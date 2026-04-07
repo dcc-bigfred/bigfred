@@ -20,6 +20,7 @@ func NewRootCommand(app *app.LocoApp) *cobra.Command {
 	command.AddCommand(NewFnCommand(app))
 	command.AddCommand(NewSpeedCommand(app))
 	command.AddCommand(NewDecoderCommand(app))
+	command.AddCommand(NewAppCommand(app))
 
 	return command
 }

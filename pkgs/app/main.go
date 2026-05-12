@@ -52,6 +52,23 @@ func (app *LocoApp) initializeCommandStation() error {
 		if cmdErr != nil {
 			return fmt.Errorf("cannot initialize app: %s", cmdErr)
 		}
+	} else if app.Config.Server.Type == "loconet" {
+		switch app.Config.Server.Conn {
+		case "", "serial":
+			cmd, cmdErr := commandstation.NewLocoNetSerial(app.Config.Server.Device, app.Config.Server.Baudrate)
+			app.station = cmd
+			if cmdErr != nil {
+				return fmt.Errorf("cannot initialize app: %s", cmdErr)
+			}
+		case "tcp":
+			cmd, cmdErr := commandstation.NewLocoNetTCP(app.Config.Server.Address, app.Config.Server.Port)
+			app.station = cmd
+			if cmdErr != nil {
+				return fmt.Errorf("cannot initialize app: %s", cmdErr)
+			}
+		default:
+			return fmt.Errorf("unknown loconet connection type '%s' (expected serial|tcp)", app.Config.Server.Conn)
+		}
 	} else {
 		return fmt.Errorf("unknown command station type '%s'", app.Config.Server.Type)
 	}

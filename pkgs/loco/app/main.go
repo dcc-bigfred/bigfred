@@ -3,10 +3,9 @@ package app
 import (
 	"fmt"
 
-	"github.com/keskad/loco/pkgs/output"
-
-	"github.com/keskad/loco/pkgs/commandstation"
-	"github.com/keskad/loco/pkgs/config"
+	"github.com/keskad/loco/pkgs/loco/commandstation"
+	"github.com/keskad/loco/pkgs/loco/config"
+	"github.com/keskad/loco/pkgs/loco/output"
 	"github.com/sirupsen/logrus"
 )
 
@@ -19,7 +18,7 @@ import (
 
 type LocoApp struct {
 	Config  *config.Configuration
-	station commandstation.Station
+	Station commandstation.Station
 
 	// runtime parameters
 	Debug bool
@@ -43,12 +42,12 @@ func (app *LocoApp) Initialize() error {
 	return nil
 }
 
-func (app *LocoApp) initializeCommandStation() error {
-	// initialize Command Station communication
+// InitializeCommandStation opens a connection to the configured command station.
+func (app *LocoApp) InitializeCommandStation() error {
 	logrus.Debug("Initializing command station")
 	if app.Config.Server.Type == "z21" {
 		cmd, cmdErr := commandstation.NewZ21Roco(app.Config.Server.Address, app.Config.Server.Port)
-		app.station = cmd
+		app.Station = cmd
 		if cmdErr != nil {
 			return fmt.Errorf("cannot initialize app: %s", cmdErr)
 		}
@@ -56,13 +55,13 @@ func (app *LocoApp) initializeCommandStation() error {
 		switch app.Config.Server.Conn {
 		case "", "serial":
 			cmd, cmdErr := commandstation.NewLocoNetSerial(app.Config.Server.Device, app.Config.Server.Baudrate)
-			app.station = cmd
+			app.Station = cmd
 			if cmdErr != nil {
 				return fmt.Errorf("cannot initialize app: %s", cmdErr)
 			}
 		case "tcp":
 			cmd, cmdErr := commandstation.NewLocoNetTCP(app.Config.Server.Address, app.Config.Server.Port)
-			app.station = cmd
+			app.Station = cmd
 			if cmdErr != nil {
 				return fmt.Errorf("cannot initialize app: %s", cmdErr)
 			}

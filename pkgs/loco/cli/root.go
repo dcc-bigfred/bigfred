@@ -3,7 +3,7 @@ package cli
 import (
 	"errors"
 
-	"github.com/keskad/loco/pkgs/app"
+	"github.com/keskad/loco/pkgs/loco/app"
 	"github.com/spf13/cobra"
 )
 
@@ -20,8 +20,6 @@ func NewRootCommand(app *app.LocoApp) *cobra.Command {
 	command.AddCommand(NewAddrCommand(app))
 	command.AddCommand(NewFnCommand(app))
 	command.AddCommand(NewSpeedCommand(app))
-	command.AddCommand(NewDecoderCommand(app))
-	command.AddCommand(NewAppCommand(app))
 
 	return command
 }

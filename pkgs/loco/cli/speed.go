@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/keskad/loco/pkgs/app"
+	"github.com/keskad/loco/pkgs/loco/app"
 	"github.com/spf13/cobra"
 )
 

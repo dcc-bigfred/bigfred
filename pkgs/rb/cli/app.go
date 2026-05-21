@@ -4,11 +4,11 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/keskad/loco/pkgs/app"
+	locoapp "github.com/keskad/loco/pkgs/loco/app"
 	"github.com/spf13/cobra"
 )
 
-func NewAppCommand(a *app.LocoApp) *cobra.Command {
+func NewAppCommand(a *locoapp.LocoApp) *cobra.Command {
 	command := &cobra.Command{
 		Use:   "app",
 		Short: "Application-level commands",
@@ -17,26 +17,12 @@ func NewAppCommand(a *app.LocoApp) *cobra.Command {
 		},
 	}
 
-	command.AddCommand(NewAppRailroadCommand(a))
+	command.AddCommand(NewAppCpCommand(a))
 
 	return command
 }
 
-func NewAppRailroadCommand(a *app.LocoApp) *cobra.Command {
-	command := &cobra.Command{
-		Use:   "railroad",
-		Short: "Railroad management commands",
-		RunE: func(command *cobra.Command, args []string) error {
-			return errors.New("please select a command")
-		},
-	}
-
-	command.AddCommand(NewAppRailroadCpCommand(a))
-
-	return command
-}
-
-func NewAppRailroadCpCommand(a *app.LocoApp) *cobra.Command {
+func NewAppCpCommand(a *locoapp.LocoApp) *cobra.Command {
 	type Args struct {
 		LocoName string
 	}
@@ -45,13 +31,13 @@ func NewAppRailroadCpCommand(a *app.LocoApp) *cobra.Command {
 	command := &cobra.Command{
 		Use:     "cp <src.db> <dst.db>",
 		Short:   "Copy a loco entry from one Railroad App database to another",
-		Example: "  loco app railroad cp db1.db --src \"SP45-090\" db2.db",
+		Example: "  rb app cp db1.db --src \"SP45-090\" db2.db",
 		Args:    cobra.ExactArgs(2),
 		RunE: func(command *cobra.Command, args []string) error {
 			if cmdArgs.LocoName == "" {
 				return fmt.Errorf("--src is required")
 			}
-			return a.RailroadCp(app.RailroadCpArgs{
+			return a.RailroadCp(locoapp.RailroadCpArgs{
 				SrcFile:  args[0],
 				DstFile:  args[1],
 				LocoName: cmdArgs.LocoName,

@@ -46,30 +46,30 @@ func TestParseArgsAsCVs_IgnoreEmptyStrings(t *testing.T) {
 }
 
 func TestTrackOrDefault_ValidPom(t *testing.T) {
-	track, err := trackOrDefault("pom", 1)
+	track, err := TrackOrDefault("pom", 1)
 	assert.Equal(t, nil, err, "unexpected error")
 	assert.Equal(t, "pom", track, "track mismatch")
 }
 
 func TestTrackOrDefault_ValidProg(t *testing.T) {
-	track, err := trackOrDefault("prog", 1)
+	track, err := TrackOrDefault("prog", 1)
 	assert.Equal(t, nil, err, "unexpected error")
 	assert.Equal(t, "prog", track, "track mismatch")
 }
 
 func TestTrackOrDefault_InvalidTrack(t *testing.T) {
-	_, err := trackOrDefault("invalid", 1)
+	_, err := TrackOrDefault("invalid", 1)
 	assert.NotNil(t, err, "expected error for invalid track")
 }
 
 func TestTrackOrDefault_DefaultPom(t *testing.T) {
-	track, err := trackOrDefault("", 1)
+	track, err := TrackOrDefault("", 1)
 	assert.Equal(t, nil, err, "unexpected error")
 	assert.Equal(t, "pom", track, "track mismatch")
 }
 
 func TestTrackOrDefault_DefaultProg(t *testing.T) {
-	track, err := trackOrDefault("", 0)
+	track, err := TrackOrDefault("", 0)
 	assert.Equal(t, nil, err, "unexpected error")
 	assert.Equal(t, "prog", track, "track mismatch")
 }

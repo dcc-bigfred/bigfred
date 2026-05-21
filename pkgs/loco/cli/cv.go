@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/keskad/loco/pkgs/app"
+	"github.com/keskad/loco/pkgs/loco/app"
 	"github.com/spf13/cobra"
 )
 
@@ -47,7 +47,7 @@ func NewSetCommand(app *app.LocoApp) *cobra.Command {
 			}
 
 			// mode selection and validation
-			track, trackErr := trackOrDefault(cmdArgs.Track, cmdArgs.LocoId)
+			track, trackErr := TrackOrDefault(cmdArgs.Track, cmdArgs.LocoId)
 			if trackErr != nil {
 				return trackErr
 			}
@@ -92,7 +92,7 @@ func NewGetCommand(app *app.LocoApp) *cobra.Command {
 			}
 
 			// mode selection and validation
-			track, trackErr := trackOrDefault(cmdArgs.Track, cmdArgs.LocoId)
+			track, trackErr := TrackOrDefault(cmdArgs.Track, cmdArgs.LocoId)
 			if trackErr != nil {
 				return trackErr
 			}
@@ -117,7 +117,8 @@ func NewGetCommand(app *app.LocoApp) *cobra.Command {
 	return command
 }
 
-func trackOrDefault(chosenTrack string, locoId uint8) (string, error) {
+// TrackOrDefault resolves track mode from flags (pom / prog / empty).
+func TrackOrDefault(chosenTrack string, locoId uint8) (string, error) {
 	track := chosenTrack
 	if track != "" && track != "pom" && track != "prog" {
 		return "", fmt.Errorf("invalid track type: %s. Must be either 'pom', 'prog' or empty", track)

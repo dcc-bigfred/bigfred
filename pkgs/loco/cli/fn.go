@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/keskad/loco/pkgs/app"
+	"github.com/keskad/loco/pkgs/loco/app"
 	"github.com/spf13/cobra"
 )
 
@@ -43,7 +43,7 @@ func NewFnSetCommand(app *app.LocoApp) *cobra.Command {
 			}
 
 			// mode selection and validation
-			track, trackErr := trackOrDefault(cmdArgs.Track, cmdArgs.LocoId)
+			track, trackErr := TrackOrDefault(cmdArgs.Track, cmdArgs.LocoId)
 			if trackErr != nil {
 				return trackErr
 			}
@@ -65,9 +65,6 @@ func NewFnSetCommand(app *app.LocoApp) *cobra.Command {
 	command.Flags().Uint16VarP(&cmdArgs.Timeout, "timeout", "", 10, "Connection timeout")
 	command.Flags().Uint8VarP(&cmdArgs.LocoId, "loco", "l", 0, "Use locomotive under specific address")
 	command.Flags().StringVarP(&cmdArgs.Track, "track", "t", "", "Track type: 'pom' for programming on main, 'prog' for programming track, or empty for automatic selection")
-
-	// Add the list subcommand
-	command.AddCommand(NewFnListCommand(app))
 
 	return command
 }

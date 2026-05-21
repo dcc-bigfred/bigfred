@@ -4,16 +4,16 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/keskad/loco/pkgs/commandstation"
-	"github.com/keskad/loco/pkgs/syntax"
+	"github.com/keskad/loco/pkgs/loco/commandstation"
+	"github.com/keskad/loco/pkgs/loco/syntax"
 	"github.com/sirupsen/logrus"
 )
 
 func (app *LocoApp) SendCVAction(mode string, locoId uint8, cvNumRaw string, verify bool, timeout time.Duration, settle time.Duration) error {
-	if cmdErr := app.initializeCommandStation(); cmdErr != nil {
+	if cmdErr := app.InitializeCommandStation(); cmdErr != nil {
 		return cmdErr
 	}
-	defer app.station.CleanUp()
+	defer app.Station.CleanUp()
 
 	entries, parseErr := syntax.ParseCVString(cvNumRaw, ",")
 	if parseErr != nil {
@@ -22,7 +22,7 @@ func (app *LocoApp) SendCVAction(mode string, locoId uint8, cvNumRaw string, ver
 
 	var writeErr error
 	for _, entry := range entries {
-		writeErr = app.station.WriteCV(commandstation.Mode(mode), commandstation.LocoCV{
+		writeErr = app.Station.WriteCV(commandstation.Mode(mode), commandstation.LocoCV{
 			LocoId: commandstation.LocoAddr(locoId),
 			Cv: commandstation.CV{
 				Num:   commandstation.CVNum(entry.Number),
@@ -43,10 +43,10 @@ func (app *LocoApp) SendCVAction(mode string, locoId uint8, cvNumRaw string, ver
 }
 
 func (app *LocoApp) ReadCVAction(mode string, locoId uint8, cvNumRaw string, verify bool, timeout time.Duration, retries uint8) error {
-	if cmdErr := app.initializeCommandStation(); cmdErr != nil {
+	if cmdErr := app.InitializeCommandStation(); cmdErr != nil {
 		return cmdErr
 	}
-	defer app.station.CleanUp()
+	defer app.Station.CleanUp()
 
 	// Try to parse as a single CV
 	entries, parseErr := syntax.ParseCVString(cvNumRaw, ",")
@@ -54,7 +54,7 @@ func (app *LocoApp) ReadCVAction(mode string, locoId uint8, cvNumRaw string, ver
 		var lastError error
 
 		for _, entry := range entries {
-			result, err := app.station.ReadCV(commandstation.Mode(mode), commandstation.LocoCV{
+			result, err := app.Station.ReadCV(commandstation.Mode(mode), commandstation.LocoCV{
 				LocoId: commandstation.LocoAddr(locoId),
 				Cv: commandstation.CV{
 					Num: commandstation.CVNum(entry.Number),

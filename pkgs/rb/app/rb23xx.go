@@ -1,4 +1,4 @@
-package app
+package rbapp
 
 import (
 	"fmt"
@@ -10,22 +10,22 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/sirupsen/logrus"
 
-	"github.com/keskad/loco/pkgs/commandstation"
-	"github.com/keskad/loco/pkgs/decoders"
+	"github.com/keskad/loco/pkgs/loco/commandstation"
+	"github.com/keskad/loco/pkgs/loco/decoders"
+	"github.com/keskad/loco/pkgs/loco/app"
 )
 
 const wifiCV = 200
 
 // RBWifiAction reads CV200 to determine which function number controls the WiFi router,
 // then enables or disables that function on the decoder.
-func (app *LocoApp) RBWifiAction(mode string, locoId uint8, enable bool, timeout time.Duration) error {
-	if cmdErr := app.initializeCommandStation(); cmdErr != nil {
+func RBWifiAction(loc *app.LocoApp, mode string, locoId uint8, enable bool, timeout time.Duration) error {
+	if cmdErr := loc.InitializeCommandStation(); cmdErr != nil {
 		return cmdErr
 	}
-	defer app.station.CleanUp()
+	defer loc.Station.CleanUp()
 
-	// Read CV200 to find the function number assigned to the WiFi router
-	fnNum, err := app.station.ReadCV(commandstation.Mode(mode), commandstation.LocoCV{
+	fnNum, err := loc.Station.ReadCV(commandstation.Mode(mode), commandstation.LocoCV{
 		LocoId: commandstation.LocoAddr(locoId),
 		Cv: commandstation.CV{
 			Num: commandstation.CVNum(wifiCV),
@@ -37,11 +37,11 @@ func (app *LocoApp) RBWifiAction(mode string, locoId uint8, enable bool, timeout
 
 	logrus.Debugf("CV%d = %d, toggling F%d to enabled=%v", wifiCV, fnNum, fnNum, enable)
 
-	// Send the function command
-	return app.station.SendFn(commandstation.Mode(mode), commandstation.LocoAddr(locoId), commandstation.FuncNum(fnNum), enable)
+	return loc.Station.SendFn(commandstation.Mode(mode), commandstation.LocoAddr(locoId), commandstation.FuncNum(fnNum), enable)
 }
 
-func (app *LocoApp) ClearSoundSlot(slot uint8, opts ...decoders.Option) error {
+// ClearSoundSlot removes all sound files from the given slot on the decoder.
+func ClearSoundSlot(slot uint8, opts ...decoders.Option) error {
 	rb := decoders.NewRailboxRB23xx(opts...)
 	return rb.ClearSoundSlot(slot)
 }
@@ -54,14 +54,13 @@ func (app *LocoApp) ClearSoundSlot(slot uint8, opts ...decoders.Option) error {
 //     (modified within the last 24 h) are always re-uploaded
 //
 // When dryRun is true, no changes are made – only a summary is printed.
-func (app *LocoApp) SyncSoundSlot(slot uint8, localDir string, dryRun bool, syncWithoutLast bool, opts ...decoders.Option) error {
+func SyncSoundSlot(loc *app.LocoApp, slot uint8, localDir string, dryRun bool, syncWithoutLast bool, opts ...decoders.Option) error {
 	rb := decoders.NewRailboxRB23xx(opts...)
 
 	if dryRun {
-		_, _ = app.P.Printf("[dry-run] no changes will be made\n")
+		_, _ = loc.P.Printf("[dry-run] no changes will be made\n")
 	}
 
-	// --- build map of local files: name → size in bytes ---
 	entries, err := os.ReadDir(localDir)
 	if err != nil {
 		return fmt.Errorf("cannot read local directory %q: %w", localDir, err)
@@ -82,8 +81,6 @@ func (app *LocoApp) SyncSoundSlot(slot uint8, localDir string, dryRun bool, sync
 		localFiles[e.Name()] = localInfo{sizeBytes: fi.Size(), modTime: fi.ModTime()}
 	}
 
-	// --- determine the set of "recently modified" files to always re-upload ---
-	// Up to 5 local files modified within the last 24 h, sorted newest-first.
 	recentlyModified := make(map[string]bool)
 	if !syncWithoutLast {
 		cutoff := time.Now().Add(-24 * time.Hour)
@@ -112,7 +109,6 @@ func (app *LocoApp) SyncSoundSlot(slot uint8, localDir string, dryRun bool, sync
 		}
 	}
 
-	// --- build map of remote files: name → size in KB ---
 	remoteList, err := rb.ListSoundSlot(slot)
 	if err != nil {
 		return fmt.Errorf("cannot list slot %d on decoder: %w", slot, err)
@@ -122,12 +118,10 @@ func (app *LocoApp) SyncSoundSlot(slot uint8, localDir string, dryRun bool, sync
 		remoteFiles[info.Name] = info.SizeKB
 	}
 
-	// --- upload missing or changed files ---
 	changes := 0
 	for name, local := range localFiles {
 		remoteSizeKB, existsRemotely := remoteFiles[name]
 		if existsRemotely {
-			// decoder reports size in KB (1 KB = 1024 bytes); round up local size
 			localSizeKB := (local.sizeBytes + 1023) / 1024
 			diff := localSizeKB - remoteSizeKB
 			if diff < 0 {
@@ -135,18 +129,18 @@ func (app *LocoApp) SyncSoundSlot(slot uint8, localDir string, dryRun bool, sync
 			}
 			if diff <= 1 {
 				if recentlyModified[name] {
-					_, _ = app.P.Printf("recent:   %s (modified within last 24 h)\n", name)
+					_, _ = loc.P.Printf("recent:   %s (modified within last 24 h)\n", name)
 					logrus.Infof("sync: force-uploading %q – modified within last 24 h", name)
 				} else {
 					logrus.Debugf("sync: skipping %q (size within tolerance: local %d KB, remote %d KB)", name, localSizeKB, remoteSizeKB)
 					continue
 				}
 			} else {
-				_, _ = app.P.Printf("changed:  %s (local %d KB, remote %d KB)\n", name, localSizeKB, remoteSizeKB)
+				_, _ = loc.P.Printf("changed:  %s (local %d KB, remote %d KB)\n", name, localSizeKB, remoteSizeKB)
 				logrus.Infof("sync: re-uploading %q (local %d KB, remote %d KB)", name, localSizeKB, remoteSizeKB)
 			}
 		} else {
-			_, _ = app.P.Printf("upload:   %s\n", name)
+			_, _ = loc.P.Printf("upload:   %s\n", name)
 			logrus.Infof("sync: uploading new file %q to slot %d", name, slot)
 		}
 
@@ -166,12 +160,11 @@ func (app *LocoApp) SyncSoundSlot(slot uint8, localDir string, dryRun bool, sync
 		}
 	}
 
-	// --- delete orphaned files ---
 	for name := range remoteFiles {
 		if _, exists := localFiles[name]; exists {
 			continue
 		}
-		_, _ = app.P.Printf("delete:   %s\n", name)
+		_, _ = loc.P.Printf("delete:   %s\n", name)
 		logrus.Infof("sync: deleting %q from slot %d on decoder", name, slot)
 		changes++
 		if dryRun {
@@ -183,7 +176,7 @@ func (app *LocoApp) SyncSoundSlot(slot uint8, localDir string, dryRun bool, sync
 	}
 
 	if changes == 0 {
-		_, _ = app.P.Printf("everything is up to date\n")
+		_, _ = loc.P.Printf("everything is up to date\n")
 	}
 
 	return nil
@@ -195,7 +188,7 @@ func (app *LocoApp) SyncSoundSlot(slot uint8, localDir string, dryRun bool, sync
 // one synchronisation run. The function blocks until the process is interrupted
 // (i.e. the watcher channels are closed). Errors – including a failed initial sync
 // or a failed triggered sync – are logged and printed, but never stop the watch loop.
-func (app *LocoApp) WatchSoundSlot(slot uint8, localDir string, dryRun bool, syncWithoutLast bool, opts ...decoders.Option) error {
+func WatchSoundSlot(loc *app.LocoApp, slot uint8, localDir string, dryRun bool, syncWithoutLast bool, opts ...decoders.Option) error {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return fmt.Errorf("cannot create filesystem watcher: %w", err)
@@ -206,20 +199,18 @@ func (app *LocoApp) WatchSoundSlot(slot uint8, localDir string, dryRun bool, syn
 		return fmt.Errorf("cannot watch directory %q: %w", localDir, err)
 	}
 
-	_, _ = app.P.Printf("watch: watching %q for changes (Ctrl+C to stop)\n", localDir)
+	_, _ = loc.P.Printf("watch: watching %q for changes (Ctrl+C to stop)\n", localDir)
 	logrus.Infof("watch: fsnotify watcher started on %q", localDir)
 
 	runSync := func(reason string) {
-		_, _ = app.P.Printf("watch: %s, syncing…\n", reason)
+		_, _ = loc.P.Printf("watch: %s, syncing…\n", reason)
 		logrus.Infof("watch: %s, triggering sync of %q → slot %d", reason, localDir, slot)
-		if syncErr := app.SyncSoundSlot(slot, localDir, dryRun, syncWithoutLast, opts...); syncErr != nil {
-			_, _ = app.P.Printf("watch: sync error: %v\n", syncErr)
+		if syncErr := SyncSoundSlot(loc, slot, localDir, dryRun, syncWithoutLast, opts...); syncErr != nil {
+			_, _ = loc.P.Printf("watch: sync error: %v\n", syncErr)
 			logrus.Errorf("watch: sync failed: %v", syncErr)
 		}
 	}
 
-	// Run an initial sync before entering the watch loop.
-	// Errors are non-fatal – the loop still starts afterwards.
 	runSync("starting initial sync")
 
 	const debounce = 500 * time.Millisecond
@@ -231,10 +222,8 @@ func (app *LocoApp) WatchSoundSlot(slot uint8, localDir string, dryRun bool, syn
 			if !ok {
 				return nil
 			}
-			// React to write, create and remove events; ignore chmod/rename noise.
 			if event.Has(fsnotify.Write) || event.Has(fsnotify.Create) || event.Has(fsnotify.Remove) {
 				logrus.Debugf("watch: fsnotify event %s on %q", event.Op, event.Name)
-				// Debounce: reset the timer on every new event within the window.
 				if timer != nil {
 					timer.Stop()
 				}
@@ -245,8 +234,7 @@ func (app *LocoApp) WatchSoundSlot(slot uint8, localDir string, dryRun bool, syn
 			if !ok {
 				return nil
 			}
-			// Log watcher errors but keep the loop running.
-			_, _ = app.P.Printf("watch: watcher error: %v\n", watchErr)
+			_, _ = loc.P.Printf("watch: watcher error: %v\n", watchErr)
 			logrus.Errorf("watch: watcher error: %v", watchErr)
 		}
 	}

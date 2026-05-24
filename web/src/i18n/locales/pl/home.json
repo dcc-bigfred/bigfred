@@ -1,0 +1,8 @@
+{
+  "greeting": "Witaj, {{login}}!",
+  "greetingAnon": "Witaj!",
+  "intro": "Logowanie zakończone sukcesem. Strona główna powstanie w kolejnych etapach implementacji (zobacz <code>docs/bigfred/architecture/13-delivery-order.md</code>, milestones M2–M8).",
+  "milestoneOverline": "Status milestone",
+  "milestoneTitle": "M2 — Persistence + auth (in progress)",
+  "milestoneBody": "Backend uruchomiony, baza SQLite zainicjowana, logowanie z argon2id + JWT działa. Następny krok: zarządzanie użytkownikami (CRUD), DCC pool, rate-limiting w Redis."
+}

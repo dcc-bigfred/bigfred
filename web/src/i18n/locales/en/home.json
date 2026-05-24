@@ -1,0 +1,8 @@
+{
+  "greeting": "Welcome, {{login}}!",
+  "greetingAnon": "Welcome!",
+  "intro": "You're signed in. A real landing page will arrive in later milestones (see <code>docs/bigfred/architecture/13-delivery-order.md</code>, milestones M2–M8).",
+  "milestoneOverline": "Milestone status",
+  "milestoneTitle": "M2 — Persistence + auth (in progress)",
+  "milestoneBody": "Backend is up, the SQLite database is initialised, and argon2id + JWT login is wired. Next up: user management (CRUD), DCC pool, Redis-backed rate limiting."
+}

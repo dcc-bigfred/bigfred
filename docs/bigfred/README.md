@@ -44,14 +44,18 @@ cross-references inside the text still work via `Ctrl+F`.
 10. [Cross-Cutting Concerns](./architecture/09-cross-cutting.md) —
     single binary, WS backpressure, reconnect, audit discipline,
     `scripts-executor` supervision.
-11. [Authentication, Roles & Authorization](./architecture/10-authn-authz/README.md)
+11. [Internationalization (i18n)](./architecture/09a-i18n.md) —
+    `react-i18next` with bundled JSON namespaces; backend stays
+    language-neutral; what is translated vs. rendered verbatim;
+    locale selection and persistence; type-safe message keys.
+12. [Authentication, Roles & Authorization](./architecture/10-authn-authz/README.md)
     — login + PIN, effective roles, the `pkgs/server/security`
     policy layer, middleware, permission matrix.
-12. [API Keys & Built-in MCP Server](./architecture/11-api-keys-and-mcp.md)
+13. [API Keys & Built-in MCP Server](./architecture/11-api-keys-and-mcp.md)
     — per-user keys (≤365 days), MCP tool surface mounted next to chi.
-13. [Makefile Additions](./architecture/12-makefile.md) — build targets
+14. [Makefile Additions](./architecture/12-makefile.md) — build targets
     for `server` and `scripts-executor`.
-14. [Delivery Order (Milestones)](./architecture/13-delivery-order.md)
+15. [Delivery Order (Milestones)](./architecture/13-delivery-order.md)
     — M1..M8, incrementally shippable.
-15. [Acceptance Criteria](./architecture/14-acceptance-criteria/README.md)
+16. [Acceptance Criteria](./architecture/14-acceptance-criteria/README.md)
     — externally observable behaviours each milestone must demonstrate.

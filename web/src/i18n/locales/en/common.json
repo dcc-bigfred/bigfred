@@ -1,0 +1,21 @@
+{
+  "appName": "BigFred",
+  "loading": "Loading…",
+  "actions": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "ok": "OK",
+    "retry": "Retry",
+    "logout": "Log out",
+    "back": "Back"
+  },
+  "language": {
+    "menuLabel": "Language",
+    "current": "Current language",
+    "options": {
+      "pl": "Polish",
+      "en": "English"
+    }
+  },
+  "networkError": "Could not reach the server."
+}

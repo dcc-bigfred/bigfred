@@ -409,3 +409,19 @@ line. The editor (`ScriptEditor.tsx`) on the Scripts page uses
 `@monaco-editor/react` with `language="javascript"`, posts the
 edited source via `PUT /api/v1/scripts/{id}`, and otherwise does
 nothing executable.
+
+### 6.8 Internationalization (pointer)
+
+Every user-visible string in the components above (button labels,
+error toasts, table headers, plural counters) is rendered through
+`react-i18next` with namespace catalogues bundled into `web/dist`.
+Backend codes (`ApiError.code`, `RadioPhrase`, `FunctionIcon`,
+`AuditAction`, …) map 1:1 to translation keys; user-entered names
+and audit-log denormalized snapshots are rendered verbatim. The
+`I18nextProvider` wraps the app **above** `ThemeProvider` and
+`QueryClientProvider` in `main.tsx`. The full specification —
+namespace layout, key naming, plural rules, locale persistence,
+type-safe key generation — lives in [§7c i18n](./09a-i18n.md).
+Components in this section omit the boilerplate `t("…")` calls in
+their snippets for brevity; in real code, no string literal that
+reaches the DOM is hard-coded.

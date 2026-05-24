@@ -1,0 +1,10 @@
+{
+  "invalid_credentials": "Incorrect login or password.",
+  "missing_credentials": "Please enter your login and password.",
+  "unauthorized": "Your session has expired. Please sign in again.",
+  "forbidden": "You don't have permission to do that.",
+  "invalid_body": "Malformed request data.",
+  "internal_error": "Internal server error. Please try again.",
+  "network": "Could not reach the server.",
+  "unknown": "An unknown error occurred: {{code}}"
+}

@@ -4,3 +4,10 @@ bin/*
 /backup-cv.txt
 /ai/_compiled/*
 !/ai/_compiled/.gitkeep
+
+# BigFred — local runtime artefacts
+/bigfred.db
+/bigfred.db-wal
+/bigfred.db-shm
+/web/node_modules
+/web/dist

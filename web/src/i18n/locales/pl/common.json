@@ -1,0 +1,21 @@
+{
+  "appName": "BigFred",
+  "loading": "Ładowanie…",
+  "actions": {
+    "save": "Zapisz",
+    "cancel": "Anuluj",
+    "ok": "OK",
+    "retry": "Spróbuj ponownie",
+    "logout": "Wyloguj",
+    "back": "Wstecz"
+  },
+  "language": {
+    "menuLabel": "Język",
+    "current": "Aktualny język",
+    "options": {
+      "pl": "Polski",
+      "en": "Angielski"
+    }
+  },
+  "networkError": "Nie udało się połączyć z serwerem."
+}

@@ -1,0 +1,10 @@
+{
+  "invalid_credentials": "Nieprawidłowy login lub hasło.",
+  "missing_credentials": "Wpisz login i hasło.",
+  "unauthorized": "Sesja wygasła. Zaloguj się ponownie.",
+  "forbidden": "Brak uprawnień do tej operacji.",
+  "invalid_body": "Nieprawidłowe dane żądania.",
+  "internal_error": "Błąd wewnętrzny serwera. Spróbuj ponownie.",
+  "network": "Nie udało się połączyć z serwerem.",
+  "unknown": "Wystąpił nieznany błąd: {{code}}"
+}

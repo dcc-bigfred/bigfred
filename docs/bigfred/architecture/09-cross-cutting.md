@@ -40,7 +40,16 @@
     object's **denormalized name** so renames or deletions never
     rewrite history. The log is admin-only on read, with no UPDATE or
     DELETE endpoints at all.
-11. **`scripts-executor` supervision.** `server` spawns the executor
+11. **Internationalization.** Frontend rendering is locale-aware,
+    backend is language-neutral. Stable codes on the wire
+    (`ApiError.code`, `RadioPhrase`, `FunctionIcon`, `AuditAction`,
+    …) are mapped to human strings by `react-i18next` from JSON
+    catalogues bundled into `web/dist`. Persisted denormalized
+    strings (audit `user_name` / `object_name`, `RadioMessage.Note`)
+    are rendered verbatim regardless of active locale. Full
+    specification, including the "what is translated vs. rendered
+    verbatim" contract, lives in [§7c i18n](./09a-i18n.md).
+12. **`scripts-executor` supervision.** `server` spawns the executor
     child process at boot (`exec.Command("loco", "scripts-executor",
     "--executor-socket", socketPath)`) and supervises it with
     exponential backoff (1 s, 2 s, 4 s, …, capped at 30 s). On

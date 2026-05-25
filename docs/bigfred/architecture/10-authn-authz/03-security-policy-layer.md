@@ -186,16 +186,34 @@ type LayoutSecurityContext struct{}
 // the filter applied by GET /api/v1/layouts/login.
 func (LayoutSecurityContext) CanLoginToLayout(actor domain.User, p domain.Layout) Decision
 
-func (LayoutSecurityContext) CanCreateLayout(actor domain.User) Decision                       // admin only
-func (LayoutSecurityContext) CanEditLayout(actor domain.User, p domain.Layout) Decision        // admin only
-func (LayoutSecurityContext) CanDeleteLayout(actor domain.User, p domain.Layout) Decision      // admin only; system layout (p.IsSystem) is undeletable
+// Layout-management policies. Every method here takes a
+// `domain.EffectiveRoles` (§7a.2) instead of a bare `domain.User`
+// because the rule for these operations is **non-sudo `admin` only**:
+// a sudo-elevated `admin` is operationally allowed (§7a.7) but is
+// explicitly denied edits to the layout itself, otherwise a sudo user
+// could rotate the layout admin PIN to lock the real admin out. The
+// shared rejection reason is `requires_non_sudo_admin`.
+func (LayoutSecurityContext) CanCreateLayout(eff domain.EffectiveRoles) Decision                                  // non-sudo admin only
+func (LayoutSecurityContext) CanEditLayout(eff domain.EffectiveRoles, p domain.Layout) Decision                   // non-sudo admin only; system layout name/isSystem still rejected via service-side rules
+func (LayoutSecurityContext) CanDeleteLayout(eff domain.EffectiveRoles, p domain.Layout) Decision                 // non-sudo admin only; system layout (p.IsSystem) is undeletable
+
+// CanRotateAdminPIN is the policy behind PUT /api/v1/layouts/{id}
+// when the request body carries a non-empty `adminPin`. The rule is
+// the same as CanEditLayout (non-sudo admin only) AND it is the
+// single most important place this discrimination matters: a sudo
+// admin must never be able to rotate the PIN that gated their own
+// elevation, otherwise the layout's PIN can be silently changed
+// during the 2-minute window. The system layout is allowed (the
+// system layout still needs a rotatable PIN even though name /
+// command-station-set are immutable).
+func (LayoutSecurityContext) CanRotateAdminPIN(eff domain.EffectiveRoles, p domain.Layout) Decision               // non-sudo admin only
 
 // Lock / unlock toggle Layout.Locked. The system layout cannot be
 // locked (CanLockLayout returns Deny("default_layout_cannot_be_locked")
 // when p.IsSystem == true). Unlocking a non-locked layout is a no-op
-// at the service layer; the policy still gates it on admin.
-func (LayoutSecurityContext) CanLockLayout(actor domain.User, p domain.Layout) Decision        // admin only; deny if p.IsSystem
-func (LayoutSecurityContext) CanUnlockLayout(actor domain.User, p domain.Layout) Decision      // admin only
+// at the service layer; the policy still gates it on non-sudo admin.
+func (LayoutSecurityContext) CanLockLayout(eff domain.EffectiveRoles, p domain.Layout) Decision                   // non-sudo admin only; deny if p.IsSystem
+func (LayoutSecurityContext) CanUnlockLayout(eff domain.EffectiveRoles, p domain.Layout) Decision                 // non-sudo admin only
 
 // Attach / detach command stations to a non-system layout. The system
 // layout exposes the full catalogue virtually, so both methods deny
@@ -204,16 +222,27 @@ func (LayoutSecurityContext) CanUnlockLayout(actor domain.User, p domain.Layout)
 // non-system layout with zero stations
 // ("layout_needs_at_least_one_command_station") – the caller supplies
 // the current count.
-func (LayoutSecurityContext) CanAttachCommandStation(actor domain.User, p domain.Layout) Decision   // admin only
-func (LayoutSecurityContext) CanDetachCommandStation(actor domain.User, p domain.Layout, currentCount int) Decision // admin only
+func (LayoutSecurityContext) CanAttachCommandStation(eff domain.EffectiveRoles, p domain.Layout) Decision         // non-sudo admin only
+func (LayoutSecurityContext) CanDetachCommandStation(eff domain.EffectiveRoles, p domain.Layout, currentCount int) Decision // non-sudo admin only
 
-func (LayoutSecurityContext) CanAddSignalman(actor domain.User, p domain.Layout) Decision     // admin only
-func (LayoutSecurityContext) CanRemoveSignalman(actor domain.User, p domain.Layout) Decision  // admin only
+func (LayoutSecurityContext) CanAddSignalman(eff domain.EffectiveRoles, p domain.Layout) Decision                 // non-sudo admin only
+func (LayoutSecurityContext) CanRemoveSignalman(eff domain.EffectiveRoles, p domain.Layout) Decision              // non-sudo admin only
 
-// Adding an interlocking is allowed for admin OR a signalman of THIS
-// layout. Caller passes the matching LayoutSignalman row (or nil).
-func (LayoutSecurityContext) CanAddInterlocking(actor domain.User, p domain.Layout, actorIsSignalmanHere *domain.LayoutSignalman) Decision
-func (LayoutSecurityContext) CanRemoveInterlocking(actor domain.User, p domain.Layout) Decision // admin only
+// Adding an interlocking is allowed for non-sudo admin OR a signalman
+// of THIS layout (sudo signalman is fine here – this is operational,
+// not organisational). Caller passes the matching LayoutSignalman row
+// (or nil); the policy resolves "is the actor a signalman here?" via
+// `eff.Has(domain.RoleSignalman) && actorIsSignalmanHere != nil`.
+func (LayoutSecurityContext) CanAddInterlocking(eff domain.EffectiveRoles, p domain.Layout, actorIsSignalmanHere *domain.LayoutSignalman) Decision
+func (LayoutSecurityContext) CanRemoveInterlocking(eff domain.EffectiveRoles, p domain.Layout) Decision           // non-sudo admin only
+
+// CanSudo gates `POST /api/v1/layouts/{id}/sudo` (§7a.7). Every
+// authenticated user MAY call it from the layout they are logged into;
+// the only structural rejection is a layout-id mismatch (caller's JWT
+// `layoutId` must equal `p.ID`). PIN verification, rate-limiting and
+// the sudo-row insert live in `AuthService.Sudo`, not in the policy
+// layer (those are stateful concerns and the policy layer is pure).
+func (LayoutSecurityContext) CanSudo(actor domain.User, p domain.Layout) Decision
 
 // CanSetSessionCommandStation is the policy behind WS
 // `session.setCommandStation`. The picked station must be currently

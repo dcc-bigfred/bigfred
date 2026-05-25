@@ -340,10 +340,61 @@ domain model and the API:
       where it was started. **Stop** is implemented server-side via
       `vm.Interrupt(...)` from a sibling goroutine in the executor.
 
+20. **Sudo elevation – temporary `admin`/`signalman` powers gated by a
+    layout-scoped PIN.** Every **layout** owns an **admin PIN** that is
+    independent of any user PIN. A user already authenticated into that
+    layout can **self-elevate** their effective role for a short, fixed
+    window by typing the layout's admin PIN, in the spirit of `sudo` on
+    Linux. The mechanism is exposed through two icons on the top
+    `AppBar`:
+    - a **closed-padlock icon** – clicking it opens a dialog asking for
+      the layout admin PIN; on success the caller's effective roles
+      gain `admin` for **2 minutes** (configurable, hard cap 10 min);
+      the icon flips to an **open padlock with a live countdown** for
+      the duration of the grant, and reverts when the grant expires;
+    - a **signalman icon** (engineer's cap) – same dialog, same PIN; on
+      success the caller is granted the **layout-scoped `signalman`**
+      role for the same 2-minute window, exclusively inside the active
+      layout.
+
+    Properties:
+    - the same PIN gates both icons – a layout has one admin PIN, not
+      two; and that single PIN never grants the user any access outside
+      the layout it belongs to;
+    - **the admin PIN can be reset by an admin** in the layout settings
+      page by typing a new PIN and clicking *Save*; **leaving the field
+      blank does NOT reset the PIN** – the page only changes the PIN
+      when the field carries a value. The PIN is stored as
+      `Layout.AdminPINHash` (argon2id) and the plaintext never leaves
+      the dialog;
+    - **sudo-elevated `admin` powers do NOT grant the right to edit
+      layout settings** (rename, lock/unlock, attach/detach command
+      stations, manage signalmen list, manage interlocking whitelist,
+      delete the layout, **and crucially – reset the admin PIN
+      itself**). This single exception prevents a sudo-elevated user
+      from rotating the PIN to lock the real admin out, and matches
+      the goal that sudo is for *operational* admin work (DCC pool
+      tweaks, registering a vehicle outside the user's pool while
+      troubleshooting, …), not *organisational* admin work;
+    - the same exception does **not** apply to users who hold the
+      permanent `admin` role: they can rotate the PIN exactly like any
+      other layout setting;
+    - sudo elevation is mirrored across every WebSocket session the
+      user has open: starting it from the desktop instantly enables
+      the lock indicator on the phone, and the auto-expiry fans out
+      to every session simultaneously;
+    - failed PIN attempts are rate-limited per `(userId, layoutId)`
+      and per IP analogously to login (§7a.1) so the PIN cannot be
+      brute-forced in a club room;
+    - every `sudo` grant, expiry and PIN reset is **audited**
+      (§3a.5: `auth.sudo_granted`, `auth.sudo_expired`,
+      `layout.admin_pin_changed`).
+
 These functional goals drive the domain model (§3a), the REST surface
 (§4.1), the WebSocket protocol (§4.2), the **drive-session contract
 and dead-man's switch (§4.5)**, the **layout / command station addressing rules
 (§3a.4)**, the **audit log (§3a.5)**, the **vehicle functions and
 template inheritance (§3a.6)**, the **server-side scripting model
 in the sibling `scripts-executor` (§3a.7)**, the authorization
-rules (§7a) and the MCP integration (§7b).
+rules (§7a) **including the sudo elevation flow (§7a.7)** and the
+MCP integration (§7b).

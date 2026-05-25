@@ -108,16 +108,43 @@ Implemented in milestones; each milestone is independently shippable.
     toggle (`layout.locked` / `layout.unlocked`) and every attach /
     detach (`layout.command_station_attached` /
     `layout.command_station_detached`) – see §3a.5.
+16. Wire **sudo elevation** (§7a.7). Add the `sudo_elevations`
+    table and the `Layout.AdminPINHash` column (NOT NULL; the
+    bootstrap migration seeds the system layout with a one-shot
+    random PIN, logged once). Implement
+    `AuthService.Sudo` / `RevokeSudo` and the
+    `LayoutService.UpdateAdminPIN` rotation path (with the "blank
+    field = no change" semantic). Add the
+    `POST/DELETE /api/v1/layouts/{id}/sudo` endpoints and the
+    `auth.elevationChanged` WS fan-out. Wire the existing janitor
+    goroutine to reap expired rows and emit `auth.sudo_expired`.
+    Plumb the `EffectiveRoles.Sudo` source through
+    `AuthService.Effective` and tighten
+    `LayoutSecurityContext.CanRotateAdminPIN` /
+    `CanEditLayout` / `CanLockLayout` / `CanUnlockLayout` /
+    `CanAttachCommandStation` / `CanDetachCommandStation` /
+    `CanAddSignalman` / `CanRemoveSignalman` /
+    `CanRemoveInterlocking` / `CanDeleteLayout` so they refuse
+    sudo-only admins with `requires_non_sudo_admin`. Cascade the
+    cleanup on `AuthService.Logout` and `LayoutService.Delete`.
+    Front-end: add the closed-padlock and engineer-cap icons to
+    `AppShell.tsx`, the `<SudoPinDialog>` and the live MM:SS
+    countdown badge; add the layout admin PIN field to the
+    `/admin/layouts` settings page (with the "leaving blank does NOT
+    reset the PIN" helper, §7a.7.4). Ship `pl/sudo.json` +
+    `en/sudo.json` and the new error codes (`invalid_pin`,
+    `sudo_locked`, `pin_missing`, `pin_too_weak`,
+    `requires_non_sudo_admin`, `layout_mismatch`).
 
 **M5 – Interlockings, takeover, radio.**
 
-16. Add `interlockings`, `interlocking_sessions`, `takeover_requests`
+17. Add `interlockings`, `interlocking_sessions`, `takeover_requests`
     and `radio_messages` tables and services, all **filtered through
     the active layout's `LayoutInterlocking` whitelist**. Implement the
     15-second takeover state machine and the closed-vocabulary radio.
     Wire `AuditService.Log` for `session.emergency_executed` emitted by
     the dead-man's switch handler in the Hub.
-17. Add the **layout dashboard** (`HomePage.tsx` – three live tables,
+18. Add the **layout dashboard** (`HomePage.tsx` – three live tables,
     §6.3c) and the **interlocking view** (`InterlockingPage.tsx` –
     occupy / leave with displacement confirm, navigation guard, radio
     panel, §6.3d). Add `layout_vehicles` table and presence tracking
@@ -125,11 +152,11 @@ Implemented in milestones; each milestone is independently shippable.
 
 **M6 – API keys + built-in MCP server.**
 
-18. Add the `api_keys` table, `APIKeyService` (mint / verify / revoke,
+19. Add the `api_keys` table, `APIKeyService` (mint / verify / revoke,
     hard cap 365 days), and the corresponding REST endpoints plus a
     React screen to mint and revoke keys (showing plaintext exactly
     once). Each key is bound to the layout that was active when minted.
-19. Add the `pkgs/server/mcp` package using
+20. Add the `pkgs/server/mcp` package using
     `github.com/mark3labs/mcp-go`. Wire the SSE handler under `/mcp`
     behind the API-key middleware, and add a `loco server --mcp-stdio`
     subcommand for local clients (Claude Desktop / Cursor). Expose the
@@ -137,7 +164,7 @@ Implemented in milestones; each milestone is independently shippable.
 
 **M7 – Server-side scripts (Goja, sibling `scripts-executor` process).**
 
-20. Add the `scripts` and `script_attachments` tables,
+21. Add the `scripts` and `script_attachments` tables,
     `ScriptService`, `ScriptSecurityContext` and the REST endpoints
     listed in §4.1. Enforce the 64 KiB source cap, the
     Vehicle-XOR-Train attachment invariant and the
@@ -145,7 +172,7 @@ Implemented in milestones; each milestone is independently shippable.
     layers. Wire `AuditService.Log` into every `Script` and
     `ScriptAttachment` mutation (create / update / delete /
     attach / detach).
-21. Build `pkgs/server/scripts/runtime.go`: a `Runtime` struct that
+22. Build `pkgs/server/scripts/runtime.go`: a `Runtime` struct that
     embeds `*goja.Runtime`, wires `findFirstLoco`, `findByDCCAddr`,
     `members`, `sleep`, `log` and the `Vehicle` helper via
     `vm.Set` + `UncapFieldNameMapper`, and exposes
@@ -156,23 +183,23 @@ Implemented in milestones; each milestone is independently shippable.
     `sleep`, `funcOff`) against a stubbed `LocoService` and
     asserting the exact sequence of `SetSpeed` / `SetFunction`
     calls.
-22. Build `pkgs/server/executor/`: the length-prefixed JSON codec,
+23. Build `pkgs/server/executor/`: the length-prefixed JSON codec,
     the `Client` used in `server`, the `Server` used in
     `scripts-executor`, and the `Supervisor` (exec the child,
     exponential backoff, health pings, in-flight run accounting).
     The supervisor must surface `system.status { scriptsExecutor }`
     over WS and the "Scripts unavailable" banner when it gives up.
-23. Add the `pkgs/scripts-executor/` package with `main.go` and a
+24. Add the `pkgs/scripts-executor/` package with `main.go` and a
     `loco scripts-executor` cobra command. The binary is built from
     the same Go module as `loco server`; CI builds both and the
     Makefile gets a `make scripts-executor` target.
-24. Ship the **Scripts page** (`web/src/pages/ScriptsPage.tsx`):
+25. Ship the **Scripts page** (`web/src/pages/ScriptsPage.tsx`):
     list, Monaco editor with `language="javascript"`, icon picker,
     attachment management, deadline slider. Add
     `ScriptButtons.tsx` and `ScriptConsole.tsx` to the vehicle and
     train control views so attached scripts render next to `F0`–
     `F32` and per-run logs surface inline.
-25. Wire the new WS events (`script.run`, `script.stop`,
+26. Wire the new WS events (`script.run`, `script.stop`,
     `script.log`, `script.runStarted`, `script.runStopped`,
     `script.changed`) and the dead-man's switch integration
     (`ScriptService.StopAllForUser` invoked from the Hub before
@@ -184,6 +211,6 @@ Implemented in milestones; each milestone is independently shippable.
 
 **M8 – Polish.**
 
-26. Redis (cache + Pub/Sub for multi-instance fan-out), background
+27. Redis (cache + Pub/Sub for multi-instance fan-out), background
     poller upgrades, optimistic UI tweaks, accessibility audit on the
     MUI screens.

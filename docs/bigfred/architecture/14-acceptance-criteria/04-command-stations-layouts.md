@@ -192,3 +192,123 @@
   that layout returns exactly the whitelisted set, and interlockings
   not on the whitelist are invisible in the UI. This applies to the
   system layout as well – its whitelist starts empty.
+
+#### Layout admin PIN and sudo elevation (§7a.7)
+
+- Every layout row carries a non-empty `admin_pin_hash` column.
+  `POST /api/v1/layouts` requires an `adminPin` field that passes the
+  configured length / digits-only checks; a missing or too-short PIN
+  is rejected with `pin_missing` / `pin_too_weak`. The bootstrap
+  migration that seeds the system layout writes a one-shot random
+  PIN to the column and prints it to the server log exactly once;
+  the first administrator is expected to rotate it from the layout
+  settings page.
+- `PUT /api/v1/layouts/{id}` accepts an optional `adminPin` field.
+  Submitting the request with the field **omitted or set to an
+  empty string** is a no-op for the PIN: the existing hash is left
+  untouched. Submitting a non-empty value rotates the PIN
+  (argon2id-hashed in `LayoutService.UpdateAdminPIN`) and writes a
+  `layout.admin_pin_changed` audit row whose `Metadata` carries
+  only the first 8 characters of the **previous** hash for
+  forensic correlation – never the plaintext, never the full hash.
+  The system layout accepts `adminPin` (it still needs a rotatable
+  PIN) even though `name` is rejected with `default_layout_immutable`.
+- The admin layout-settings UI renders the PIN field as a numeric
+  text input with a helper line "Pozostawienie pustego pola NIE
+  zmienia PIN-u" (pl) / "Leaving this field blank does NOT change
+  the PIN" (en). The page never submits the rotation request when
+  the field is blank, so the "no reset" semantic is enforced both
+  client- and server-side.
+
+- Two icons live on the top `AppBar` for every authenticated user:
+  a **closed-padlock** (admin elevation) and an **engineer's-cap**
+  (signalman elevation). Clicking either opens a `<SudoPinDialog>`
+  modal; submitting the dialog calls
+  `POST /api/v1/layouts/{layoutId}/sudo { target, pin }` against the
+  layout the JWT is bound to. Cross-layout sudo is rejected with
+  `422 layout_mismatch`; this is structurally impossible from the UI
+  but defended at the API.
+- On a successful PIN match the server inserts (or, if a row
+  already exists, **updates**) a `sudo_elevations` row with
+  `expires_at = now() + cfg.SudoTTL` (default 2 minutes; bounds
+  `[1m, 10m]` enforced at startup), writes
+  `auth.sudo_granted` to the audit log, and broadcasts
+  `auth.elevationChanged { target, granted:true, expiresAt,
+  reason:"granted"|"renewed" }` over the WS hub to every live
+  session of the caller. The icon flips to its **open** variant
+  with a live `MM:SS` countdown badge sourced from `expiresAt`.
+- A second click on an already-elevated icon revokes the grant:
+  the UI calls `DELETE /api/v1/layouts/{layoutId}/sudo { target }`
+  (idempotent, returns `200` even when no row existed),
+  `auth.sudo_revoked { reason:"user_action" }` is audited, and
+  `auth.elevationChanged { granted:false }` fans out to every live
+  session – the icon reverts to closed across desktop and phone
+  simultaneously.
+- The janitor goroutine (the same one that reaps leases and
+  takeovers, §7 cross-cutting concern 9) deletes
+  `sudo_elevations` rows where `expires_at <= now()` every 30 s and
+  emits `auth.sudo_expired` (actor = system user id `0`,
+  login `"system"`) plus `auth.elevationChanged { granted:false,
+  reason:"expired" }`. The UI countdown reaches 00:00 at the
+  expected wall-clock instant regardless of the janitor's lag,
+  because the policy layer treats a row with
+  `expires_at <= now()` as already deleted (`AuthService.Effective`
+  filters with `AndGt("expires_at", now)`).
+- Failed PIN attempts increment two Redis counters
+  (`auth:sudo_fail:<userId>:<layoutId>` and
+  `auth:sudo_fail:<ip>`) with exponential back-off
+  (1 s, 2 s, 4 s, …, 60 s); after `cfg.FailAttempts` consecutive
+  misses the (userId, layoutId) tuple is soft-locked for
+  `cfg.LockDuration` (default 5 minutes). The next call returns
+  `429 sudo_locked` with a `Retry-After` header and an
+  `auth.sudo_locked` audit row is written.
+- `AuthService.Logout` deletes every `sudo_elevations` row of the
+  caller (any layout, any target) in the same transaction as the
+  JWT-blacklist insert, audits each row with
+  `reason:"logout"`, and broadcasts
+  `auth.elevationChanged { granted:false, reason:"logout" }` to
+  every other live session of the user before disconnecting the
+  current one.
+- `LayoutService.Delete` cascades `sudo_elevations` for the
+  deleted layout, audits `reason:"layout_deleted"`, and fans out
+  `auth.elevationChanged` to the affected sessions. In practice
+  `409 layout_in_use` rejects deletion while any session is still
+  pinned to the layout, so this branch only fires for empty
+  layouts.
+
+- A user with **only a sudo `admin` elevation** can:
+  - register a vehicle outside their own DCC pool
+    (`vehicle.dcc_address_outside_pool` is bypassed by
+    `LocoSecurityContext.CanRegisterLoco` when the actor `Has(admin)`),
+  - grant a temporary role to another user
+    (`POST /api/v1/users/{id}/temp-role`),
+  - read the audit log (`GET /api/v1/audit-log`).
+  All three operations succeed identically to a permanent admin.
+- A user with **only a sudo `admin` elevation** is rejected with
+  `requires_non_sudo_admin` on every layout-management write:
+  `POST /api/v1/layouts`, `PUT /api/v1/layouts/{id}` (both with
+  `name` and with `adminPin`), `DELETE /api/v1/layouts/{id}`,
+  `POST/DELETE /api/v1/layouts/{id}/lock`,
+  `POST/DELETE /api/v1/layouts/{id}/command-stations`,
+  `POST/DELETE /api/v1/layouts/{id}/signalmen`,
+  `DELETE /api/v1/layouts/{id}/interlockings/{interlockingId}`.
+  This includes the **PIN rotation path** – rotating the admin PIN
+  with a sudo-elevated session is the single most important
+  operation that must fail, otherwise the sudo user could lock the
+  real admin out during the 2-minute window. The matching test
+  case grants a sudo elevation, attempts the rotation, asserts
+  `403 requires_non_sudo_admin`, and verifies the
+  `Layout.AdminPINHash` column is unchanged.
+- A user with **only a sudo `signalman` elevation** can occupy any
+  interlocking whitelisted in the active layout, request takeovers
+  while occupying, and add an interlocking to the layout's
+  whitelist. They cannot remove an interlocking from the whitelist
+  (admin-only, sudo or not denies via `requires_non_sudo_admin`)
+  and their elevation does not grant any driving authority.
+- `GET /api/v1/auth/me` returns
+  `effectiveRoles: [{ role, source }]` with
+  `source ∈ {"permanent", "temp_grant", "layout_signalman", "sudo"}`.
+  The frontend's lock / signalman icon visual state is sourced
+  exclusively from the `"sudo"` rows; `auth.me` on WS reconnect
+  (§7a.6) carries the same set so the icons restore to the correct
+  open / closed state across a refresh.

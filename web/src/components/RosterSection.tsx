@@ -67,6 +67,8 @@ export default function RosterSection({ layoutId }: Props) {
     );
 
   const ownsRow = (ownerId: number) => me?.id === ownerId;
+  const isAdmin = me?.effectiveRole === "admin";
+  const canRemoveFromRoster = (ownerId: number) => ownsRow(ownerId) || isAdmin;
 
   return (
     <Stack spacing={3}>
@@ -126,7 +128,7 @@ export default function RosterSection({ layoutId }: Props) {
                       )}
                     </TableCell>
                     <TableCell align="right">
-                      {ownsRow(row.ownerId) && (
+                      {canRemoveFromRoster(row.ownerId) && (
                         <Tooltip title={t("vehicle:roster.removeButton")}>
                           <IconButton
                             size="small"
@@ -203,7 +205,7 @@ export default function RosterSection({ layoutId }: Props) {
                       )}
                     </TableCell>
                     <TableCell align="right">
-                      {ownsRow(row.ownerId) && (
+                      {canRemoveFromRoster(row.ownerId) && (
                         <Tooltip title={t("vehicle:roster.removeButton")}>
                           <IconButton
                             size="small"

@@ -1,25 +1,26 @@
 ### 7a.5 Permission matrix
 
-| Capability                                  | driver (own) | driver (leased) | signalman (idle) | signalman (active takeover) | admin (permanent) | admin (sudo) | signalman (sudo) |
-|---------------------------------------------|:------------:|:---------------:|:----------------:|:---------------------------:|:-----------------:|:------------:|:----------------:|
-| Drive vehicle / train                       | ✅            | ✅               | ❌                | ✅                           | ❌¹                | ❌¹           | ❌                |
-| Edit vehicle metadata, write CV             | ✅            | ❌               | ❌                | ❌                           | ❌¹                | ❌¹           | ❌                |
-| Register vehicle (within own DCC pool)      | ✅            | n/a             | n/a              | n/a                         | ❌¹                | ❌¹           | n/a              |
-| Register vehicle outside the user's DCC pool³ | ❌            | n/a             | n/a              | n/a                         | ✅                 | ✅            | n/a              |
-| Create / edit train                         | ✅            | ❌               | ❌                | ❌                           | ❌¹                | ❌¹           | ❌                |
-| Lease out a vehicle / train                 | ✅            | ❌               | ❌                | ❌                           | ❌¹                | ❌¹           | ❌                |
-| Occupy an interlocking                      | ❌            | ❌               | ✅                | ✅                           | ❌¹                | ❌¹           | ✅                |
-| Request takeover                            | ❌            | ❌               | ❌                | ✅²                          | ❌¹                | ❌¹           | ✅²               |
-| Add an interlocking to the layout whitelist  | ❌            | ❌               | ✅                | ✅                           | ✅                 | ✅            | ✅                |
-| Manage users, roles, DCC pools              | ❌            | ❌               | ❌                | ❌                           | ✅                 | ✅            | ❌                |
-| **Edit layout settings⁴**                    | ❌            | ❌               | ❌                | ❌                           | ✅                 | **❌⁵**       | ❌                |
-| **Rotate the layout admin PIN**              | ❌            | ❌               | ❌                | ❌                           | ✅                 | **❌⁵**       | ❌                |
-| Lock / unlock layout                        | ❌            | ❌               | ❌                | ❌                           | ✅                 | **❌⁵**       | ❌                |
-| Attach / detach command stations on layout   | ❌            | ❌               | ❌                | ❌                           | ✅                 | **❌⁵**       | ❌                |
-| Grant / revoke layout-scoped signalmen       | ❌            | ❌               | ❌                | ❌                           | ✅                 | **❌⁵**       | ❌                |
-| Delete layout                                | ❌            | ❌               | ❌                | ❌                           | ✅                 | **❌⁵**       | ❌                |
-| Read audit log                               | ❌            | ❌               | ❌                | ❌                           | ✅                 | ✅            | ❌                |
-| Self-elevate via layout admin PIN (`sudo`)   | ✅            | ✅               | ✅                | ✅                           | ✅                 | n/a          | n/a              |
+| Capability                                  | driver (own) | driver (leased) | signalman (idle) | signalman (active takeover) | admin (permanent) | admin (sudo) |
+|---------------------------------------------|:------------:|:---------------:|:----------------:|:---------------------------:|:-----------------:|:------------:|
+| Drive vehicle / train                       | ✅            | ✅               | ❌                | ✅                           | ❌¹                | ❌¹           |
+| Edit vehicle metadata, write CV             | ✅            | ❌               | ❌                | ❌                           | ❌¹                | ❌¹           |
+| Register vehicle (within own DCC pool)      | ✅            | n/a             | n/a              | n/a                         | ❌¹                | ❌¹           |
+| Register vehicle outside the user's DCC pool³ | ❌            | n/a             | n/a              | n/a                         | ✅                 | ✅            |
+| Create / edit train                         | ✅            | ❌               | ❌                | ❌                           | ❌¹                | ❌¹           |
+| Lease out a vehicle / train                 | ✅            | ❌               | ❌                | ❌                           | ❌¹                | ❌¹           |
+| Occupy an interlocking                      | ❌            | ❌               | ✅                | ✅                           | ❌¹                | ❌¹           |
+| Request takeover                            | ❌            | ❌               | ❌                | ✅²                          | ❌¹                | ❌¹           |
+| Add an interlocking to the layout whitelist  | ❌            | ❌               | ✅                | ✅                           | ✅                 | ✅            |
+| Manage users, roles, DCC pools              | ❌            | ❌               | ❌                | ❌                           | ✅                 | ✅            |
+| Edit layout settings⁴                        | ❌            | ❌               | ❌                | ❌                           | ✅                 | ✅            |
+| Rotate the layout admin PIN                  | ❌            | ❌               | ❌                | ❌                           | ✅                 | ✅            |
+| Lock / unlock layout                        | ❌            | ❌               | ❌                | ❌                           | ✅                 | ✅            |
+| Attach / detach command stations on layout   | ❌            | ❌               | ❌                | ❌                           | ✅                 | ✅            |
+| Grant / revoke layout-scoped signalmen       | ❌            | ❌               | ❌                | ❌                           | ✅                 | ✅            |
+| Delete layout                                | ❌            | ❌               | ❌                | ❌                           | ✅                 | ✅            |
+| Read audit log                               | ❌            | ❌               | ❌                | ❌                           | ✅                 | ✅            |
+| Self-elevate via layout admin PIN (`sudo`)   | ✅            | ✅               | ✅                | ✅                           | ✅                 | n/a          |
+| Self-grant permanent signalman via PIN      | ✅            | ✅               | n/a              | n/a                         | ✅                 | ✅            |
 
 ¹ `admin` is a management role only; if an admin also needs to drive,
    they must additionally hold the `driver` role (permanent or
@@ -36,12 +37,13 @@
    `LayoutSecurityContext.CanEditLayout` and friends in §7a.3:
    rename, lock/unlock, command-station attach/detach, layout-scoped
    signalmen list, interlocking whitelist removal, layout deletion
-   AND admin-PIN rotation. The first six are organisational decisions
-   that should outlast the 2-minute sudo window; the seventh is the
-   "lock the real admin out" trap that motivates the entire exception.
-⁵ Denied with `requires_non_sudo_admin`. This is the single
-   asymmetry between permanent and sudo `admin` and is the entire
-   point of the sudo concept (§7a.7): a sudo user can do **operational
-   admin work** in a club room (register a guest loco, grant a
-   one-shot temporary role, …) but cannot make **organisational**
-   changes to the layout itself.
+   and admin-PIN rotation. A sudo admin grants the same authority as
+   a permanent admin everywhere — the 2-minute window plus the
+   rate-limiter on the PIN dialog are the only guard rails (§7a.7).
+
+The signalman icon next to the padlock (§7a.7) is **not** a sudo
+elevation: it writes a permanent `LayoutSignalman` row with
+`expires_at = NULL`, so a user that promotes themselves keeps the
+signalman role inside that layout until they (or an admin) revoke
+it. The matrix row "signalman (idle)" / "signalman (active takeover)"
+applies to such a user from the moment the row is persisted.

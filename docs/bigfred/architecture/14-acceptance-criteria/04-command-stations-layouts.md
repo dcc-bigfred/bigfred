@@ -284,31 +284,28 @@
     (`POST /api/v1/users/{id}/temp-role`),
   - read the audit log (`GET /api/v1/audit-log`).
   All three operations succeed identically to a permanent admin.
-- A user with **only a sudo `admin` elevation** is rejected with
-  `requires_non_sudo_admin` on every layout-management write:
-  `POST /api/v1/layouts`, `PUT /api/v1/layouts/{id}` (both with
-  `name` and with `adminPin`), `DELETE /api/v1/layouts/{id}`,
-  `POST/DELETE /api/v1/layouts/{id}/lock`,
-  `POST/DELETE /api/v1/layouts/{id}/command-stations`,
-  `POST/DELETE /api/v1/layouts/{id}/signalmen`,
-  `DELETE /api/v1/layouts/{id}/interlockings/{interlockingId}`.
-  This includes the **PIN rotation path** – rotating the admin PIN
-  with a sudo-elevated session is the single most important
-  operation that must fail, otherwise the sudo user could lock the
-  real admin out during the 2-minute window. The matching test
-  case grants a sudo elevation, attempts the rotation, asserts
-  `403 requires_non_sudo_admin`, and verifies the
-  `Layout.AdminPINHash` column is unchanged.
-- A user with **only a sudo `signalman` elevation** can occupy any
-  interlocking whitelisted in the active layout, request takeovers
-  while occupying, and add an interlocking to the layout's
-  whitelist. They cannot remove an interlocking from the whitelist
-  (admin-only, sudo or not denies via `requires_non_sudo_admin`)
-  and their elevation does not grant any driving authority.
+- A user with **only a sudo `admin` elevation** passes EVERY
+  admin-only check while the elevation is live: layout creation,
+  rename, PIN rotation (`PUT /api/v1/layouts/{id} { adminPin }`),
+  lock / unlock, command-station attach/detach, signalman list,
+  interlocking removal AND layout deletion all succeed identically
+  to a permanent admin. The matching test case grants a sudo
+  elevation, rotates the PIN, asserts the new digest verifies and
+  the old one does not. The 2-minute window plus the PIN-dialog
+  rate-limiter are the only guard rails (§7a.7.6).
+- The **engineer's-cap icon** lives next to the padlock and writes
+  a **permanent** `LayoutSignalman` row (`expires_at = NULL`) after
+  the same PIN check. Acceptance: a non-signalman user clicks the
+  icon, types the layout admin PIN, and immediately afterwards
+  every signalman-only API call inside the layout (occupy
+  interlocking, request takeover, add to whitelist) succeeds for
+  the rest of the session and across reconnects. Clicking the icon
+  again — or hitting `DELETE /api/v1/layouts/{id}/signalman` — drops
+  the row and restores the original effective role.
 - `GET /api/v1/auth/me` returns
-  `effectiveRoles: [{ role, source }]` with
-  `source ∈ {"permanent", "temp_grant", "layout_signalman", "sudo"}`.
-  The frontend's lock / signalman icon visual state is sourced
-  exclusively from the `"sudo"` rows; `auth.me` on WS reconnect
-  (§7a.6) carries the same set so the icons restore to the correct
-  open / closed state across a refresh.
+  `{ effectiveRole, isSignalman, sudo: { grantedAt, expiresAt }|null }`.
+  The frontend padlock indicator drives its countdown from
+  `sudo.expiresAt`; the engineer's-cap indicator lights up when
+  `effectiveRole === "signalman"`. `auth.me` on WS reconnect
+  (§7a.6) carries the same payload so the icons restore to the
+  correct state across a refresh.

@@ -36,6 +36,8 @@ func register(m *migrator.Migrator) {
 	m.Register(20260525_000007, createTrainsUp, createTrainsDown)
 	m.Register(20260525_000008, createLayoutVehiclesUp, createLayoutVehiclesDown)
 	m.Register(20260525_000009, addUsersActiveColumnUp, addUsersActiveColumnDown)
+	m.Register(20260525_000010, addLayoutsAdminPINUp, addLayoutsAdminPINDown)
+	m.Register(20260525_000011, createSudoElevationsUp, createSudoElevationsDown)
 }
 
 func createUsersUp(s *rel.Schema) {
@@ -124,7 +126,7 @@ func createLayoutSignalmenUp(s *rel.Schema) {
 		t.Int("user_id", rel.Unsigned(true))
 		t.Int("granted_by", rel.Unsigned(true), rel.Default(0))
 		t.DateTime("granted_at")
-		t.DateTime("expires_at")
+		t.DateTime("expires_at", rel.Required(false))
 
 		t.Unique([]string{"layout_id", "user_id"})
 	})
@@ -290,4 +292,51 @@ func addUsersActiveColumnDown(s *rel.Schema) {
 	s.AlterTable("users", func(t *rel.AlterTable) {
 		t.DropColumn("active")
 	})
+}
+
+// addLayoutsAdminPINUp installs the `admin_pin_hash` column on the
+// `layouts` table (§7a.7). The column is NOT NULL — every layout
+// (including the bootstrap system row) MUST carry a digest so the
+// sudo flow has a comparable hash on day one. SQLite forbids
+// adding a NOT NULL column without a default, hence the empty-string
+// fallback. The seeder rotates the bootstrap PIN to the well-known
+// "0000" value (logged on first boot, mirrors the admin login
+// PIN-warning UX) on freshly-created installations; existing rows
+// keep their empty digest until an admin rotates it via the layout
+// settings dialog (the empty digest can never match any PIN, so the
+// migration is non-destructive but does deactivate sudo until the
+// rotation happens — same trade-off as the admin PIN rotation).
+func addLayoutsAdminPINUp(s *rel.Schema) {
+	s.AlterTable("layouts", func(t *rel.AlterTable) {
+		t.String("admin_pin_hash", rel.Default(""))
+	})
+}
+
+func addLayoutsAdminPINDown(s *rel.Schema) {
+	s.AlterTable("layouts", func(t *rel.AlterTable) {
+		t.DropColumn("admin_pin_hash")
+	})
+}
+
+// createSudoElevationsUp installs the `sudo_elevations` table that
+// backs domain.SudoElevation (§7a.7). Sudo is admin-only; the unique
+// index guarantees at most one active row per (user_id, layout_id)
+// so the service-level "renew the timer" path is a single upsert.
+// Expired rows are reaped by the janitor goroutine; nothing relies
+// on stale rows hanging around once `expires_at` passes.
+func createSudoElevationsUp(s *rel.Schema) {
+	s.CreateTable("sudo_elevations", func(t *rel.Table) {
+		t.ID("id")
+		t.Int("user_id", rel.Unsigned(true))
+		t.Int("layout_id", rel.Unsigned(true))
+		t.DateTime("granted_at")
+		t.DateTime("expires_at")
+
+		t.Unique([]string{"user_id", "layout_id"})
+	})
+	s.Exec(rel.Raw(`CREATE INDEX sudo_elevations_expires_at ON sudo_elevations(expires_at)`))
+}
+
+func createSudoElevationsDown(s *rel.Schema) {
+	s.DropTable("sudo_elevations")
 }

@@ -26,6 +26,7 @@ type RouterConfig struct {
 	Trains         *service.TrainService
 	LayoutVehicles *service.LayoutVehicleService
 	DCCPool        *service.DCCPoolService
+	Sudo           *service.SudoService
 	Hub            *ws.Hub
 
 	// AllowedOrigins is forwarded verbatim to the CORS middleware.
@@ -59,14 +60,15 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		MaxAge:           300,
 	}))
 
-	authH := NewAuthHandler(cfg.Auth, cfg.SecureCookie)
+	authH := NewAuthHandler(cfg.Auth, cfg.Sudo, cfg.SecureCookie)
 	layoutH := NewLayoutHandler(cfg.Layouts)
 	interlockingH := NewInterlockingHandler(cfg.Interlockings, cfg.Occupancy, cfg.Auth)
 	presenceH := NewPresenceHandler(cfg.Presence)
 	vehicleH := NewVehicleHandler(cfg.Vehicles, cfg.LayoutVehicles, cfg.DCCPool)
 	trainH := NewTrainHandler(cfg.Trains, cfg.LayoutVehicles)
-	rosterH := NewLayoutRosterHandler(cfg.LayoutVehicles)
+	rosterH := NewLayoutRosterHandler(cfg.LayoutVehicles, cfg.Auth)
 	userH := NewUserHandler(cfg.Users)
+	sudoH := NewSudoHandler(cfg.Sudo)
 
 	r.Route("/api/v1", func(r chi.Router) {
 		// WebSocket upgrade — auth reads cookie / ?token= inline.
@@ -123,8 +125,19 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			r.Get("/layouts/{id}", layoutH.Get)
 			r.Get("/layouts/{id}/interlockings", layoutH.ListInterlockings)
 
+			// Sudo elevation (§7a.7) — open to every authenticated
+			// caller; the service guards entry with the layout
+			// admin PIN. Two flavours:
+			//   /sudo       → 2-min temporary admin elevation
+			//   /signalman  → permanent self-grant of the
+			//                 layout-scoped signalman role
+			r.Post("/layouts/{id}/sudo", sudoH.RequestSudo)
+			r.Delete("/layouts/{id}/sudo", sudoH.RevokeSudo)
+			r.Post("/layouts/{id}/signalman", sudoH.RequestSignalman)
+			r.Delete("/layouts/{id}/signalman", sudoH.RevokeSignalman)
+
 			r.Group(func(r chi.Router) {
-				r.Use(RequireRole(domain.RoleAdmin))
+				r.Use(RequireRole(cfg.Auth, domain.RoleAdmin))
 				r.Get("/interlockings/catalogue", interlockingH.ListCatalogue)
 				r.Post("/layouts", layoutH.Create)
 				r.Put("/layouts/{id}", layoutH.Update)

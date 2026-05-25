@@ -1,5 +1,6 @@
 {
   "title": "Layout dashboard",
+  "editLayoutSettings": "Edit layout settings",
   "subtitle": "Signed in as {{login}}.",
   "greetingAnon": "Welcome!",
   "loadError": "Could not load dashboard data.",

@@ -93,6 +93,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	interlockings := repo.NewInterlockings(repository)
 	layoutInterlockings := repo.NewLayoutInterlockings(repository)
 	layoutSignalmen := repo.NewLayoutSignalmen(repository)
+	sudoElevations := repo.NewSudoElevations(repository)
 	interlockingSessions := repo.NewInterlockingSessions(repository)
 	dccPools := repo.NewDCCAddressRanges(repository)
 	vehicles := repo.NewVehicles(repository)
@@ -103,17 +104,18 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 
 	layoutSvc := service.NewLayoutService(layouts, interlockings, layoutInterlockings)
 	interlockingSvc := service.NewInterlockingService(interlockings, layoutInterlockings)
-	authSvc := service.NewAuthService(users, layoutSvc, layoutSignalmen, service.AuthConfig{JWTSecret: secret})
+	authSvc := service.NewAuthService(users, layoutSvc, layoutSignalmen, sudoElevations, service.AuthConfig{JWTSecret: secret})
 	dccPoolSvc := service.NewDCCPoolService(dccPools)
 	vehicleSvc := service.NewVehicleService(vehicles, dccPoolSvc, trainMembers)
 	trainSvc := service.NewTrainService(trains, trainMembers, vehicles)
 	userSvc := service.NewUserService(users, vehicles, trains, dccPoolSvc)
 
 	hub := ws.NewHub()
+	sudoSvc := service.NewSudoService(sudoElevations, layoutSignalmen, layoutSvc, hub, service.DefaultSudoConfig)
 	presenceSvc := service.NewPresenceService(hub, authSvc, users, interlockingSessions, interlockings, layoutInterlockings)
 	hub.SetPresenceRefresher(presenceSvc)
 	occupancySvc := service.NewInterlockingOccupancyService(
-		interlockings, layoutInterlockings, interlockingSessions, users, layoutSignalmen,
+		interlockings, layoutInterlockings, interlockingSessions, users,
 		authSvc, hub, presenceSvc,
 	)
 	layoutVehicleSvc := service.NewLayoutVehicleService(
@@ -121,6 +123,9 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	)
 
 	go hub.Run(ctx)
+	// Janitor for expired sudo elevations (§7a.7). Runs in its own
+	// goroutine so a slow SQLite write doesn't block the WS hub.
+	go sudoSvc.RunJanitor(ctx)
 
 	// Seed the bootstrap system layout BEFORE the admin account so
 	// the very first login can pick it from the dropdown without
@@ -128,7 +133,8 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	if seeded, err := layoutSvc.EnsureSystemLayout(ctx); err != nil {
 		return fmt.Errorf("seed system layout: %w", err)
 	} else if seeded {
-		log.Info("bootstrap system layout created (Name = default, IsSystem = true)")
+		log.WithField("admin_pin", service.SystemLayoutDefaultAdminPIN).
+			Warn("bootstrap system layout created — CHANGE THE ADMIN PIN AFTER FIRST LOGIN")
 	}
 
 	seeded, err := service.SeedAdmin(ctx, users, service.SeedDefaults)
@@ -162,6 +168,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		Trains:         trainSvc,
 		LayoutVehicles: layoutVehicleSvc,
 		DCCPool:        dccPoolSvc,
+		Sudo:           sudoSvc,
 		Hub:            hub,
 		AllowedOrigins: f.AllowedOrigins,
 		SecureCookie:   f.SecureCookie,

@@ -10,22 +10,24 @@ import (
 // (§7a.3).
 type InterlockingSecurityContext struct{}
 
-// CanOccupy decides whether actor may staff ilk inside layout when
-// layoutILK is the whitelist row (non-nil) and current is the active
-// session on the box, if any.
+// CanOccupy decides whether the caller may staff ilk inside layout
+// when layoutILK is the whitelist row (non-nil) and current is the
+// active session on the box, if any. `eff` is the caller's effective
+// role set inside the layout (§7a.2) — sudo admin counts the same as
+// a permanent admin or layout signalman grant.
 func (InterlockingSecurityContext) CanOccupy(
-	actor domain.User,
+	eff domain.EffectiveRoles,
+	actorID uint,
 	layoutILK *domain.LayoutInterlocking,
-	layoutSignalman *domain.LayoutSignalman,
 	current *domain.InterlockingSession,
 ) Decision {
 	if layoutILK == nil {
 		return Deny("interlocking_not_in_layout")
 	}
-	if actor.Role != domain.RoleAdmin && layoutSignalman == nil {
+	if !eff.Has(domain.RoleSignalman) && !eff.Has(domain.RoleAdmin) {
 		return Deny("not_signalman")
 	}
-	if current != nil && current.SignalmanUserID == actor.ID {
+	if current != nil && current.SignalmanUserID == actorID {
 		return Allow
 	}
 	if current != nil {
@@ -34,20 +36,20 @@ func (InterlockingSecurityContext) CanOccupy(
 	return Allow
 }
 
-// CanDisplace allows a signalman to take over an already-staffed box
-// when the client sends force:true.
+// CanDisplace allows a signalman (or admin, including sudo) to take
+// over an already-staffed box when the client sends force:true.
 func (InterlockingSecurityContext) CanDisplace(
-	actor domain.User,
-	layoutSignalman *domain.LayoutSignalman,
+	eff domain.EffectiveRoles,
 	current *domain.InterlockingSession,
+	actorID uint,
 ) Decision {
-	if actor.Role != domain.RoleAdmin && layoutSignalman == nil {
+	if !eff.Has(domain.RoleSignalman) && !eff.Has(domain.RoleAdmin) {
 		return Deny("not_signalman")
 	}
 	if current == nil {
 		return Allow
 	}
-	if current.SignalmanUserID == actor.ID {
+	if current.SignalmanUserID == actorID {
 		return Allow
 	}
 	return Allow

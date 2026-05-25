@@ -1,5 +1,6 @@
 {
   "title": "Pulpit makiety",
+  "editLayoutSettings": "Edytuj ustawienia makiety",
   "subtitle": "Zalogowano jako {{login}}.",
   "greetingAnon": "Witaj!",
   "loadError": "Nie udało się załadować danych pulpitu.",

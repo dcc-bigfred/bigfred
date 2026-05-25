@@ -55,5 +55,10 @@
   "user_has_trains": "Cannot delete the user — they still own trains.",
   "cannot_deactivate_self": "You cannot deactivate your own account.",
   "cannot_delete_self": "You cannot delete your own account.",
-  "account_deactivated": "Your account has been deactivated. Please contact an administrator."
+  "account_deactivated": "Your account has been deactivated. Please contact an administrator.",
+  "layout_admin_pin_invalid": "The admin PIN must contain 4–8 digits.",
+  "layout_admin_pin_unset": "This layout has no admin PIN — ask the administrator to set one first.",
+  "sudo_invalid_pin": "Wrong layout admin PIN.",
+  "sudo_layout_mismatch": "Your session is bound to a different layout.",
+  "sudo_locked": "Too many failed attempts — try again in a moment."
 }

@@ -250,7 +250,10 @@ func (h *InterlockingHandler) Join(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(resp)
 }
 
-// Leave handles POST /api/v1/interlockings/{id}/leave (signalman).
+// Leave handles POST /api/v1/interlockings/{id}/leave. No ongoing
+// signalman/admin role is required — the service only ends a session
+// when the caller is its current occupant, so a user who staffed the
+// box under a since-expired sudo elevation can still release it.
 func (h *InterlockingHandler) Leave(w http.ResponseWriter, r *http.Request) {
 	interlockingID, ok := parseUintParam(r, "id")
 	if !ok {
@@ -260,16 +263,6 @@ func (h *InterlockingHandler) Leave(w http.ResponseWriter, r *http.Request) {
 	id, ok := IdentityFromContext(r.Context())
 	if !ok {
 		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
-		return
-	}
-
-	isSignalman, err := h.auth.IsEffectiveSignalman(r.Context(), id.User, id.Layout.ID)
-	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
-		return
-	}
-	if !isSignalman {
-		writeJSONError(w, http.StatusForbidden, "not_signalman")
 		return
 	}
 

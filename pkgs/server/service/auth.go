@@ -78,11 +78,12 @@ func (i Identity) HasRole(roles ...domain.Role) bool {
 // trusts the network boundary and focuses on getting argon2id + JWT
 // right.
 type AuthService struct {
-	users      *repo.Users
-	layouts    *LayoutService
-	signalmen  *repo.LayoutSignalmen
-	jwtSecret  []byte
-	sessionTTL time.Duration
+	users        *repo.Users
+	layouts      *LayoutService
+	signalmen    *repo.LayoutSignalmen
+	elevations   *repo.SudoElevations
+	jwtSecret    []byte
+	sessionTTL   time.Duration
 	cookieDomain string
 }
 
@@ -101,7 +102,12 @@ type AuthConfig struct {
 // 2-3) and to rehydrate the Layout side of Identity from a verified
 // JWT (so a layout deleted out of band immediately invalidates
 // outstanding cookies, mirroring the User branch).
-func NewAuthService(users *repo.Users, layouts *LayoutService, signalmen *repo.LayoutSignalmen, cfg AuthConfig) *AuthService {
+//
+// `elevations` plugs into Effective so sudo grants count toward the
+// role hierarchy (§7a.7). It MAY be nil only in legacy tests that
+// pre-date the sudo feature; in that case AuthService behaves as if
+// no sudo grants exist.
+func NewAuthService(users *repo.Users, layouts *LayoutService, signalmen *repo.LayoutSignalmen, elevations *repo.SudoElevations, cfg AuthConfig) *AuthService {
 	if len(cfg.JWTSecret) == 0 {
 		panic("service.NewAuthService: JWTSecret must not be empty")
 	}
@@ -119,6 +125,7 @@ func NewAuthService(users *repo.Users, layouts *LayoutService, signalmen *repo.L
 		users:      users,
 		layouts:    layouts,
 		signalmen:  signalmen,
+		elevations: elevations,
 		jwtSecret:  cfg.JWTSecret,
 		sessionTTL: ttl,
 	}
@@ -228,31 +235,58 @@ func (s *AuthService) Login(ctx context.Context, login, pin string, layoutID uin
 	return Identity{User: user, Layout: layout}, nil
 }
 
-// EffectiveDisplayRole returns the single role label shown on the
-// dashboard (§6.3c): admin beats signalman beats driver.
-func (s *AuthService) EffectiveDisplayRole(ctx context.Context, user domain.User, layoutID uint) (domain.Role, error) {
-	if user.Role == domain.RoleAdmin {
-		return domain.RoleAdmin, nil
-	}
+// Effective computes the flat role membership for (user, layout)
+// at the present moment (§7a.2 / §7a.7). Permanent role, layout
+// signalman grant and sudo admin elevation all collapse onto the
+// same set — a sudo admin is indistinguishable from a permanent
+// admin for every authority check (§7a.7.6).
+func (s *AuthService) Effective(ctx context.Context, user domain.User, layoutID uint) (domain.EffectiveRoles, error) {
+	roles := []domain.Role{user.Role}
 	now := time.Now().UTC()
-	ok, err := s.signalmen.HasActiveGrant(ctx, layoutID, user.ID, now)
+
+	if hasGrant, err := s.signalmen.HasActiveGrant(ctx, layoutID, user.ID, now); err != nil {
+		return domain.EffectiveRoles{}, err
+	} else if hasGrant {
+		roles = append(roles, domain.RoleSignalman)
+	}
+
+	if s.elevations != nil {
+		if _, err := s.elevations.FindActive(ctx, user.ID, layoutID, now); err == nil {
+			roles = append(roles, domain.RoleAdmin)
+		} else if !errors.Is(err, repo.ErrSudoElevationNotFound) {
+			return domain.EffectiveRoles{}, err
+		}
+	}
+	return domain.NewEffectiveRoles(roles...), nil
+}
+
+// EffectiveDisplayRole returns the single role label shown on the
+// dashboard (§6.3c): admin beats signalman beats driver. Sudo
+// elevations count — a sudo admin shows as "admin" until the
+// elevation expires.
+func (s *AuthService) EffectiveDisplayRole(ctx context.Context, user domain.User, layoutID uint) (domain.Role, error) {
+	roles, err := s.Effective(ctx, user, layoutID)
 	if err != nil {
 		return "", err
 	}
-	if ok {
+	if roles.Has(domain.RoleAdmin) {
+		return domain.RoleAdmin, nil
+	}
+	if roles.Has(domain.RoleSignalman) {
 		return domain.RoleSignalman, nil
 	}
 	return domain.RoleDriver, nil
 }
 
 // IsEffectiveSignalman reports whether the user may operate as a
-// signalman inside the layout: permanent admins always may; everyone
-// else needs an active LayoutSignalman grant (§7a.2).
+// signalman inside the layout. Admins (sudo or permanent) and
+// signalman grants both count.
 func (s *AuthService) IsEffectiveSignalman(ctx context.Context, user domain.User, layoutID uint) (bool, error) {
-	if user.Role == domain.RoleAdmin {
-		return true, nil
+	roles, err := s.Effective(ctx, user, layoutID)
+	if err != nil {
+		return false, err
 	}
-	return s.signalmen.HasActiveGrant(ctx, layoutID, user.ID, time.Now().UTC())
+	return roles.Has(domain.RoleSignalman) || roles.Has(domain.RoleAdmin), nil
 }
 
 // sessionClaims is the wire shape of the JWT payload. Keep it small —

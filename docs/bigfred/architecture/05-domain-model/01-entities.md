@@ -378,54 +378,37 @@ type LayoutVehicle struct {
 ```
 
 ```go
-// pkgs/server/domain/effective_roles.go
-// EffectiveRoles is the structured result of
-// `AuthService.Effective(ctx, layoutID)`. Lives in the domain
-// package because the security policy layer (§7a.3) is allowed to
-// depend on `pkgs/server/domain` only. See §7a.2 for the
-// computation and the four-source decomposition.
-type EffectiveRoles struct {
-    Permanent       Role                  // user.Role
-    TempGrants      map[Role]struct{}     // active TemporaryRole rows (admin-issued)
-    LayoutSignalman map[Role]struct{}     // ∈ {{}, { "signalman" }}
-    Sudo            map[Role]struct{}     // active SudoElevation rows for this layout
-}
-
-func (EffectiveRoles) Has(Role) bool         // any source
-func (EffectiveRoles) HasNonSudo(Role) bool  // any source other than sudo
-func (EffectiveRoles) IsSudoOnly(Role) bool  // role held but only via sudo
-```
-
-```go
 // pkgs/server/domain/sudo.go
 
-// SudoTarget is the closed catalogue of roles a user can self-grant
-// via the layout admin PIN. The two values mirror the two icons on
-// the top AppBar (closed-padlock = admin, engineer-cap = signalman).
-// See §7a.7 for the flow.
-type SudoTarget string
+// EffectiveRoles is the flat result of
+// `AuthService.Effective(ctx, user, layoutID)`. Permanent role,
+// admin-issued temporary grants, layout-scoped signalman grants
+// (admin-issued OR self-granted via the engineer's-cap icon) and
+// the sudo admin elevation collapse onto the same set. A sudo
+// admin grants the SAME authority as a permanent admin everywhere
+// (§7a.7).
+type EffectiveRoles struct {
+    // unexported set; constructed by NewEffectiveRoles.
+}
 
-const (
-    SudoTargetAdmin     SudoTarget = "admin"
-    SudoTargetSignalman SudoTarget = "signalman"
-)
+func NewEffectiveRoles(roles ...Role) EffectiveRoles
+func (EffectiveRoles) Has(Role) bool
 
-// SudoElevation is a short-lived, layout-scoped self-grant produced
-// by the sudo flow (§7a.7). One row exists per active grant; the
-// janitor goroutine deletes rows where ExpiresAt <= now() and emits
-// `auth.elevationChanged` to every WS session of the affected user.
+// SudoElevation is the short-lived, layout-scoped admin self-grant
+// produced by the sudo flow (§7a.7). The signalman icon next to the
+// padlock writes a permanent `LayoutSignalman` row instead, so this
+// type is admin-only.
 //
 // Invariants (DB + service):
-//   - exactly one ACTIVE row per (UserID, LayoutID, Target), enforced
-//     by a partial UNIQUE index on rows where ExpiresAt > now() at
-//     insert time AND the service refuses to insert if a row already
-//     exists (the "renew the timer" path simply UPDATEs ExpiresAt);
+//   - exactly one ACTIVE row per (UserID, LayoutID), enforced by a
+//     UNIQUE index. The "renew the timer" path is a single upsert
+//     that pushes ExpiresAt forward;
 //   - ExpiresAt - GrantedAt MUST equal the configured sudo TTL
 //     (default 2 minutes; bounds [1m, 10m] enforced by the server
 //     config – not by a per-row CHECK, because an operator may tune
 //     the TTL between deployments and existing rows must remain
 //     valid);
-//   - the row is created ONLY by `AuthService.Sudo` after a
+//   - the row is created ONLY by `SudoService.Sudo` after a
 //     successful PIN verification against `Layout.AdminPINHash`.
 //     There is no admin-side "grant sudo to user X" path – sudo is
 //     always a self-grant.
@@ -433,7 +416,6 @@ type SudoElevation struct {
     ID        uint
     UserID    uint
     LayoutID  uint
-    Target    SudoTarget
     GrantedAt time.Time
     ExpiresAt time.Time
 }
@@ -473,9 +455,10 @@ const (
     AuditLayoutUnlocked                 AuditAction = "layout.unlocked"
     AuditLayoutCommandStationAttached   AuditAction = "layout.command_station_attached"
     AuditLayoutCommandStationDetached   AuditAction = "layout.command_station_detached"
-    // Layout admin PIN was rotated by a (permanent, non-sudo) admin
-    // through the layout settings page. Metadata = {previous_hash_prefix}
-    // so the audit row never carries plaintext or full hash. See §7a.7.
+    // Layout admin PIN was rotated through the layout settings
+    // page. Any effective admin (permanent or sudo) may rotate it.
+    // Metadata = {previous_hash_prefix} so the audit row never
+    // carries plaintext or full hash. See §7a.7.
     AuditLayoutAdminPINChanged          AuditAction = "layout.admin_pin_changed"
 
     // Sudo elevation lifecycle (§7a.7). The actor is the user who

@@ -1,6 +1,8 @@
+import SettingsIcon from "@mui/icons-material/Settings";
 import {
   Alert,
   Box,
+  Button,
   CircularProgress,
   Container,
   Paper,
@@ -44,6 +46,17 @@ export default function HomePage() {
             <Typography variant="body1" color="text.secondary">
               {t("home:subtitle", { login: me.login })}
             </Typography>
+          )}
+          {me?.effectiveRole === "admin" && layoutId != null && layoutId > 0 && (
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<SettingsIcon />}
+              onClick={() => navigate(`/admin/layouts?edit=${layoutId}`)}
+              sx={{ mt: 1.5 }}
+            >
+              {t("home:editLayoutSettings")}
+            </Button>
           )}
         </Box>
 

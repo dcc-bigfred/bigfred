@@ -184,19 +184,21 @@ Server → Client:
   the supervisor lost its RPC channel to the executor and the run
   was implicitly aborted.
 
-Authorization (sudo elevation, §7a.7):
+Authorization (sudo elevation + signalman self-grant, §7a.7):
 
-- `auth.elevationChanged` `{ target: "admin"|"signalman", granted: bool, expiresAt?, reason?: "granted"|"renewed"|"expired"|"user_action"|"logout"|"layout_deleted" }`
-  – fan-out to **every live WS session of the affected user** when a
-  `SudoElevation` row is inserted, updated, or deleted. The frontend
-  listens for this event in `AppShell.tsx` to flip the lock /
-  signalman icons between "closed" and "open with countdown" without
-  polling. `expiresAt` is omitted when `granted == false`. The event
-  is the WS counterpart of the REST `POST/DELETE
-  /api/v1/layouts/{id}/sudo` endpoints; both write paths emit it so
-  starting sudo on the desktop instantly enables the indicator on the
-  phone, and the auto-expiry fan-out is the same code path as a
-  manual revoke.
+- `auth.elevationChanged` `{ layoutId, userId }` – fan-out to **every
+  live WS session of the affected user** when their sudo
+  elevation OR their signalman self-grant changes. The payload is
+  intentionally a "something changed" pulse — the frontend invalidates
+  the `useMe` query and re-renders the AppBar indicators (padlock
+  countdown for sudo admin, engineer's-cap binary state for the
+  permanent signalman row) from the refreshed `/api/v1/auth/me`
+  response. The event is emitted by `SudoService.Sudo /
+  Revoke / GrantSignalman / RevokeSignalman`, by the sudo janitor on
+  expiry, and by `AuthService.Logout` on session teardown. Starting
+  sudo on the desktop instantly flips the indicator on the phone,
+  and the auto-expiry fan-out is the same code path as a manual
+  revoke.
 
 Common:
 

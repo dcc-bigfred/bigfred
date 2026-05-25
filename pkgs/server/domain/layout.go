@@ -37,11 +37,22 @@ const SystemLayoutName = "default"
 type Layout struct {
 	ID        uint
 	Name      string
-	IsSystem  bool      `db:"is_system"`
+	IsSystem  bool `db:"is_system"`
 	Locked    bool
-	CreatedBy uint      `db:"created_by"` // admin user ID; 0 for the system seed
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	CreatedBy uint `db:"created_by"` // admin user ID; 0 for the system seed
+	// AdminPINHash is the argon2id digest of the layout's
+	// administrative PIN (§7a.7). The PIN gates "sudo" elevation
+	// to admin / signalman from inside the layout; any permanent
+	// admin may rotate it via PUT /api/v1/layouts/{id}.
+	//
+	// The column is NOT NULL at the DB level — every layout
+	// (including the system seed) carries a digest so the sudo
+	// flow has a comparable hash on day one. The plaintext PIN
+	// never lives in memory outside Login / Sudo: the service
+	// hashes it at the trust boundary and zeroes the buffer.
+	AdminPINHash string `db:"admin_pin_hash"`
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }
 
 // Table tells REL which physical table backs this struct.

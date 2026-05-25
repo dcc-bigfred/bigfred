@@ -31,6 +31,7 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import LockIcon from "@mui/icons-material/Lock";
 import LockOpenIcon from "@mui/icons-material/LockOpen";
 import { useTranslation } from "react-i18next";
+import { useSearchParams } from "react-router-dom";
 
 import { ApiError } from "../../api/client";
 import {
@@ -59,7 +60,8 @@ import {
 // (`["layouts","login"]`), so the login screen always sees a
 // freshly-locked layout vanish on the next open.
 export default function LayoutsPage() {
-  const { t } = useTranslation(["layout", "common", "errors"]);
+  const { t } = useTranslation(["layout", "common", "errors", "sudo"]);
+  const [searchParams, setSearchParams] = useSearchParams();
   const list = useAdminLayouts();
   const interlockingsCatalog = useInterlockings();
   const create = useCreateLayout();
@@ -81,6 +83,7 @@ export default function LayoutsPage() {
   const [selectedInterlockings, setSelectedInterlockings] = useState<
     Interlocking[]
   >([]);
+  const [adminPinInput, setAdminPinInput] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -94,6 +97,7 @@ export default function LayoutsPage() {
     setEditLayoutId(null);
     setNameInput("");
     setSelectedInterlockings([]);
+    setAdminPinInput("");
     setActionError(null);
     create.reset();
     update.reset();
@@ -118,6 +122,7 @@ export default function LayoutsPage() {
     setEditLayoutId(null);
     setNameInput("");
     setSelectedInterlockings([]);
+    setAdminPinInput("");
     setActionError(null);
   };
 
@@ -126,8 +131,19 @@ export default function LayoutsPage() {
     setEditLayoutId(target.id);
     setNameInput(target.name);
     setSelectedInterlockings([]);
+    setAdminPinInput("");
     setActionError(null);
   };
+
+  const editFromQuery = searchParams.get("edit");
+  useEffect(() => {
+    const id = Number(editFromQuery);
+    if (!editFromQuery || Number.isNaN(id) || !list.data || dialog) return;
+    const target = list.data.find((l) => l.id === id);
+    if (!target) return;
+    openEdit(target);
+    setSearchParams({}, { replace: true });
+  }, [editFromQuery, list.data, dialog, setSearchParams]);
 
   const openDelete = (target: Layout) => {
     setDialog({ kind: "delete", target });
@@ -143,10 +159,12 @@ export default function LayoutsPage() {
     if (!dialog) return;
     try {
       const interlockingIds = selectedInterlockings.map((i) => i.id);
+      const adminPin = adminPinInput.trim();
       if (dialog.kind === "create") {
         await create.mutateAsync({
           name: nameInput.trim(),
           interlockingIds,
+          adminPin: adminPin === "" ? undefined : adminPin,
         });
       } else if (dialog.kind === "edit") {
         const name = dialog.target.isSystem
@@ -156,6 +174,7 @@ export default function LayoutsPage() {
           id: dialog.target.id,
           name,
           interlockingIds,
+          adminPin: adminPin === "" ? undefined : adminPin,
         });
       } else if (dialog.kind === "delete") {
         await remove.mutateAsync(dialog.target.id);
@@ -432,6 +451,27 @@ export default function LayoutsPage() {
                 <CircularProgress size={24} />
               </Box>
             )}
+
+            <TextField
+              label={t("sudo:settings.pinLabel")}
+              value={adminPinInput}
+              onChange={(e) =>
+                setAdminPinInput(e.target.value.replace(/[^0-9]/g, "").slice(0, 8))
+              }
+              helperText={t("sudo:settings.pinHelp")}
+              type="password"
+              inputMode="numeric"
+              autoComplete="off"
+              fullWidth
+              slotProps={{
+                input: {
+                  inputProps: {
+                    pattern: "[0-9]*",
+                    maxLength: 8,
+                  },
+                },
+              }}
+            />
 
             {actionError && <Alert severity="error">{actionError}</Alert>}
           </Stack>

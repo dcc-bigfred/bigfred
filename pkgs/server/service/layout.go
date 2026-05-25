@@ -45,12 +45,46 @@ var (
 	// ErrSystemLayoutCannotBeLocked is returned by SetLocked on the
 	// IsSystem row.
 	ErrSystemLayoutCannotBeLocked = errors.New("default_layout_cannot_be_locked")
+
+	// ErrLayoutAdminPINInvalid is returned when the supplied PIN
+	// does not satisfy the digit / length policy (§7a.7). The same
+	// code is used for "PIN supplied at create time but malformed"
+	// and "PIN being rotated is malformed".
+	ErrLayoutAdminPINInvalid = errors.New("layout_admin_pin_invalid")
+
+	// ErrLayoutAdminPINUnset is returned by VerifyAdminPIN when the
+	// layout's `admin_pin_hash` column is empty (the post-migration
+	// default before any admin has rotated it). The HTTP layer maps
+	// it to 422 so the UI can prompt the admin to set the PIN
+	// before any sudo elevation is attempted.
+	ErrLayoutAdminPINUnset = errors.New("layout_admin_pin_unset")
+
+	// ErrLayoutAdminPINMismatch is returned by VerifyAdminPIN when
+	// the caller-supplied PIN doesn't match the stored digest.
+	// AuthService.Sudo translates it to its own `invalid_pin`
+	// rejection so brute-force counters stay in one place.
+	ErrLayoutAdminPINMismatch = errors.New("layout_admin_pin_mismatch")
 )
 
 // maxLayoutNameLen caps the human label so it fits the login
 // dropdown without truncation acrobatics. A modeling event name in
 // the wild rarely exceeds two words.
 const maxLayoutNameLen = 64
+
+// Layout admin PIN policy (§7a.7). Numeric, 4–8 digits — short
+// enough to type from memory on a phone, long enough to make
+// random guessing infeasible together with the rate limiter.
+const (
+	minLayoutAdminPINLength = 4
+	maxLayoutAdminPINLength = 8
+)
+
+// SystemLayoutDefaultAdminPIN is the well-known admin PIN seeded
+// onto a freshly-created system layout. Logged on first boot
+// alongside the bootstrap admin account so the operator can use
+// the sudo flow immediately. SHOULD be rotated through the layout
+// settings dialog after first login.
+const SystemLayoutDefaultAdminPIN = "0000"
 
 // LayoutService implements the CRUD + lifecycle rules described in
 // §3a.1 and §4.1 for Layout (Polish: makieta). It is intentionally
@@ -84,7 +118,9 @@ func NewLayoutService(
 // does not already exist. The operation is idempotent — calling it on
 // every server startup is safe. The seeded row has
 // Name = domain.SystemLayoutName, IsSystem = true, Locked = false,
-// CreatedBy = 0 (no admin user owns it).
+// CreatedBy = 0 (no admin user owns it), and AdminPINHash = the
+// argon2id digest of SystemLayoutDefaultAdminPIN so the sudo flow
+// has a comparable hash on day one.
 //
 // Returns true when the seed actually happened so the caller can
 // emit a one-shot log line.
@@ -95,14 +131,20 @@ func (s *LayoutService) EnsureSystemLayout(ctx context.Context) (bool, error) {
 		return false, err
 	}
 
+	hash, err := HashPIN(SystemLayoutDefaultAdminPIN)
+	if err != nil {
+		return false, err
+	}
+
 	now := time.Now().UTC()
 	layout := domain.Layout{
-		Name:      domain.SystemLayoutName,
-		IsSystem:  true,
-		Locked:    false,
-		CreatedBy: 0,
-		CreatedAt: now,
-		UpdatedAt: now,
+		Name:         domain.SystemLayoutName,
+		IsSystem:     true,
+		Locked:       false,
+		CreatedBy:    0,
+		AdminPINHash: hash,
+		CreatedAt:    now,
+		UpdatedAt:    now,
 	}
 	if err := s.layouts.Insert(ctx, &layout); err != nil {
 		return false, err
@@ -155,6 +197,12 @@ type CreateInput struct {
 	Name            string
 	CreatedBy       uint
 	InterlockingIDs []uint
+	// AdminPIN is the layout's initial sudo PIN (§7a.7). Empty
+	// means "seed with SystemLayoutDefaultAdminPIN" — same UX as
+	// the system layout, so a freshly-created layout already has
+	// a usable PIN until the admin rotates it. Must satisfy
+	// validateLayoutAdminPIN when non-empty.
+	AdminPIN string
 }
 
 // Create inserts a brand-new non-system layout. Name uniqueness and
@@ -188,14 +236,27 @@ func (s *LayoutService) Create(ctx context.Context, in CreateInput) (domain.Layo
 		return domain.Layout{}, err
 	}
 
+	pin := in.AdminPIN
+	if pin == "" {
+		pin = SystemLayoutDefaultAdminPIN
+	}
+	if err := validateLayoutAdminPIN(pin); err != nil {
+		return domain.Layout{}, err
+	}
+	hash, err := HashPIN(pin)
+	if err != nil {
+		return domain.Layout{}, err
+	}
+
 	now := time.Now().UTC()
 	layout := domain.Layout{
-		Name:      name,
-		IsSystem:  false,
-		Locked:    false,
-		CreatedBy: in.CreatedBy,
-		CreatedAt: now,
-		UpdatedAt: now,
+		Name:         name,
+		IsSystem:     false,
+		Locked:       false,
+		CreatedBy:    in.CreatedBy,
+		AdminPINHash: hash,
+		CreatedAt:    now,
+		UpdatedAt:    now,
 	}
 	if err := s.layouts.Insert(ctx, &layout); err != nil {
 		return domain.Layout{}, err
@@ -204,6 +265,76 @@ func (s *LayoutService) Create(ctx context.Context, in CreateInput) (domain.Layo
 		return domain.Layout{}, err
 	}
 	return layout, nil
+}
+
+// validateLayoutAdminPIN enforces the digit / length policy on a
+// candidate layout admin PIN (§7a.7). Returns ErrLayoutAdminPINInvalid
+// for any input that fails the check.
+func validateLayoutAdminPIN(pin string) error {
+	if len(pin) < minLayoutAdminPINLength || len(pin) > maxLayoutAdminPINLength {
+		return ErrLayoutAdminPINInvalid
+	}
+	for _, r := range pin {
+		if r < '0' || r > '9' {
+			return ErrLayoutAdminPINInvalid
+		}
+	}
+	return nil
+}
+
+// UpdateAdminPIN rotates the layout's admin PIN. The empty string is
+// treated as "no change" so a layout edit dialog that always submits
+// the field doesn't accidentally clobber the digest with an empty
+// hash. The system layout's PIN is rotatable too — the only
+// immutable field on the system row is the Name (§7a.1).
+//
+// The HTTP layer guards the call with the policy that "only a
+// non-sudo permanent admin may rotate the layout admin PIN" — see
+// §7a.3 / §7a.7.
+func (s *LayoutService) UpdateAdminPIN(ctx context.Context, id uint, newPIN string) (domain.Layout, error) {
+	layout, err := s.Get(ctx, id)
+	if err != nil {
+		return domain.Layout{}, err
+	}
+	if newPIN == "" {
+		return layout, nil
+	}
+	if err := validateLayoutAdminPIN(newPIN); err != nil {
+		return domain.Layout{}, err
+	}
+	hash, err := HashPIN(newPIN)
+	if err != nil {
+		return domain.Layout{}, err
+	}
+	layout.AdminPINHash = hash
+	layout.UpdatedAt = time.Now().UTC()
+	if err := s.layouts.Update(ctx, &layout); err != nil {
+		return domain.Layout{}, err
+	}
+	return layout, nil
+}
+
+// VerifyAdminPIN compares a candidate PIN against the layout's
+// stored digest (§7a.7). Returns:
+//
+//   - nil — match, caller may proceed with the elevation;
+//   - ErrLayoutAdminPINUnset — the layout has no PIN yet (an
+//     empty digest never matches anything);
+//   - ErrLayoutAdminPINMismatch — wrong PIN (the rate-limiter must
+//     count this towards the brute-force counter);
+//   - ErrLayoutNotFound — layout id is unknown.
+func (s *LayoutService) VerifyAdminPIN(ctx context.Context, id uint, pin string) error {
+	layout, err := s.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	if layout.AdminPINHash == "" {
+		return ErrLayoutAdminPINUnset
+	}
+	if err := verifyPIN(pin, layout.AdminPINHash); err != nil {
+		return ErrLayoutAdminPINMismatch
+	}
+	return nil
 }
 
 // Rename updates the layout's Name. The system row rejects with

@@ -1,0 +1,39 @@
+{
+  "tooltip": {
+    "admin": {
+      "idle": "Elevate to layout administrator (sudo)",
+      "active": "Sudo active: administrator — {{remaining}} remaining"
+    },
+    "signalman": {
+      "idle": "Promote yourself to signalman in this layout",
+      "active": "You are a signalman in this layout — click to step down"
+    }
+  },
+  "aria": {
+    "admin": {
+      "idle": "Activate admin sudo",
+      "active": "Revoke admin sudo"
+    },
+    "signalman": {
+      "idle": "Become signalman",
+      "active": "Step down from signalman"
+    }
+  },
+  "dialog": {
+    "title": {
+      "admin": "Layout admin PIN",
+      "signalman": "Layout admin PIN"
+    },
+    "description": {
+      "admin": "Enter the layout admin PIN to gain administrator powers for 2 minutes.",
+      "signalman": "Enter the layout admin PIN to permanently take the signalman role in this layout."
+    },
+    "pinLabel": "PIN",
+    "submit": "Elevate",
+    "cancel": "Cancel"
+  },
+  "settings": {
+    "pinLabel": "Layout admin PIN",
+    "pinHelp": "Leave blank to keep the current PIN. 4–8 digits required."
+  }
+}

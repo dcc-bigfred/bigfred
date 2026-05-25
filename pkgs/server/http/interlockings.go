@@ -135,12 +135,22 @@ type interlockingCreateRequest struct {
 
 // Create handles POST /api/v1/interlockings (admin only).
 func (h *InterlockingHandler) Create(w http.ResponseWriter, r *http.Request) {
+	actor, ok := IdentityFromContext(r.Context())
+	if !ok {
+		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	eff, err := h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
 	var req interlockingCreateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid_body")
 		return
 	}
-	row, err := h.svc.Create(r.Context(), service.InterlockingCreateInput{
+	row, err := h.svc.Create(r.Context(), eff, service.InterlockingCreateInput{
 		Name:     req.Name,
 		Location: req.Location,
 	})
@@ -165,12 +175,22 @@ func (h *InterlockingHandler) Update(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "invalid_id")
 		return
 	}
+	actor, ok := IdentityFromContext(r.Context())
+	if !ok {
+		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	eff, err := h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
 	var req interlockingUpdateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid_body")
 		return
 	}
-	row, err := h.svc.Update(r.Context(), interlockingID, service.InterlockingUpdateInput{
+	row, err := h.svc.Update(r.Context(), eff, interlockingID, service.InterlockingUpdateInput{
 		Name:     req.Name,
 		Location: req.Location,
 	})
@@ -189,7 +209,17 @@ func (h *InterlockingHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "invalid_id")
 		return
 	}
-	if err := h.svc.Delete(r.Context(), interlockingID); err != nil {
+	actor, ok := IdentityFromContext(r.Context())
+	if !ok {
+		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	eff, err := h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	if err := h.svc.Delete(r.Context(), eff, interlockingID); err != nil {
 		writeInterlockingError(w, err)
 		return
 	}
@@ -296,6 +326,8 @@ func writeInterlockingError(w http.ResponseWriter, err error) {
 		writeJSONError(w, http.StatusConflict, "interlocking_name_taken")
 	case errors.Is(err, service.ErrInterlockingNameRequired):
 		writeJSONError(w, http.StatusUnprocessableEntity, "interlocking_name_required")
+	case errors.Is(err, service.ErrInterlockingForbidden):
+		writeJSONError(w, http.StatusForbidden, "forbidden")
 	default:
 		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 	}

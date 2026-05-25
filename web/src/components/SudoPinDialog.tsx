@@ -17,7 +17,7 @@ import { ApiError } from "../api/client";
 // the two PIN-gated flows. Both share the dialog component because
 // the input affordances (numeric keypad, password masking, error
 // display) are identical.
-export type DialogTarget = "admin" | "signalman" | "promoteSignalman";
+export type DialogTarget = "admin" | "signalman" | "promoteSignalman" | "demoteSignalman";
 
 interface SudoPinDialogProps {
   open: boolean;

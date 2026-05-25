@@ -22,6 +22,7 @@ import { useMe } from "../api/auth";
 import { useDashboardInterlockings } from "../api/interlockings";
 import { useLayoutPresence } from "../api/presence";
 import PromoteSignalmanButton from "../components/PromoteSignalmanButton";
+import DemoteSignalmanButton from "../components/DemoteSignalmanButton";
 import RosterSection from "../components/RosterSection";
 
 export default function HomePage() {
@@ -82,7 +83,7 @@ export default function HomePage() {
                       <TableCell>{t("home:onlineUsers.columns.login")}</TableCell>
                       <TableCell>{t("home:onlineUsers.columns.role")}</TableCell>
                       <TableCell>{t("home:onlineUsers.columns.interlocking")}</TableCell>
-                      <TableCell align="right" width={56}>
+                      <TableCell align="right" width={96}>
                         {t("home:onlineUsers.columns.actions")}
                       </TableCell>
                     </TableRow>
@@ -106,7 +107,14 @@ export default function HomePage() {
                           </TableCell>
                           <TableCell align="right">
                             {layoutId != null && (
-                              <PromoteSignalmanButton layoutId={layoutId} user={user} />
+                              <Stack
+                                direction="row"
+                                spacing={0.5}
+                                justifyContent="flex-end"
+                              >
+                                <PromoteSignalmanButton layoutId={layoutId} user={user} />
+                                <DemoteSignalmanButton layoutId={layoutId} user={user} />
+                              </Stack>
                             )}
                           </TableCell>
                         </TableRow>

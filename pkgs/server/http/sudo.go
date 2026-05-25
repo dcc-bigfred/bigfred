@@ -19,6 +19,7 @@ import (
 //	POST   /api/v1/layouts/{id}/signalman  — permanent self-grant via PIN
 //	DELETE /api/v1/layouts/{id}/signalman  — drop own signalman grant
 //	POST   /api/v1/layouts/{id}/signalmen — admin grants signalman to another user
+//	DELETE /api/v1/layouts/{id}/signalmen/{userId} — admin revokes signalman grant
 //
 // The self-grant paths trust RequireAuth; the padlock and the
 // engineer's-cap icons always target the caller. GrantSignalmanToUser
@@ -198,6 +199,46 @@ func (h *SudoHandler) GrantSignalmanToUser(w http.ResponseWriter, r *http.Reques
 	}
 
 	if err := h.svc.GrantSignalmanToUser(r.Context(), actor.User.ID, req.UserID, layoutID); err != nil {
+		writeSudoError(w, h.svc, actor.User.ID, layoutID, err)
+		return
+	}
+	h.presence.RefreshAndBroadcast(r.Context(), layoutID)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// RevokeSignalmanFromUser handles DELETE
+// /api/v1/layouts/{id}/signalmen/{userId}. Requires effective admin
+// inside the session layout.
+func (h *SudoHandler) RevokeSignalmanFromUser(w http.ResponseWriter, r *http.Request) {
+	actor, layoutID, ok := h.resolveLayoutActor(w, r)
+	if !ok {
+		return
+	}
+	eff, err := h.auth.Effective(r.Context(), actor.User, layoutID)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	if d := (security.LayoutSecurityContext{}).CanGrantSignalmanToUser(eff); !d.Allowed {
+		writeJSONError(w, http.StatusForbidden, d.Reason)
+		return
+	}
+
+	targetUserID, ok := parseUintParam(r, "userId")
+	if !ok {
+		writeJSONError(w, http.StatusBadRequest, "invalid_id")
+		return
+	}
+	if _, err := h.users.Get(r.Context(), targetUserID); err != nil {
+		if errors.Is(err, service.ErrUserNotFound) {
+			writeJSONError(w, http.StatusNotFound, "user_not_found")
+			return
+		}
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+
+	if err := h.svc.RevokeSignalman(r.Context(), targetUserID, layoutID); err != nil {
 		writeSudoError(w, h.svc, actor.User.ID, layoutID, err)
 		return
 	}

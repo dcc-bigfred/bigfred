@@ -14,7 +14,8 @@
       "interlocking": "Interlocking",
       "actions": "Actions"
     },
-    "promoteSignalman": "Promote {{login}} to signalman"
+    "promoteSignalman": "Promote {{login}} to signalman",
+    "demoteSignalman": "Demote {{login}} to driver"
   },
   "interlockings": {
     "title": "Interlockings",

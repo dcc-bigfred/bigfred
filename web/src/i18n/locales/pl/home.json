@@ -14,7 +14,8 @@
       "interlocking": "Nastawnia",
       "actions": "Akcje"
     },
-    "promoteSignalman": "Awansuj {{login}} na nastawniczego"
+    "promoteSignalman": "Awansuj {{login}} na nastawniczego",
+    "demoteSignalman": "Degraduj {{login}} do maszynisty"
   },
   "interlockings": {
     "title": "Nastawnie",

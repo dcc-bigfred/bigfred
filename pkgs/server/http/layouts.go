@@ -18,12 +18,13 @@ import (
 // the layouts surface — wiring it next to the admin endpoints keeps
 // the JSON shape in one place.
 type LayoutHandler struct {
-	svc *service.LayoutService
+	svc  *service.LayoutService
+	auth *service.AuthService
 }
 
 // NewLayoutHandler returns a LayoutHandler bound to a LayoutService.
-func NewLayoutHandler(svc *service.LayoutService) *LayoutHandler {
-	return &LayoutHandler{svc: svc}
+func NewLayoutHandler(svc *service.LayoutService, auth *service.AuthService) *LayoutHandler {
+	return &LayoutHandler{svc: svc, auth: auth}
 }
 
 // layoutResponse is the canonical JSON shape of a Layout row. The
@@ -125,9 +126,14 @@ type createRequest struct {
 // adds the auth middleware; this handler trusts the identity in
 // context.
 func (h *LayoutHandler) Create(w http.ResponseWriter, r *http.Request) {
-	id, ok := IdentityFromContext(r.Context())
+	actor, ok := IdentityFromContext(r.Context())
 	if !ok {
 		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	eff, err := h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 		return
 	}
 	var req createRequest
@@ -135,9 +141,9 @@ func (h *LayoutHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "invalid_body")
 		return
 	}
-	layout, err := h.svc.Create(r.Context(), service.CreateInput{
+	layout, err := h.svc.Create(r.Context(), eff, service.CreateInput{
 		Name:            req.Name,
-		CreatedBy:       id.User.ID,
+		CreatedBy:       actor.User.ID,
 		InterlockingIDs: req.InterlockingIDs,
 		AdminPIN:        req.AdminPIN,
 	})
@@ -192,12 +198,17 @@ func (h *LayoutHandler) SetInterlockings(w http.ResponseWriter, r *http.Request)
 		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
+	eff, err := h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
 	var req setLayoutInterlockingsRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid_body")
 		return
 	}
-	rows, err := h.svc.SetInterlockings(r.Context(), layoutID, actor.User.ID, req.InterlockingIDs)
+	rows, err := h.svc.SetInterlockings(r.Context(), eff, layoutID, actor.User.ID, req.InterlockingIDs)
 	if err != nil {
 		writeLayoutInterlockingError(w, err)
 		return
@@ -239,24 +250,29 @@ func (h *LayoutHandler) Update(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
+	eff, err := h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
 	var req updateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid_body")
 		return
 	}
-	layout, err := h.svc.Rename(r.Context(), id, req.Name)
+	layout, err := h.svc.Rename(r.Context(), eff, id, req.Name)
 	if err != nil {
 		writeLayoutError(w, err)
 		return
 	}
 	if req.InterlockingIDs != nil {
-		if _, err := h.svc.SetInterlockings(r.Context(), id, actor.User.ID, req.InterlockingIDs); err != nil {
+		if _, err := h.svc.SetInterlockings(r.Context(), eff, id, actor.User.ID, req.InterlockingIDs); err != nil {
 			writeLayoutInterlockingError(w, err)
 			return
 		}
 	}
 	if req.AdminPIN != "" {
-		updated, err := h.svc.UpdateAdminPIN(r.Context(), id, req.AdminPIN)
+		updated, err := h.svc.UpdateAdminPIN(r.Context(), eff, id, req.AdminPIN)
 		if err != nil {
 			writeLayoutError(w, err)
 			return
@@ -274,7 +290,17 @@ func (h *LayoutHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "invalid_id")
 		return
 	}
-	if err := h.svc.Delete(r.Context(), id); err != nil {
+	actor, ok := IdentityFromContext(r.Context())
+	if !ok {
+		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	eff, err := h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	if err := h.svc.Delete(r.Context(), eff, id); err != nil {
 		writeLayoutError(w, err)
 		return
 	}
@@ -330,6 +356,8 @@ func writeLayoutError(w http.ResponseWriter, err error) {
 		writeJSONError(w, http.StatusUnprocessableEntity, "default_layout_undeletable")
 	case errors.Is(err, service.ErrLayoutAdminPINInvalid):
 		writeJSONError(w, http.StatusUnprocessableEntity, "layout_admin_pin_invalid")
+	case errors.Is(err, service.ErrLayoutForbidden):
+		writeJSONError(w, http.StatusForbidden, "forbidden")
 	default:
 		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 	}
@@ -341,6 +369,8 @@ func writeLayoutInterlockingError(w http.ResponseWriter, err error) {
 		writeJSONError(w, http.StatusNotFound, "layout_not_found")
 	case errors.Is(err, service.ErrInterlockingNotFound):
 		writeJSONError(w, http.StatusNotFound, "interlocking_not_found")
+	case errors.Is(err, service.ErrLayoutForbidden):
+		writeJSONError(w, http.StatusForbidden, "forbidden")
 	default:
 		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 	}

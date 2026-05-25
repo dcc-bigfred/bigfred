@@ -18,13 +18,14 @@ import (
 // no self-delete) through `security.UserSecurityContext`, so a
 // misrouted endpoint still fails closed.
 type UserHandler struct {
-	svc *service.UserService
-	sec security.UserSecurityContext
+	svc  *service.UserService
+	sec  security.UserSecurityContext
+	auth *service.AuthService
 }
 
 // NewUserHandler returns a UserHandler.
-func NewUserHandler(svc *service.UserService) *UserHandler {
-	return &UserHandler{svc: svc}
+func NewUserHandler(svc *service.UserService, auth *service.AuthService) *UserHandler {
+	return &UserHandler{svc: svc, auth: auth}
 }
 
 type dccPoolRangeResponse struct {
@@ -105,12 +106,22 @@ type userCreateRequest struct {
 
 // Create handles POST /api/v1/users.
 func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
+	actor, ok := IdentityFromContext(r.Context())
+	if !ok {
+		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	eff, err := h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
 	var req userCreateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid_body")
 		return
 	}
-	row, err := h.svc.Create(r.Context(), service.UserCreateInput{
+	row, err := h.svc.Create(r.Context(), eff, service.UserCreateInput{
 		Login:   req.Login,
 		PIN:     req.PIN,
 		Role:    req.Role,
@@ -149,6 +160,16 @@ func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "invalid_id")
 		return
 	}
+	actor, ok := IdentityFromContext(r.Context())
+	if !ok {
+		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	eff, err := h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
 	var req userUpdateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid_body")
@@ -169,7 +190,7 @@ func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 		ranges := toPoolRanges(*req.DCCPool)
 		in.DCCPool = &ranges
 	}
-	row, err := h.svc.Update(r.Context(), userID, in)
+	row, err := h.svc.Update(r.Context(), eff, userID, in)
 	if err != nil {
 		writeUserError(w, err)
 		return
@@ -251,7 +272,12 @@ func (h *UserHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusUnprocessableEntity, d.Reason)
 		return
 	}
-	if err := h.svc.Delete(r.Context(), userID); err != nil {
+	eff, err := h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	if err := h.svc.Delete(r.Context(), eff, userID); err != nil {
 		writeUserError(w, err)
 		return
 	}
@@ -290,6 +316,8 @@ func writeUserError(w http.ResponseWriter, err error) {
 		writeJSONError(w, http.StatusUnprocessableEntity, "dcc_pool_range_invalid")
 	case errors.Is(err, service.ErrDCCPoolOverlap):
 		writeJSONError(w, http.StatusConflict, "dcc_pool_overlap")
+	case errors.Is(err, service.ErrDCCPoolForbidden):
+		writeJSONError(w, http.StatusForbidden, "forbidden")
 	default:
 		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 	}

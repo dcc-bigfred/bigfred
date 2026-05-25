@@ -8,6 +8,7 @@ import (
 
 	"github.com/keskad/loco/pkgs/server/domain"
 	"github.com/keskad/loco/pkgs/server/repo"
+	"github.com/keskad/loco/pkgs/server/security"
 )
 
 // Layout-related sentinel errors. They are machine-readable on
@@ -60,6 +61,10 @@ var (
 	// AuthService.Sudo translates it to its own `invalid_pin`
 	// rejection so brute-force counters stay in one place.
 	ErrLayoutAdminPINMismatch = errors.New("layout_admin_pin_mismatch")
+
+	// ErrLayoutForbidden is returned when a non-admin attempts a
+	// layout catalogue mutation guarded by CanManageLayouts.
+	ErrLayoutForbidden = errors.New("forbidden")
 )
 
 // maxLayoutNameLen caps the human label so it fits the login
@@ -94,6 +99,7 @@ type LayoutService struct {
 	layouts             *repo.Layouts
 	interlockings       *repo.Interlockings
 	layoutInterlockings *repo.LayoutInterlockings
+	sec                 security.LayoutSecurityContext
 }
 
 // NewLayoutService constructs a service bound to a Layouts
@@ -210,7 +216,10 @@ type CreateInput struct {
 // the codebase (they land in the milestone that introduces
 // CommandStationService); when that lands, this constructor will
 // gain a CommandStationIDs field with the matching ≥1 validation.
-func (s *LayoutService) Create(ctx context.Context, in CreateInput) (domain.Layout, error) {
+func (s *LayoutService) Create(ctx context.Context, eff domain.EffectiveRoles, in CreateInput) (domain.Layout, error) {
+	if err := s.checkManageLayouts(eff); err != nil {
+		return domain.Layout{}, err
+	}
 	name := strings.TrimSpace(in.Name)
 	if name == "" {
 		return domain.Layout{}, ErrLayoutNameRequired
@@ -287,7 +296,10 @@ func validateLayoutAdminPIN(pin string) error {
 // The HTTP layer guards the call with the policy that "only a
 // non-sudo permanent admin may rotate the layout admin PIN" — see
 // §7a.3 / §7a.7.
-func (s *LayoutService) UpdateAdminPIN(ctx context.Context, id uint, newPIN string) (domain.Layout, error) {
+func (s *LayoutService) UpdateAdminPIN(ctx context.Context, eff domain.EffectiveRoles, id uint, newPIN string) (domain.Layout, error) {
+	if err := s.checkManageLayouts(eff); err != nil {
+		return domain.Layout{}, err
+	}
 	layout, err := s.Get(ctx, id)
 	if err != nil {
 		return domain.Layout{}, err
@@ -335,7 +347,10 @@ func (s *LayoutService) VerifyAdminPIN(ctx context.Context, id uint, pin string)
 
 // Rename updates the layout's Name. The system row rejects with
 // ErrSystemLayoutImmutable so the UI can keep its row read-only.
-func (s *LayoutService) Rename(ctx context.Context, id uint, newName string) (domain.Layout, error) {
+func (s *LayoutService) Rename(ctx context.Context, eff domain.EffectiveRoles, id uint, newName string) (domain.Layout, error) {
+	if err := s.checkManageLayouts(eff); err != nil {
+		return domain.Layout{}, err
+	}
 	layout, err := s.Get(ctx, id)
 	if err != nil {
 		return domain.Layout{}, err
@@ -381,7 +396,10 @@ func (s *LayoutService) Rename(ctx context.Context, id uint, newName string) (do
 // a later milestone (M4 command-station bring-up), so the check
 // will be added together with `DriveSession`. The system row guard
 // covers the most-important footgun for now.
-func (s *LayoutService) Delete(ctx context.Context, id uint) error {
+func (s *LayoutService) Delete(ctx context.Context, eff domain.EffectiveRoles, id uint) error {
+	if err := s.checkManageLayouts(eff); err != nil {
+		return err
+	}
 	layout, err := s.Get(ctx, id)
 	if err != nil {
 		return err
@@ -426,7 +444,10 @@ func (s *LayoutService) ListInterlockings(ctx context.Context, layoutID uint) ([
 // SetInterlockings replaces the entire interlocking whitelist for a
 // layout with the supplied id set. Unknown ids reject with
 // ErrInterlockingNotFound. Duplicate ids in the input are ignored.
-func (s *LayoutService) SetInterlockings(ctx context.Context, layoutID, addedBy uint, interlockingIDs []uint) ([]domain.Interlocking, error) {
+func (s *LayoutService) SetInterlockings(ctx context.Context, eff domain.EffectiveRoles, layoutID, addedBy uint, interlockingIDs []uint) ([]domain.Interlocking, error) {
+	if err := s.checkManageLayouts(eff); err != nil {
+		return nil, err
+	}
 	if _, err := s.Get(ctx, layoutID); err != nil {
 		return nil, err
 	}
@@ -434,6 +455,19 @@ func (s *LayoutService) SetInterlockings(ctx context.Context, layoutID, addedBy 
 		return nil, err
 	}
 	return s.ListInterlockings(ctx, layoutID)
+}
+
+func (s *LayoutService) checkManageLayouts(eff domain.EffectiveRoles) error {
+	decision := s.sec.CanManageLayouts(eff)
+	if decision.Allowed {
+		return nil
+	}
+	switch decision.Reason {
+	case "forbidden":
+		return ErrLayoutForbidden
+	default:
+		return errors.New(decision.Reason)
+	}
 }
 
 func (s *LayoutService) setInterlockings(ctx context.Context, layoutID, addedBy uint, interlockingIDs []uint) error {

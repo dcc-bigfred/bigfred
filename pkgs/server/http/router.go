@@ -61,13 +61,13 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	}))
 
 	authH := NewAuthHandler(cfg.Auth, cfg.Sudo, cfg.SecureCookie)
-	layoutH := NewLayoutHandler(cfg.Layouts)
+	layoutH := NewLayoutHandler(cfg.Layouts, cfg.Auth)
 	interlockingH := NewInterlockingHandler(cfg.Interlockings, cfg.Occupancy, cfg.Auth)
 	presenceH := NewPresenceHandler(cfg.Presence)
 	vehicleH := NewVehicleHandler(cfg.Vehicles, cfg.LayoutVehicles, cfg.DCCPool, cfg.Auth)
 	trainH := NewTrainHandler(cfg.Trains, cfg.LayoutVehicles, cfg.Auth)
 	rosterH := NewLayoutRosterHandler(cfg.LayoutVehicles, cfg.Auth)
-	userH := NewUserHandler(cfg.Users)
+	userH := NewUserHandler(cfg.Users, cfg.Auth)
 	sudoH := NewSudoHandler(cfg.Sudo, cfg.Auth, cfg.Users, cfg.Presence)
 
 	r.Route("/api/v1", func(r chi.Router) {

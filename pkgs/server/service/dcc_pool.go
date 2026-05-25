@@ -7,6 +7,7 @@ import (
 
 	"github.com/keskad/loco/pkgs/server/domain"
 	"github.com/keskad/loco/pkgs/server/repo"
+	"github.com/keskad/loco/pkgs/server/security"
 )
 
 const (
@@ -28,6 +29,10 @@ var (
 	// ErrDCCAddressOutsidePool is returned when a vehicle registration
 	// or update points at an address not covered by any pool row.
 	ErrDCCAddressOutsidePool = errors.New("dcc_address_outside_pool")
+
+	// ErrDCCPoolForbidden is returned when a non-admin attempts a pool
+	// mutation guarded by CanManageDCCPool.
+	ErrDCCPoolForbidden = errors.New("forbidden")
 )
 
 // DCCPoolService is the read+write facade over the per-user DCC
@@ -44,6 +49,7 @@ var (
 // extra round trip through the admin pool page.
 type DCCPoolService struct {
 	pool *repo.DCCAddressRanges
+	sec  security.DCCPoolSecurityContext
 }
 
 // NewDCCPoolService returns a DCCPoolService.
@@ -80,7 +86,10 @@ func (s *DCCPoolService) Validate(ctx context.Context, userID uint, ranges []Poo
 // ranges. Overlap within the same user's rows is tolerated — the
 // membership test on AllowsAddress only needs *any* row to cover
 // the candidate address.
-func (s *DCCPoolService) Replace(ctx context.Context, userID uint, ranges []PoolRange) ([]domain.DCCAddressRange, error) {
+func (s *DCCPoolService) Replace(ctx context.Context, eff domain.EffectiveRoles, userID uint, ranges []PoolRange) ([]domain.DCCAddressRange, error) {
+	if err := s.checkManageDCCPool(eff); err != nil {
+		return nil, err
+	}
 	allRows, err := s.pool.ListAll(ctx)
 	if err != nil {
 		return nil, err
@@ -149,8 +158,24 @@ func (s *DCCPoolService) SeedAdminPoolIfEmpty(ctx context.Context, adminUserID u
 }
 
 // DeleteForUser removes every pool row owned by the user.
-func (s *DCCPoolService) DeleteForUser(ctx context.Context, userID uint) error {
+func (s *DCCPoolService) DeleteForUser(ctx context.Context, eff domain.EffectiveRoles, userID uint) error {
+	if err := s.checkManageDCCPool(eff); err != nil {
+		return err
+	}
 	return s.pool.DeleteAllForUser(ctx, userID)
+}
+
+func (s *DCCPoolService) checkManageDCCPool(eff domain.EffectiveRoles) error {
+	decision := s.sec.CanManageDCCPool(eff)
+	if decision.Allowed {
+		return nil
+	}
+	switch decision.Reason {
+	case "forbidden":
+		return ErrDCCPoolForbidden
+	default:
+		return errors.New(decision.Reason)
+	}
 }
 
 func validatePoolRanges(userID uint, ranges []PoolRange, existing []domain.DCCAddressRange) ([]PoolRange, error) {

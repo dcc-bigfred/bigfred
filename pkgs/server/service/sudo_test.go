@@ -295,7 +295,9 @@ func TestLayoutUpdateAdminPINBlankIsNoop(t *testing.T) {
 	}
 	originalHash := system.AdminPINHash
 
-	if _, err := layoutSvc.UpdateAdminPIN(ctx, system.ID, ""); err != nil {
+	adminEff := domain.NewEffectiveRoles(domain.RoleAdmin)
+
+	if _, err := layoutSvc.UpdateAdminPIN(ctx, adminEff, system.ID, ""); err != nil {
 		t.Fatalf("blank UpdateAdminPIN: %v", err)
 	}
 
@@ -318,11 +320,13 @@ func TestLayoutUpdateAdminPINRejectsLetters(t *testing.T) {
 		t.Fatalf("get system: %v", err)
 	}
 
-	_, err = layoutSvc.UpdateAdminPIN(ctx, system.ID, "abcd")
+	adminEff := domain.NewEffectiveRoles(domain.RoleAdmin)
+
+	_, err = layoutSvc.UpdateAdminPIN(ctx, adminEff, system.ID, "abcd")
 	if !errors.Is(err, service.ErrLayoutAdminPINInvalid) {
 		t.Fatalf("expected ErrLayoutAdminPINInvalid, got %v", err)
 	}
-	_, err = layoutSvc.UpdateAdminPIN(ctx, system.ID, "12")
+	_, err = layoutSvc.UpdateAdminPIN(ctx, adminEff, system.ID, "12")
 	if !errors.Is(err, service.ErrLayoutAdminPINInvalid) {
 		t.Fatalf("expected ErrLayoutAdminPINInvalid, got %v", err)
 	}
@@ -338,7 +342,9 @@ func TestLayoutUpdateAdminPINRotates(t *testing.T) {
 		t.Fatalf("get system: %v", err)
 	}
 
-	if _, err := layoutSvc.UpdateAdminPIN(ctx, system.ID, "1234"); err != nil {
+	adminEff := domain.NewEffectiveRoles(domain.RoleAdmin)
+
+	if _, err := layoutSvc.UpdateAdminPIN(ctx, adminEff, system.ID, "1234"); err != nil {
 		t.Fatalf("UpdateAdminPIN: %v", err)
 	}
 

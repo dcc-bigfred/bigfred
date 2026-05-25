@@ -32,14 +32,14 @@ import { ApiError } from "../../api/client";
 import {
   useCreateInterlocking,
   useDeleteInterlocking,
-  useInterlockings,
+  useInterlockingsCatalogue,
   useUpdateInterlocking,
   type Interlocking,
 } from "../../api/interlockings";
 
 export default function InterlockingsPage() {
   const { t } = useTranslation(["interlocking", "common", "errors"]);
-  const list = useInterlockings();
+  const list = useInterlockingsCatalogue();
   const create = useCreateInterlocking();
   const update = useUpdateInterlocking();
   const remove = useDeleteInterlocking();

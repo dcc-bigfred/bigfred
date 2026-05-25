@@ -23,6 +23,7 @@ import (
 	"github.com/keskad/loco/pkgs/server/repo"
 	"github.com/keskad/loco/pkgs/server/repo/migrations"
 	"github.com/keskad/loco/pkgs/server/service"
+	"github.com/keskad/loco/pkgs/server/ws"
 )
 
 // Flags collects every command-line knob exposed by `loco-server`.
@@ -91,10 +92,22 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	layouts := repo.NewLayouts(repository)
 	interlockings := repo.NewInterlockings(repository)
 	layoutInterlockings := repo.NewLayoutInterlockings(repository)
+	layoutSignalmen := repo.NewLayoutSignalmen(repository)
+	interlockingSessions := repo.NewInterlockingSessions(repository)
 
 	layoutSvc := service.NewLayoutService(layouts, interlockings, layoutInterlockings)
 	interlockingSvc := service.NewInterlockingService(interlockings, layoutInterlockings)
-	authSvc := service.NewAuthService(users, layoutSvc, service.AuthConfig{JWTSecret: secret})
+	authSvc := service.NewAuthService(users, layoutSvc, layoutSignalmen, service.AuthConfig{JWTSecret: secret})
+
+	hub := ws.NewHub()
+	presenceSvc := service.NewPresenceService(hub, authSvc, users, interlockingSessions, interlockings, layoutInterlockings)
+	hub.SetPresenceRefresher(presenceSvc)
+	occupancySvc := service.NewInterlockingOccupancyService(
+		interlockings, layoutInterlockings, interlockingSessions, users, layoutSignalmen,
+		authSvc, hub, presenceSvc,
+	)
+
+	go hub.Run(ctx)
 
 	// Seed the bootstrap system layout BEFORE the admin account so
 	// the very first login can pick it from the dropdown without
@@ -120,6 +133,9 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		Auth:           authSvc,
 		Layouts:        layoutSvc,
 		Interlockings:  interlockingSvc,
+		Occupancy:      occupancySvc,
+		Presence:       presenceSvc,
+		Hub:            hub,
 		AllowedOrigins: f.AllowedOrigins,
 		SecureCookie:   f.SecureCookie,
 	})

@@ -17,5 +17,9 @@
   "default_layout_cannot_be_locked": "Domyślnej makiety nie można zablokować.",
   "interlocking_not_found": "Wybrana nastawnia już nie istnieje.",
   "interlocking_name_required": "Wpisz nazwę nastawni.",
-  "interlocking_name_taken": "Nastawnia o tej nazwie już istnieje."
+  "interlocking_name_taken": "Nastawnia o tej nazwie już istnieje.",
+  "interlocking_occupied": "Nastawnia jest już obsadzona.",
+  "interlocking_not_in_layout": "Ta nastawnia nie należy do aktywnej makiety.",
+  "not_signalman": "Brak uprawnień nastawniczego w tej makiecie.",
+  "layout_mismatch": "Żądanie dotyczy innej makiety niż sesja."
 }

@@ -29,6 +29,8 @@ func register(m *migrator.Migrator) {
 	m.Register(20260523_000001, createUsersUp, createUsersDown)
 	m.Register(20260525_000001, createLayoutsUp, createLayoutsDown)
 	m.Register(20260525_000002, createInterlockingsUp, createInterlockingsDown)
+	m.Register(20260525_000003, createLayoutSignalmenUp, createLayoutSignalmenDown)
+	m.Register(20260525_000004, createInterlockingSessionsUp, createInterlockingSessionsDown)
 }
 
 func createUsersUp(s *rel.Schema) {
@@ -108,4 +110,37 @@ func createInterlockingsUp(s *rel.Schema) {
 func createInterlockingsDown(s *rel.Schema) {
 	s.DropTable("layout_interlockings")
 	s.DropTable("interlockings")
+}
+
+func createLayoutSignalmenUp(s *rel.Schema) {
+	s.CreateTable("layout_signalmen", func(t *rel.Table) {
+		t.ID("id")
+		t.Int("layout_id", rel.Unsigned(true))
+		t.Int("user_id", rel.Unsigned(true))
+		t.Int("granted_by", rel.Unsigned(true), rel.Default(0))
+		t.DateTime("granted_at")
+		t.DateTime("expires_at")
+
+		t.Unique([]string{"layout_id", "user_id"})
+	})
+}
+
+func createLayoutSignalmenDown(s *rel.Schema) {
+	s.DropTable("layout_signalmen")
+}
+
+func createInterlockingSessionsUp(s *rel.Schema) {
+	s.CreateTable("interlocking_sessions", func(t *rel.Table) {
+		t.ID("id")
+		t.Int("interlocking_id", rel.Unsigned(true))
+		t.Int("signalman_user_id", rel.Unsigned(true))
+		t.DateTime("started_at")
+		t.DateTime("ended_at")
+	})
+	s.Exec(rel.Raw(`CREATE UNIQUE INDEX interlocking_sessions_one_active
+		ON interlocking_sessions(interlocking_id) WHERE ended_at IS NULL`))
+}
+
+func createInterlockingSessionsDown(s *rel.Schema) {
+	s.DropTable("interlocking_sessions")
 }

@@ -9,10 +9,11 @@ import PersonIcon from "@mui/icons-material/Person";
 import VpnKeyIcon from "@mui/icons-material/VpnKey";
 import LockResetIcon from "@mui/icons-material/LockReset";
 import LogoutIcon from "@mui/icons-material/Logout";
-import { Outlet, useNavigate } from "react-router-dom";
+import { Link, Outlet, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
 import { useLogout, useMe } from "../api/auth";
+import { SocketProvider } from "../context/SocketContext";
 import LanguageMenu from "./LanguageMenu";
 import TopBarMenu, { type TopBarMenuItem } from "./TopBarMenu";
 
@@ -130,10 +131,21 @@ export default function AppShell() {
   const isAdmin = me?.role === "admin";
 
   return (
+    <SocketProvider enabled={!!me}>
     <Box sx={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
       <AppBar position="sticky">
         <Toolbar>
-          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
+          <Typography
+            variant="h6"
+            component={Link}
+            to="/"
+            sx={{
+              flexGrow: 1,
+              color: "inherit",
+              textDecoration: "none",
+              "&:hover": { opacity: 0.9 },
+            }}
+          >
             {t("appName")}
           </Typography>
 
@@ -194,5 +206,6 @@ export default function AppShell() {
         <Outlet />
       </Box>
     </Box>
+    </SocketProvider>
   );
 }

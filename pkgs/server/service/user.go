@@ -152,7 +152,7 @@ type UserCreateInput struct {
 
 // Create inserts a brand-new user. The PIN is hashed inside this
 // method so plaintext never escapes via a service contract.
-func (s *UserService) Create(ctx context.Context, in UserCreateInput) (domain.User, error) {
+func (s *UserService) Create(ctx context.Context, eff domain.EffectiveRoles, in UserCreateInput) (domain.User, error) {
 	login, err := sanitiseLogin(in.Login)
 	if err != nil {
 		return domain.User{}, err
@@ -191,7 +191,7 @@ func (s *UserService) Create(ctx context.Context, in UserCreateInput) (domain.Us
 	if err := s.users.Insert(ctx, &row); err != nil {
 		return domain.User{}, err
 	}
-	if _, err := s.dccPool.Replace(ctx, row.ID, in.DCCPool); err != nil {
+	if _, err := s.dccPool.Replace(ctx, eff, row.ID, in.DCCPool); err != nil {
 		return domain.User{}, err
 	}
 	return row, nil
@@ -209,7 +209,7 @@ type UserUpdateInput struct {
 
 // Update mutates an existing user in place. Only the fields the
 // caller supplies are touched.
-func (s *UserService) Update(ctx context.Context, id uint, in UserUpdateInput) (domain.User, error) {
+func (s *UserService) Update(ctx context.Context, eff domain.EffectiveRoles, id uint, in UserUpdateInput) (domain.User, error) {
 	row, err := s.Get(ctx, id)
 	if err != nil {
 		return domain.User{}, err
@@ -248,7 +248,7 @@ func (s *UserService) Update(ctx context.Context, id uint, in UserUpdateInput) (
 		row.PINHash = hash
 	}
 	if in.DCCPool != nil {
-		if _, err := s.dccPool.Replace(ctx, row.ID, *in.DCCPool); err != nil {
+		if _, err := s.dccPool.Replace(ctx, eff, row.ID, *in.DCCPool); err != nil {
 			return domain.User{}, err
 		}
 	}
@@ -288,7 +288,7 @@ func (s *UserService) SetActive(ctx context.Context, id uint, active bool) (doma
 // run the security policy (no self-delete). The service guards the
 // owned-vehicles / owned-trains invariant so a hand-crafted request
 // cannot cascade orphan rows.
-func (s *UserService) Delete(ctx context.Context, id uint) error {
+func (s *UserService) Delete(ctx context.Context, eff domain.EffectiveRoles, id uint) error {
 	row, err := s.Get(ctx, id)
 	if err != nil {
 		return err
@@ -307,7 +307,7 @@ func (s *UserService) Delete(ctx context.Context, id uint) error {
 	if nt > 0 {
 		return ErrUserHasTrains
 	}
-	if err := s.dccPool.DeleteForUser(ctx, row.ID); err != nil {
+	if err := s.dccPool.DeleteForUser(ctx, eff, row.ID); err != nil {
 		return err
 	}
 	return s.users.Delete(ctx, &row)

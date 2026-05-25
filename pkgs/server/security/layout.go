@@ -50,3 +50,13 @@ func (LayoutSecurityContext) CanGrantSignalmanToUser(eff domain.EffectiveRoles) 
 	}
 	return Deny("forbidden")
 }
+
+// CanManageLayouts decides whether the caller may create, update or
+// delete layout rows (§7a.3). Only an effective admin (permanent or
+// sudo in the active layout, §7a.7) qualifies.
+func (LayoutSecurityContext) CanManageLayouts(eff domain.EffectiveRoles) Decision {
+	if eff.Has(domain.RoleAdmin) {
+		return Allow
+	}
+	return Deny("forbidden")
+}

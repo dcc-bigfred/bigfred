@@ -17,7 +17,7 @@ func TestDCCPoolReplaceRejectsEmptyPool(t *testing.T) {
 	pool := service.NewDCCPoolService(bundle.Pool)
 	userSvc := service.NewUserService(bundle.Users, bundle.Vehicles, bundle.Trains, pool)
 
-	row, err := userSvc.Create(ctx, service.UserCreateInput{
+	row, err := userSvc.Create(ctx, testAdminEff, service.UserCreateInput{
 		Login: "alice", PIN: "123456", Role: domain.RoleDriver,
 		DCCPool: []service.PoolRange{{From: 1, To: 10}},
 	})
@@ -25,7 +25,7 @@ func TestDCCPoolReplaceRejectsEmptyPool(t *testing.T) {
 		t.Fatalf("create user: %v", err)
 	}
 
-	_, err = pool.Replace(ctx, row.ID, nil)
+	_, err = pool.Replace(ctx, testAdminEff, row.ID, nil)
 	if !errors.Is(err, service.ErrDCCPoolEmpty) {
 		t.Fatalf("expected ErrDCCPoolEmpty, got %v", err)
 	}
@@ -39,7 +39,7 @@ func TestDCCPoolReplaceRejectsOutOfBounds(t *testing.T) {
 	pool := service.NewDCCPoolService(bundle.Pool)
 	userSvc := service.NewUserService(bundle.Users, bundle.Vehicles, bundle.Trains, pool)
 
-	row, err := userSvc.Create(ctx, service.UserCreateInput{
+	row, err := userSvc.Create(ctx, testAdminEff, service.UserCreateInput{
 		Login: "alice", PIN: "123456", Role: domain.RoleDriver,
 		DCCPool: []service.PoolRange{{From: 1, To: 10}},
 	})
@@ -53,7 +53,7 @@ func TestDCCPoolReplaceRejectsOutOfBounds(t *testing.T) {
 		{From: 100, To: 50},
 	}
 	for _, tc := range cases {
-		_, err := pool.Replace(ctx, row.ID, []service.PoolRange{tc})
+		_, err := pool.Replace(ctx, testAdminEff, row.ID, []service.PoolRange{tc})
 		if !errors.Is(err, service.ErrDCCPoolRangeInvalid) {
 			t.Fatalf("range %+v: expected ErrDCCPoolRangeInvalid, got %v", tc, err)
 		}
@@ -68,14 +68,14 @@ func TestDCCPoolReplaceRejectsOverlapWithOtherUser(t *testing.T) {
 	pool := service.NewDCCPoolService(bundle.Pool)
 	userSvc := service.NewUserService(bundle.Users, bundle.Vehicles, bundle.Trains, pool)
 
-	alice, err := userSvc.Create(ctx, service.UserCreateInput{
+	alice, err := userSvc.Create(ctx, testAdminEff, service.UserCreateInput{
 		Login: "alice", PIN: "123456", Role: domain.RoleDriver,
 		DCCPool: []service.PoolRange{{From: 100, To: 199}},
 	})
 	if err != nil {
 		t.Fatalf("create alice: %v", err)
 	}
-	bob, err := userSvc.Create(ctx, service.UserCreateInput{
+	bob, err := userSvc.Create(ctx, testAdminEff, service.UserCreateInput{
 		Login: "bob", PIN: "123456", Role: domain.RoleDriver,
 		DCCPool: []service.PoolRange{{From: 300, To: 399}},
 	})
@@ -83,13 +83,13 @@ func TestDCCPoolReplaceRejectsOverlapWithOtherUser(t *testing.T) {
 		t.Fatalf("create bob: %v", err)
 	}
 
-	_, err = pool.Replace(ctx, bob.ID, []service.PoolRange{{From: 150, To: 250}})
+	_, err = pool.Replace(ctx, testAdminEff, bob.ID, []service.PoolRange{{From: 150, To: 250}})
 	if !errors.Is(err, service.ErrDCCPoolOverlap) {
 		t.Fatalf("expected ErrDCCPoolOverlap, got %v", err)
 	}
 
 	// Same user may replace without false overlap against own old rows.
-	if _, err := pool.Replace(ctx, alice.ID, []service.PoolRange{{From: 100, To: 199}}); err != nil {
+	if _, err := pool.Replace(ctx, testAdminEff, alice.ID, []service.PoolRange{{From: 100, To: 199}}); err != nil {
 		t.Fatalf("replace own pool: %v", err)
 	}
 }
@@ -102,7 +102,7 @@ func TestUserCreateRequiresDCCPool(t *testing.T) {
 	pool := service.NewDCCPoolService(bundle.Pool)
 	userSvc := service.NewUserService(bundle.Users, bundle.Vehicles, bundle.Trains, pool)
 
-	_, err := userSvc.Create(ctx, service.UserCreateInput{
+	_, err := userSvc.Create(ctx, testAdminEff, service.UserCreateInput{
 		Login: "alice", PIN: "123456", Role: domain.RoleDriver,
 	})
 	if !errors.Is(err, service.ErrDCCPoolEmpty) {
@@ -118,14 +118,14 @@ func TestUserCreateDoesNotPersistWhenPoolOverlaps(t *testing.T) {
 	pool := service.NewDCCPoolService(bundle.Pool)
 	userSvc := service.NewUserService(bundle.Users, bundle.Vehicles, bundle.Trains, pool)
 
-	if _, err := userSvc.Create(ctx, service.UserCreateInput{
+	if _, err := userSvc.Create(ctx, testAdminEff, service.UserCreateInput{
 		Login: "alice", PIN: "123456", Role: domain.RoleDriver,
 		DCCPool: []service.PoolRange{{From: 100, To: 199}},
 	}); err != nil {
 		t.Fatalf("create alice: %v", err)
 	}
 
-	_, err := userSvc.Create(ctx, service.UserCreateInput{
+	_, err := userSvc.Create(ctx, testAdminEff, service.UserCreateInput{
 		Login: "bob", PIN: "123456", Role: domain.RoleDriver,
 		DCCPool: []service.PoolRange{{From: 150, To: 250}},
 	})
@@ -139,5 +139,31 @@ func TestUserCreateDoesNotPersistWhenPoolOverlaps(t *testing.T) {
 	}
 	if n != 1 {
 		t.Fatalf("expected 1 user after failed create, got %d", n)
+	}
+}
+
+func TestDCCPoolAdminOnly(t *testing.T) {
+	bundle, cleanup := freshRepo(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	pool := service.NewDCCPoolService(bundle.Pool)
+	userSvc := service.NewUserService(bundle.Users, bundle.Vehicles, bundle.Trains, pool)
+
+	driverEff := domain.NewEffectiveRoles(domain.RoleDriver)
+
+	row, err := userSvc.Create(ctx, testAdminEff, service.UserCreateInput{
+		Login: "alice", PIN: "123456", Role: domain.RoleDriver,
+		DCCPool: []service.PoolRange{{From: 100, To: 199}},
+	})
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	if _, err := pool.Replace(ctx, driverEff, row.ID, []service.PoolRange{{From: 500, To: 599}}); !errors.Is(err, service.ErrDCCPoolForbidden) {
+		t.Fatalf("expected ErrDCCPoolForbidden on replace, got %v", err)
+	}
+	if err := pool.DeleteForUser(ctx, driverEff, row.ID); !errors.Is(err, service.ErrDCCPoolForbidden) {
+		t.Fatalf("expected ErrDCCPoolForbidden on delete, got %v", err)
 	}
 }

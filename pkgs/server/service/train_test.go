@@ -18,7 +18,7 @@ func TestTrainAdminCanMutateOthersTrain(t *testing.T) {
 	admin := insertUser(t, ctx, bundle.Users, "admin", domain.RoleAdmin)
 
 	pool := service.NewDCCPoolService(bundle.Pool)
-	if _, err := pool.Replace(ctx, owner.ID, []service.PoolRange{{From: 1, To: 9999}}); err != nil {
+	if _, err := pool.Replace(ctx, testAdminEff, owner.ID, []service.PoolRange{{From: 1, To: 9999}}); err != nil {
 		t.Fatalf("seed owner pool: %v", err)
 	}
 	vSvc := service.NewVehicleService(bundle.Vehicles, pool, bundle.TrainMembers)

@@ -40,3 +40,13 @@ func (LayoutSecurityContext) CanRemoveTrainFromRoster(
 	}
 	return Deny("train_not_owned")
 }
+
+// CanGrantSignalmanToUser allows an effective admin (permanent or
+// sudo, §7a.7) to grant the layout-scoped signalman role to another
+// user.
+func (LayoutSecurityContext) CanGrantSignalmanToUser(eff domain.EffectiveRoles) Decision {
+	if eff.Has(domain.RoleAdmin) {
+		return Allow
+	}
+	return Deny("forbidden")
+}

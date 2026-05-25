@@ -16,15 +16,14 @@ const SystemLayoutName = "default"
 // its lifetime. The two boolean flags steer its lifecycle:
 //
 //   - IsSystem: true ONLY for the bootstrap row. The system layout
-//     cannot be deleted, cannot be locked, its Name and IsSystem
-//     fields are immutable, and the set of attached command stations
-//     is a virtual view of `command_stations` (admin endpoints that
-//     try to mutate it return 422). The system row is seeded with
-//     Name = "default"; the UI renders it via the i18n key
-//     `layout:system_default_label`.
+//     cannot be deleted, its Name and IsSystem fields are immutable,
+//     and the set of attached command stations is a virtual view of
+//     `command_stations` (admin endpoints that try to mutate it return
+//     422). The system row is seeded with Name = "default"; the UI
+//     renders it via the i18n key `layout:system_default_label`.
 //
-//   - Locked: false right after creation. Admin may toggle it on a
-//     non-system layout. A locked layout is hidden from the
+//   - Locked: false right after creation. Admin may toggle it on any
+//     layout, including the system row. A locked layout is hidden from the
 //     unauthenticated login dropdown (GET /api/v1/layouts/login), but
 //     already-running sessions keep working until they close on their
 //     own.

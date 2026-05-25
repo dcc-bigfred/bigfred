@@ -22,11 +22,13 @@
   "dialog": {
     "title": {
       "admin": "PIN administratora makiety",
-      "signalman": "PIN administratora makiety"
+      "signalman": "PIN administratora makiety",
+      "promoteSignalman": "PIN administratora makiety"
     },
     "description": {
       "admin": "Wpisz PIN administracyjny makiety, aby uzyskać uprawnienia administratora na 2 minuty.",
-      "signalman": "Wpisz PIN administracyjny makiety, aby otrzymać rolę nastawniczego na stałe w tej makiecie."
+      "signalman": "Wpisz PIN administracyjny makiety, aby otrzymać rolę nastawniczego na stałe w tej makiecie.",
+      "promoteSignalman": "Wpisz PIN administracyjny makiety, aby awansować użytkownika {{login}} na nastawniczego w tej makiecie."
     },
     "pinLabel": "PIN",
     "submit": "Aktywuj",

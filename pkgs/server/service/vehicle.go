@@ -8,6 +8,7 @@ import (
 
 	"github.com/keskad/loco/pkgs/server/domain"
 	"github.com/keskad/loco/pkgs/server/repo"
+	"github.com/keskad/loco/pkgs/server/security"
 )
 
 // Vehicle sentinel errors.
@@ -52,6 +53,7 @@ type VehicleService struct {
 	vehicles     *repo.Vehicles
 	pool         *DCCPoolService
 	trainMembers *repo.TrainMembers
+	sec          security.VehicleSecurityContext
 }
 
 // NewVehicleService constructs a VehicleService.
@@ -150,17 +152,15 @@ type VehicleAddressPatch struct {
 	Value *uint16
 }
 
-// Update mutates an existing vehicle in place. Only the OWNER may
-// call this; the HTTP layer is expected to enforce that via the
-// VehicleSecurityContext before calling — Update double-checks
-// anyway so a missing wiring fails closed.
-func (s *VehicleService) Update(ctx context.Context, actorID, vehicleID uint, in VehicleUpdateInput) (domain.Vehicle, error) {
+// Update mutates an existing vehicle in place. Authority is decided
+// by VehicleSecurityContext.CanMutateVehicle (§7a.3).
+func (s *VehicleService) Update(ctx context.Context, actorID, vehicleID uint, eff domain.EffectiveRoles, in VehicleUpdateInput) (domain.Vehicle, error) {
 	row, err := s.Get(ctx, vehicleID)
 	if err != nil {
 		return domain.Vehicle{}, err
 	}
-	if row.OwnerUserID != actorID {
-		return domain.Vehicle{}, ErrVehicleNotOwned
+	if err := s.checkVehicleMutate(eff, actorID, row.OwnerUserID); err != nil {
+		return domain.Vehicle{}, err
 	}
 
 	if in.Name != nil {
@@ -203,16 +203,17 @@ func (s *VehicleService) Update(ctx context.Context, actorID, vehicleID uint, in
 	return row, nil
 }
 
-// Delete removes the vehicle. Only the OWNER may call this. Refuses
-// when the vehicle is still a member of any train (the user must
-// detach it first) so the train_members FK never dangles.
-func (s *VehicleService) Delete(ctx context.Context, actorID, vehicleID uint) (domain.Vehicle, error) {
+// Delete removes the vehicle. Authority is decided by
+// VehicleSecurityContext.CanMutateVehicle (§7a.3). Refuses when the
+// vehicle is still a member of any train (the user must detach it
+// first) so the train_members FK never dangles.
+func (s *VehicleService) Delete(ctx context.Context, actorID, vehicleID uint, eff domain.EffectiveRoles) (domain.Vehicle, error) {
 	row, err := s.Get(ctx, vehicleID)
 	if err != nil {
 		return domain.Vehicle{}, err
 	}
-	if row.OwnerUserID != actorID {
-		return domain.Vehicle{}, ErrVehicleNotOwned
+	if err := s.checkVehicleMutate(eff, actorID, row.OwnerUserID); err != nil {
+		return domain.Vehicle{}, err
 	}
 	n, err := s.trainMembers.CountReferencingVehicle(ctx, row.ID)
 	if err != nil {
@@ -225,6 +226,19 @@ func (s *VehicleService) Delete(ctx context.Context, actorID, vehicleID uint) (d
 		return domain.Vehicle{}, err
 	}
 	return row, nil
+}
+
+func (s *VehicleService) checkVehicleMutate(eff domain.EffectiveRoles, actorID, ownerUserID uint) error {
+	decision := s.sec.CanMutateVehicle(eff, actorID, ownerUserID)
+	if decision.Allowed {
+		return nil
+	}
+	switch decision.Reason {
+	case "vehicle_not_owned":
+		return ErrVehicleNotOwned
+	default:
+		return errors.New(decision.Reason)
+	}
 }
 
 // checkDCCAddress validates that addr is unused (or used only by

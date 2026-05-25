@@ -42,10 +42,6 @@ var (
 	// system row.
 	ErrSystemLayoutUndeletable = errors.New("default_layout_undeletable")
 
-	// ErrSystemLayoutCannotBeLocked is returned by SetLocked on the
-	// IsSystem row.
-	ErrSystemLayoutCannotBeLocked = errors.New("default_layout_cannot_be_locked")
-
 	// ErrLayoutAdminPINInvalid is returned when the supplied PIN
 	// does not satisfy the digit / length policy (§7a.7). The same
 	// code is used for "PIN supplied at create time but malformed"
@@ -403,9 +399,6 @@ func (s *LayoutService) SetLocked(ctx context.Context, id uint, locked bool) (do
 	layout, err := s.Get(ctx, id)
 	if err != nil {
 		return domain.Layout{}, err
-	}
-	if layout.IsSystem && locked {
-		return domain.Layout{}, ErrSystemLayoutCannotBeLocked
 	}
 	if layout.Locked == locked {
 		return layout, nil

@@ -43,7 +43,7 @@ import {
   type Layout,
 } from "../../api/layouts";
 import {
-  useInterlockings,
+  useInterlockingsCatalogue,
   useLayoutInterlockings,
   type Interlocking,
 } from "../../api/interlockings";
@@ -63,7 +63,7 @@ export default function LayoutsPage() {
   const { t } = useTranslation(["layout", "common", "errors", "sudo"]);
   const [searchParams, setSearchParams] = useSearchParams();
   const list = useAdminLayouts();
-  const interlockingsCatalog = useInterlockings();
+  const interlockingsCatalog = useInterlockingsCatalogue();
   const create = useCreateLayout();
   const update = useUpdateLayout();
   const remove = useDeleteLayout();
@@ -311,14 +311,14 @@ export default function LayoutsPage() {
                             </span>
                           </Tooltip>
 
-                          {/* Lock/Unlock — disabled on the system row */}
+                          {/* Lock/Unlock */}
                           {l.locked ? (
                             <Tooltip title={t("layout:admin.actions.unlock")}>
                               <span>
                                 <IconButton
                                   size="small"
                                   onClick={() => openLock(l, false)}
-                                  disabled={l.isSystem || submitting}
+                                  disabled={submitting}
                                   aria-label={t("layout:admin.actions.unlock")}
                                 >
                                   <LockOpenIcon fontSize="small" />
@@ -326,18 +326,12 @@ export default function LayoutsPage() {
                               </span>
                             </Tooltip>
                           ) : (
-                            <Tooltip
-                              title={
-                                l.isSystem
-                                  ? t("errors:default_layout_cannot_be_locked")
-                                  : t("layout:admin.actions.lock")
-                              }
-                            >
+                            <Tooltip title={t("layout:admin.actions.lock")}>
                               <span>
                                 <IconButton
                                   size="small"
                                   onClick={() => openLock(l, true)}
-                                  disabled={l.isSystem || submitting}
+                                  disabled={submitting}
                                   aria-label={t("layout:admin.actions.lock")}
                                 >
                                   <LockIcon fontSize="small" />

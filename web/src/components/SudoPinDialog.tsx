@@ -17,11 +17,12 @@ import { ApiError } from "../api/client";
 // the two PIN-gated flows. Both share the dialog component because
 // the input affordances (numeric keypad, password masking, error
 // display) are identical.
-export type DialogTarget = "admin" | "signalman";
+export type DialogTarget = "admin" | "signalman" | "promoteSignalman";
 
 interface SudoPinDialogProps {
   open: boolean;
   target: DialogTarget;
+  targetLogin?: string;
   onCancel: () => void;
   onSubmit: (pin: string) => Promise<void>;
 }
@@ -37,6 +38,7 @@ interface SudoPinDialogProps {
 export default function SudoPinDialog({
   open,
   target,
+  targetLogin,
   onCancel,
   onSubmit,
 }: SudoPinDialogProps) {
@@ -76,7 +78,9 @@ export default function SudoPinDialog({
       <DialogTitle>{t(`sudo:dialog.title.${target}`)}</DialogTitle>
       <DialogContent>
         <DialogContentText sx={{ mb: 2 }}>
-          {t(`sudo:dialog.description.${target}`)}
+          {t(`sudo:dialog.description.${target}`, {
+            login: targetLogin ?? "",
+          })}
         </DialogContentText>
         <TextField
           autoFocus

@@ -21,6 +21,7 @@ import { useNavigate } from "react-router-dom";
 import { useMe } from "../api/auth";
 import { useDashboardInterlockings } from "../api/interlockings";
 import { useLayoutPresence } from "../api/presence";
+import PromoteSignalmanButton from "../components/PromoteSignalmanButton";
 import RosterSection from "../components/RosterSection";
 
 export default function HomePage() {
@@ -81,12 +82,15 @@ export default function HomePage() {
                       <TableCell>{t("home:onlineUsers.columns.login")}</TableCell>
                       <TableCell>{t("home:onlineUsers.columns.role")}</TableCell>
                       <TableCell>{t("home:onlineUsers.columns.interlocking")}</TableCell>
+                      <TableCell align="right" width={56}>
+                        {t("home:onlineUsers.columns.actions")}
+                      </TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {(presence.data ?? []).length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={3} align="center" sx={{ py: 3, color: "text.secondary" }}>
+                        <TableCell colSpan={4} align="center" sx={{ py: 3, color: "text.secondary" }}>
                           {t("home:onlineUsers.empty")}
                         </TableCell>
                       </TableRow>
@@ -99,6 +103,11 @@ export default function HomePage() {
                           </TableCell>
                           <TableCell>
                             {user.occupiedInterlocking?.name ?? t("home:onlineUsers.noInterlocking")}
+                          </TableCell>
+                          <TableCell align="right">
+                            {layoutId != null && (
+                              <PromoteSignalmanButton layoutId={layoutId} user={user} />
+                            )}
                           </TableCell>
                         </TableRow>
                       ))

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/keskad/loco/pkgs/server/security"
 	"github.com/keskad/loco/pkgs/server/service"
 )
 
@@ -17,17 +18,26 @@ import (
 //	DELETE /api/v1/layouts/{id}/sudo       — drop the active admin grant
 //	POST   /api/v1/layouts/{id}/signalman  — permanent self-grant via PIN
 //	DELETE /api/v1/layouts/{id}/signalman  — drop own signalman grant
+//	POST   /api/v1/layouts/{id}/signalmen — admin grants signalman to another user
 //
-// The handler trusts the identity attached by RequireAuth; both the
-// padlock and the engineer's-cap icons are always self-grants — the
-// actor and the target are the same user.
+// The self-grant paths trust RequireAuth; the padlock and the
+// engineer's-cap icons always target the caller. GrantSignalmanToUser
+// requires effective admin (permanent or sudo).
 type SudoHandler struct {
-	svc *service.SudoService
+	svc      *service.SudoService
+	auth     *service.AuthService
+	users    *service.UserService
+	presence *service.PresenceService
 }
 
-// NewSudoHandler returns a SudoHandler bound to a SudoService.
-func NewSudoHandler(svc *service.SudoService) *SudoHandler {
-	return &SudoHandler{svc: svc}
+// NewSudoHandler returns a SudoHandler.
+func NewSudoHandler(
+	svc *service.SudoService,
+	auth *service.AuthService,
+	users *service.UserService,
+	presence *service.PresenceService,
+) *SudoHandler {
+	return &SudoHandler{svc: svc, auth: auth, users: users, presence: presence}
 }
 
 // pinRequest mirrors the JSON body of POST /api/v1/layouts/{id}/sudo
@@ -36,6 +46,10 @@ func NewSudoHandler(svc *service.SudoService) *SudoHandler {
 //	{ "pin": "0000" }
 type pinRequest struct {
 	PIN string `json:"pin"`
+}
+
+type grantSignalmanRequest struct {
+	UserID uint `json:"userId"`
 }
 
 // sudoResponse echoes the persisted admin grant so the UI can start
@@ -146,6 +160,69 @@ func (h *SudoHandler) RevokeSignalman(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// GrantSignalmanToUser handles POST /api/v1/layouts/{id}/signalmen.
+// Requires effective admin inside the session layout.
+func (h *SudoHandler) GrantSignalmanToUser(w http.ResponseWriter, r *http.Request) {
+	actor, layoutID, ok := h.resolveLayoutActor(w, r)
+	if !ok {
+		return
+	}
+	eff, err := h.auth.Effective(r.Context(), actor.User, layoutID)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	if d := (security.LayoutSecurityContext{}).CanGrantSignalmanToUser(eff); !d.Allowed {
+		writeJSONError(w, http.StatusForbidden, d.Reason)
+		return
+	}
+
+	var req grantSignalmanRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid_body")
+		return
+	}
+	if req.UserID == 0 {
+		writeJSONError(w, http.StatusBadRequest, "invalid_body")
+		return
+	}
+	if _, err := h.users.Get(r.Context(), req.UserID); err != nil {
+		if errors.Is(err, service.ErrUserNotFound) {
+			writeJSONError(w, http.StatusNotFound, "user_not_found")
+			return
+		}
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+
+	if err := h.svc.GrantSignalmanToUser(r.Context(), actor.User.ID, req.UserID, layoutID); err != nil {
+		writeSudoError(w, h.svc, actor.User.ID, layoutID, err)
+		return
+	}
+	h.presence.RefreshAndBroadcast(r.Context(), layoutID)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// resolveLayoutActor returns the authenticated identity and layout
+// id when the path matches the JWT-pinned session layout.
+func (h *SudoHandler) resolveLayoutActor(w http.ResponseWriter, r *http.Request) (service.Identity, uint, bool) {
+	id, ok := parseUintParam(r, "id")
+	if !ok {
+		writeJSONError(w, http.StatusBadRequest, "invalid_id")
+		return service.Identity{}, 0, false
+	}
+	actor, ok := IdentityFromContext(r.Context())
+	if !ok {
+		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
+		return service.Identity{}, 0, false
+	}
+	if actor.Layout.ID != id {
+		writeJSONError(w, http.StatusUnprocessableEntity, "sudo_layout_mismatch")
+		return service.Identity{}, 0, false
+	}
+	return actor, id, true
 }
 
 // writeSudoError maps SudoService sentinels to status + machine

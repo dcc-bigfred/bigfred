@@ -11,8 +11,10 @@
     "columns": {
       "login": "Login",
       "role": "Rola",
-      "interlocking": "Nastawnia"
-    }
+      "interlocking": "Nastawnia",
+      "actions": "Akcje"
+    },
+    "promoteSignalman": "Awansuj {{login}} na nastawniczego"
   },
   "interlockings": {
     "title": "Nastawnie",

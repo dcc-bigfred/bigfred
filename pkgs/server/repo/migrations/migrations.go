@@ -38,6 +38,7 @@ func register(m *migrator.Migrator) {
 	m.Register(20260525_000009, addUsersActiveColumnUp, addUsersActiveColumnDown)
 	m.Register(20260525_000010, addLayoutsAdminPINUp, addLayoutsAdminPINDown)
 	m.Register(20260525_000011, createSudoElevationsUp, createSudoElevationsDown)
+	m.Register(20260525_000012, dropSystemLayoutLockCheckUp, dropSystemLayoutLockCheckDown)
 }
 
 func createUsersUp(s *rel.Schema) {
@@ -58,17 +59,10 @@ func createUsersDown(s *rel.Schema) {
 }
 
 // createLayoutsUp wires the `layouts` table that backs domain.Layout
-// (§3a.1). On top of the obvious columns it installs two SQLite
-// constraints that the spec calls out explicitly (§9 step 11):
-//
-//  1. CHECK (NOT (is_system = 1 AND locked = 1)) — the system layout
-//     can never be locked, so this catches both a buggy service call
-//     and a hand-rolled UPDATE.
-//
-//  2. UNIQUE partial index on `is_system` WHERE is_system = 1 —
-//     guarantees at most one system row exists. SQLite does not
-//     support partial indexes through REL's typed Schema builder,
-//     hence the raw s.Exec.
+// (§3a.1). On top of the obvious columns it installs a partial unique
+// index on `is_system` WHERE is_system = 1 — guarantees at most one
+// system row exists. SQLite does not support partial indexes through
+// REL's typed Schema builder, hence the raw s.Exec.
 //
 // `name` is a plain unique constraint; the user-facing label for the
 // system row is rendered through the i18n key `layout:system_default_label`,
@@ -84,7 +78,6 @@ func createLayoutsUp(s *rel.Schema) {
 		t.DateTime("updated_at")
 
 		t.Unique([]string{"name"})
-		t.Fragment("CHECK (NOT (is_system = 1 AND locked = 1))")
 	})
 	s.Exec(rel.Raw(`CREATE UNIQUE INDEX layouts_unique_system ON layouts(is_system) WHERE is_system = 1`))
 }
@@ -339,4 +332,60 @@ func createSudoElevationsUp(s *rel.Schema) {
 
 func createSudoElevationsDown(s *rel.Schema) {
 	s.DropTable("sudo_elevations")
+}
+
+// dropSystemLayoutLockCheckUp removes the SQLite CHECK that forbade
+// locking the system layout. SQLite cannot drop a CHECK in place, so
+// the table is recreated without it.
+func dropSystemLayoutLockCheckUp(s *rel.Schema) {
+	s.Exec(rel.Raw(`
+		CREATE TABLE "layouts__migration" (
+			"id" INTEGER PRIMARY KEY AUTOINCREMENT,
+			"name" VARCHAR(255),
+			"is_system" BOOL DEFAULT 0,
+			"locked" BOOL DEFAULT 0,
+			"created_by" UNSIGNED INTEGER DEFAULT 0,
+			"created_at" DATETIME,
+			"updated_at" DATETIME,
+			"admin_pin_hash" VARCHAR(255) DEFAULT '',
+			UNIQUE ("name")
+		)
+	`))
+	s.Exec(rel.Raw(`
+		INSERT INTO "layouts__migration"
+			("id", "name", "is_system", "locked", "created_by", "created_at", "updated_at", "admin_pin_hash")
+		SELECT
+			"id", "name", "is_system", "locked", "created_by", "created_at", "updated_at", "admin_pin_hash"
+		FROM "layouts"
+	`))
+	s.Exec(rel.Raw(`DROP TABLE "layouts"`))
+	s.Exec(rel.Raw(`ALTER TABLE "layouts__migration" RENAME TO "layouts"`))
+	s.Exec(rel.Raw(`CREATE UNIQUE INDEX layouts_unique_system ON layouts(is_system) WHERE is_system = 1`))
+}
+
+func dropSystemLayoutLockCheckDown(s *rel.Schema) {
+	s.Exec(rel.Raw(`
+		CREATE TABLE "layouts__migration" (
+			"id" INTEGER PRIMARY KEY AUTOINCREMENT,
+			"name" VARCHAR(255),
+			"is_system" BOOL DEFAULT 0,
+			"locked" BOOL DEFAULT 0,
+			"created_by" UNSIGNED INTEGER DEFAULT 0,
+			"created_at" DATETIME,
+			"updated_at" DATETIME,
+			"admin_pin_hash" VARCHAR(255) DEFAULT '',
+			UNIQUE ("name"),
+			CHECK (NOT (is_system = 1 AND locked = 1))
+		)
+	`))
+	s.Exec(rel.Raw(`
+		INSERT INTO "layouts__migration"
+			("id", "name", "is_system", "locked", "created_by", "created_at", "updated_at", "admin_pin_hash")
+		SELECT
+			"id", "name", "is_system", "locked", "created_by", "created_at", "updated_at", "admin_pin_hash"
+		FROM "layouts"
+	`))
+	s.Exec(rel.Raw(`DROP TABLE "layouts"`))
+	s.Exec(rel.Raw(`ALTER TABLE "layouts__migration" RENAME TO "layouts"`))
+	s.Exec(rel.Raw(`CREATE UNIQUE INDEX layouts_unique_system ON layouts(is_system) WHERE is_system = 1`))
 }

@@ -25,6 +25,7 @@
     },
     "actions": {
       "create": "New layout",
+      "edit": "Edit",
       "rename": "Rename",
       "lock": "Lock",
       "unlock": "Unlock",
@@ -35,6 +36,12 @@
         "title": "New layout",
         "nameLabel": "Name",
         "nameHelp": "A short label identifying the layout (e.g. \"Modelfest 2026\")."
+      },
+      "edit": {
+        "title": "Edit layout",
+        "nameLabel": "Name",
+        "interlockingsLabel": "Interlockings",
+        "interlockingsHelp": "Pick interlockings visible in this layout. The list may be empty."
       },
       "rename": {
         "title": "Rename layout",

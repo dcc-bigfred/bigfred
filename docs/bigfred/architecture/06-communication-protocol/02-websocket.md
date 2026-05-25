@@ -114,6 +114,20 @@ Throttle / state:
   `GET /api/v1/vehicles/{addr}/functions`. See §3a.6.5.
 - `system.status` `{ connected, station: "z21", trackPower: true }`.
 
+Layout dashboard (presence + roster):
+
+- `layout.presenceChanged` `{ layoutId, users: [{ userId, login, role, occupiedInterlocking? }] }` –
+  broadcast to every WS session in the layout when someone connects,
+  disconnects, or their occupied interlocking changes. Clients merge
+  into the dashboard "online users" table without polling.
+- `layout.vehiclesChanged` `{ layoutId, action: "added"|"removed", vehicleAddr }` –
+  invalidates the layout vehicle roster table on the dashboard.
+- `interlocking.occupantChanged` `{ interlockingId, occupant?: { userId, login }, reason?: "joined"|"left"|"displaced" }` –
+  fan-out to the layout. Updates both the interlockings table on the
+  dashboard and the interlocking view header. When `reason:"displaced"`,
+  the displaced user's client shows a toast and clears local
+  "I am occupying" state.
+
 Takeover:
 
 - `takeover.requested` `{ requestId, signalman, target, targetId, autoGrantAt }`

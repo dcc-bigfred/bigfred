@@ -74,8 +74,7 @@ export default function AppShell() {
         id: "interlockings",
         label: t("nav.administration.interlockings"),
         icon: <AccountTreeIcon fontSize="small" />,
-        disabled: true,
-        tooltip: comingSoon("M5"),
+        onClick: () => navigate("/admin/interlockings"),
       },
       { id: "divider-1", divider: true },
       {

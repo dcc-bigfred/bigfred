@@ -117,8 +117,11 @@ Implemented in milestones; each milestone is independently shippable.
     15-second takeover state machine and the closed-vocabulary radio.
     Wire `AuditService.Log` for `session.emergency_executed` emitted by
     the dead-man's switch handler in the Hub.
-17. Add the interlocking / signalman UI (occupy box, take over vehicle,
-    radio dialog with preset phrases).
+17. Add the **layout dashboard** (`HomePage.tsx` – three live tables,
+    §6.3c) and the **interlocking view** (`InterlockingPage.tsx` –
+    occupy / leave with displacement confirm, navigation guard, radio
+    panel, §6.3d). Add `layout_vehicles` table and presence tracking
+    in the Hub.
 
 **M6 – API keys + built-in MCP server.**
 

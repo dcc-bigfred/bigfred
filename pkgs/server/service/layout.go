@@ -61,13 +61,23 @@ const maxLayoutNameLen = 64
 // layout on a freshly-created database via EnsureSystemLayout, which
 // runs out of the CLI startup sequence right after migrations.
 type LayoutService struct {
-	layouts *repo.Layouts
+	layouts             *repo.Layouts
+	interlockings       *repo.Interlockings
+	layoutInterlockings *repo.LayoutInterlockings
 }
 
 // NewLayoutService constructs a service bound to a Layouts
 // repository.
-func NewLayoutService(layouts *repo.Layouts) *LayoutService {
-	return &LayoutService{layouts: layouts}
+func NewLayoutService(
+	layouts *repo.Layouts,
+	interlockings *repo.Interlockings,
+	layoutInterlockings *repo.LayoutInterlockings,
+) *LayoutService {
+	return &LayoutService{
+		layouts:             layouts,
+		interlockings:       interlockings,
+		layoutInterlockings: layoutInterlockings,
+	}
 }
 
 // EnsureSystemLayout inserts the bootstrap system layout row if it
@@ -142,8 +152,9 @@ func (s *LayoutService) GetSystem(ctx context.Context) (domain.Layout, error) {
 
 // CreateInput is the validated payload of LayoutService.Create.
 type CreateInput struct {
-	Name      string
-	CreatedBy uint
+	Name            string
+	CreatedBy       uint
+	InterlockingIDs []uint
 }
 
 // Create inserts a brand-new non-system layout. Name uniqueness and
@@ -187,6 +198,9 @@ func (s *LayoutService) Create(ctx context.Context, in CreateInput) (domain.Layo
 		UpdatedAt: now,
 	}
 	if err := s.layouts.Insert(ctx, &layout); err != nil {
+		return domain.Layout{}, err
+	}
+	if err := s.setInterlockings(ctx, layout.ID, in.CreatedBy, in.InterlockingIDs); err != nil {
 		return domain.Layout{}, err
 	}
 	return layout, nil
@@ -271,6 +285,70 @@ func (s *LayoutService) SetLocked(ctx context.Context, id uint, locked bool) (do
 		return domain.Layout{}, err
 	}
 	return layout, nil
+}
+
+// ListInterlockings returns interlockings whitelisted for a layout.
+func (s *LayoutService) ListInterlockings(ctx context.Context, layoutID uint) ([]domain.Interlocking, error) {
+	if _, err := s.Get(ctx, layoutID); err != nil {
+		return nil, err
+	}
+	ids, err := s.layoutInterlockings.InterlockingIDsForLayout(ctx, layoutID)
+	if err != nil {
+		return nil, err
+	}
+	return s.interlockings.ListByIDs(ctx, ids)
+}
+
+// SetInterlockings replaces the entire interlocking whitelist for a
+// layout with the supplied id set. Unknown ids reject with
+// ErrInterlockingNotFound. Duplicate ids in the input are ignored.
+func (s *LayoutService) SetInterlockings(ctx context.Context, layoutID, addedBy uint, interlockingIDs []uint) ([]domain.Interlocking, error) {
+	if _, err := s.Get(ctx, layoutID); err != nil {
+		return nil, err
+	}
+	if err := s.setInterlockings(ctx, layoutID, addedBy, interlockingIDs); err != nil {
+		return nil, err
+	}
+	return s.ListInterlockings(ctx, layoutID)
+}
+
+func (s *LayoutService) setInterlockings(ctx context.Context, layoutID, addedBy uint, interlockingIDs []uint) error {
+	seen := make(map[uint]struct{}, len(interlockingIDs))
+	unique := make([]uint, 0, len(interlockingIDs))
+	for _, id := range interlockingIDs {
+		if id == 0 {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		if _, err := s.interlockings.FindByID(ctx, id); err != nil {
+			if errors.Is(err, repo.ErrInterlockingNotFound) {
+				return ErrInterlockingNotFound
+			}
+			return err
+		}
+		unique = append(unique, id)
+	}
+
+	if err := s.layoutInterlockings.DeleteAllForLayout(ctx, layoutID); err != nil {
+		return err
+	}
+
+	now := time.Now().UTC()
+	for _, id := range unique {
+		row := domain.LayoutInterlocking{
+			LayoutID:       layoutID,
+			InterlockingID: id,
+			AddedByUserID:  addedBy,
+			AddedAt:        now,
+		}
+		if err := s.layoutInterlockings.Insert(ctx, &row); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // ValidateForLogin loads a layout by id and rejects locked rows with

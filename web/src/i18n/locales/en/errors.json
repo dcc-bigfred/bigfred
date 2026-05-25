@@ -14,5 +14,8 @@
   "layout_name_taken": "A layout with this name already exists.",
   "default_layout_immutable": "The default layout cannot be renamed.",
   "default_layout_undeletable": "The default layout cannot be deleted.",
-  "default_layout_cannot_be_locked": "The default layout cannot be locked."
+  "default_layout_cannot_be_locked": "The default layout cannot be locked.",
+  "interlocking_not_found": "The selected interlocking no longer exists.",
+  "interlocking_name_required": "Please enter an interlocking name.",
+  "interlocking_name_taken": "An interlocking with this name already exists."
 }

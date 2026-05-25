@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Chip,
@@ -40,6 +41,11 @@ import {
   useUpdateLayout,
   type Layout,
 } from "../../api/layouts";
+import {
+  useInterlockings,
+  useLayoutInterlockings,
+  type Interlocking,
+} from "../../api/interlockings";
 
 // LayoutsPage is the admin-only management screen for layouts
 // (Polish: makiety) wired in §4.1 of the spec. It exposes the four
@@ -55,32 +61,42 @@ import {
 export default function LayoutsPage() {
   const { t } = useTranslation(["layout", "common", "errors"]);
   const list = useAdminLayouts();
+  const interlockingsCatalog = useInterlockings();
   const create = useCreateLayout();
-  const rename = useUpdateLayout();
+  const update = useUpdateLayout();
   const remove = useDeleteLayout();
   const setLock = useSetLayoutLock();
 
   type DialogState =
     | { kind: "create" }
-    | { kind: "rename"; target: Layout }
+    | { kind: "edit"; target: Layout }
     | { kind: "delete"; target: Layout }
     | { kind: "lock"; target: Layout; lock: boolean }
     | null;
 
   const [dialog, setDialog] = useState<DialogState>(null);
+  const [editLayoutId, setEditLayoutId] = useState<number | null>(null);
+  const layoutInterlockings = useLayoutInterlockings(editLayoutId);
   const [nameInput, setNameInput] = useState("");
+  const [selectedInterlockings, setSelectedInterlockings] = useState<
+    Interlocking[]
+  >([]);
   const [actionError, setActionError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (dialog?.kind === "edit" && layoutInterlockings.data) {
+      setSelectedInterlockings(layoutInterlockings.data);
+    }
+  }, [dialog, layoutInterlockings.data]);
 
   const closeDialog = () => {
     setDialog(null);
+    setEditLayoutId(null);
     setNameInput("");
+    setSelectedInterlockings([]);
     setActionError(null);
-    // Mutation errors are kept around between dialog openings only
-    // long enough to render an Alert; reset() makes sure the next
-    // open starts clean. Calling reset() on a not-pending mutation
-    // is harmless.
     create.reset();
-    rename.reset();
+    update.reset();
     remove.reset();
     setLock.reset();
   };
@@ -99,13 +115,17 @@ export default function LayoutsPage() {
 
   const openCreate = () => {
     setDialog({ kind: "create" });
+    setEditLayoutId(null);
     setNameInput("");
+    setSelectedInterlockings([]);
     setActionError(null);
   };
 
-  const openRename = (target: Layout) => {
-    setDialog({ kind: "rename", target });
+  const openEdit = (target: Layout) => {
+    setDialog({ kind: "edit", target });
+    setEditLayoutId(target.id);
     setNameInput(target.name);
+    setSelectedInterlockings([]);
     setActionError(null);
   };
 
@@ -122,10 +142,21 @@ export default function LayoutsPage() {
   const submitDialog = async () => {
     if (!dialog) return;
     try {
+      const interlockingIds = selectedInterlockings.map((i) => i.id);
       if (dialog.kind === "create") {
-        await create.mutateAsync({ name: nameInput.trim() });
-      } else if (dialog.kind === "rename") {
-        await rename.mutateAsync({ id: dialog.target.id, name: nameInput.trim() });
+        await create.mutateAsync({
+          name: nameInput.trim(),
+          interlockingIds,
+        });
+      } else if (dialog.kind === "edit") {
+        const name = dialog.target.isSystem
+          ? dialog.target.name
+          : nameInput.trim();
+        await update.mutateAsync({
+          id: dialog.target.id,
+          name,
+          interlockingIds,
+        });
       } else if (dialog.kind === "delete") {
         await remove.mutateAsync(dialog.target.id);
       } else if (dialog.kind === "lock") {
@@ -138,9 +169,16 @@ export default function LayoutsPage() {
   };
 
   const rows = useMemo(() => list.data ?? [], [list.data]);
+  const interlockingOptions = useMemo(
+    () => interlockingsCatalog.data ?? [],
+    [interlockingsCatalog.data],
+  );
 
   const submitting =
-    create.isPending || rename.isPending || remove.isPending || setLock.isPending;
+    create.isPending ||
+    update.isPending ||
+    remove.isPending ||
+    setLock.isPending;
 
   const showSystemBadge = (l: Layout) =>
     l.isSystem ? t("layout:admin.type.system") : t("layout:admin.type.custom");
@@ -241,20 +279,13 @@ export default function LayoutsPage() {
                           spacing={0.5}
                           justifyContent="flex-end"
                         >
-                          {/* Rename — disabled on the system row */}
-                          <Tooltip
-                            title={
-                              l.isSystem
-                                ? t("errors:default_layout_immutable")
-                                : t("layout:admin.actions.rename")
-                            }
-                          >
+                          <Tooltip title={t("layout:admin.actions.edit")}>
                             <span>
                               <IconButton
                                 size="small"
-                                onClick={() => openRename(l)}
-                                disabled={l.isSystem || submitting}
-                                aria-label={t("layout:admin.actions.rename")}
+                                onClick={() => openEdit(l)}
+                                disabled={submitting}
+                                aria-label={t("layout:admin.actions.edit")}
                               >
                                 <EditIcon fontSize="small" />
                               </IconButton>
@@ -327,39 +358,81 @@ export default function LayoutsPage() {
         </Paper>
       </Stack>
 
-      {/* Create / Rename dialog. The two flows share a single name
-          field so the visual rhythm is identical; only the title and
-          submit label differ. */}
+      {/* Create / Edit dialog. Edit replaces the old rename-only flow
+          and adds a multi-select of interlockings whitelisted for the
+          layout. The system row keeps its name read-only. */}
       <Dialog
-        open={dialog?.kind === "create" || dialog?.kind === "rename"}
+        open={dialog?.kind === "create" || dialog?.kind === "edit"}
         onClose={closeDialog}
         fullWidth
-        maxWidth="xs"
+        maxWidth="sm"
       >
         <DialogTitle>
-          {dialog?.kind === "rename"
-            ? t("layout:admin.dialogs.rename.title")
+          {dialog?.kind === "edit"
+            ? t("layout:admin.dialogs.edit.title")
             : t("layout:admin.dialogs.create.title")}
         </DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
             <TextField
               label={
-                dialog?.kind === "rename"
-                  ? t("layout:admin.dialogs.rename.nameLabel")
+                dialog?.kind === "edit"
+                  ? t("layout:admin.dialogs.edit.nameLabel")
                   : t("layout:admin.dialogs.create.nameLabel")
               }
-              value={nameInput}
+              value={
+                dialog?.kind === "edit" && dialog.target.isSystem
+                  ? t("layout:system_default_label")
+                  : nameInput
+              }
               onChange={(e) => setNameInput(e.target.value)}
               helperText={
                 dialog?.kind === "create"
                   ? t("layout:admin.dialogs.create.nameHelp")
-                  : undefined
+                  : dialog?.kind === "edit" && dialog.target.isSystem
+                    ? t("errors:default_layout_immutable")
+                    : undefined
               }
-              autoFocus
+              disabled={dialog?.kind === "edit" && dialog.target.isSystem}
+              autoFocus={dialog?.kind !== "edit" || !dialog.target.isSystem}
               fullWidth
               required
             />
+
+            <Autocomplete
+              multiple
+              options={interlockingOptions}
+              getOptionLabel={(option) => option.name}
+              value={selectedInterlockings}
+              onChange={(_event, value) => setSelectedInterlockings(value)}
+              isOptionEqualToValue={(a, b) => a.id === b.id}
+              loading={interlockingsCatalog.isLoading}
+              disabled={interlockingsCatalog.isError}
+              renderTags={(value, getTagProps) =>
+                value.map((option, index) => (
+                  <Chip
+                    {...getTagProps({ index })}
+                    key={option.id}
+                    label={option.name}
+                    size="small"
+                  />
+                ))
+              }
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label={t("layout:admin.dialogs.edit.interlockingsLabel")}
+                  helperText={t("layout:admin.dialogs.edit.interlockingsHelp")}
+                />
+              )}
+            />
+
+            {dialog?.kind === "edit" && layoutInterlockings.isLoading && (
+              <Box sx={{ display: "flex", justifyContent: "center", py: 1 }}>
+                <CircularProgress size={24} />
+              </Box>
+            )}
+
             {actionError && <Alert severity="error">{actionError}</Alert>}
           </Stack>
         </DialogContent>
@@ -370,9 +443,16 @@ export default function LayoutsPage() {
           <Button
             variant="contained"
             onClick={submitDialog}
-            disabled={submitting || nameInput.trim() === ""}
+            disabled={
+              submitting ||
+              (dialog?.kind === "create" && nameInput.trim() === "") ||
+              (dialog?.kind === "edit" &&
+                !dialog.target.isSystem &&
+                nameInput.trim() === "") ||
+              (dialog?.kind === "edit" && layoutInterlockings.isLoading)
+            }
           >
-            {dialog?.kind === "rename"
+            {dialog?.kind === "edit"
               ? t("common:actions.save")
               : t("common:actions.create")}
           </Button>

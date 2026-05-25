@@ -264,6 +264,7 @@ type Layout struct {
 
     Signalmen       []LayoutSignalman       `ref:"id" fk:"layout_id"`
     Interlockings   []LayoutInterlocking    `ref:"id" fk:"layout_id"`
+    Vehicles        []LayoutVehicle         `ref:"id" fk:"layout_id"`
     CommandStations []LayoutCommandStation  `ref:"id" fk:"layout_id"` // EMPTY for IsSystem rows: their set is virtual
 }
 
@@ -320,6 +321,20 @@ type LayoutInterlocking struct {
     InterlockingID  uint
     AddedByUserID   uint
     AddedAt         time.Time
+}
+
+// LayoutVehicle pins a registered Vehicle to a layout's operating roster.
+// A vehicle must be registered globally before it can be added; only the
+// vehicle owner may add or remove their row. The dashboard lists these
+// rows so every participant in the layout sees which locos are "on the
+// floor" for this session. Distinct from leasing: roster membership
+// is visibility/participation, not a transfer of driving authority.
+type LayoutVehicle struct {
+    ID         uint
+    LayoutID   uint
+    VehicleID  uint
+    AddedByUserID uint // must equal vehicle.OwnerUserID at insert time
+    AddedAt    time.Time
 }
 ```
 

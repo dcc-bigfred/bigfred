@@ -15,8 +15,9 @@ import (
 // time. Keeping it as an explicit struct (rather than positional args)
 // makes future additions (Hub, LocoService, …) source-compatible.
 type RouterConfig struct {
-	Auth    *service.AuthService
-	Layouts *service.LayoutService
+	Auth          *service.AuthService
+	Layouts       *service.LayoutService
+	Interlockings *service.InterlockingService
 
 	// AllowedOrigins is forwarded verbatim to the CORS middleware.
 	// In development the Vite dev server lives on a different port
@@ -51,6 +52,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 
 	authH := NewAuthHandler(cfg.Auth, cfg.SecureCookie)
 	layoutH := NewLayoutHandler(cfg.Layouts)
+	interlockingH := NewInterlockingHandler(cfg.Interlockings)
 
 	r.Route("/api/v1", func(r chi.Router) {
 		// Public auth endpoints (login does its own credential check).
@@ -68,10 +70,14 @@ func NewRouter(cfg RouterConfig) http.Handler {
 
 			r.Get("/auth/me", authH.Me)
 
+			r.Get("/interlockings", interlockingH.List)
+			r.Get("/interlockings/{id}", interlockingH.Get)
+
 			// Layouts: read endpoints are open to every
 			// authenticated user; mutating endpoints require admin.
 			r.Get("/layouts", layoutH.List)
 			r.Get("/layouts/{id}", layoutH.Get)
+			r.Get("/layouts/{id}/interlockings", layoutH.ListInterlockings)
 
 			r.Group(func(r chi.Router) {
 				r.Use(RequireRole(domain.RoleAdmin))
@@ -80,6 +86,11 @@ func NewRouter(cfg RouterConfig) http.Handler {
 				r.Delete("/layouts/{id}", layoutH.Delete)
 				r.Post("/layouts/{id}/lock", layoutH.Lock)
 				r.Delete("/layouts/{id}/lock", layoutH.Unlock)
+				r.Put("/layouts/{id}/interlockings", layoutH.SetInterlockings)
+
+				r.Post("/interlockings", interlockingH.Create)
+				r.Put("/interlockings/{id}", interlockingH.Update)
+				r.Delete("/interlockings/{id}", interlockingH.Delete)
 			})
 		})
 	})

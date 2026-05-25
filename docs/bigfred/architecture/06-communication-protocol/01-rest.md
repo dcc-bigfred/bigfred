@@ -79,9 +79,9 @@ POST   /api/v1/trains/{id}/lease       { toUserId, expiresAt }    owner
 DELETE /api/v1/trains/{id}/lease                                  owner
 
 # --- Interlockings ---
-GET    /api/v1/interlockings                                      *           # FILTERED to the caller's active layout (only whitelisted IDs)
-POST   /api/v1/interlockings/{id}/join                            signalman   # join (becomes active session); requires interlocking ∈ active layout
-POST   /api/v1/interlockings/{id}/leave                           signalman
+GET    /api/v1/interlockings                                      *           # FILTERED to the caller's active layout (only whitelisted IDs). Each row includes `{ id, name, location, occupant?: { userId, login } }` when staffed.
+POST   /api/v1/interlockings/{id}/join   { force?: bool }         signalman   # become active occupant; requires interlocking ∈ active layout. When already occupied: `409 interlocking_occupied` unless `force:true`, which ends the incumbent session (`reason:"displaced"`) and opens a new one for the caller.
+POST   /api/v1/interlockings/{id}/leave                           signalman   # end own active session for this interlocking (idempotent if not occupying)
 
 # --- Command Stations (catalogue of `centralki`) ---
 GET    /api/v1/command-stations                                            *           # list (name + connection type only; admin sees full Connection)
@@ -113,6 +113,13 @@ DELETE /api/v1/layouts/{id}/command-stations/{commandStationId}   admin       # 
 GET    /api/v1/layouts/{id}/signalmen                             *
 POST   /api/v1/layouts/{id}/signalmen  { userId, expiresAt? }     admin       # grant signalman role inside this layout
 DELETE /api/v1/layouts/{id}/signalmen/{userId}                    admin
+
+# Layout vehicle roster + live presence (dashboard data sources)
+GET    /api/v1/layouts/{id}/vehicles                              *           # vehicles on the layout roster. JWT `layoutId` must match `{id}`.
+GET    /api/v1/layouts/{id}/vehicles/mine                         *           # caller's registered vehicles with `onLayout: bool` per row ("Show my vehicles" / add picker)
+POST   /api/v1/layouts/{id}/vehicles     { vehicleAddr }          owner       # add own vehicle to roster; 409 if already attached
+DELETE /api/v1/layouts/{id}/vehicles/{vehicleAddr}                owner       # remove own vehicle from roster
+GET    /api/v1/layouts/{id}/presence                              *           # online users in this layout: `[{ userId, login, role, occupiedInterlocking?: { id, name } }]`
 
 # Layout-scoped interlocking whitelist
 GET    /api/v1/layouts/{id}/interlockings                         *

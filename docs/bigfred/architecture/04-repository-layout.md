@@ -37,8 +37,8 @@ pkgs/
     │   ├── takeover.go         # TakeoverService – 15s arbitration
     │   ├── radio.go            # RadioService – walkie-talkie messages
     │   ├── command_station.go           # CommandStationService – CRUD over centralki (admin only)
-    │   ├── layout.go            # LayoutService – CRUD, join, signalmen list,
-    │   │                       #                interlocking whitelist
+    │   ├── layout.go            # LayoutService – CRUD, vehicle roster, presence,
+    │   │                       #                signalmen list, interlocking whitelist
     │   ├── function.go         # FunctionService – vehicle F0-F32 list,
     │   │                       #                copy-on-write detach
     │   ├── template.go         # TemplateService – CRUD over vehicle templates
@@ -71,7 +71,7 @@ pkgs/
     │   ├── takeover.go         # TakeoverRequest
     │   ├── radio.go            # RadioMessage, RadioPhrase
     │   ├── command_station.go           # CommandStation, CommandStationConnection, CommandStationConnectionType
-    │   ├── layout.go            # Layout, LayoutSignalman, LayoutInterlocking
+    │   ├── layout.go            # Layout, LayoutSignalman, LayoutInterlocking, LayoutVehicle
     │   ├── function.go         # VehicleFunction, FunctionIcon, FunctionKind
     │   ├── template.go         # VehicleTemplate, TemplateFunction
     │   └── audit.go            # AuditLogEntry, AuditAction
@@ -151,8 +151,16 @@ web/                            # NEW – frontend
     │   │                       # not from the editor – running needs a target.
     │   ├── ScriptConsole.tsx   # subscribes to WS `script.log` events for the current run
     │   │                       # and renders run history (start time, duration, reason)
-    │   └── AppShell.tsx        # MUI AppBar + Drawer + Container
+    │   ├── AppShell.tsx        # MUI AppBar (incl. Throttle toggle) + Drawer + Container
+    │   ├── ThrottleOverlay.tsx # full-screen driving layer (§6.3b); hosts Loco/Train control
+    │   ├── LayoutVehiclesTable.tsx
+    │   ├── OnlineUsersTable.tsx
+    │   ├── InterlockingsTable.tsx
+    │   ├── InterlockingRadioPanel.tsx
+    │   └── LeaveInterlockingDialog.tsx
     ├── pages/
+    │   ├── HomePage.tsx        # layout dashboard (§6.3c)
+    │   ├── InterlockingPage.tsx # /interlockings/:id – occupation + radio (§6.3d)
     │   ├── LocoListPage.tsx
     │   ├── LocoControlPage.tsx
     │   ├── TrainControlPage.tsx # same ThrottleSlider as LocoControlPage; sends train.setSpeed

@@ -20,8 +20,8 @@ cross-references inside the text still work via `Ctrl+F`.
 1. [Terminology](./architecture/00-terminology.md) — authoritative
    vocabulary (driver, signalman, vehicle, train, interlocking,
    takeover, lease, radio, layout, command station, function, vehicle template,
-   script).
-2. [Goals](./architecture/01-goals.md) — platform goals and the 18
+   script, throttle mode, dashboard, layout vehicle roster).
+2. [Goals](./architecture/01-goals.md) — platform goals and the 19
    functional goals that drive everything else.
 3. [Technology Stack](./architecture/02-tech-stack.md) — Go (chi, REL,
    Goja, mark3labs/mcp-go, …) and React (Vite, MUI, TanStack Query,
@@ -39,8 +39,9 @@ cross-references inside the text still work via `Ctrl+F`.
 8. [Backend Components](./architecture/07-backend-components.md) — Hub,
    Client, dispatch, LocoService, poller, Redis roles, chi wiring.
 9. [Frontend Components](./architecture/08-frontend-components.md) —
-   `useSocket`, Zustand store, `LocoControl`, `TrainControl`, MUI
-   setup, script buttons & console.
+   `useSocket`, Zustand store, `LocoControl`, `TrainControl`, throttle
+   mode overlay, layout dashboard, interlocking view, MUI setup, script
+   buttons & console.
 10. [Cross-Cutting Concerns](./architecture/09-cross-cutting.md) —
     single binary, WS backpressure, reconnect, audit discipline,
     `scripts-executor` supervision.

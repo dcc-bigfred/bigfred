@@ -1,0 +1,34 @@
+{
+  "admin": {
+    "title": "Interlockings",
+    "subtitle": "Catalogue of interlockings in the system. Assign interlockings to layouts from the layout editor.",
+    "columns": {
+      "name": "Name",
+      "location": "Description",
+      "actions": "Actions"
+    },
+    "actions": {
+      "create": "New interlocking",
+      "edit": "Edit",
+      "delete": "Delete"
+    },
+    "dialogs": {
+      "create": {
+        "title": "New interlocking"
+      },
+      "edit": {
+        "title": "Edit interlocking"
+      },
+      "delete": {
+        "title": "Delete interlocking \"{{name}}\"",
+        "message": "This operation is irreversible. The interlocking will be removed from every layout it was assigned to."
+      },
+      "fields": {
+        "name": "Name",
+        "location": "Description",
+        "locationHelp": "A short description of where or what the interlocking covers."
+      }
+    },
+    "empty": "There are no interlockings to display."
+  }
+}

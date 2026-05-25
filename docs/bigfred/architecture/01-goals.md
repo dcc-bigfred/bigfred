@@ -32,13 +32,23 @@ domain model and the API:
 5. **Vehicle control** – a user can drive:
    - vehicles they own,
    - vehicles currently leased to them by another user (see below).
-6. **Vehicle leasing** – a user can lend a vehicle to another user
+   Driving happens in **throttle mode** (§1, §6.3b): a full-screen overlay
+   opened from the top AppBar, with real-time WebSocket control and
+   server-authoritative state sync (including changes made by external
+   throttles on the same command station).
+6. **Layout dashboard** – after login the user lands on the **dashboard**
+   (`/`) for their pinned layout. It shows three live tables (§6.3c):
+   vehicles on the layout roster, online users (role + occupied
+   interlocking, if any), and whitelisted interlockings with their
+   current occupant. Drivers manage their vehicles on the roster; signalmen
+   open interlocking views from the third table.
+7. **Vehicle leasing** – a user can lend a vehicle to another user
    **for driving only** (no edit / no CV writes). Properties of a lease:
    - explicit `expires_at` timestamp; lease auto-expires after that
      moment with no manual action,
    - can be revoked early by the owner at any time,
    - lessee never inherits ownership or edit rights.
-7. **Trains** – a user may create a **train** (`skład`) made up of at
+8. **Trains** – a user may create a **train** (`skład`) made up of at
    least one vehicle. The train is owned by the user that created it
    and can be leased exactly like a single vehicle (same `expires_at`
    / revoke semantics). The **train control view shows the same speed
@@ -48,11 +58,15 @@ domain model and the API:
    whole consist moves as a rigid unit. Function buttons and scripts
    remain per-vehicle (each member keeps its own F0–F32 row); only
    the throttle is consolidated.
-8. **Interlockings / Signal boxes** – the system models physical
+9. **Interlockings / Signal boxes** – the system models physical
    `interlockings` (`nastawnie`). At any moment **at most one signalman
    can occupy a given interlocking** in order to direct traffic from
-   there.
-9. **Takeover by signalman** – an occupying signalman may request to
+   there. Occupation is managed from the **interlocking view** (§6.3d):
+   signalmen click a row on the **dashboard**, then use **Obsadź
+   nastawnię** / **Opuść nastawnię**. If the box is already staffed,
+   another signalman may take over after confirming displacement so the
+   interlocking cannot remain permanently blocked.
+10. **Takeover by signalman** – an occupying signalman may request to
    take control of a driver's vehicle or train. The flow is:
    - signalman emits `takeover.request`,
    - driver receives `takeover.requested` and has **15 seconds** to
@@ -62,13 +76,13 @@ domain model and the API:
    - if the 15-second window elapses with no rejection, the signalman
      becomes the active controller; ownership is unchanged, but driving
      authority is moved.
-10. **Radio ("walkie-talkie") between signalmen and drivers** – the app
+11. **Radio ("walkie-talkie") between signalmen and drivers** – the app
     provides a built-in messaging channel between drivers and signalmen
     based on a closed set of **standard radio phrases** (for example
     `STOPPED_AT_SIGNAL_READY_TO_ENTER`, `ENTRY_PERMITTED`,
     `CANCEL_ROUTE`, `ACK`). Messages are short, structured, addressable
     and delivered over the same WebSocket connection.
-11. **Programmable access (API keys + built-in MCP server)** – any user
+12. **Programmable access (API keys + built-in MCP server)** – any user
     can mint **temporary API keys** scoped to their own permissions:
     - configurable lifetime up to a **hard maximum of 365 days**;
     - the plaintext key is shown to the user **exactly once** at
@@ -82,7 +96,7 @@ domain model and the API:
       toggle function, send radio phrase, …) so AI assistants, IDE
       agents and automation scripts can drive the same domain via
       Anthropic's [Model Context Protocol](https://modelcontextprotocol.io/).
-12. **Layouts (modeling events) picked on the login form** – the
+13. **Layouts (modeling events) picked on the login form** – the
     application is multi-tenant in the soft sense that all users live
     in the same database, but every drive session happens inside a
     **layout** (`makieta`), and the choice is made **before the user
@@ -105,8 +119,10 @@ domain model and the API:
       reads `layoutId` from the token and pins the resulting drive
       session to that layout for its **entire lifetime**. **The user
       cannot change layout mid-session** – switching requires a full
-      logout/login round trip. There is no post-login layout-list
-      screen and no `setLayout` action;
+      logout/login round trip. There is no post-login **layout picker**
+      (the choice stays on the login form), but every user lands on
+      the **dashboard** (`/`, §6.3c) for their pinned layout. There is
+      no `setLayout` action;
     - **`admin` creates and deletes non-system layouts**; **any user
       may log into any non-locked layout**;
     - **a layout has no end date** – it stays in the catalogue until
@@ -123,6 +139,9 @@ domain model and the API:
       specific layout**, and the user gains signalman powers
       exclusively while active in that layout (see §7a.2 for how this
       changes the effective-roles computation);
+    - each layout owns a **vehicle roster** (`LayoutVehicle`): users
+      add their own registered vehicles to the layout so they appear on
+      the shared **dashboard** (§6.3c);
     - each layout owns its own **interlocking whitelist**: both
       `admin` and any signalman of the layout may add interlockings to
       it; **only the whitelisted interlockings are visible to drivers
@@ -132,7 +151,7 @@ domain model and the API:
       list. They expose name/lock toggle and the attached
       command-station set; the system layout's row is read-only in
       that page.
-13. **Command stations catalogue (`centralki`)** – the physical DCC
+14. **Command stations catalogue (`centralki`)** – the physical DCC
     command station is a first-class entity, **independent of any
     specific layout**:
     - the system maintains a **catalogue of command stations**; each
@@ -166,7 +185,7 @@ domain model and the API:
       told to re-pick. The deletion itself is rejected with `409
       Conflict` if it would leave any non-system layout with zero
       attached stations.
-14. **Audit log** – every significant state change is recorded in an
+15. **Audit log** – every significant state change is recorded in an
     **append-only audit log**. The scope is deliberately narrow and
     covers the operationally interesting events:
     - **vehicle leasing** – grant, revoke, auto-expire;
@@ -196,7 +215,7 @@ domain model and the API:
     history**. The audit log is read-only for everyone (no DELETE/UPDATE
     endpoints) and visible only to `admin`. See §3a.5 for the entity,
     §4.1 for the REST surface and §10.6 for the acceptance criteria.
-15. **Vehicle functions (`F0`–`F32`)** – every vehicle exposes a
+16. **Vehicle functions (`F0`–`F32`)** – every vehicle exposes a
     user-curated list of DCC functions that drivers can toggle from
     the throttle UI:
     - the underlying DCC function range is **`F0`–`F32`** (33
@@ -214,7 +233,7 @@ domain model and the API:
       lessees and signalmen who took the vehicle over may **invoke**
       functions while they have driving authority, but never edit the
       list.
-16. **Vehicle templates with copy-on-write inheritance** – the system
+17. **Vehicle templates with copy-on-write inheritance** – the system
     has a catalogue of **vehicle templates** (`szablony pojazdów`)
     that pre-define a function list for a class of vehicles
     (e.g. "PKP ET22", "DB BR 218", "Bachmann 0-6-0 with sound"):
@@ -238,7 +257,7 @@ domain model and the API:
     - the user can also explicitly **detach** (manual copy) or
       **re-attach** (drop local edits, re-sync to template's current
       state) via dedicated endpoints.
-17. **Persistent drive session with dead-man's switch** – the
+18. **Persistent drive session with dead-man's switch** – the
     WebSocket connection is treated as a **drive session**, not just a
     transport:
     - the server tracks per-user sessions with a heartbeat
@@ -259,7 +278,7 @@ domain model and the API:
     - a successful reconnect within the grace window **cancels** the
       pending emergency.
 
-18. **Scripts – server-side JavaScript automation attached to vehicles
+19. **Scripts – server-side JavaScript automation attached to vehicles
     and trains** – the app exposes a **Scripts** tab where any user
     can author short **JavaScript (ECMAScript 5.1+)** programs that
     automate driving. Architecturally scripts live entirely on the

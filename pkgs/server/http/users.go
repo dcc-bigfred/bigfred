@@ -27,24 +27,42 @@ func NewUserHandler(svc *service.UserService) *UserHandler {
 	return &UserHandler{svc: svc}
 }
 
+type dccPoolRangeResponse struct {
+	From uint16 `json:"from"`
+	To   uint16 `json:"to"`
+}
+
 // userResponse is the JSON shape returned by the user-management
 // endpoints. `pinHash` is deliberately omitted — the plaintext PIN
 // has never been recoverable and the hash is useless to the UI.
 type userResponse struct {
-	ID        uint        `json:"id"`
-	Login     string      `json:"login"`
-	Role      domain.Role `json:"role"`
-	Active    bool        `json:"active"`
-	CreatedAt time.Time   `json:"createdAt"`
-	UpdatedAt time.Time   `json:"updatedAt"`
+	ID        uint                   `json:"id"`
+	Login     string                 `json:"login"`
+	Role      domain.Role            `json:"role"`
+	Active    bool                   `json:"active"`
+	DCCPool   []dccPoolRangeResponse `json:"dccPool"`
+	CreatedAt time.Time              `json:"createdAt"`
+	UpdatedAt time.Time              `json:"updatedAt"`
 }
 
-func toUserResponse(u domain.User) userResponse {
+func toDCCPoolResponse(rows []domain.DCCAddressRange) []dccPoolRangeResponse {
+	out := make([]dccPoolRangeResponse, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, dccPoolRangeResponse{From: r.FromAddr, To: r.ToAddr})
+	}
+	return out
+}
+
+func toUserResponse(u domain.User, pool []domain.DCCAddressRange) userResponse {
+	if pool == nil {
+		pool = []domain.DCCAddressRange{}
+	}
 	return userResponse{
 		ID:        u.ID,
 		Login:     u.Login,
 		Role:      u.Role,
 		Active:    u.Active,
+		DCCPool:   toDCCPoolResponse(pool),
 		CreatedAt: u.CreatedAt,
 		UpdatedAt: u.UpdatedAt,
 	}
@@ -52,23 +70,37 @@ func toUserResponse(u domain.User) userResponse {
 
 // List handles GET /api/v1/users.
 func (h *UserHandler) List(w http.ResponseWriter, r *http.Request) {
-	rows, err := h.svc.List(r.Context())
+	rows, err := h.svc.ListWithDCCPools(r.Context())
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 		return
 	}
 	out := make([]userResponse, 0, len(rows))
-	for _, u := range rows {
-		out = append(out, toUserResponse(u))
+	for _, row := range rows {
+		out = append(out, toUserResponse(row.User, row.DCCPool))
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(out)
 }
 
+type dccPoolRangeRequest struct {
+	From uint16 `json:"from"`
+	To   uint16 `json:"to"`
+}
+
+func toPoolRanges(rows []dccPoolRangeRequest) []service.PoolRange {
+	out := make([]service.PoolRange, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, service.PoolRange{From: r.From, To: r.To})
+	}
+	return out
+}
+
 type userCreateRequest struct {
-	Login string      `json:"login"`
-	PIN   string      `json:"pin"`
-	Role  domain.Role `json:"role"`
+	Login   string                `json:"login"`
+	PIN     string                `json:"pin"`
+	Role    domain.Role           `json:"role"`
+	DCCPool []dccPoolRangeRequest `json:"dccPool"`
 }
 
 // Create handles POST /api/v1/users.
@@ -79,17 +111,23 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	row, err := h.svc.Create(r.Context(), service.UserCreateInput{
-		Login: req.Login,
-		PIN:   req.PIN,
-		Role:  req.Role,
+		Login:   req.Login,
+		PIN:     req.PIN,
+		Role:    req.Role,
+		DCCPool: toPoolRanges(req.DCCPool),
 	})
+	if err != nil {
+		writeUserError(w, err)
+		return
+	}
+	pool, err := h.svc.GetDCCPool(r.Context(), row.ID)
 	if err != nil {
 		writeUserError(w, err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(toUserResponse(row))
+	_ = json.NewEncoder(w).Encode(toUserResponse(row, pool))
 }
 
 // userUpdateRequest mirrors the optional fields exposed by
@@ -98,9 +136,10 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 // would not buy any safety because the admin already has full
 // authority over the row.
 type userUpdateRequest struct {
-	Login *string      `json:"login"`
-	Role  *domain.Role `json:"role"`
-	PIN   *string      `json:"pin"`
+	Login   *string                `json:"login"`
+	Role    *domain.Role           `json:"role"`
+	PIN     *string                `json:"pin"`
+	DCCPool *[]dccPoolRangeRequest `json:"dccPool"`
 }
 
 // Update handles PUT /api/v1/users/{id}.
@@ -121,17 +160,27 @@ func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if req.PIN != nil && *req.PIN == "" {
 		req.PIN = nil
 	}
-	row, err := h.svc.Update(r.Context(), userID, service.UserUpdateInput{
+	in := service.UserUpdateInput{
 		Login: req.Login,
 		Role:  req.Role,
 		PIN:   req.PIN,
-	})
+	}
+	if req.DCCPool != nil {
+		ranges := toPoolRanges(*req.DCCPool)
+		in.DCCPool = &ranges
+	}
+	row, err := h.svc.Update(r.Context(), userID, in)
+	if err != nil {
+		writeUserError(w, err)
+		return
+	}
+	pool, err := h.svc.GetDCCPool(r.Context(), row.ID)
 	if err != nil {
 		writeUserError(w, err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(toUserResponse(row))
+	_ = json.NewEncoder(w).Encode(toUserResponse(row, pool))
 }
 
 // Activate handles POST /api/v1/users/{id}/activate. Idempotent.
@@ -172,8 +221,13 @@ func (h *UserHandler) setActive(w http.ResponseWriter, r *http.Request, active b
 		writeUserError(w, err)
 		return
 	}
+	pool, err := h.svc.GetDCCPool(r.Context(), row.ID)
+	if err != nil {
+		writeUserError(w, err)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(toUserResponse(row))
+	_ = json.NewEncoder(w).Encode(toUserResponse(row, pool))
 }
 
 // Delete handles DELETE /api/v1/users/{id}.
@@ -230,6 +284,12 @@ func writeUserError(w http.ResponseWriter, err error) {
 		writeJSONError(w, http.StatusUnprocessableEntity, "cannot_deactivate_self")
 	case errors.Is(err, service.ErrCannotDeleteSelf):
 		writeJSONError(w, http.StatusUnprocessableEntity, "cannot_delete_self")
+	case errors.Is(err, service.ErrDCCPoolEmpty):
+		writeJSONError(w, http.StatusUnprocessableEntity, "dcc_pool_empty")
+	case errors.Is(err, service.ErrDCCPoolRangeInvalid):
+		writeJSONError(w, http.StatusUnprocessableEntity, "dcc_pool_range_invalid")
+	case errors.Is(err, service.ErrDCCPoolOverlap):
+		writeJSONError(w, http.StatusConflict, "dcc_pool_overlap")
 	default:
 		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 	}

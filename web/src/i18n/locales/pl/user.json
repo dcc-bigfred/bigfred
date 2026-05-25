@@ -11,6 +11,7 @@
     "columns": {
       "login": "Login",
       "role": "Rola",
+      "dccPool": "Adresacja DCC",
       "status": "Status",
       "actions": "Akcje"
     },
@@ -37,7 +38,13 @@
         "pin": "Hasło (PIN)",
         "pinCreateHelp": "Wpisz hasło użytkownika. Wyłącznie cyfry, 4–12 znaków.",
         "pinEditHelp": "Zostaw puste, aby zachować obecne hasło. Wyłącznie cyfry, 4–12 znaków.",
-        "pinPlaceholder": "Bez zmian"
+        "pinPlaceholder": "Bez zmian",
+        "dccPool": "Pula adresów DCC",
+        "dccPoolHelp": "Co najmniej jeden zakres od {{min}} do {{max}}. Zakresy nie mogą nakładać się na pulę innego użytkownika.",
+        "dccFrom": "Od",
+        "dccTo": "Do",
+        "dccAddRange": "Dodaj zakres",
+        "dccRemoveRange": "Usuń zakres"
       },
       "deactivate": {
         "title": "Dezaktywować użytkownika „{{login}}”?",

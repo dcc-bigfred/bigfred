@@ -11,6 +11,7 @@
     "columns": {
       "login": "Login",
       "role": "Role",
+      "dccPool": "DCC addresses",
       "status": "Status",
       "actions": "Actions"
     },
@@ -37,7 +38,13 @@
         "pin": "Password (PIN)",
         "pinCreateHelp": "Pick a numeric password (4–12 digits).",
         "pinEditHelp": "Leave empty to keep the current password. Digits only, 4–12 characters.",
-        "pinPlaceholder": "No change"
+        "pinPlaceholder": "No change",
+        "dccPool": "DCC address pool",
+        "dccPoolHelp": "At least one range from {{min}} to {{max}}. Ranges must not overlap another user's pool.",
+        "dccFrom": "From",
+        "dccTo": "To",
+        "dccAddRange": "Add range",
+        "dccRemoveRange": "Remove range"
       },
       "deactivate": {
         "title": "Deactivate user \"{{login}}\"?",

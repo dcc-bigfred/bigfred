@@ -80,18 +80,52 @@ type UserService struct {
 	users    *repo.Users
 	vehicles *repo.Vehicles
 	trains   *repo.Trains
+	dccPool  *DCCPoolService
 }
 
 // NewUserService constructs a UserService bound to the persistence
 // repositories it needs for create / update / delete validation.
-func NewUserService(users *repo.Users, vehicles *repo.Vehicles, trains *repo.Trains) *UserService {
-	return &UserService{users: users, vehicles: vehicles, trains: trains}
+func NewUserService(users *repo.Users, vehicles *repo.Vehicles, trains *repo.Trains, dccPool *DCCPoolService) *UserService {
+	return &UserService{users: users, vehicles: vehicles, trains: trains, dccPool: dccPool}
+}
+
+// UserWithDCCPool is a catalogue row enriched with the user's DCC
+// address ranges for the admin UI.
+type UserWithDCCPool struct {
+	User    domain.User
+	DCCPool []domain.DCCAddressRange
 }
 
 // List returns every user in the catalogue. Admin-only; the HTTP
 // layer is responsible for the role check.
 func (s *UserService) List(ctx context.Context) ([]domain.User, error) {
 	return s.users.ListAll(ctx)
+}
+
+// ListWithDCCPools returns every user together with their DCC pool
+// rows so the admin UI can render the catalogue in one round trip.
+func (s *UserService) ListWithDCCPools(ctx context.Context) ([]UserWithDCCPool, error) {
+	users, err := s.users.ListAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+	allRanges, err := s.dccPool.ListAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+	byUser := make(map[uint][]domain.DCCAddressRange, len(users))
+	for _, r := range allRanges {
+		byUser[r.UserID] = append(byUser[r.UserID], r)
+	}
+	out := make([]UserWithDCCPool, 0, len(users))
+	for _, u := range users {
+		pool := byUser[u.ID]
+		if pool == nil {
+			pool = []domain.DCCAddressRange{}
+		}
+		out = append(out, UserWithDCCPool{User: u, DCCPool: pool})
+	}
+	return out, nil
 }
 
 // Get loads a single user by primary key. Returns ErrUserNotFound
@@ -110,9 +144,10 @@ func (s *UserService) Get(ctx context.Context, id uint) (domain.User, error) {
 
 // UserCreateInput is the validated payload of UserService.Create.
 type UserCreateInput struct {
-	Login string
-	PIN   string
-	Role  domain.Role
+	Login   string
+	PIN     string
+	Role    domain.Role
+	DCCPool []PoolRange
 }
 
 // Create inserts a brand-new user. The PIN is hashed inside this
@@ -135,6 +170,10 @@ func (s *UserService) Create(ctx context.Context, in UserCreateInput) (domain.Us
 		return domain.User{}, err
 	}
 
+	if err := s.dccPool.Validate(ctx, 0, in.DCCPool); err != nil {
+		return domain.User{}, err
+	}
+
 	hash, err := HashPIN(in.PIN)
 	if err != nil {
 		return domain.User{}, err
@@ -152,6 +191,9 @@ func (s *UserService) Create(ctx context.Context, in UserCreateInput) (domain.Us
 	if err := s.users.Insert(ctx, &row); err != nil {
 		return domain.User{}, err
 	}
+	if _, err := s.dccPool.Replace(ctx, row.ID, in.DCCPool); err != nil {
+		return domain.User{}, err
+	}
 	return row, nil
 }
 
@@ -159,9 +201,10 @@ func (s *UserService) Create(ctx context.Context, in UserCreateInput) (domain.Us
 // Each field is a pointer so the caller can distinguish "leave
 // alone" from "explicit empty".
 type UserUpdateInput struct {
-	Login *string
-	Role  *domain.Role
-	PIN   *string
+	Login   *string
+	Role    *domain.Role
+	PIN     *string
+	DCCPool *[]PoolRange
 }
 
 // Update mutates an existing user in place. Only the fields the
@@ -204,12 +247,22 @@ func (s *UserService) Update(ctx context.Context, id uint, in UserUpdateInput) (
 		}
 		row.PINHash = hash
 	}
+	if in.DCCPool != nil {
+		if _, err := s.dccPool.Replace(ctx, row.ID, *in.DCCPool); err != nil {
+			return domain.User{}, err
+		}
+	}
 
 	row.UpdatedAt = time.Now().UTC()
 	if err := s.users.Update(ctx, &row); err != nil {
 		return domain.User{}, err
 	}
 	return row, nil
+}
+
+// GetDCCPool loads the DCC address ranges assigned to a user.
+func (s *UserService) GetDCCPool(ctx context.Context, userID uint) ([]domain.DCCAddressRange, error) {
+	return s.dccPool.List(ctx, userID)
 }
 
 // SetActive flips the user's Active flag. Idempotent on either
@@ -253,6 +306,9 @@ func (s *UserService) Delete(ctx context.Context, id uint) error {
 	}
 	if nt > 0 {
 		return ErrUserHasTrains
+	}
+	if err := s.dccPool.DeleteForUser(ctx, row.ID); err != nil {
+		return err
 	}
 	return s.users.Delete(ctx, &row)
 }

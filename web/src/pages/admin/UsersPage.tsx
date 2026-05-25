@@ -43,6 +43,14 @@ import {
   useUsers,
   type User,
 } from "../../api/users";
+import UserDccPoolFields, {
+  dccPoolFromApi,
+  emptyDccPoolRange,
+  formatDccPoolSummary,
+  isDccPoolInputValid,
+  parseDccPoolRanges,
+  type DccPoolRangeInput,
+} from "../../components/UserDccPoolFields";
 
 // UsersPage is the admin-only management screen for user accounts
 // (§4.1 / §7a.5). Five operations are supported:
@@ -80,6 +88,9 @@ export default function UsersPage() {
   const [loginInput, setLoginInput] = useState("");
   const [pinInput, setPinInput] = useState("");
   const [roleInput, setRoleInput] = useState<Role>("driver");
+  const [dccPoolInput, setDccPoolInput] = useState<DccPoolRangeInput[]>([
+    emptyDccPoolRange(),
+  ]);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const closeDialog = () => {
@@ -87,6 +98,7 @@ export default function UsersPage() {
     setLoginInput("");
     setPinInput("");
     setRoleInput("driver");
+    setDccPoolInput([emptyDccPoolRange()]);
     setActionError(null);
     create.reset();
     update.reset();
@@ -110,6 +122,7 @@ export default function UsersPage() {
     setLoginInput("");
     setPinInput("");
     setRoleInput("driver");
+    setDccPoolInput([emptyDccPoolRange()]);
     setActionError(null);
   };
 
@@ -118,6 +131,7 @@ export default function UsersPage() {
     setLoginInput(target.login);
     setPinInput("");
     setRoleInput(target.role);
+    setDccPoolInput(dccPoolFromApi(target.dccPool ?? []));
     setActionError(null);
   };
 
@@ -134,21 +148,23 @@ export default function UsersPage() {
   const submitDialog = async () => {
     if (!dialog) return;
     try {
+      const dccPool = parseDccPoolRanges(dccPoolInput);
+      if (!dccPool) return;
+
       if (dialog.kind === "create") {
         await create.mutateAsync({
           login: loginInput.trim(),
           pin: pinInput,
           role: roleInput,
+          dccPool,
         });
       } else if (dialog.kind === "edit") {
         await update.mutateAsync({
           id: dialog.target.id,
           login: loginInput.trim(),
           role: roleInput,
-          // Only send the PIN when the admin actually typed one — the
-          // backend coerces empty strings to "leave alone" as well,
-          // but skipping the key keeps the audit trail cleaner.
           pin: pinInput || undefined,
+          dccPool,
         });
       } else if (dialog.kind === "delete") {
         await remove.mutateAsync(dialog.target.id);
@@ -179,9 +195,10 @@ export default function UsersPage() {
   const trimmedLogin = loginInput.trim();
   const loginValid = /^[A-Za-z0-9._-]{1,32}$/.test(trimmedLogin);
   const pinValid = /^[0-9]{4,12}$/.test(pinInput);
-  const createValid = loginValid && pinValid;
+  const dccPoolValid = isDccPoolInputValid(dccPoolInput);
+  const createValid = loginValid && pinValid && dccPoolValid;
   const editValid =
-    loginValid && (pinInput === "" || pinValid);
+    loginValid && (pinInput === "" || pinValid) && dccPoolValid;
 
   return (
     <Container maxWidth="md" sx={{ py: { xs: 3, sm: 5 } }}>
@@ -232,6 +249,7 @@ export default function UsersPage() {
                   <TableRow>
                     <TableCell>{t("user:admin.columns.login")}</TableCell>
                     <TableCell>{t("user:admin.columns.role")}</TableCell>
+                    <TableCell>{t("user:admin.columns.dccPool")}</TableCell>
                     <TableCell>{t("user:admin.columns.status")}</TableCell>
                     <TableCell align="right">
                       {t("user:admin.columns.actions")}
@@ -264,6 +282,11 @@ export default function UsersPage() {
                             color={u.role === "admin" ? "primary" : "default"}
                             label={renderRole(u.role)}
                           />
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2" color="text.secondary">
+                            {formatDccPoolSummary(u.dccPool ?? [])}
+                          </Typography>
                         </TableCell>
                         <TableCell>
                           <Chip
@@ -415,6 +438,11 @@ export default function UsersPage() {
               required={dialog?.kind === "create"}
               fullWidth
               inputProps={{ inputMode: "numeric", pattern: "[0-9]*" }}
+            />
+            <UserDccPoolFields
+              value={dccPoolInput}
+              onChange={setDccPoolInput}
+              disabled={submitting}
             />
             {actionError && <Alert severity="error">{actionError}</Alert>}
           </Stack>

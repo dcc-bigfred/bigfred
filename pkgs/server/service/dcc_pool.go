@@ -9,12 +9,22 @@ import (
 	"github.com/keskad/loco/pkgs/server/repo"
 )
 
+const (
+	minDCCAddress = uint16(1)
+	maxDCCAddress = uint16(9999)
+)
+
 // DCC-pool sentinel errors. Mapped to status codes + i18n keys by the
 // HTTP layer.
 var (
+	// ErrDCCPoolEmpty is returned when the admin submits no ranges.
+	ErrDCCPoolEmpty = errors.New("dcc_pool_empty")
 	// ErrDCCPoolRangeInvalid is returned when from > to or either
-	// bound is zero (DCC addresses start at 1).
+	// bound falls outside [1, 9999].
 	ErrDCCPoolRangeInvalid = errors.New("dcc_pool_range_invalid")
+	// ErrDCCPoolOverlap is returned when a range intersects another
+	// user's pool row.
+	ErrDCCPoolOverlap = errors.New("dcc_pool_overlap")
 	// ErrDCCAddressOutsidePool is returned when a vehicle registration
 	// or update points at an address not covered by any pool row.
 	ErrDCCAddressOutsidePool = errors.New("dcc_address_outside_pool")
@@ -53,17 +63,31 @@ type PoolRange struct {
 	To   uint16
 }
 
+// Validate checks whether ranges could be assigned to userID without
+// persisting anything. Pass userID = 0 when the account does not
+// exist yet (Create).
+func (s *DCCPoolService) Validate(ctx context.Context, userID uint, ranges []PoolRange) error {
+	allRows, err := s.pool.ListAll(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = validatePoolRanges(userID, ranges, allRows)
+	return err
+}
+
 // Replace overwrites the user's pool with the supplied set. Each row
-// is sanitised (from ≤ to, both non-zero). Overlap is tolerated —
-// the membership test on AllowsAddress only needs *any* row to cover
+// must lie inside [1, 9999] and must not overlap any other user's
+// ranges. Overlap within the same user's rows is tolerated — the
+// membership test on AllowsAddress only needs *any* row to cover
 // the candidate address.
 func (s *DCCPoolService) Replace(ctx context.Context, userID uint, ranges []PoolRange) ([]domain.DCCAddressRange, error) {
-	clean := make([]PoolRange, 0, len(ranges))
-	for _, r := range ranges {
-		if r.From == 0 || r.To == 0 || r.From > r.To {
-			return nil, ErrDCCPoolRangeInvalid
-		}
-		clean = append(clean, r)
+	allRows, err := s.pool.ListAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+	clean, err := validatePoolRanges(userID, ranges, allRows)
+	if err != nil {
+		return nil, err
 	}
 
 	if err := s.pool.DeleteAllForUser(ctx, userID); err != nil {
@@ -83,6 +107,11 @@ func (s *DCCPoolService) Replace(ctx context.Context, userID uint, ranges []Pool
 		}
 	}
 	return s.pool.ListByUser(ctx, userID)
+}
+
+// ListAll returns every pool row in the database.
+func (s *DCCPoolService) ListAll(ctx context.Context) ([]domain.DCCAddressRange, error) {
+	return s.pool.ListAll(ctx)
 }
 
 // AllowsAddress reports whether the user's pool covers the candidate
@@ -114,7 +143,43 @@ func (s *DCCPoolService) SeedAdminPoolIfEmpty(ctx context.Context, adminUserID u
 	}
 	return s.pool.Insert(ctx, &domain.DCCAddressRange{
 		UserID:   adminUserID,
-		FromAddr: 1,
-		ToAddr:   9999,
+		FromAddr: minDCCAddress,
+		ToAddr:   maxDCCAddress,
 	})
+}
+
+// DeleteForUser removes every pool row owned by the user.
+func (s *DCCPoolService) DeleteForUser(ctx context.Context, userID uint) error {
+	return s.pool.DeleteAllForUser(ctx, userID)
+}
+
+func validatePoolRanges(userID uint, ranges []PoolRange, existing []domain.DCCAddressRange) ([]PoolRange, error) {
+	if len(ranges) == 0 {
+		return nil, ErrDCCPoolEmpty
+	}
+
+	clean := make([]PoolRange, 0, len(ranges))
+	for _, r := range ranges {
+		if r.From < minDCCAddress || r.To > maxDCCAddress || r.From > r.To {
+			return nil, ErrDCCPoolRangeInvalid
+		}
+		clean = append(clean, r)
+	}
+
+	for _, r := range clean {
+		for _, row := range existing {
+			if row.UserID == userID {
+				continue
+			}
+			if poolRangesOverlap(r, PoolRange{From: row.FromAddr, To: row.ToAddr}) {
+				return nil, ErrDCCPoolOverlap
+			}
+		}
+	}
+
+	return clean, nil
+}
+
+func poolRangesOverlap(a, b PoolRange) bool {
+	return a.From <= b.To && b.From <= a.To
 }

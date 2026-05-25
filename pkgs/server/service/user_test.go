@@ -117,6 +117,7 @@ func TestUserDeleteRefusedWhenOwnsVehicles(t *testing.T) {
 	ctx := context.Background()
 	svc := userSvc(bundle)
 	pool := service.NewDCCPoolService(bundle.Pool)
+	admin := insertUser(t, ctx, bundle.Users, "admin", domain.RoleAdmin)
 
 	created, err := svc.Create(ctx, testAdminEff, service.UserCreateInput{
 		Login: "alice", PIN: "123456", Role: domain.RoleDriver,
@@ -133,7 +134,7 @@ func TestUserDeleteRefusedWhenOwnsVehicles(t *testing.T) {
 		t.Fatalf("create vehicle: %v", err)
 	}
 
-	if err := svc.Delete(ctx, testAdminEff, created.ID); !errors.Is(err, service.ErrUserHasVehicles) {
+	if err := svc.Delete(ctx, testAdminEff, admin.ID, created.ID); !errors.Is(err, service.ErrUserHasVehicles) {
 		t.Fatalf("expected ErrUserHasVehicles, got %v", err)
 	}
 }
@@ -145,6 +146,7 @@ func TestUserDeleteRefusedWhenOwnsTrains(t *testing.T) {
 	ctx := context.Background()
 	svc := userSvc(bundle)
 	pool := service.NewDCCPoolService(bundle.Pool)
+	admin := insertUser(t, ctx, bundle.Users, "admin", domain.RoleAdmin)
 
 	created, err := svc.Create(ctx, testAdminEff, service.UserCreateInput{
 		Login: "alice", PIN: "123456", Role: domain.RoleDriver,
@@ -179,7 +181,7 @@ func TestUserDeleteRefusedWhenOwnsTrains(t *testing.T) {
 		t.Fatalf("reset vehicle owner: %v", err)
 	}
 
-	if err := svc.Delete(ctx, testAdminEff, created.ID); !errors.Is(err, service.ErrUserHasTrains) {
+	if err := svc.Delete(ctx, testAdminEff, admin.ID, created.ID); !errors.Is(err, service.ErrUserHasTrains) {
 		t.Fatalf("expected ErrUserHasTrains, got %v", err)
 	}
 }
@@ -190,6 +192,7 @@ func TestUserSetActiveToggles(t *testing.T) {
 
 	ctx := context.Background()
 	svc := userSvc(bundle)
+	admin := insertUser(t, ctx, bundle.Users, "admin", domain.RoleAdmin)
 
 	row, err := svc.Create(ctx, testAdminEff, service.UserCreateInput{
 		Login: "alice", PIN: "123456", Role: domain.RoleDriver, DCCPool: testUserPool,
@@ -200,14 +203,14 @@ func TestUserSetActiveToggles(t *testing.T) {
 	if !row.Active {
 		t.Fatalf("default user must be active")
 	}
-	off, err := svc.SetActive(ctx, row.ID, false)
+	off, err := svc.SetActive(ctx, testAdminEff, admin.ID, row.ID, false)
 	if err != nil {
 		t.Fatalf("deactivate: %v", err)
 	}
 	if off.Active {
 		t.Fatalf("expected Active=false after deactivate")
 	}
-	on, err := svc.SetActive(ctx, row.ID, true)
+	on, err := svc.SetActive(ctx, testAdminEff, admin.ID, row.ID, true)
 	if err != nil {
 		t.Fatalf("reactivate: %v", err)
 	}
@@ -273,5 +276,43 @@ func TestUserUpdateChangesDCCPool(t *testing.T) {
 	}
 	if len(pool) != 1 || pool[0].FromAddr != 500 || pool[0].ToAddr != 599 {
 		t.Fatalf("unexpected pool: %+v", pool)
+	}
+}
+
+func TestUserManageAdminOnly(t *testing.T) {
+	bundle, cleanup := freshRepo(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	svc := userSvc(bundle)
+	driverEff := domain.NewEffectiveRoles(domain.RoleDriver)
+
+	if _, err := svc.ListWithDCCPools(ctx, driverEff); !errors.Is(err, service.ErrUserForbidden) {
+		t.Fatalf("expected ErrUserForbidden on list, got %v", err)
+	}
+	if _, err := svc.Create(ctx, driverEff, service.UserCreateInput{
+		Login: "bob", PIN: "123456", Role: domain.RoleDriver,
+		DCCPool: testUserPool,
+	}); !errors.Is(err, service.ErrUserForbidden) {
+		t.Fatalf("expected ErrUserForbidden on create, got %v", err)
+	}
+
+	row, err := svc.Create(ctx, testAdminEff, service.UserCreateInput{
+		Login: "alice", PIN: "123456", Role: domain.RoleDriver,
+		DCCPool: testUserPool,
+	})
+	if err != nil {
+		t.Fatalf("admin create: %v", err)
+	}
+
+	newLogin := "alice2"
+	if _, err := svc.Update(ctx, driverEff, row.ID, service.UserUpdateInput{Login: &newLogin}); !errors.Is(err, service.ErrUserForbidden) {
+		t.Fatalf("expected ErrUserForbidden on update, got %v", err)
+	}
+	if _, err := svc.SetActive(ctx, driverEff, row.ID, row.ID, false); !errors.Is(err, service.ErrUserForbidden) {
+		t.Fatalf("expected ErrUserForbidden on deactivate, got %v", err)
+	}
+	if err := svc.Delete(ctx, driverEff, row.ID, row.ID); !errors.Is(err, service.ErrUserForbidden) {
+		t.Fatalf("expected ErrUserForbidden on delete, got %v", err)
 	}
 }

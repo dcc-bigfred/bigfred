@@ -14,11 +14,11 @@ import (
 type UserSecurityContext struct{}
 
 // CanManageUsers gates the entire user-management surface — listing,
-// creating, editing, deactivating, deleting users. Only the permanent
-// admin role qualifies (signalman and temporary-driver grants do
-// NOT escalate to user management).
-func (UserSecurityContext) CanManageUsers(actor domain.User) Decision {
-	if actor.Role == domain.RoleAdmin {
+// creating, editing, deactivating, deleting users. Only an effective
+// admin (permanent or sudo in the active layout, §7a.5 / §7a.7)
+// qualifies; signalman and driver grants do not escalate.
+func (UserSecurityContext) CanManageUsers(eff domain.EffectiveRoles) Decision {
+	if eff.Has(domain.RoleAdmin) {
 		return Allow
 	}
 	return Deny("forbidden")

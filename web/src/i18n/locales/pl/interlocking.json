@@ -1,0 +1,34 @@
+{
+  "admin": {
+    "title": "Nastawnie",
+    "subtitle": "Katalog nastawni dostępnych w systemie. Przypisanie nastawnii do makiet odbywa się w edycji makiety.",
+    "columns": {
+      "name": "Nazwa",
+      "location": "Opis",
+      "actions": "Akcje"
+    },
+    "actions": {
+      "create": "Nowa nastawnia",
+      "edit": "Edytuj",
+      "delete": "Usuń"
+    },
+    "dialogs": {
+      "create": {
+        "title": "Nowa nastawnia"
+      },
+      "edit": {
+        "title": "Edytuj nastawnię"
+      },
+      "delete": {
+        "title": "Usuń nastawnię „{{name}}”",
+        "message": "Operacja jest nieodwracalna. Nastawnia zostanie usunięta ze wszystkich makiet, do których była przypisana."
+      },
+      "fields": {
+        "name": "Nazwa",
+        "location": "Opis",
+        "locationHelp": "Krótki opis lokalizacji lub przeznaczenia nastawni."
+      }
+    },
+    "empty": "Brak nastawnii do wyświetlenia."
+  }
+}

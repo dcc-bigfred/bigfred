@@ -7,6 +7,9 @@
 | At most one active lease per vehicle/train                         | `LeaseVehicle` transaction + partial unique index on active rows  |
 | Lessee cannot edit, only drive                                     | Authorization middleware (§11)                                    |
 | Exactly one signalman per interlocking                             | Partial unique index `UNIQUE(interlocking_id) WHERE ended_at IS NULL` |
+| Interlocking displacement requires explicit confirmation           | `InterlockingService.Join(..., force bool)` rejects `force:false` when a session is active; `force:true` ends the incumbent session with reason `"displaced"` before opening a new one (§6.3d) |
+| A vehicle appears at most once on a layout roster                  | `UNIQUE(layout_id, vehicle_id)` on `layout_vehicles` |
+| Only the vehicle owner may add/remove it from a layout roster       | `LayoutVehicleSecurityContext.CanMutateRoster` checks `vehicle.OwnerUserID == actor.ID` |
 | Temporary role expires automatically                               | Filtered out in `AuthService.Roles()`; janitor goroutine reaps    |
 | Takeover auto-grant after 15 s with no rejection                   | `TakeoverService` timer + `AutoGrantAt` column                    |
 | API key lifetime ≤ 365 days                                         | `APIKeyService.Create` validates `expires_at - now() ≤ 365d`     |

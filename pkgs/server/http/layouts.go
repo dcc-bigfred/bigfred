@@ -111,11 +111,10 @@ func (h *LayoutHandler) Get(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(toLayoutResponse(layout))
 }
 
-// createRequest models the JSON body of POST /api/v1/layouts. The
-// spec also lists `commandStationIds:[id,...]` — see the note on
-// service.LayoutService.Create for why it is deferred.
+// createRequest models the JSON body of POST /api/v1/layouts.
 type createRequest struct {
-	Name string `json:"name"`
+	Name            string `json:"name"`
+	InterlockingIDs []uint `json:"interlockingIds"`
 }
 
 // Create handles `POST /api/v1/layouts` (admin only). The HTTP wiring
@@ -133,10 +132,15 @@ func (h *LayoutHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	layout, err := h.svc.Create(r.Context(), service.CreateInput{
-		Name:      req.Name,
-		CreatedBy: id.User.ID,
+		Name:            req.Name,
+		CreatedBy:       id.User.ID,
+		InterlockingIDs: req.InterlockingIDs,
 	})
 	if err != nil {
+		if errors.Is(err, service.ErrInterlockingNotFound) {
+			writeLayoutInterlockingError(w, err)
+			return
+		}
 		writeLayoutError(w, err)
 		return
 	}
@@ -145,17 +149,80 @@ func (h *LayoutHandler) Create(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(toLayoutResponse(layout))
 }
 
-// updateRequest models the JSON body of PUT /api/v1/layouts/{id}.
-// Today the only mutable field is `name` (§4.1: "rename only").
-type updateRequest struct {
-	Name string `json:"name"`
+// ListInterlockings handles GET /api/v1/layouts/{id}/interlockings.
+func (h *LayoutHandler) ListInterlockings(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseUintParam(r, "id")
+	if !ok {
+		writeJSONError(w, http.StatusBadRequest, "invalid_id")
+		return
+	}
+	rows, err := h.svc.ListInterlockings(r.Context(), id)
+	if err != nil {
+		writeLayoutInterlockingError(w, err)
+		return
+	}
+	out := make([]interlockingResponse, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, toInterlockingResponse(row))
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(out)
 }
 
-// Update handles `PUT /api/v1/layouts/{id}` (admin only).
+type setLayoutInterlockingsRequest struct {
+	InterlockingIDs []uint `json:"interlockingIds"`
+}
+
+// SetInterlockings handles PUT /api/v1/layouts/{id}/interlockings
+// (admin only). Replaces the entire whitelist in one shot — used by
+// the multi-select in the layout edit dialog.
+func (h *LayoutHandler) SetInterlockings(w http.ResponseWriter, r *http.Request) {
+	layoutID, ok := parseUintParam(r, "id")
+	if !ok {
+		writeJSONError(w, http.StatusBadRequest, "invalid_id")
+		return
+	}
+	actor, ok := IdentityFromContext(r.Context())
+	if !ok {
+		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	var req setLayoutInterlockingsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid_body")
+		return
+	}
+	rows, err := h.svc.SetInterlockings(r.Context(), layoutID, actor.User.ID, req.InterlockingIDs)
+	if err != nil {
+		writeLayoutInterlockingError(w, err)
+		return
+	}
+	out := make([]interlockingResponse, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, toInterlockingResponse(row))
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(out)
+}
+
+// updateRequest models the JSON body of PUT /api/v1/layouts/{id}.
+type updateRequest struct {
+	Name            string `json:"name"`
+	InterlockingIDs []uint `json:"interlockingIds"`
+}
+
+// Update handles `PUT /api/v1/layouts/{id}` (admin only). Renames
+// non-system layouts and replaces the interlocking whitelist when
+// `interlockingIds` is present (including an empty slice).
 func (h *LayoutHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseUintParam(r, "id")
 	if !ok {
 		writeJSONError(w, http.StatusBadRequest, "invalid_id")
+		return
+	}
+	actor, ok := IdentityFromContext(r.Context())
+	if !ok {
+		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 	var req updateRequest
@@ -167,6 +234,12 @@ func (h *LayoutHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeLayoutError(w, err)
 		return
+	}
+	if req.InterlockingIDs != nil {
+		if _, err := h.svc.SetInterlockings(r.Context(), id, actor.User.ID, req.InterlockingIDs); err != nil {
+			writeLayoutInterlockingError(w, err)
+			return
+		}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(toLayoutResponse(layout))
@@ -235,6 +308,17 @@ func writeLayoutError(w http.ResponseWriter, err error) {
 		writeJSONError(w, http.StatusUnprocessableEntity, "default_layout_undeletable")
 	case errors.Is(err, service.ErrSystemLayoutCannotBeLocked):
 		writeJSONError(w, http.StatusUnprocessableEntity, "default_layout_cannot_be_locked")
+	default:
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+	}
+}
+
+func writeLayoutInterlockingError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, service.ErrLayoutNotFound):
+		writeJSONError(w, http.StatusNotFound, "layout_not_found")
+	case errors.Is(err, service.ErrInterlockingNotFound):
+		writeJSONError(w, http.StatusNotFound, "interlocking_not_found")
 	default:
 		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 	}

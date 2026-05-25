@@ -28,6 +28,7 @@ func MigrateUp(ctx context.Context, repo rel.Repository) {
 func register(m *migrator.Migrator) {
 	m.Register(20260523_000001, createUsersUp, createUsersDown)
 	m.Register(20260525_000001, createLayoutsUp, createLayoutsDown)
+	m.Register(20260525_000002, createInterlockingsUp, createInterlockingsDown)
 }
 
 func createUsersUp(s *rel.Schema) {
@@ -81,4 +82,30 @@ func createLayoutsUp(s *rel.Schema) {
 
 func createLayoutsDown(s *rel.Schema) {
 	s.DropTable("layouts")
+}
+
+func createInterlockingsUp(s *rel.Schema) {
+	s.CreateTable("interlockings", func(t *rel.Table) {
+		t.ID("id")
+		t.String("name")
+		t.Text("location")
+		t.DateTime("created_at")
+
+		t.Unique([]string{"name"})
+	})
+
+	s.CreateTable("layout_interlockings", func(t *rel.Table) {
+		t.ID("id")
+		t.Int("layout_id", rel.Unsigned(true))
+		t.Int("interlocking_id", rel.Unsigned(true))
+		t.Int("added_by_user_id", rel.Unsigned(true), rel.Default(0))
+		t.DateTime("added_at")
+
+		t.Unique([]string{"layout_id", "interlocking_id"})
+	})
+}
+
+func createInterlockingsDown(s *rel.Schema) {
+	s.DropTable("layout_interlockings")
+	s.DropTable("interlockings")
 }

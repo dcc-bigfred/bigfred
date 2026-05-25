@@ -14,5 +14,8 @@
   "layout_name_taken": "Makieta o tej nazwie już istnieje.",
   "default_layout_immutable": "Domyślna makieta nie może zostać zmieniona.",
   "default_layout_undeletable": "Domyślnej makiety nie można usunąć.",
-  "default_layout_cannot_be_locked": "Domyślnej makiety nie można zablokować."
+  "default_layout_cannot_be_locked": "Domyślnej makiety nie można zablokować.",
+  "interlocking_not_found": "Wybrana nastawnia już nie istnieje.",
+  "interlocking_name_required": "Wpisz nazwę nastawni.",
+  "interlocking_name_taken": "Nastawnia o tej nazwie już istnieje."
 }

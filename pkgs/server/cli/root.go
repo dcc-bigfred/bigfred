@@ -89,8 +89,11 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 
 	users := repo.NewUsers(repository)
 	layouts := repo.NewLayouts(repository)
+	interlockings := repo.NewInterlockings(repository)
+	layoutInterlockings := repo.NewLayoutInterlockings(repository)
 
-	layoutSvc := service.NewLayoutService(layouts)
+	layoutSvc := service.NewLayoutService(layouts, interlockings, layoutInterlockings)
+	interlockingSvc := service.NewInterlockingService(interlockings, layoutInterlockings)
 	authSvc := service.NewAuthService(users, layoutSvc, service.AuthConfig{JWTSecret: secret})
 
 	// Seed the bootstrap system layout BEFORE the admin account so
@@ -116,6 +119,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	router := httpapi.NewRouter(httpapi.RouterConfig{
 		Auth:           authSvc,
 		Layouts:        layoutSvc,
+		Interlockings:  interlockingSvc,
 		AllowedOrigins: f.AllowedOrigins,
 		SecureCookie:   f.SecureCookie,
 	})

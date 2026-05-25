@@ -58,7 +58,7 @@ export function useAdminLayouts() {
 export function useCreateLayout() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { name: string }) =>
+    mutationFn: (body: { name: string; interlockingIds?: number[] }) =>
       apiFetch<Layout>("/api/v1/layouts", {
         method: "POST",
         body: JSON.stringify(body),
@@ -73,14 +73,24 @@ export function useCreateLayout() {
 export function useUpdateLayout() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (args: { id: number; name: string }) =>
+    mutationFn: (args: {
+      id: number;
+      name: string;
+      interlockingIds?: number[];
+    }) =>
       apiFetch<Layout>(`/api/v1/layouts/${args.id}`, {
         method: "PUT",
-        body: JSON.stringify({ name: args.name }),
+        body: JSON.stringify({
+          name: args.name,
+          interlockingIds: args.interlockingIds,
+        }),
       }),
-    onSuccess: () => {
+    onSuccess: (_data, args) => {
       void qc.invalidateQueries({ queryKey: layoutsQueryKey });
       void qc.invalidateQueries({ queryKey: loginLayoutsQueryKey });
+      void qc.invalidateQueries({
+        queryKey: ["layouts", args.id, "interlockings"],
+      });
     },
   });
 }

@@ -220,6 +220,276 @@ WS message the parent component dispatches, and that single decision
 keeps `LocoControlPage` and `TrainControlPage` visually identical
 from the driver's standpoint.
 
+### 6.3b Throttle mode – full-screen overlay
+
+**Throttle mode** (*tryb sterowania „Throttle”*, see §1) is how a
+**driver** or a **signalman** (after a granted **takeover**) operates a
+**vehicle** or **train** in real time. It is not a separate application
+route the user navigates away from: it is a layer above the rest of
+BigFred that hosts the driving surface (`ThrottleSlider`, function and
+script buttons, command-station picker, script console, takeover
+banners, dead-man's switch affordances).
+
+#### Entry, exit and shell layout
+
+The sticky top **AppBar** in `AppShell.tsx` carries a **Throttle** button
+(labelled via `vehicle.json`, icon: engineer / *maszynista*) among the
+account-level controls. Clicking it toggles throttle mode:
+
+- **Open** – a full-screen overlay is rendered immediately below the
+  `AppBar`. It occupies the remaining viewport height (`position:
+  fixed`, top aligned to the AppBar, high `z-index`). Every other page
+  (admin screens, vehicle lists, future radio panel) stays mounted
+  underneath but is visually covered; only the **AppBar remains visible**.
+- **Close** – the same button (or an explicit close control on the
+  overlay) dismisses the layer without tearing down WebSocket
+  subscriptions, so re-entry is instant.
+
+Gating: the button is shown to users who may drive at least one vehicle
+or train in the current session layout (drivers on owned/leased scope;
+signalmen only while they hold active takeover authority on a target).
+Exact rules follow the permission matrix in §11.
+
+#### Controls available inside the overlay
+
+While throttle mode is open and driving authority is held, the operator
+can:
+
+- set speed and direction (`loco.setSpeed` / `train.setSpeed`),
+- toggle registered DCC functions (`loco.toggleFn`),
+- start and stop attached scripts (`script.run` / `script.stop`),
+- trigger emergency braking (`system.estop`).
+
+All of the above travel over the existing WebSocket connection (§4.2).
+
+#### Server as source of truth (multi-pilot sync)
+
+The DCC bus and the backend **command station** are shared state. A
+physical throttle on the layout, another browser tab, or an external
+API/MCP client may change the same locomotive while BigFred is open.
+The overlay therefore **must not treat the last outbound command as
+ground truth**. Instead it renders from server push events — principally
+`loco.state` for speed, direction and the runtime `functions` array —
+and re-fetches function definitions on `vehicle.functionsChanged`. When
+an external pilot moves the speed step or flips a function, every open
+throttle overlay subscribed to that address converges to the server
+state within one polling/event round trip (see M1 acceptance criteria).
+
+When a **takeover** is active, the affected **driver's** overlay for
+that target becomes read-only telemetry (`controlledBy.kind ==
+"signalman"`); the **signalman's** overlay receives full write access
+until `takeover.released`.
+
+#### Illustrative shell wiring
+
+```tsx
+// AppShell.tsx (excerpt) – Throttle toggle on the top bar
+import EngineeringIcon from "@mui/icons-material/Engineering";
+import { ThrottleOverlay } from "./ThrottleOverlay";
+
+export function AppShell({ children }: { children: React.ReactNode }) {
+  const [throttleOpen, setThrottleOpen] = useState(false);
+  const canDrive = useCanDriveAny(); // owned, leased, or takeover-held scope
+
+  return (
+    <>
+      <AppBar position="sticky">
+        <Toolbar>
+          <Typography variant="h6" sx={{ flexGrow: 1 }}>BigFred</Typography>
+          {canDrive && (
+            <IconButton
+              color="inherit"
+              aria-label={t("vehicle:throttle.open")}
+              aria-pressed={throttleOpen}
+              onClick={() => setThrottleOpen((v) => !v)}
+            >
+              <EngineeringIcon />
+            </IconButton>
+          )}
+          {/* account / admin menus, locale toggle … */}
+        </Toolbar>
+      </AppBar>
+
+      <main>{children}</main>
+
+      {throttleOpen && (
+        <ThrottleOverlay onClose={() => setThrottleOpen(false)} />
+      )}
+    </>
+  );
+}
+```
+
+`ThrottleOverlay` hosts vehicle/train selection and mounts
+`LocoControlPage` / `TrainControlPage` content from §6.3 and §6.3a.
+
+### 6.3c Layout dashboard (`HomePage`)
+
+After login the default route is `/` (`HomePage.tsx`). This **dashboard**
+(*pulpit makiety*, see §1) is the operational home screen for the
+layout the user picked on the login form. It renders **three MUI
+`DataGrid` / `Table` panels** stacked vertically (or tabbed on very
+small screens), each fed by REST on mount and kept fresh by WebSocket
+fan-out (§4.2).
+
+#### 1. Layout vehicle roster
+
+Default view: vehicles **added to this layout** (`GET
+/api/v1/layouts/{layoutId}/vehicles`). Columns include at minimum DCC
+address, name, owner login.
+
+Toolbar actions (i18n keys in `home.json` / `vehicle.json`):
+
+- **Pokaż moje pojazdy** (*Show my vehicles*) – toggles the table
+  between the shared roster and the caller's own catalogue (`GET
+  …/vehicles/mine`), marking which rows are already on the layout
+  (`onLayout: true`). Lets a driver review their fleet without losing
+  layout context.
+- **Dodaj mój pojazd do makiety** (*Add my vehicle to layout*) –
+  opens a picker dialog listing owned vehicles not yet on the roster;
+  confirming fires `POST …/vehicles { vehicleAddr }`. Only vehicles
+  the user **owns** may be added; leased vehicles are excluded.
+
+Row actions (owner only): remove from layout (`DELETE …/vehicles/{addr}`).
+
+#### 2. Online users
+
+Live table of everyone currently connected to the layout (`GET
+/api/v1/layouts/{layoutId}/presence`, updated on
+`layout.presenceChanged`). Columns:
+
+| Column | Content |
+|--------|---------|
+| Login | `login` |
+| Role | effective role in this layout (`driver` / `signalman` / `admin`, via `role` namespace) |
+| Interlocking | if the user occupies a signal box: interlocking name; otherwise em dash |
+
+One row per **user**, not per tab – multiple WS sessions from the same
+login collapse into a single row.
+
+#### 3. Interlockings
+
+Table of interlockings whitelisted in this layout (`GET
+/api/v1/interlockings`, enriched with `occupant`). Columns: name,
+location, **Obstawia** (*staffed by* – occupant login or "wolna" /
+vacant). Rows are **clickable**: navigation to `/interlockings/:id`
+(`InterlockingPage`).
+
+All three panels share the active `layoutId` from `useMe()`; there is
+no layout switcher on this page (layout is immutable for the session).
+
+```tsx
+// HomePage.tsx (structure sketch)
+function HomePage() {
+  const me = useMe().data!;
+  const layoutId = me.layoutId;
+  const [showMine, setShowMine] = useState(false);
+
+  const vehicles = useQuery({
+    queryKey: ["layout-vehicles", layoutId, showMine],
+    queryFn: () =>
+      fetch(
+        showMine
+          ? `/api/v1/layouts/${layoutId}/vehicles/mine`
+          : `/api/v1/layouts/${layoutId}/vehicles`,
+      ).then((r) => r.json()),
+  });
+  // presence + interlockings analogous; useSocket merges WS events
+
+  return (
+    <Container maxWidth="lg">
+      <LayoutVehiclesTable data={vehicles.data} showMine={showMine}
+        onToggleMine={() => setShowMine((v) => !v)} layoutId={layoutId} />
+      <OnlineUsersTable layoutId={layoutId} />
+      <InterlockingsTable layoutId={layoutId} onRowClick={(id) => navigate(`/interlockings/${id}`)} />
+    </Container>
+  );
+}
+```
+
+### 6.3d Interlocking view and occupation
+
+Route: `/interlockings/:id` (`InterlockingPage.tsx`). Opened from the
+dashboard interlockings table (§6.3c) or via direct link. Visible to
+every authenticated user in the layout; **occupation controls** are
+enabled only for users with the layout-scoped **signalman** role.
+
+#### Layout of the page
+
+1. **Header** – interlocking name, location, current occupant (live via
+   `interlocking.occupantChanged`).
+2. **Action bar** (signalmen only):
+   - **Obsadź nastawnię** (*Occupy interlocking*) – visible when the
+     caller is **not** the active occupant. Calls
+     `POST /api/v1/interlockings/{id}/join`. If the box is vacant the
+     join succeeds immediately. If another signalman is already
+     staffing it, the UI shows a **confirmation dialog** naming the
+     incumbent and explaining that they will be displaced; on confirm
+     the client retries with `{ force: true }`. This prevents a
+     forgotten session from blocking the interlocking indefinitely
+     while still requiring an explicit human decision.
+   - **Opuść nastawnię** (*Leave interlocking*) – visible when the
+     caller **is** the active occupant. Calls
+     `POST /api/v1/interlockings/{id}/leave`.
+3. **Radio panel** – the interlocking's **chat** with drivers and other
+   signal boxes: a scrollable message list (`radio.message` events +
+   persisted replay on mount) and a phrase picker that emits
+   `radio.send`. Traffic addressed to this interlocking's id, messages
+   from/to drivers in the layout, and cross-interlocking phrases the
+   protocol allows are all rendered here – this is the signalman's
+   primary comms surface while staffing the box.
+
+#### Leaving the view while still occupying
+
+If the active occupant navigates away from `/interlockings/:id` (back
+to the dashboard, admin page, browser back, …) while still holding an
+`InterlockingSession`, the router **blocks** the transition and shows a
+dialog:
+
+> You are staffing this interlocking. Leave the interlocking?
+
+- **Confirm** – `POST …/leave`, then proceed with navigation.
+- **Cancel** – stay on the interlocking view.
+
+Implementation: React Router `useBlocker` (or equivalent) keyed off
+"am I the occupant?" local state synced from REST + WS. Closing the
+browser tab does **not** auto-leave (the session stays until explicit
+leave, displacement, or logout) – only in-app navigation triggers the
+prompt.
+
+#### Displaced occupant UX
+
+When `interlocking.occupantChanged { reason:"displaced" }` targets the
+current user, show a non-blocking toast, clear occupation state, and
+disable takeover/radio actions that require active occupation until
+they re-join or navigate away.
+
+```tsx
+// InterlockingPage.tsx (occupation hook sketch)
+function useInterlockingOccupation(interlockingId: number) {
+  const me = useMe().data!;
+  const isSignalman = /* effective role in layout includes signalman */;
+
+  const join = async (force = false) => {
+    const res = await fetch(`/api/v1/interlockings/${interlockingId}/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ force }),
+    });
+    if (res.status === 409 && !force) {
+      const incumbent = await res.json(); // { occupant: { login } }
+      const ok = await confirmDisplaceDialog(incumbent);
+      if (ok) return join(true);
+      return;
+    }
+    // refresh local occupant state …
+  };
+
+  // useBlocker: when isOccupying && navigating away → leave dialog
+  return { isSignalman, join, leave, isOccupying, … };
+}
+```
+
 ### 6.4 MUI Setup – Theme, Roboto Font, App Shell
 
 Following [MUI's installation guide](https://mui.com/material-ui/getting-started/installation/),

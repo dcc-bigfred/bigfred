@@ -167,6 +167,7 @@ type InterlockingSecurityContext struct{}
 // the actor's active layout (LayoutInterlocking row exists). The caller
 // provides that row (or nil) – the policy stays pure.
 func (InterlockingSecurityContext) CanOccupy(actor domain.User, ilk domain.Interlocking, layoutILK *domain.LayoutInterlocking, current *domain.InterlockingSession, layoutSignalman *domain.LayoutSignalman) Decision
+func (InterlockingSecurityContext) CanDisplace(actor domain.User, current *domain.InterlockingSession, layoutSignalman *domain.LayoutSignalman) Decision // same layout-scoped signalman grant; used when join carries force:true
 func (InterlockingSecurityContext) CanRequestTakeover(actor domain.User, current *domain.InterlockingSession) Decision
 
 // pkgs/server/security/command_station.go

@@ -25,6 +25,7 @@
     },
     "actions": {
       "create": "Nowa makieta",
+      "edit": "Edytuj",
       "rename": "Zmień nazwę",
       "lock": "Zablokuj",
       "unlock": "Odblokuj",
@@ -35,6 +36,12 @@
         "title": "Nowa makieta",
         "nameLabel": "Nazwa",
         "nameHelp": "Krótka nazwa identyfikująca makietę (np. „Modelfest 2026”)."
+      },
+      "edit": {
+        "title": "Edytuj makietę",
+        "nameLabel": "Nazwa",
+        "interlockingsLabel": "Nastawnie",
+        "interlockingsHelp": "Wybierz nastawnie widoczne w tej makiecie. Lista może być pusta."
       },
       "rename": {
         "title": "Zmień nazwę makiety",

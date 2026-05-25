@@ -7,6 +7,7 @@ import (
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 
+	"github.com/keskad/loco/pkgs/server/domain"
 	"github.com/keskad/loco/pkgs/server/service"
 )
 
@@ -14,7 +15,8 @@ import (
 // time. Keeping it as an explicit struct (rather than positional args)
 // makes future additions (Hub, LocoService, …) source-compatible.
 type RouterConfig struct {
-	Auth *service.AuthService
+	Auth    *service.AuthService
+	Layouts *service.LayoutService
 
 	// AllowedOrigins is forwarded verbatim to the CORS middleware.
 	// In development the Vite dev server lives on a different port
@@ -48,16 +50,37 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	}))
 
 	authH := NewAuthHandler(cfg.Auth, cfg.SecureCookie)
+	layoutH := NewLayoutHandler(cfg.Layouts)
 
 	r.Route("/api/v1", func(r chi.Router) {
 		// Public auth endpoints (login does its own credential check).
 		r.Post("/auth/login", authH.Login)
 		r.Post("/auth/logout", authH.Logout)
 
+		// Public layout dropdown for the login form (§7a.1). Lives
+		// outside RequireAuth so an unauthenticated client can fetch
+		// the list before submitting credentials.
+		r.Get("/layouts/login", layoutH.ListForLogin)
+
 		// Authenticated routes share the RequireAuth middleware.
 		r.Group(func(r chi.Router) {
 			r.Use(RequireAuth(cfg.Auth))
+
 			r.Get("/auth/me", authH.Me)
+
+			// Layouts: read endpoints are open to every
+			// authenticated user; mutating endpoints require admin.
+			r.Get("/layouts", layoutH.List)
+			r.Get("/layouts/{id}", layoutH.Get)
+
+			r.Group(func(r chi.Router) {
+				r.Use(RequireRole(domain.RoleAdmin))
+				r.Post("/layouts", layoutH.Create)
+				r.Put("/layouts/{id}", layoutH.Update)
+				r.Delete("/layouts/{id}", layoutH.Delete)
+				r.Post("/layouts/{id}/lock", layoutH.Lock)
+				r.Delete("/layouts/{id}/lock", layoutH.Unlock)
+			})
 		})
 	})
 

@@ -1,0 +1,54 @@
+{
+  "system_default_label": "Domyślna (warsztat)",
+  "loginPicker": {
+    "label": "Makieta",
+    "loading": "Wczytywanie makiet…",
+    "loadError": "Nie udało się wczytać listy makiet.",
+    "empty": "Brak dostępnych makiet."
+  },
+  "admin": {
+    "title": "Makiety",
+    "subtitle": "Lista wszystkich makiet (makieta domyślna jest zawsze dostępna i nie można jej usunąć ani zablokować).",
+    "columns": {
+      "name": "Nazwa",
+      "status": "Status",
+      "type": "Typ",
+      "actions": "Akcje"
+    },
+    "type": {
+      "system": "Systemowa",
+      "custom": "Użytkownika"
+    },
+    "status": {
+      "active": "Aktywna",
+      "locked": "Zablokowana"
+    },
+    "actions": {
+      "create": "Nowa makieta",
+      "rename": "Zmień nazwę",
+      "lock": "Zablokuj",
+      "unlock": "Odblokuj",
+      "delete": "Usuń"
+    },
+    "dialogs": {
+      "create": {
+        "title": "Nowa makieta",
+        "nameLabel": "Nazwa",
+        "nameHelp": "Krótka nazwa identyfikująca makietę (np. „Modelfest 2026”)."
+      },
+      "rename": {
+        "title": "Zmień nazwę makiety",
+        "nameLabel": "Nazwa"
+      },
+      "delete": {
+        "title": "Usuń makietę „{{name}}”",
+        "message": "Operacja jest nieodwracalna. Aktywne sesje wskazujące tę makietę pozostaną otwarte do swojego zakończenia, ale nikt nie będzie mógł się do niej zalogować."
+      },
+      "lock": {
+        "title": "Zablokuj makietę „{{name}}”",
+        "message": "Zablokowana makieta zniknie z ekranu logowania, ale działające sesje pozostaną otwarte. Możesz ją w każdej chwili odblokować."
+      }
+    },
+    "empty": "Brak makiet do wyświetlenia."
+  }
+}

@@ -1,6 +1,6 @@
 ### 10.5 Audit log (M3, extended in M4–M5)
 
-- Every CRUD on a vehicle, train, layout or party produces **exactly
+- Every CRUD on a vehicle, train, command station or layout produces **exactly
   one** audit entry, persisted **in the same transaction** as the
   underlying mutation. If the mutation rolls back, the audit row does
   not appear; if the audit insert fails, the mutation rolls back.
@@ -17,7 +17,7 @@
   vehicle DCC addresses in `Metadata`. An admin opening the activity
   screen sees this row labelled `"maszynista zasnął"` in the UI.
 - Subsequently renaming or deleting the affected vehicle, the user or
-  the layout/party **does not change** any historical audit row. The
+  the command station/layout **does not change** any historical audit row. The
   denormalized `ObjectName` / `ActorLogin` fields still reflect the
   state at the time of the event.
 - A non-admin calling `GET /api/v1/audit-log` receives `403`. There

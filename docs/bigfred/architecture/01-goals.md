@@ -82,48 +82,90 @@ domain model and the API:
       toggle function, send radio phrase, …) so AI assistants, IDE
       agents and automation scripts can drive the same domain via
       Anthropic's [Model Context Protocol](https://modelcontextprotocol.io/).
-12. **Parties (modeling events) and the default workspace** – the
+12. **Layouts (modeling events) picked on the login form** – the
     application is multi-tenant in the soft sense that all users live
-    in the same database, but every driving session happens inside a
-    **party** (`impreza`):
-    - immediately after login the UI presents a **list of parties**;
-      the user either joins one or enters the system-provided
-      **`default`** workspace, which is always present;
-    - **`admin` creates parties**, **any user may join any party**;
-    - **a party has no end date** – it stays in the catalogue until an
-      admin deletes it;
-    - each party owns its own **party-scoped signalmen list**: an
+    in the same database, but every drive session happens inside a
+    **layout** (`makieta`), and the choice is made **before the user
+    is authenticated**:
+    - the login screen carries three inputs: `login`, `PIN` and a
+      **layout dropdown** (`makieta`). The dropdown is populated by
+      the unauthenticated `GET /api/v1/layouts/login` endpoint,
+      which returns every layout currently selectable (i.e. not
+      locked). The system-provided **system layout** is always in
+      that list and is the default pre-selection;
+    - the system layout is seeded with `Name = "default"`,
+      `IsSystem = true`, and is displayed in the UI as
+      **"Domyślna (warsztat)"** (Polish) / **"Default (workshop)"**
+      (English) via the `layout:system_default_label` i18n key. It is
+      always available, cannot be locked, cannot be deleted, and its
+      attached command stations are not editable – it always exposes
+      the entire `command_stations` catalogue as a virtual set;
+    - on a successful `POST /api/v1/auth/login { login, pin, layoutId }`
+      the issued JWT carries `{ userId, layoutId }`; the WS upgrade
+      reads `layoutId` from the token and pins the resulting drive
+      session to that layout for its **entire lifetime**. **The user
+      cannot change layout mid-session** – switching requires a full
+      logout/login round trip. There is no post-login layout-list
+      screen and no `setLayout` action;
+    - **`admin` creates and deletes non-system layouts**; **any user
+      may log into any non-locked layout**;
+    - **a layout has no end date** – it stays in the catalogue until
+      an admin deletes it;
+    - **an admin may lock any non-system layout** via
+      `POST /api/v1/layouts/{id}/lock`. A locked layout disappears
+      from the login dropdown so no new drive sessions can be opened
+      in it. Drive sessions already running in a layout that becomes
+      locked are **NOT kicked** – they finish on their own. Unlocking
+      via `DELETE /api/v1/layouts/{id}/lock` returns the row to the
+      dropdown. The system layout cannot be locked;
+    - each layout owns its own **layout-scoped signalmen list**: an
       admin may grant the `signalman` role to a user **only inside one
-      specific party**, and the user gains signalman powers exclusively
-      while active in that party (see §7a.2 for how this changes the
-      effective-roles computation);
-    - each party owns its own **interlocking whitelist**: both `admin`
-      and any signalman of the party may add interlockings to it;
-      **only the whitelisted interlockings are visible to drivers
-      currently in that party**;
-    - the party list rendered right after login shows a **settings
-      icon next to every party**, visible only to users with the
-      `admin` role.
-13. **Layouts catalogue (`makiety`)** – the physical model layout each
-    party runs on is a first-class entity:
-    - the system maintains a **catalogue of layouts**; each layout has
-      a name and a **connection definition** describing how the
-      backend reaches the command station:
+      specific layout**, and the user gains signalman powers
+      exclusively while active in that layout (see §7a.2 for how this
+      changes the effective-roles computation);
+    - each layout owns its own **interlocking whitelist**: both
+      `admin` and any signalman of the layout may add interlockings to
+      it; **only the whitelisted interlockings are visible to drivers
+      currently in that layout**;
+    - admin-only management pages for layouts are reachable from
+      `AppShell.tsx` (`/admin/layouts`), not from a post-login layout
+      list. They expose name/lock toggle and the attached
+      command-station set; the system layout's row is read-only in
+      that page.
+13. **Command stations catalogue (`centralki`)** – the physical DCC
+    command station is a first-class entity, **independent of any
+    specific layout**:
+    - the system maintains a **catalogue of command stations**; each
+      command station has a name and a **connection definition**
+      describing how the backend reaches it:
       a) a **physical LocoNet socket** (serial / TTY device),
       b) **Z21 over network** (host + port),
       c) **LocoNet over Network** (host + port);
-    - **only `admin` may create, edit or delete layouts**;
-    - **every non-`default` party must be assigned exactly one
-      layout** at creation time. A non-default party with no layout
-      is unreachable and joining it fails with a clear error;
-    - the **`default` party is the one explicit exception**: it has
-      **no fixed layout**. Instead, in `default` the **driver picks a
-      layout from a dropdown** inside the vehicle control view, and
-      that pick becomes the active layout for the current drive
-      session until the driver picks a different one. This makes
-      `default` the workspace where any user can experiment with any
-      available layout without an admin first having to create a
-      dedicated party for it.
+    - **only `admin` may create, edit or delete command stations**;
+    - **a command station may be attached to any number of layouts**
+      via a `LayoutCommandStation` join table managed by an admin
+      (`POST/DELETE /api/v1/layouts/{id}/command-stations`). The
+      system layout is the exception: every command station in the
+      catalogue is **implicitly attached** to it – its set is virtual,
+      always up to date, and **not editable** via any endpoint;
+    - **every non-system layout must have at least one attached
+      command station at all times** – creation requires a non-empty
+      `commandStationIds` array, and detaching the last one is
+      rejected with `layout_needs_at_least_one_command_station`;
+    - inside the drive session the **driver picks one command station
+      from the session layout's set** via a dropdown in the vehicle
+      control view (`session.setCommandStation { commandStationId }`,
+      §4.5). Until a pick is made, the throttle is gated and every
+      command returns `command_station_not_selected`. Switching the
+      pick later is allowed and is a controlled context switch: the
+      emergency plan runs against the previous command station first,
+      then the session re-points to the new one;
+    - deleting a command station cascades cleanly: every layout that
+      had it explicitly attached loses the row, every live drive
+      session pinned to it is detached (CommandStationID → nil) and
+      told to re-pick. The deletion itself is rejected with `409
+      Conflict` if it would leave any non-system layout with zero
+      attached stations.
 14. **Audit log** – every significant state change is recorded in an
     **append-only audit log**. The scope is deliberately narrow and
     covers the operationally interesting events:
@@ -134,8 +176,9 @@ domain model and the API:
     - **"driver fell asleep"** (`maszynista zasnął`) – the
       dead-man's switch firing (§4.5), with the list of affected
       vehicles attached;
-    - **layout create / edit / delete** (`makieta`);
-    - **party create / edit / delete** (`impreza`).
+    - **command station create / edit / delete** (`centralka`);
+    - **layout create / edit / delete** (`makieta`), plus **lock /
+      unlock** and **command-station attach / detach** on a layout.
 
     Every entry MUST carry the following fields:
 
@@ -145,8 +188,8 @@ domain model and the API:
     | user name      | `string`     | `user.login` **at the moment of the event** (denormalized)        |
     | user ID        | `uint`       | `user.id`                                                         |
     | date           | `time.Time`  | UTC; persisted with millisecond precision                         |
-    | object ID      | `uint`       | id of the affected vehicle/train/layout/party/session             |
-    | object name    | `string`     | e.g. vehicle name, train name, layout name (denormalized)         |
+    | object ID      | `uint`       | id of the affected vehicle/train/command station/layout/session             |
+    | object name    | `string`     | e.g. vehicle name, train name, command station name (denormalized)         |
 
     Denormalization of `user name` and `object name` is intentional:
     deleting or renaming a user/vehicle later **must not rewrite
@@ -280,7 +323,7 @@ domain model and the API:
 
 These functional goals drive the domain model (§3a), the REST surface
 (§4.1), the WebSocket protocol (§4.2), the **drive-session contract
-and dead-man's switch (§4.5)**, the **party / layout addressing rules
+and dead-man's switch (§4.5)**, the **layout / command station addressing rules
 (§3a.4)**, the **audit log (§3a.5)**, the **vehicle functions and
 template inheritance (§3a.6)**, the **server-side scripting model
 in the sibling `scripts-executor` (§3a.7)**, the authorization

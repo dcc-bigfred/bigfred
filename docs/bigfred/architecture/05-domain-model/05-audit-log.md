@@ -35,7 +35,7 @@ type AuditQuery struct {
     ActorUserID *uint
     ObjectType  *string
     ObjectID    *uint
-    PartyID     *uint
+    LayoutID     *uint
     Since, Until *time.Time
     Limit, Offset int
 }
@@ -53,8 +53,10 @@ func (s *AuditService) List(ctx context.Context, q AuditQuery) ([]domain.AuditLo
 | `vehicle.lease_expired`          | Janitor goroutine (§7 cross-cutting)   |
 | `train.created/updated/deleted`  | `TrainService.Create/Update/Delete`    |
 | `train.leased / lease_revoked / lease_expired` | `LeaseService` + janitor |
-| `layout.created/updated/deleted` | `LayoutService.Create/Update/Delete`   |
-| `party.created/updated/deleted`  | `PartyService.Create/Update/Delete`    |
+| `command_station.created/updated/deleted` | `CommandStationService.Create/Update/Delete`   |
+| `layout.created/updated/deleted`  | `LayoutService.Create/Update/Delete`    |
+| `layout.locked / layout.unlocked` | `LayoutService.Lock / Unlock`. `ObjectID = layout.id`, `ObjectName = layout.name`. The system layout cannot be locked, so neither row ever appears for it. |
+| `layout.command_station_attached / layout.command_station_detached` | `LayoutService.AttachCommandStation / DetachCommandStation` (admin-only, non-system layouts only). `ObjectID = layout.id`, `ObjectName = layout.name`, `Metadata = { commandStationId, commandStationName }`. |
 | `vehicle.functions_updated`      | `FunctionService.Upsert / Remove / Reorder` (after `EnsureDetached`). `ObjectID = vehicle.id`, `Metadata = {num, name, icon, kind, position, prev?}` |
 | `vehicle.functions_detached`     | `FunctionService.EnsureDetached` when the copy fires. `Metadata = {templateId, copied_rows}` |
 | `vehicle.functions_attached`     | `FunctionService.Attach` on explicit re-link. `Metadata = {templateId}` |
@@ -73,7 +75,7 @@ func (s *AuditService) List(ctx context.Context, q AuditQuery) ([]domain.AuditLo
   caller.
 - Where possible, the audit insert is wrapped in the same REL
   transaction as the domain change so both commit atomically (relevant
-  for create/update/delete on vehicle/train/layout/party).
+  for create/update/delete on vehicle/train/command station/layout).
 
 **Read-path discipline:**
 

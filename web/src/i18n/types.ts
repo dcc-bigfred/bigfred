@@ -24,6 +24,7 @@ import type plAuth from "./locales/pl/auth.json";
 import type plErrors from "./locales/pl/errors.json";
 import type plRole from "./locales/pl/role.json";
 import type plHome from "./locales/pl/home.json";
+import type plLayout from "./locales/pl/layout.json";
 
 declare module "i18next" {
   interface CustomTypeOptions {
@@ -34,6 +35,7 @@ declare module "i18next" {
       errors: typeof plErrors;
       role: typeof plRole;
       home: typeof plHome;
+      layout: typeof plLayout;
     };
     // returnNull is false in index.ts; mirror that here so the t()
     // return type is `string` (not `string | null`).

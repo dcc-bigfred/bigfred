@@ -2,7 +2,7 @@
 
 The same Go binary that serves REST + WebSocket also hosts a Model
 Context Protocol (MCP) server, so that AI assistants, IDE agents and
-automation scripts can drive the layout through Anthropic's
+automation scripts can drive the command station through Anthropic's
 [Model Context Protocol](https://modelcontextprotocol.io/). The MCP
 surface re-uses the same services (`LocoService`, `RadioService`, …) as
 the human-facing UI – there is no second implementation of the business

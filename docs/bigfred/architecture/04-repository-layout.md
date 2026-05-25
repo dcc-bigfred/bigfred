@@ -26,18 +26,18 @@ pkgs/
     │   ├── protocol.go         # typed messages (Action/Event)
     │   └── handlers.go         # WS message dispatching
     ├── service/
-    │   ├── loco.go             # LocoService – business layer; map[layoutID]Station
+    │   ├── loco.go             # LocoService – business layer; map[commandStationID]Station
     │   ├── train.go            # TrainService – CRUD + SetSpeed fan-out
     │   │                       #                (lock-step, Reversed-flip, per-member ack)
     │   ├── auth.go             # AuthService – login + PIN, sessions/JWT
     │   ├── apikey.go           # APIKeyService – mint/revoke/verify, ≤365d
     │   ├── user.go             # UserService – roles, temp grants, DCC pool
     │   ├── lease.go            # LeaseService – vehicle/train leasing
-    │   ├── interlocking.go     # InterlockingService – signal boxes (party-filtered)
+    │   ├── interlocking.go     # InterlockingService – signal boxes (layout-filtered)
     │   ├── takeover.go         # TakeoverService – 15s arbitration
     │   ├── radio.go            # RadioService – walkie-talkie messages
-    │   ├── layout.go           # LayoutService – CRUD over makiety (admin only)
-    │   ├── party.go            # PartyService – CRUD, join, signalmen list,
+    │   ├── command_station.go           # CommandStationService – CRUD over centralki (admin only)
+    │   ├── layout.go            # LayoutService – CRUD, join, signalmen list,
     │   │                       #                interlocking whitelist
     │   ├── function.go         # FunctionService – vehicle F0-F32 list,
     │   │                       #                copy-on-write detach
@@ -57,8 +57,8 @@ pkgs/
     │   ├── radio.go            # RadioSecurityContext – CanSendTo
     │   ├── user.go             # UserSecurityContext – admin policies
     │   ├── apikey.go           # APIKeySecurityContext – CanMint, CanRevoke
-    │   ├── layout.go           # LayoutSecurityContext – CanEditLayout (admin only)
-    │   ├── party.go            # PartySecurityContext – CanCreate/CanJoin/CanAddSignalman/CanAddInterlocking
+    │   ├── command_station.go           # CommandStationSecurityContext – CanEditCommandStation (admin only)
+    │   ├── layout.go            # LayoutSecurityContext – CanCreate/CanJoin/CanAddSignalman/CanAddInterlocking
     │   ├── function.go         # FunctionSecurityContext – CanEditFunctions / CanInvokeFunction
     │   ├── template.go         # TemplateSecurityContext – CanEditTemplate (owner or admin)
     │   └── audit.go            # AuditSecurityContext – CanReadAuditLog (admin only)
@@ -70,8 +70,8 @@ pkgs/
     │   ├── interlocking.go     # Interlocking, InterlockingSession
     │   ├── takeover.go         # TakeoverRequest
     │   ├── radio.go            # RadioMessage, RadioPhrase
-    │   ├── layout.go           # Layout, LayoutConnection, LayoutConnectionType
-    │   ├── party.go            # Party, PartySignalman, PartyInterlocking
+    │   ├── command_station.go           # CommandStation, CommandStationConnection, CommandStationConnectionType
+    │   ├── layout.go            # Layout, LayoutSignalman, LayoutInterlocking
     │   ├── function.go         # VehicleFunction, FunctionIcon, FunctionKind
     │   ├── template.go         # VehicleTemplate, TemplateFunction
     │   └── audit.go            # AuditLogEntry, AuditAction
@@ -86,8 +86,8 @@ pkgs/
     │   ├── scripts.go          # Script + ScriptAttachment repo (with size cap on Source)
     │   ├── leases.go
     │   ├── interlockings.go
+    │   ├── command_stations.go
     │   ├── layouts.go
-    │   ├── parties.go
     │   ├── audit.go            # append-only writer + indexed reader
     │   └── migrations/         # REL migrations in Go (embed.FS)
     ├── mcp/                    # built-in MCP server (mark3labs/mcp-go)

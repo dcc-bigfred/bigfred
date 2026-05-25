@@ -43,10 +43,13 @@ var argon2idParams = struct {
 }
 
 // Identity carries the authenticated caller through HTTP and WS
-// handlers. It is intentionally minimal at this milestone — party
-// scoping, effective roles, etc. will be added in M4.
+// handlers. It is intentionally minimal at this milestone — effective
+// roles will be added together with LayoutSignalman (§7a.2). For
+// now it carries the User + the Layout the user picked on the login
+// form (§7a.1).
 type Identity struct {
-	User domain.User
+	User   domain.User
+	Layout domain.Layout
 }
 
 // HasRole returns true when the user's permanent role matches any of
@@ -69,6 +72,7 @@ func (i Identity) HasRole(roles ...domain.Role) bool {
 // right.
 type AuthService struct {
 	users        *repo.Users
+	layouts      *LayoutService
 	jwtSecret    []byte
 	sessionTTL   time.Duration
 	cookieDomain string
@@ -84,10 +88,17 @@ type AuthConfig struct {
 	SessionTTL time.Duration
 }
 
-// NewAuthService returns a ready-to-use AuthService.
-func NewAuthService(users *repo.Users, cfg AuthConfig) *AuthService {
+// NewAuthService returns a ready-to-use AuthService. The LayoutService
+// is used to validate the chosen layoutId at login time (§7a.1 steps
+// 2-3) and to rehydrate the Layout side of Identity from a verified
+// JWT (so a layout deleted out of band immediately invalidates
+// outstanding cookies, mirroring the User branch).
+func NewAuthService(users *repo.Users, layouts *LayoutService, cfg AuthConfig) *AuthService {
 	if len(cfg.JWTSecret) == 0 {
 		panic("service.NewAuthService: JWTSecret must not be empty")
+	}
+	if layouts == nil {
+		panic("service.NewAuthService: LayoutService must not be nil")
 	}
 	ttl := cfg.SessionTTL
 	if ttl == 0 {
@@ -95,6 +106,7 @@ func NewAuthService(users *repo.Users, cfg AuthConfig) *AuthService {
 	}
 	return &AuthService{
 		users:      users,
+		layouts:    layouts,
 		jwtSecret:  cfg.JWTSecret,
 		sessionTTL: ttl,
 	}
@@ -163,10 +175,16 @@ func verifyPIN(pin, encoded string) error {
 	return nil
 }
 
-// Login exchanges a (login, pin) pair for an Identity. The caller
-// (HTTP handler) is responsible for turning the returned Identity into
-// a JWT via IssueToken and packaging it into a Secure HttpOnly cookie.
-func (s *AuthService) Login(ctx context.Context, login, pin string) (Identity, error) {
+// Login exchanges a (login, pin, layoutId) triplet for an Identity.
+// The caller (HTTP handler) is responsible for turning the returned
+// Identity into a JWT via IssueToken and packaging it into a Secure
+// HttpOnly cookie.
+//
+// The (login, pin) branch is checked first so an attacker that
+// hand-crafts a request with a bad layoutId still can't enumerate
+// valid logins via differing status codes. The layout branch only
+// runs once credentials match.
+func (s *AuthService) Login(ctx context.Context, login, pin string, layoutID uint) (Identity, error) {
 	user, err := s.users.FindByLogin(ctx, login)
 	if err != nil {
 		if errors.Is(err, repo.ErrUserNotFound) {
@@ -182,14 +200,21 @@ func (s *AuthService) Login(ctx context.Context, login, pin string) (Identity, e
 		return Identity{}, ErrInvalidCredentials
 	}
 
-	return Identity{User: user}, nil
+	layout, err := s.layouts.ValidateForLogin(ctx, layoutID)
+	if err != nil {
+		return Identity{}, err
+	}
+
+	return Identity{User: user, Layout: layout}, nil
 }
 
 // sessionClaims is the wire shape of the JWT payload. Keep it small —
 // every WebSocket frame carries the cookie, so each byte matters.
+// `lid` is the immutable layout binding documented in §7a.1.
 type sessionClaims struct {
 	UID  uint   `json:"uid"`
 	Role string `json:"role"`
+	LID  uint   `json:"lid"`
 	jwt.RegisteredClaims
 }
 
@@ -200,6 +225,7 @@ func (s *AuthService) IssueToken(id Identity) (string, time.Time, error) {
 	claims := sessionClaims{
 		UID:  id.User.ID,
 		Role: string(id.User.Role),
+		LID:  id.Layout.ID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   id.User.Login,
 			ExpiresAt: jwt.NewNumericDate(expiry),
@@ -215,8 +241,15 @@ func (s *AuthService) IssueToken(id Identity) (string, time.Time, error) {
 }
 
 // VerifyToken parses + cryptographically verifies a previously issued
-// session token, and loads the corresponding User from the database
-// (so a deleted account immediately invalidates outstanding cookies).
+// session token, and loads the corresponding User + Layout from the
+// database (so a deleted account or a deleted layout immediately
+// invalidates outstanding cookies).
+//
+// Tokens minted before the layout binding existed have LID = 0 — for
+// those we fall back to the system layout so M2-era sessions keep
+// working across the upgrade. The fallback is harmless: locked is
+// false on the system row and `ValidateForLogin` already greenlit it
+// at login time.
 func (s *AuthService) VerifyToken(ctx context.Context, raw string) (Identity, error) {
 	parsed, err := jwt.ParseWithClaims(raw, &sessionClaims{}, func(t *jwt.Token) (interface{}, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
@@ -236,5 +269,16 @@ func (s *AuthService) VerifyToken(ctx context.Context, raw string) (Identity, er
 	if err != nil {
 		return Identity{}, ErrInvalidCredentials
 	}
-	return Identity{User: user}, nil
+
+	var layout domain.Layout
+	if claims.LID == 0 {
+		layout, err = s.layouts.GetSystem(ctx)
+	} else {
+		layout, err = s.layouts.Get(ctx, claims.LID)
+	}
+	if err != nil {
+		return Identity{}, ErrInvalidCredentials
+	}
+
+	return Identity{User: user, Layout: layout}, nil
 }

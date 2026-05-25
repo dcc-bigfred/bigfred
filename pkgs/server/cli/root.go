@@ -88,8 +88,19 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	migrations.MigrateUp(ctx, repository)
 
 	users := repo.NewUsers(repository)
+	layouts := repo.NewLayouts(repository)
 
-	authSvc := service.NewAuthService(users, service.AuthConfig{JWTSecret: secret})
+	layoutSvc := service.NewLayoutService(layouts)
+	authSvc := service.NewAuthService(users, layoutSvc, service.AuthConfig{JWTSecret: secret})
+
+	// Seed the bootstrap system layout BEFORE the admin account so
+	// the very first login can pick it from the dropdown without
+	// hitting a 422 layout_not_found.
+	if seeded, err := layoutSvc.EnsureSystemLayout(ctx); err != nil {
+		return fmt.Errorf("seed system layout: %w", err)
+	} else if seeded {
+		log.Info("bootstrap system layout created (Name = default, IsSystem = true)")
+	}
 
 	seeded, err := service.SeedAdmin(ctx, users, service.SeedDefaults)
 	if err != nil {
@@ -104,6 +115,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 
 	router := httpapi.NewRouter(httpapi.RouterConfig{
 		Auth:           authSvc,
+		Layouts:        layoutSvc,
 		AllowedOrigins: f.AllowedOrigins,
 		SecureCookie:   f.SecureCookie,
 	})

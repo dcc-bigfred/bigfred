@@ -242,7 +242,7 @@ import { createTheme } from "@mui/material/styles";
 
 export const theme = createTheme({
   palette: {
-    mode: "dark", // a layout console is easier to read in dark mode
+    mode: "dark", // a command station console is easier to read in dark mode
     primary: { main: "#90caf9" },
     error: { main: "#ef5350" },
   },

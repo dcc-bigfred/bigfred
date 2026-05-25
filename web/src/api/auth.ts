@@ -7,15 +7,23 @@ import { ApiError, apiFetch } from "./client";
 
 export type Role = "driver" | "signalman" | "admin";
 
+// CurrentUser mirrors `meResponse` in pkgs/server/http/auth.go. The
+// layout fields are derived from the JWT and immutable for the
+// lifetime of the session (§7a.1): the user must log out and log in
+// again to switch layout.
 export interface CurrentUser {
   id: number;
   login: string;
   role: Role;
+  layoutId: number;
+  layoutName: string;
+  layoutIsSystem: boolean;
 }
 
 export interface LoginRequest {
   login: string;
   pin: string;
+  layoutId: number;
 }
 
 const meQueryKey = ["auth", "me"] as const;

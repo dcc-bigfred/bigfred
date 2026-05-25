@@ -25,19 +25,42 @@ func NewAuthHandler(auth *service.AuthService, secureCookie bool) *AuthHandler {
 
 // loginRequest mirrors the JSON body documented in §4.1:
 //
-//	POST /api/v1/auth/login { login, pin }
+//	POST /api/v1/auth/login { login, pin, layoutId }
+//
+// `layoutId` is REQUIRED. The frontend pre-fills it from the
+// `GET /api/v1/layouts/login` dropdown (defaulting to the system
+// layout), so a missing value is always a client bug.
 type loginRequest struct {
-	Login string `json:"login"`
-	PIN   string `json:"pin"`
+	Login    string `json:"login"`
+	PIN      string `json:"pin"`
+	LayoutID uint   `json:"layoutId"`
 }
 
-// meResponse is the JSON shape returned by GET /api/v1/auth/me. The
-// permanent role is sent as a top-level field; effective roles will
-// be added once the party scope lands in M4.
+// meResponse is the JSON shape returned by GET /api/v1/auth/me and
+// echoed by POST /api/v1/auth/login (so the frontend can hydrate its
+// store without a follow-up call). The layout fields mirror §4.1:
+// they are derived from the JWT and immutable for the lifetime of
+// the session.
 type meResponse struct {
-	ID    uint        `json:"id"`
-	Login string      `json:"login"`
-	Role  domain.Role `json:"role"`
+	ID             uint        `json:"id"`
+	Login          string      `json:"login"`
+	Role           domain.Role `json:"role"`
+	LayoutID       uint        `json:"layoutId"`
+	LayoutName     string      `json:"layoutName"`
+	LayoutIsSystem bool        `json:"layoutIsSystem"`
+}
+
+// meFromIdentity collapses the identity → response mapping so the
+// Login and Me handlers stay in sync.
+func meFromIdentity(id service.Identity) meResponse {
+	return meResponse{
+		ID:             id.User.ID,
+		Login:          id.User.Login,
+		Role:           id.User.Role,
+		LayoutID:       id.Layout.ID,
+		LayoutName:     id.Layout.Name,
+		LayoutIsSystem: id.Layout.IsSystem,
+	}
 }
 
 // Login validates credentials, mints a JWT and sets it as a Secure,
@@ -56,14 +79,27 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "missing_credentials")
 		return
 	}
+	if req.LayoutID == 0 {
+		// §7a.1: the dropdown always has at least the system layout
+		// pre-selected, so a zero id means the request was crafted
+		// without it. Treat as a 422 (the credentials might still be
+		// fine — distinct from 401 invalid_credentials).
+		writeJSONError(w, http.StatusUnprocessableEntity, "layout_required")
+		return
+	}
 
-	id, err := h.auth.Login(r.Context(), req.Login, req.PIN)
+	id, err := h.auth.Login(r.Context(), req.Login, req.PIN, req.LayoutID)
 	if err != nil {
-		if errors.Is(err, service.ErrInvalidCredentials) {
+		switch {
+		case errors.Is(err, service.ErrInvalidCredentials):
 			writeJSONError(w, http.StatusUnauthorized, "invalid_credentials")
-			return
+		case errors.Is(err, service.ErrLayoutNotFound):
+			writeJSONError(w, http.StatusUnprocessableEntity, "layout_not_found")
+		case errors.Is(err, service.ErrLayoutLocked):
+			writeJSONError(w, http.StatusUnprocessableEntity, "layout_locked")
+		default:
+			writeJSONError(w, http.StatusInternalServerError, "internal_error")
 		}
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 		return
 	}
 
@@ -89,11 +125,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	})
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(meResponse{
-		ID:    id.User.ID,
-		Login: id.User.Login,
-		Role:  id.User.Role,
-	})
+	_ = json.NewEncoder(w).Encode(meFromIdentity(id))
 }
 
 // Logout clears the session cookie. Idempotent — calling it without
@@ -121,9 +153,5 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(meResponse{
-		ID:    id.User.ID,
-		Login: id.User.Login,
-		Role:  id.User.Role,
-	})
+	_ = json.NewEncoder(w).Encode(meFromIdentity(id))
 }

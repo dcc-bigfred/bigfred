@@ -7,7 +7,11 @@
     "ok": "OK",
     "retry": "Spróbuj ponownie",
     "logout": "Wyloguj",
-    "back": "Wstecz"
+    "back": "Wstecz",
+    "create": "Utwórz",
+    "rename": "Zmień nazwę",
+    "delete": "Usuń",
+    "confirm": "Potwierdź"
   },
   "language": {
     "menuLabel": "Język",
@@ -17,5 +21,23 @@
       "en": "Angielski"
     }
   },
+  "nav": {
+    "administration": {
+      "menuLabel": "Administracja",
+      "users": "Użytkownicy",
+      "layouts": "Makiety",
+      "parties": "Imprezy",
+      "interlockings": "Nastawnie",
+      "auditLog": "Dziennik audytu"
+    },
+    "account": {
+      "menuLabel": "Konto",
+      "profile": "Profil",
+      "apiKeys": "Klucze API",
+      "changePin": "Zmień hasło",
+      "logout": "Wyloguj"
+    }
+  },
+  "comingSoon": "Wkrótce ({{milestone}})",
   "networkError": "Nie udało się połączyć z serwerem."
 }

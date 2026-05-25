@@ -6,5 +6,13 @@
   "invalid_body": "Malformed request data.",
   "internal_error": "Internal server error. Please try again.",
   "network": "Could not reach the server.",
-  "unknown": "An unknown error occurred: {{code}}"
+  "unknown": "An unknown error occurred: {{code}}",
+  "layout_required": "Please pick a layout.",
+  "layout_not_found": "The selected layout no longer exists.",
+  "layout_locked": "The selected layout is locked.",
+  "layout_name_required": "Please enter a layout name.",
+  "layout_name_taken": "A layout with this name already exists.",
+  "default_layout_immutable": "The default layout cannot be renamed.",
+  "default_layout_undeletable": "The default layout cannot be deleted.",
+  "default_layout_cannot_be_locked": "The default layout cannot be locked."
 }

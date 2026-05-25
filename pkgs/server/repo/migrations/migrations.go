@@ -27,6 +27,7 @@ func MigrateUp(ctx context.Context, repo rel.Repository) {
 // stamps are recommended so concurrent feature branches don't collide).
 func register(m *migrator.Migrator) {
 	m.Register(20260523_000001, createUsersUp, createUsersDown)
+	m.Register(20260525_000001, createLayoutsUp, createLayoutsDown)
 }
 
 func createUsersUp(s *rel.Schema) {
@@ -44,4 +45,40 @@ func createUsersUp(s *rel.Schema) {
 
 func createUsersDown(s *rel.Schema) {
 	s.DropTable("users")
+}
+
+// createLayoutsUp wires the `layouts` table that backs domain.Layout
+// (§3a.1). On top of the obvious columns it installs two SQLite
+// constraints that the spec calls out explicitly (§9 step 11):
+//
+//  1. CHECK (NOT (is_system = 1 AND locked = 1)) — the system layout
+//     can never be locked, so this catches both a buggy service call
+//     and a hand-rolled UPDATE.
+//
+//  2. UNIQUE partial index on `is_system` WHERE is_system = 1 —
+//     guarantees at most one system row exists. SQLite does not
+//     support partial indexes through REL's typed Schema builder,
+//     hence the raw s.Exec.
+//
+// `name` is a plain unique constraint; the user-facing label for the
+// system row is rendered through the i18n key `layout:system_default_label`,
+// so the stored Name ("default") is an opaque system marker.
+func createLayoutsUp(s *rel.Schema) {
+	s.CreateTable("layouts", func(t *rel.Table) {
+		t.ID("id")
+		t.String("name")
+		t.Bool("is_system", rel.Default(false))
+		t.Bool("locked", rel.Default(false))
+		t.Int("created_by", rel.Unsigned(true), rel.Default(0))
+		t.DateTime("created_at")
+		t.DateTime("updated_at")
+
+		t.Unique([]string{"name"})
+		t.Fragment("CHECK (NOT (is_system = 1 AND locked = 1))")
+	})
+	s.Exec(rel.Raw(`CREATE UNIQUE INDEX layouts_unique_system ON layouts(is_system) WHERE is_system = 1`))
+}
+
+func createLayoutsDown(s *rel.Schema) {
+	s.DropTable("layouts")
 }

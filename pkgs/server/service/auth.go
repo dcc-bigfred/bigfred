@@ -26,6 +26,13 @@ import (
 // — it prevents enumeration of valid logins.
 var ErrInvalidCredentials = errors.New("invalid credentials")
 
+// ErrAccountDeactivated is returned by Login when the credentials are
+// valid but the user account has been soft-disabled by an admin. The
+// error is distinct from ErrInvalidCredentials so the UI can render
+// a precise message — there is no enumeration risk because reaching
+// this branch already requires a valid (login, pin) pair.
+var ErrAccountDeactivated = errors.New("account_deactivated")
+
 // argon2idParams are the OWASP-recommended baseline (RFC 9106) tuned
 // for an interactive login flow (<100 ms on a modern desktop CPU). The
 // numbers are encoded inside the stored hash, so they can be bumped
@@ -203,6 +210,14 @@ func (s *AuthService) Login(ctx context.Context, login, pin string, layoutID uin
 
 	if err := verifyPIN(pin, user.PINHash); err != nil {
 		return Identity{}, ErrInvalidCredentials
+	}
+
+	// Soft-disabled accounts pass the credential check above (so the
+	// admin can still re-activate them by login) but are rejected
+	// here. Reaching this branch already requires a valid PIN, so
+	// surfacing a distinct error code is not an enumeration risk.
+	if !user.Active {
+		return Identity{}, ErrAccountDeactivated
 	}
 
 	layout, err := s.layouts.ValidateForLogin(ctx, layoutID)

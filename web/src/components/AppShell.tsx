@@ -57,8 +57,7 @@ export default function AppShell() {
         id: "users",
         label: t("nav.administration.users"),
         icon: <PeopleIcon fontSize="small" />,
-        disabled: true,
-        tooltip: comingSoon("M2"),
+        onClick: () => navigate("/admin/users"),
       },
       {
         id: "layouts",

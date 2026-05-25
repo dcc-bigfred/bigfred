@@ -1,0 +1,59 @@
+{
+  "admin": {
+    "title": "Users",
+    "subtitle": "Manage accounts, roles and system access.",
+    "empty": "No users to display.",
+    "youBadge": "(You)",
+    "status": {
+      "active": "Active",
+      "inactive": "Inactive"
+    },
+    "columns": {
+      "login": "Login",
+      "role": "Role",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "actions": {
+      "create": "New user",
+      "edit": "Edit",
+      "delete": "Delete",
+      "activate": "Activate",
+      "deactivate": "Deactivate"
+    },
+    "dialogs": {
+      "create": {
+        "title": "New user",
+        "submit": "Create"
+      },
+      "edit": {
+        "title": "Edit user \"{{login}}\"",
+        "submit": "Save"
+      },
+      "fields": {
+        "login": "Login",
+        "loginHelp": "Latin letters, digits and \".\", \"-\", \"_\". 32 characters max.",
+        "role": "Role",
+        "pin": "Password (PIN)",
+        "pinCreateHelp": "Pick a numeric password (4–12 digits).",
+        "pinEditHelp": "Leave empty to keep the current password. Digits only, 4–12 characters.",
+        "pinPlaceholder": "No change"
+      },
+      "deactivate": {
+        "title": "Deactivate user \"{{login}}\"?",
+        "message": "The account stays in the database but the user can no longer log in. You can restore access at any time with \"Activate\".",
+        "submit": "Deactivate"
+      },
+      "activate": {
+        "title": "Activate user \"{{login}}\"?",
+        "message": "Once active, the user can log in again.",
+        "submit": "Activate"
+      },
+      "delete": {
+        "title": "Delete user \"{{login}}\"?",
+        "message": "This action cannot be undone. To delete the account the user must not own any vehicles or trains.",
+        "submit": "Delete"
+      }
+    }
+  }
+}

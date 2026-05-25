@@ -52,6 +52,13 @@ func (t *Trains) FindByOwnerAndName(ctx context.Context, ownerID uint, name stri
 	return row, nil
 }
 
+// CountByOwner returns how many trains are owned by the user. Used
+// by the user-deletion guard so an admin cannot delete a driver that
+// still has trains in the catalogue.
+func (t *Trains) CountByOwner(ctx context.Context, ownerID uint) (int, error) {
+	return t.repo.Count(ctx, "trains", where.Eq("owner_user_id", ownerID))
+}
+
 // ListByOwner returns every train owned by the user.
 func (t *Trains) ListByOwner(ctx context.Context, ownerID uint) ([]domain.Train, error) {
 	var rows []domain.Train

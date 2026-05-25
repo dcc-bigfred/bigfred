@@ -6,11 +6,12 @@ package repo
 // only so it never grows wide enough to obscure the dependency graph
 // in real callers.
 type UsersBundle struct {
-	Users          *Users
-	Pool           *DCCAddressRanges
-	Vehicles       *Vehicles
-	Trains         *Trains
-	TrainMembers   *TrainMembers
-	LayoutVehicles *LayoutVehicles
-	LayoutTrains   *LayoutTrains
+	Users           *Users
+	Pool            *DCCAddressRanges
+	Vehicles        *Vehicles
+	Trains          *Trains
+	TrainMembers    *TrainMembers
+	LayoutVehicles  *LayoutVehicles
+	LayoutTrains    *LayoutTrains
+	LayoutSignalmen *LayoutSignalmen
 }

@@ -50,6 +50,7 @@ func SeedAdmin(ctx context.Context, users *repo.Users, cfg SeedConfig) (bool, er
 		Login:     cfg.Login,
 		PINHash:   hash,
 		Role:      domain.RoleAdmin,
+		Active:    true,
 		CreatedAt: now,
 		UpdatedAt: now,
 	}

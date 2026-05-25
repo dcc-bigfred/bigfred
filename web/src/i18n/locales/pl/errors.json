@@ -41,5 +41,17 @@
   "layout_vehicle_already_on_roster": "Pojazd jest już dodany do tej makiety.",
   "layout_vehicle_not_on_roster": "Pojazd nie znajduje się w tej makiecie.",
   "layout_train_already_on_roster": "Skład jest już dodany do tej makiety.",
-  "layout_train_not_on_roster": "Skład nie znajduje się w tej makiecie."
+  "layout_train_not_on_roster": "Skład nie znajduje się w tej makiecie.",
+  "user_not_found": "Użytkownik nie istnieje.",
+  "user_login_required": "Wpisz login użytkownika.",
+  "user_login_invalid": "Login może zawierać tylko litery łacińskie, cyfry oraz znaki „.”, „-”, „_” (maks. 32 znaki).",
+  "user_login_taken": "Użytkownik o tym loginie już istnieje.",
+  "user_pin_required": "Wpisz hasło (PIN).",
+  "user_pin_invalid": "Hasło (PIN) musi składać się z 4–12 cyfr.",
+  "user_role_invalid": "Wybierz rolę z listy.",
+  "user_has_vehicles": "Nie można usunąć użytkownika – ma przypisane pojazdy.",
+  "user_has_trains": "Nie można usunąć użytkownika – ma przypisane składy.",
+  "cannot_deactivate_self": "Nie możesz dezaktywować własnego konta.",
+  "cannot_delete_self": "Nie możesz usunąć własnego konta.",
+  "account_deactivated": "Konto zostało dezaktywowane. Skontaktuj się z administratorem."
 }

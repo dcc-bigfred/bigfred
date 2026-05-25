@@ -35,6 +35,7 @@ func register(m *migrator.Migrator) {
 	m.Register(20260525_000006, createVehiclesUp, createVehiclesDown)
 	m.Register(20260525_000007, createTrainsUp, createTrainsDown)
 	m.Register(20260525_000008, createLayoutVehiclesUp, createLayoutVehiclesDown)
+	m.Register(20260525_000009, addUsersActiveColumnUp, addUsersActiveColumnDown)
 }
 
 func createUsersUp(s *rel.Schema) {
@@ -269,4 +270,24 @@ func createLayoutVehiclesUp(s *rel.Schema) {
 func createLayoutVehiclesDown(s *rel.Schema) {
 	s.DropTable("layout_trains")
 	s.DropTable("layout_vehicles")
+}
+
+// addUsersActiveColumnUp installs the `active` flag on the `users`
+// table (§7a, user management). Existing rows default to active so
+// the migration is non-destructive on installations that pre-date
+// the user-management feature.
+//
+// SQLite does not support adding a NOT NULL column without a default
+// to an existing table, so we explicitly pin `DEFAULT 1` — REL's
+// typed AlterTable builder forwards this as the column default.
+func addUsersActiveColumnUp(s *rel.Schema) {
+	s.AlterTable("users", func(t *rel.AlterTable) {
+		t.Bool("active", rel.Default(true))
+	})
+}
+
+func addUsersActiveColumnDown(s *rel.Schema) {
+	s.AlterTable("users", func(t *rel.AlterTable) {
+		t.DropColumn("active")
+	})
 }

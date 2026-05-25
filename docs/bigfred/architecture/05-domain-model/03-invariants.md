@@ -2,8 +2,10 @@
 
 | Invariant                                                          | Enforced by                                                       |
 |--------------------------------------------------------------------|-------------------------------------------------------------------|
-| `vehicle.dcc_address` is globally unique                            | DB `UNIQUE` constraint                                            |
-| A user can only register vehicles in their DCC pool                | `UserService.RegisterVehicle` checks `DCCAddressRange`            |
+| `vehicle.dcc_address`, when set, is globally unique                 | DB partial `UNIQUE` index on `dcc_address` WHERE `dcc_address IS NOT NULL` – dummies (NULL DCC) freely coexist |
+| Dummy vehicles cannot be driven                                     | `VehicleService.RegisterVehicle` allows `DCCAddress = nil`; `LocoService` rejects throttle ops when `Vehicle.DCCAddress` is nil with `vehicle_is_dummy` |
+| A user can only register vehicles in their DCC pool                 | `VehicleService.Register/Update` validates `DCCAddress != nil → exists DCCAddressRange where addr ∈ [from,to]`; dummies skip the pool check |
+| `vehicle.kind` is in the closed catalogue                           | DB `CHECK (kind IN ('loco','emu','driving_wagon','trolley','wagon'))` + service-side validation |
 | At most one active lease per vehicle/train                         | `LeaseVehicle` transaction + partial unique index on active rows  |
 | Lessee cannot edit, only drive                                     | Authorization middleware (§11)                                    |
 | Exactly one signalman per interlocking                             | Partial unique index `UNIQUE(interlocking_id) WHERE ended_at IS NULL` |

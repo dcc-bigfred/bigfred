@@ -1,0 +1,98 @@
+package repo
+
+import (
+	"context"
+	"errors"
+
+	"github.com/go-rel/rel"
+	"github.com/go-rel/rel/sort"
+	"github.com/go-rel/rel/where"
+
+	"github.com/keskad/loco/pkgs/server/domain"
+)
+
+// ErrVehicleNotFound is returned when no vehicle row matches.
+var ErrVehicleNotFound = errors.New("vehicle not found")
+
+// Vehicles is the persistence adapter for domain.Vehicle.
+type Vehicles struct {
+	repo rel.Repository
+}
+
+// NewVehicles returns a Vehicles repository.
+func NewVehicles(r rel.Repository) *Vehicles { return &Vehicles{repo: r} }
+
+// FindByID looks up a vehicle by primary key.
+func (v *Vehicles) FindByID(ctx context.Context, id uint) (domain.Vehicle, error) {
+	var row domain.Vehicle
+	err := v.repo.Find(ctx, &row, where.Eq("id", id))
+	if err != nil {
+		if errors.Is(err, rel.ErrNotFound) {
+			return domain.Vehicle{}, ErrVehicleNotFound
+		}
+		return domain.Vehicle{}, err
+	}
+	return row, nil
+}
+
+// FindByDCCAddress looks up a vehicle by its (unique) DCC address.
+// Dummies (DCC = NULL) cannot be located via this helper.
+func (v *Vehicles) FindByDCCAddress(ctx context.Context, addr uint16) (domain.Vehicle, error) {
+	var row domain.Vehicle
+	err := v.repo.Find(ctx, &row, where.Eq("dcc_address", addr))
+	if err != nil {
+		if errors.Is(err, rel.ErrNotFound) {
+			return domain.Vehicle{}, ErrVehicleNotFound
+		}
+		return domain.Vehicle{}, err
+	}
+	return row, nil
+}
+
+// ListByOwner returns every vehicle owned by the user.
+func (v *Vehicles) ListByOwner(ctx context.Context, ownerID uint) ([]domain.Vehicle, error) {
+	var rows []domain.Vehicle
+	err := v.repo.FindAll(ctx, &rows,
+		where.Eq("owner_user_id", ownerID),
+		sort.Asc("name"),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
+// ListByIDs returns vehicles by primary-key set.
+func (v *Vehicles) ListByIDs(ctx context.Context, ids []uint) ([]domain.Vehicle, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	vals := make([]interface{}, len(ids))
+	for i, id := range ids {
+		vals[i] = id
+	}
+	var rows []domain.Vehicle
+	err := v.repo.FindAll(ctx, &rows,
+		where.In("id", vals...),
+		sort.Asc("name"),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
+// Insert persists a new vehicle.
+func (v *Vehicles) Insert(ctx context.Context, row *domain.Vehicle) error {
+	return v.repo.Insert(ctx, row)
+}
+
+// Update writes an existing vehicle back.
+func (v *Vehicles) Update(ctx context.Context, row *domain.Vehicle) error {
+	return v.repo.Update(ctx, row)
+}
+
+// Delete removes a vehicle row.
+func (v *Vehicles) Delete(ctx context.Context, row *domain.Vehicle) error {
+	return v.repo.Delete(ctx, row)
+}

@@ -58,12 +58,37 @@ type APIKey struct {
 
 ```go
 // pkgs/server/domain/vehicle.go
+
+// VehicleKind is the closed catalogue of physical vehicle classes
+// that show up on a modeling layout. The values steer UI icons and
+// filtering ("show me only locomotives") but are NOT used for DCC
+// addressing – every kind may carry an optional DCC address.
+type VehicleKind string
+
+const (
+    VehicleKindLoco         VehicleKind = "loco"           // "Lokomotywa"
+    VehicleKindEMU          VehicleKind = "emu"            // "EZT" – elektryczny/diesel zespół trakcyjny
+    VehicleKindDrivingWagon VehicleKind = "driving_wagon"  // "Wagon sterowniczy"
+    VehicleKindTrolley      VehicleKind = "trolley"        // "Drezyna"
+    VehicleKindWagon        VehicleKind = "wagon"          // "Wagon" (pasywny)
+)
+
 type Vehicle struct {
     ID          uint
-    DCCAddress  uint16    // unique – DCC is a global namespace on the track
-    OwnerUserID uint      // must currently fall inside owner's DCC pool
+    // DCCAddress is OPTIONAL (pointer) per goal 4:
+    //   *  non-nil – the vehicle is steerable, the address must fall
+    //                inside the owner's DCC pool, and (DCCAddress,
+    //                command_station) is unique on the track;
+    //   *  nil    – the vehicle is a DUMMY: still listed in the
+    //                catalogue, still attachable to a train, still
+    //                visible on the layout roster, but the throttle
+    //                never sends DCC against it. Typical for unpowered
+    //                wagons and visual fillers.
+    DCCAddress  *uint16
+    OwnerUserID uint      // when DCCAddress is set, the address must lie inside the owner's DCC pool
     Name        string
-    Type        string    // "loco", "wagon-with-sound", ...
+    Kind        VehicleKind // closed catalogue (loco | emu | driving_wagon | trolley | wagon)
+    Number      string      // optional free-text inventory / road number (e.g. "ET22-123", "92510")
 
     // Function inheritance (§3a.6, goal 16). Three states:
     //   (nil, nil)   – stand-alone, vehicle owns its VehicleFunction rows

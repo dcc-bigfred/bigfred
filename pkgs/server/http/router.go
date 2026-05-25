@@ -16,12 +16,16 @@ import (
 // time. Keeping it as an explicit struct (rather than positional args)
 // makes future additions (Hub, LocoService, …) source-compatible.
 type RouterConfig struct {
-	Auth          *service.AuthService
-	Layouts       *service.LayoutService
-	Interlockings *service.InterlockingService
-	Occupancy     *service.InterlockingOccupancyService
-	Presence      *service.PresenceService
-	Hub           *ws.Hub
+	Auth           *service.AuthService
+	Layouts        *service.LayoutService
+	Interlockings  *service.InterlockingService
+	Occupancy      *service.InterlockingOccupancyService
+	Presence       *service.PresenceService
+	Vehicles       *service.VehicleService
+	Trains         *service.TrainService
+	LayoutVehicles *service.LayoutVehicleService
+	DCCPool        *service.DCCPoolService
+	Hub            *ws.Hub
 
 	// AllowedOrigins is forwarded verbatim to the CORS middleware.
 	// In development the Vite dev server lives on a different port
@@ -58,6 +62,9 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	layoutH := NewLayoutHandler(cfg.Layouts)
 	interlockingH := NewInterlockingHandler(cfg.Interlockings, cfg.Occupancy, cfg.Auth)
 	presenceH := NewPresenceHandler(cfg.Presence)
+	vehicleH := NewVehicleHandler(cfg.Vehicles, cfg.LayoutVehicles, cfg.DCCPool)
+	trainH := NewTrainHandler(cfg.Trains, cfg.LayoutVehicles)
+	rosterH := NewLayoutRosterHandler(cfg.LayoutVehicles)
 
 	r.Route("/api/v1", func(r chi.Router) {
 		// WebSocket upgrade — auth reads cookie / ?token= inline.
@@ -79,6 +86,27 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			r.Use(RequireAuth(cfg.Auth))
 
 			r.Get("/auth/me", authH.Me)
+			r.Get("/auth/me/dcc-pool", vehicleH.ListPool)
+
+			// Vehicle catalogue (own only for now).
+			r.Get("/vehicles", vehicleH.List)
+			r.Post("/vehicles", vehicleH.Create)
+			r.Put("/vehicles/{id}", vehicleH.Update)
+			r.Delete("/vehicles/{id}", vehicleH.Delete)
+
+			// Train catalogue.
+			r.Get("/trains", trainH.List)
+			r.Post("/trains", trainH.Create)
+			r.Put("/trains/{id}", trainH.Update)
+			r.Delete("/trains/{id}", trainH.Delete)
+
+			// Layout vehicle / train roster (dashboard data sources).
+			r.Get("/layouts/{id}/vehicles", rosterH.ListVehicles)
+			r.Post("/layouts/{id}/vehicles", rosterH.AddVehicle)
+			r.Delete("/layouts/{id}/vehicles/{vehicleId}", rosterH.RemoveVehicle)
+			r.Get("/layouts/{id}/trains", rosterH.ListTrains)
+			r.Post("/layouts/{id}/trains", rosterH.AddTrain)
+			r.Delete("/layouts/{id}/trains/{trainId}", rosterH.RemoveTrain)
 
 			r.Get("/interlockings", interlockingH.List)
 			r.Get("/interlockings/{id}", interlockingH.Get)

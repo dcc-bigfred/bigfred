@@ -9,6 +9,7 @@ import (
 
 	"github.com/keskad/loco/pkgs/server/domain"
 	"github.com/keskad/loco/pkgs/server/repo"
+	"github.com/keskad/loco/pkgs/server/security"
 )
 
 // User-management sentinel errors. They are deliberately
@@ -60,6 +61,10 @@ var (
 	// ErrCannotDeleteSelf prevents an admin from removing their own
 	// account.
 	ErrCannotDeleteSelf = errors.New("cannot_delete_self")
+
+	// ErrUserForbidden is returned when a non-admin attempts a
+	// user-catalogue operation guarded by CanManageUsers.
+	ErrUserForbidden = errors.New("forbidden")
 )
 
 // minPINLength is the minimum number of digits we accept on create
@@ -81,6 +86,7 @@ type UserService struct {
 	vehicles *repo.Vehicles
 	trains   *repo.Trains
 	dccPool  *DCCPoolService
+	sec      security.UserSecurityContext
 }
 
 // NewUserService constructs a UserService bound to the persistence
@@ -104,7 +110,10 @@ func (s *UserService) List(ctx context.Context) ([]domain.User, error) {
 
 // ListWithDCCPools returns every user together with their DCC pool
 // rows so the admin UI can render the catalogue in one round trip.
-func (s *UserService) ListWithDCCPools(ctx context.Context) ([]UserWithDCCPool, error) {
+func (s *UserService) ListWithDCCPools(ctx context.Context, eff domain.EffectiveRoles) ([]UserWithDCCPool, error) {
+	if err := s.checkManageUsers(eff); err != nil {
+		return nil, err
+	}
 	users, err := s.users.ListAll(ctx)
 	if err != nil {
 		return nil, err
@@ -153,6 +162,9 @@ type UserCreateInput struct {
 // Create inserts a brand-new user. The PIN is hashed inside this
 // method so plaintext never escapes via a service contract.
 func (s *UserService) Create(ctx context.Context, eff domain.EffectiveRoles, in UserCreateInput) (domain.User, error) {
+	if err := s.checkManageUsers(eff); err != nil {
+		return domain.User{}, err
+	}
 	login, err := sanitiseLogin(in.Login)
 	if err != nil {
 		return domain.User{}, err
@@ -210,6 +222,9 @@ type UserUpdateInput struct {
 // Update mutates an existing user in place. Only the fields the
 // caller supplies are touched.
 func (s *UserService) Update(ctx context.Context, eff domain.EffectiveRoles, id uint, in UserUpdateInput) (domain.User, error) {
+	if err := s.checkManageUsers(eff); err != nil {
+		return domain.User{}, err
+	}
 	row, err := s.Get(ctx, id)
 	if err != nil {
 		return domain.User{}, err
@@ -266,12 +281,23 @@ func (s *UserService) GetDCCPool(ctx context.Context, userID uint) ([]domain.DCC
 }
 
 // SetActive flips the user's Active flag. Idempotent on either
-// branch. The caller (handler) is responsible for guarding the
-// self-deactivation case via the security policy before calling.
-func (s *UserService) SetActive(ctx context.Context, id uint, active bool) (domain.User, error) {
+// branch. Self-deactivation is rejected via CanDeactivateSelf.
+func (s *UserService) SetActive(ctx context.Context, eff domain.EffectiveRoles, actorID, id uint, active bool) (domain.User, error) {
+	if err := s.checkManageUsers(eff); err != nil {
+		return domain.User{}, err
+	}
 	row, err := s.Get(ctx, id)
 	if err != nil {
 		return domain.User{}, err
+	}
+	if !active {
+		actor, err := s.Get(ctx, actorID)
+		if err != nil {
+			return domain.User{}, err
+		}
+		if d := s.sec.CanDeactivateSelf(actor, row); !d.Allowed {
+			return domain.User{}, ErrCannotDeactivateSelf
+		}
 	}
 	if row.Active == active {
 		return row, nil
@@ -284,14 +310,24 @@ func (s *UserService) SetActive(ctx context.Context, id uint, active bool) (doma
 	return row, nil
 }
 
-// Delete removes the user. The caller is expected to have already
-// run the security policy (no self-delete). The service guards the
-// owned-vehicles / owned-trains invariant so a hand-crafted request
-// cannot cascade orphan rows.
-func (s *UserService) Delete(ctx context.Context, eff domain.EffectiveRoles, id uint) error {
+// Delete removes the user. Self-deletion is rejected via
+// CanDeleteSelf. The service guards the owned-vehicles /
+// owned-trains invariant so a hand-crafted request cannot cascade
+// orphan rows.
+func (s *UserService) Delete(ctx context.Context, eff domain.EffectiveRoles, actorID, id uint) error {
+	if err := s.checkManageUsers(eff); err != nil {
+		return err
+	}
 	row, err := s.Get(ctx, id)
 	if err != nil {
 		return err
+	}
+	actor, err := s.Get(ctx, actorID)
+	if err != nil {
+		return err
+	}
+	if d := s.sec.CanDeleteSelf(actor, row); !d.Allowed {
+		return ErrCannotDeleteSelf
 	}
 	nv, err := s.vehicles.CountByOwner(ctx, row.ID)
 	if err != nil {
@@ -311,6 +347,19 @@ func (s *UserService) Delete(ctx context.Context, eff domain.EffectiveRoles, id 
 		return err
 	}
 	return s.users.Delete(ctx, &row)
+}
+
+func (s *UserService) checkManageUsers(eff domain.EffectiveRoles) error {
+	decision := s.sec.CanManageUsers(eff)
+	if decision.Allowed {
+		return nil
+	}
+	switch decision.Reason {
+	case "forbidden":
+		return ErrUserForbidden
+	default:
+		return errors.New(decision.Reason)
+	}
 }
 
 // isPermanentRole gates the closed catalogue of permanent roles

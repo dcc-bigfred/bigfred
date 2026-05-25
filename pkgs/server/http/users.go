@@ -7,19 +7,15 @@ import (
 	"time"
 
 	"github.com/keskad/loco/pkgs/server/domain"
-	"github.com/keskad/loco/pkgs/server/security"
 	"github.com/keskad/loco/pkgs/server/service"
 )
 
 // UserHandler bundles the admin-only user-management endpoints under
-// `/api/v1/users` (§4.1 / §7a.5). The chi router is responsible for
-// wrapping every route with RequireRole(domain.RoleAdmin) — this
-// handler also re-runs the self-action guards (no self-deactivate /
-// no self-delete) through `security.UserSecurityContext`, so a
-// misrouted endpoint still fails closed.
+// `/api/v1/users` (§4.1 / §7a.5). The chi router wraps every route
+// with RequireRole(domain.RoleAdmin); UserService re-checks via
+// CanManageUsers for defense in depth.
 type UserHandler struct {
 	svc  *service.UserService
-	sec  security.UserSecurityContext
 	auth *service.AuthService
 }
 
@@ -71,7 +67,17 @@ func toUserResponse(u domain.User, pool []domain.DCCAddressRange) userResponse {
 
 // List handles GET /api/v1/users.
 func (h *UserHandler) List(w http.ResponseWriter, r *http.Request) {
-	rows, err := h.svc.ListWithDCCPools(r.Context())
+	actor, ok := IdentityFromContext(r.Context())
+	if !ok {
+		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	eff, err := h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	rows, err := h.svc.ListWithDCCPools(r.Context(), eff)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 		return
@@ -226,18 +232,12 @@ func (h *UserHandler) setActive(w http.ResponseWriter, r *http.Request, active b
 		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
-	target, err := h.svc.Get(r.Context(), userID)
+	eff, err := h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
 	if err != nil {
-		writeUserError(w, err)
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 		return
 	}
-	if !active {
-		if d := h.sec.CanDeactivateSelf(actor.User, target); !d.Allowed {
-			writeJSONError(w, http.StatusUnprocessableEntity, d.Reason)
-			return
-		}
-	}
-	row, err := h.svc.SetActive(r.Context(), userID, active)
+	row, err := h.svc.SetActive(r.Context(), eff, actor.User.ID, userID, active)
 	if err != nil {
 		writeUserError(w, err)
 		return
@@ -263,21 +263,12 @@ func (h *UserHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
-	target, err := h.svc.Get(r.Context(), userID)
-	if err != nil {
-		writeUserError(w, err)
-		return
-	}
-	if d := h.sec.CanDeleteSelf(actor.User, target); !d.Allowed {
-		writeJSONError(w, http.StatusUnprocessableEntity, d.Reason)
-		return
-	}
 	eff, err := h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 		return
 	}
-	if err := h.svc.Delete(r.Context(), eff, userID); err != nil {
+	if err := h.svc.Delete(r.Context(), eff, actor.User.ID, userID); err != nil {
 		writeUserError(w, err)
 		return
 	}
@@ -317,6 +308,8 @@ func writeUserError(w http.ResponseWriter, err error) {
 	case errors.Is(err, service.ErrDCCPoolOverlap):
 		writeJSONError(w, http.StatusConflict, "dcc_pool_overlap")
 	case errors.Is(err, service.ErrDCCPoolForbidden):
+		writeJSONError(w, http.StatusForbidden, "forbidden")
+	case errors.Is(err, service.ErrUserForbidden):
 		writeJSONError(w, http.StatusForbidden, "forbidden")
 	default:
 		writeJSONError(w, http.StatusInternalServerError, "internal_error")

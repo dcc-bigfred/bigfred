@@ -19,6 +19,7 @@ import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import PlaylistAddIcon from "@mui/icons-material/PlaylistAdd";
+import RemoveCircleOutlineIcon from "@mui/icons-material/RemoveCircleOutline";
 import { useTranslation } from "react-i18next";
 
 import { ApiError } from "../api/client";
@@ -27,6 +28,7 @@ import {
   useDeleteTrain,
   useLayoutTrains,
   useMyTrains,
+  useRemoveTrainFromRoster,
   type Train,
 } from "../api/vehicles";
 import TrainDialog from "./TrainDialog";
@@ -42,6 +44,7 @@ export default function MyTrainsCatalogue({ layoutId }: Props) {
   const trains = useMyTrains();
   const layoutTrains = useLayoutTrains(layoutId);
   const addTrainToRoster = useAddTrainToRoster();
+  const removeTrainFromRoster = useRemoveTrainFromRoster();
   const deleteTrainMut = useDeleteTrain();
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -54,7 +57,10 @@ export default function MyTrainsCatalogue({ layoutId }: Props) {
   }, [layoutTrains.data]);
 
   const mutationError = (() => {
-    const err = addTrainToRoster.error ?? deleteTrainMut.error;
+    const err =
+      addTrainToRoster.error ??
+      removeTrainFromRoster.error ??
+      deleteTrainMut.error;
     if (!err) return null;
     if (err instanceof ApiError) {
       const key = `errors:${err.code}` as const;
@@ -137,14 +143,24 @@ export default function MyTrainsCatalogue({ layoutId }: Props) {
                       </TableCell>
                       <TableCell align="right">
                         <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                          <Tooltip
-                            title={
-                              isOnLayout
-                                ? t("vehicle:trainList.actions.alreadyOnLayout")
-                                : t("vehicle:trainList.actions.addToLayout")
-                            }
-                          >
-                            <span>
+                          {isOnLayout ? (
+                            <Tooltip title={t("vehicle:roster.removeButton")}>
+                              <IconButton
+                                size="small"
+                                onClick={() =>
+                                  removeTrainFromRoster.mutate({
+                                    layoutId,
+                                    trainId: tr.id,
+                                  })
+                                }
+                                disabled={removeTrainFromRoster.isPending}
+                                aria-label={t("vehicle:roster.removeButton")}
+                              >
+                                <RemoveCircleOutlineIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          ) : (
+                            <Tooltip title={t("vehicle:trainList.actions.addToLayout")}>
                               <IconButton
                                 size="small"
                                 onClick={() =>
@@ -153,13 +169,13 @@ export default function MyTrainsCatalogue({ layoutId }: Props) {
                                     trainId: tr.id,
                                   })
                                 }
-                                disabled={isOnLayout || addTrainToRoster.isPending}
+                                disabled={addTrainToRoster.isPending}
                                 aria-label={t("vehicle:trainList.actions.addToLayout")}
                               >
                                 <PlaylistAddIcon fontSize="small" />
                               </IconButton>
-                            </span>
-                          </Tooltip>
+                            </Tooltip>
+                          )}
                           <Tooltip title={t("vehicle:trainList.actions.edit")}>
                             <IconButton
                               size="small"

@@ -49,6 +49,13 @@ func (v *Vehicles) FindByDCCAddress(ctx context.Context, addr uint16) (domain.Ve
 	return row, nil
 }
 
+// CountByOwner returns how many vehicles are owned by the user. Used
+// by the user-deletion guard so an admin cannot delete a driver that
+// still has vehicles in the catalogue.
+func (v *Vehicles) CountByOwner(ctx context.Context, ownerID uint) (int, error) {
+	return v.repo.Count(ctx, "vehicles", where.Eq("owner_user_id", ownerID))
+}
+
 // ListByOwner returns every vehicle owned by the user.
 func (v *Vehicles) ListByOwner(ctx context.Context, ownerID uint) ([]domain.Vehicle, error) {
 	var rows []domain.Vehicle

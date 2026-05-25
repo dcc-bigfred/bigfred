@@ -35,6 +35,7 @@ func freshRepo(t *testing.T) (repo.UsersBundle, func()) {
 		TrainMembers:    repo.NewTrainMembers(r),
 		LayoutVehicles:  repo.NewLayoutVehicles(r),
 		LayoutTrains:    repo.NewLayoutTrains(r),
+		LayoutSignalmen: repo.NewLayoutSignalmen(r),
 	}
 	cleanup := func() {
 		_ = db.Close()
@@ -46,7 +47,7 @@ func freshRepo(t *testing.T) (repo.UsersBundle, func()) {
 func insertUser(t *testing.T, ctx context.Context, users *repo.Users, login string, role domain.Role) domain.User {
 	t.Helper()
 	now := time.Now().UTC()
-	u := domain.User{Login: login, PINHash: "x", Role: role, CreatedAt: now, UpdatedAt: now}
+	u := domain.User{Login: login, PINHash: "x", Role: role, Active: true, CreatedAt: now, UpdatedAt: now}
 	if err := users.Insert(ctx, &u); err != nil {
 		t.Fatalf("insert user: %v", err)
 	}

@@ -103,6 +103,8 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, service.ErrInvalidCredentials):
 			writeJSONError(w, http.StatusUnauthorized, "invalid_credentials")
+		case errors.Is(err, service.ErrAccountDeactivated):
+			writeJSONError(w, http.StatusForbidden, "account_deactivated")
 		case errors.Is(err, service.ErrLayoutNotFound):
 			writeJSONError(w, http.StatusUnprocessableEntity, "layout_not_found")
 		case errors.Is(err, service.ErrLayoutLocked):

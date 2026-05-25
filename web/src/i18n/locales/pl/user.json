@@ -1,0 +1,59 @@
+{
+  "admin": {
+    "title": "Użytkownicy",
+    "subtitle": "Zarządzaj kontami, rolami oraz dostępem do systemu.",
+    "empty": "Brak użytkowników do wyświetlenia.",
+    "youBadge": "(Ty)",
+    "status": {
+      "active": "Aktywny",
+      "inactive": "Nieaktywny"
+    },
+    "columns": {
+      "login": "Login",
+      "role": "Rola",
+      "status": "Status",
+      "actions": "Akcje"
+    },
+    "actions": {
+      "create": "Nowy użytkownik",
+      "edit": "Edytuj",
+      "delete": "Usuń",
+      "activate": "Aktywuj",
+      "deactivate": "Dezaktywuj"
+    },
+    "dialogs": {
+      "create": {
+        "title": "Nowy użytkownik",
+        "submit": "Utwórz"
+      },
+      "edit": {
+        "title": "Edytuj użytkownika „{{login}}”",
+        "submit": "Zapisz"
+      },
+      "fields": {
+        "login": "Login",
+        "loginHelp": "Litery łacińskie, cyfry oraz znaki „.”, „-”, „_”. Maksymalnie 32 znaki.",
+        "role": "Rola",
+        "pin": "Hasło (PIN)",
+        "pinCreateHelp": "Wpisz hasło użytkownika. Wyłącznie cyfry, 4–12 znaków.",
+        "pinEditHelp": "Zostaw puste, aby zachować obecne hasło. Wyłącznie cyfry, 4–12 znaków.",
+        "pinPlaceholder": "Bez zmian"
+      },
+      "deactivate": {
+        "title": "Dezaktywować użytkownika „{{login}}”?",
+        "message": "Konto pozostanie w bazie, ale użytkownik nie będzie mógł się zalogować. W każdej chwili możesz przywrócić dostęp poleceniem „Aktywuj”.",
+        "submit": "Dezaktywuj"
+      },
+      "activate": {
+        "title": "Aktywować użytkownika „{{login}}”?",
+        "message": "Po aktywacji użytkownik znów będzie mógł się zalogować.",
+        "submit": "Aktywuj"
+      },
+      "delete": {
+        "title": "Usunąć użytkownika „{{login}}”?",
+        "message": "Tej operacji nie można cofnąć. Aby usunąć konto, użytkownik nie może mieć żadnych pojazdów ani składów.",
+        "submit": "Usuń"
+      }
+    }
+  }
+}

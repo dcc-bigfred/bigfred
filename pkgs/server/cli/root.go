@@ -107,6 +107,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	dccPoolSvc := service.NewDCCPoolService(dccPools)
 	vehicleSvc := service.NewVehicleService(vehicles, dccPoolSvc, trainMembers)
 	trainSvc := service.NewTrainService(trains, trainMembers, vehicles)
+	userSvc := service.NewUserService(users, vehicles, trains)
 
 	hub := ws.NewHub()
 	presenceSvc := service.NewPresenceService(hub, authSvc, users, interlockingSessions, interlockings, layoutInterlockings)
@@ -152,6 +153,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 
 	router := httpapi.NewRouter(httpapi.RouterConfig{
 		Auth:           authSvc,
+		Users:          userSvc,
 		Layouts:        layoutSvc,
 		Interlockings:  interlockingSvc,
 		Occupancy:      occupancySvc,

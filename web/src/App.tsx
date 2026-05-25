@@ -16,6 +16,7 @@ import MyTrainsPage from "./pages/MyTrainsPage";
 import MyVehiclesPage from "./pages/MyVehiclesPage";
 import LayoutsAdminPage from "./pages/admin/LayoutsPage";
 import InterlockingsAdminPage from "./pages/admin/InterlockingsPage";
+import UsersAdminPage from "./pages/admin/UsersPage";
 
 // App is the route-tree root. Layout reads top-down:
 //
@@ -45,6 +46,7 @@ const router = createBrowserRouter(
           <Route path="/my/trains" element={<MyTrainsPage />} />
           <Route path="/interlockings/:id" element={<InterlockingPage />} />
           <Route element={<AdminRoute />}>
+            <Route path="/admin/users" element={<UsersAdminPage />} />
             <Route path="/admin/layouts" element={<LayoutsAdminPage />} />
             <Route
               path="/admin/interlockings"

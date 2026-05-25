@@ -27,6 +27,7 @@ import type plHome from "./locales/pl/home.json";
 import type plLayout from "./locales/pl/layout.json";
 import type plInterlocking from "./locales/pl/interlocking.json";
 import type plVehicle from "./locales/pl/vehicle.json";
+import type plUser from "./locales/pl/user.json";
 
 declare module "i18next" {
   interface CustomTypeOptions {
@@ -40,6 +41,7 @@ declare module "i18next" {
       layout: typeof plLayout;
       interlocking: typeof plInterlocking;
       vehicle: typeof plVehicle;
+      user: typeof plUser;
     };
     // returnNull is false in index.ts; mirror that here so the t()
     // return type is `string` (not `string | null`).

@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/go-rel/rel"
+	"github.com/go-rel/rel/sort"
 	"github.com/go-rel/rel/where"
 
 	"github.com/keskad/loco/pkgs/server/domain"
@@ -60,9 +61,32 @@ func (u *Users) FindByID(ctx context.Context, id uint) (domain.User, error) {
 	return user, nil
 }
 
+// ListAll returns every user, ordered by login. Used by the admin
+// user-management screen — sorted ASCII so the UI never reshuffles
+// rows between renders.
+func (u *Users) ListAll(ctx context.Context) ([]domain.User, error) {
+	var rows []domain.User
+	err := u.repo.FindAll(ctx, &rows, sort.Asc("login"))
+	if err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
 // Insert persists a new user. The caller is responsible for hashing
 // PIN before populating PINHash; this layer never touches plaintext
 // secrets.
 func (u *Users) Insert(ctx context.Context, user *domain.User) error {
 	return u.repo.Insert(ctx, user)
+}
+
+// Update writes an existing user back. The caller bumps UpdatedAt.
+func (u *Users) Update(ctx context.Context, user *domain.User) error {
+	return u.repo.Update(ctx, user)
+}
+
+// Delete removes a user row. Service-layer guards (no owned vehicles /
+// trains, not self) run first; this method is the final write.
+func (u *Users) Delete(ctx context.Context, user *domain.User) error {
+	return u.repo.Delete(ctx, user)
 }

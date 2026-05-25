@@ -23,6 +23,7 @@ import plHome from "./locales/pl/home.json";
 import plLayout from "./locales/pl/layout.json";
 import plInterlocking from "./locales/pl/interlocking.json";
 import plVehicle from "./locales/pl/vehicle.json";
+import plUser from "./locales/pl/user.json";
 
 import enCommon from "./locales/en/common.json";
 import enAuth from "./locales/en/auth.json";
@@ -32,6 +33,7 @@ import enHome from "./locales/en/home.json";
 import enLayout from "./locales/en/layout.json";
 import enInterlocking from "./locales/en/interlocking.json";
 import enVehicle from "./locales/en/vehicle.json";
+import enUser from "./locales/en/user.json";
 
 // SUPPORTED_LOCALES is the single source of truth. Adding a third
 // locale (e.g. "de") is: append it here → mirror every catalogue
@@ -54,6 +56,7 @@ export const resources = {
     layout: plLayout,
     interlocking: plInterlocking,
     vehicle: plVehicle,
+    user: plUser,
   },
   en: {
     common: enCommon,
@@ -64,6 +67,7 @@ export const resources = {
     layout: enLayout,
     interlocking: enInterlocking,
     vehicle: enVehicle,
+    user: enUser,
   },
 } as const;
 
@@ -80,7 +84,7 @@ void i18n
     fallbackLng: "pl",
     supportedLngs: SUPPORTED_LOCALES as unknown as string[],
     defaultNS: "common",
-    ns: ["common", "auth", "errors", "role", "home", "layout", "interlocking", "vehicle"],
+    ns: ["common", "auth", "errors", "role", "home", "layout", "interlocking", "vehicle", "user"],
     interpolation: {
       // React already escapes everything; double-escaping inside
       // i18next would mangle apostrophes and quotes.

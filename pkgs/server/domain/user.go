@@ -28,11 +28,18 @@ const (
 // User is the canonical account record. PINHash holds the argon2id
 // digest of the user's PIN; the plaintext PIN never leaves
 // AuthService.Login (§7a.1).
+//
+// Active is the soft-disable flag flipped by an admin from the user
+// management screen. The DB defaults it to `true`; a `false` value
+// prevents fresh logins (AuthService.Login rejects with
+// ErrAccountDeactivated) but does NOT terminate sessions already in
+// flight — those expire naturally with their JWT.
 type User struct {
 	ID        uint
 	Login     string
 	PINHash   string `db:"pin_hash"`
 	Role      Role
+	Active    bool
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }

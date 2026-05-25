@@ -41,5 +41,17 @@
   "layout_vehicle_already_on_roster": "This vehicle is already on this layout.",
   "layout_vehicle_not_on_roster": "This vehicle is not on this layout.",
   "layout_train_already_on_roster": "This train is already on this layout.",
-  "layout_train_not_on_roster": "This train is not on this layout."
+  "layout_train_not_on_roster": "This train is not on this layout.",
+  "user_not_found": "This user no longer exists.",
+  "user_login_required": "Please enter a login.",
+  "user_login_invalid": "Login may contain Latin letters, digits and \".\", \"-\", \"_\" (32 characters max).",
+  "user_login_taken": "A user with this login already exists.",
+  "user_pin_required": "Please enter a password (PIN).",
+  "user_pin_invalid": "Password (PIN) must contain 4–12 digits.",
+  "user_role_invalid": "Please pick a role from the list.",
+  "user_has_vehicles": "Cannot delete the user — they still own vehicles.",
+  "user_has_trains": "Cannot delete the user — they still own trains.",
+  "cannot_deactivate_self": "You cannot deactivate your own account.",
+  "cannot_delete_self": "You cannot delete your own account.",
+  "account_deactivated": "Your account has been deactivated. Please contact an administrator."
 }

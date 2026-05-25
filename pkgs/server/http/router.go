@@ -17,6 +17,7 @@ import (
 // makes future additions (Hub, LocoService, …) source-compatible.
 type RouterConfig struct {
 	Auth           *service.AuthService
+	Users          *service.UserService
 	Layouts        *service.LayoutService
 	Interlockings  *service.InterlockingService
 	Occupancy      *service.InterlockingOccupancyService
@@ -65,6 +66,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	vehicleH := NewVehicleHandler(cfg.Vehicles, cfg.LayoutVehicles, cfg.DCCPool)
 	trainH := NewTrainHandler(cfg.Trains, cfg.LayoutVehicles)
 	rosterH := NewLayoutRosterHandler(cfg.LayoutVehicles)
+	userH := NewUserHandler(cfg.Users)
 
 	r.Route("/api/v1", func(r chi.Router) {
 		// WebSocket upgrade — auth reads cookie / ?token= inline.
@@ -134,6 +136,17 @@ func NewRouter(cfg RouterConfig) http.Handler {
 				r.Post("/interlockings", interlockingH.Create)
 				r.Put("/interlockings/{id}", interlockingH.Update)
 				r.Delete("/interlockings/{id}", interlockingH.Delete)
+
+				// User management (§4.1 / §7a.5). Permanent admin
+				// is the only role allowed to mutate the user
+				// catalogue; the dedicated security policy guards
+				// the self-action edge cases inside the handler.
+				r.Get("/users", userH.List)
+				r.Post("/users", userH.Create)
+				r.Put("/users/{id}", userH.Update)
+				r.Delete("/users/{id}", userH.Delete)
+				r.Post("/users/{id}/activate", userH.Activate)
+				r.Post("/users/{id}/deactivate", userH.Deactivate)
 			})
 		})
 	})

@@ -1,7 +1,7 @@
 {
   "admin": {
     "title": "Nastawnie",
-    "subtitle": "Katalog nastawni dostępnych w systemie. Przypisanie nastawnii do makiet odbywa się w edycji makiety.",
+    "subtitle": "Katalog nastawni dostepnych w systemie. Przypisanie nastawni do makiet odbywa sie w edycji makiety.",
     "columns": {
       "name": "Nazwa",
       "location": "Opis",
@@ -10,7 +10,7 @@
     "actions": {
       "create": "Nowa nastawnia",
       "edit": "Edytuj",
-      "delete": "Usuń"
+      "delete": "Usun"
     },
     "dialogs": {
       "create": {
@@ -20,15 +20,42 @@
         "title": "Edytuj nastawnię"
       },
       "delete": {
-        "title": "Usuń nastawnię „{{name}}”",
-        "message": "Operacja jest nieodwracalna. Nastawnia zostanie usunięta ze wszystkich makiet, do których była przypisana."
+        "title": "Usun nastawnię \"{{name}}\"",
+        "message": "Operacja jest nieodwracalna. Nastawnia zostanie usunieta ze wszystkich makiet, do ktorych byla przypisana."
       },
       "fields": {
         "name": "Nazwa",
         "location": "Opis",
-        "locationHelp": "Krótki opis lokalizacji lub przeznaczenia nastawni."
+        "locationHelp": "Krotki opis lokalizacji lub przeznaczenia nastawni."
       }
     },
-    "empty": "Brak nastawnii do wyświetlenia."
+    "empty": "Brak nastawni do wyswietlenia."
+  },
+  "view": {
+    "overline": "Nastawnia",
+    "backToDashboard": "Wróć do pulpitu",
+    "vacant": "Wolna",
+    "occupant": "Obstawia {{login}}",
+    "occupantSelf": "Obstawiasz tę nastawnię ({{login}})",
+    "signalmanOnlyHint": "Obsadzanie i opuszczanie nastawni jest dostępne tylko dla nastawniczych tej makiety.",
+    "radioTitle": "Radio",
+    "radioComingSoon": "Panel radia pojawi się razem z funkcją przejmowania pojazdów w kolejnym etapie.",
+    "actions": {
+      "occupy": "Obsadź nastawnię",
+      "leave": "Opuść nastawnię"
+    },
+    "displace": {
+      "title": "Nastawnia jest już obsadzona",
+      "message": "Tę nastawnię obsadza obecnie {{login}}. Czy chcesz wyprzeć tego użytkownika i przejąć dyżur?",
+      "confirm": "Przejmij dyżur",
+      "cancel": "Anuluj"
+    },
+    "leaveGuard": {
+      "title": "Opuścić nastawnię?",
+      "message": "Obstawiasz tę nastawnię. Jeśli opuścisz stronę, Twoja sesja nastawniczego tutaj zakończy się.",
+      "confirm": "Opuść",
+      "cancel": "Zostań"
+    },
+    "displacedToast": "Inny nastawniczy przejął tę nastawnię — zostałeś/aś wyparty/a."
   }
 }

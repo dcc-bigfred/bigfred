@@ -97,19 +97,35 @@ func (h *InterlockingHandler) ListCatalogue(w http.ResponseWriter, r *http.Reque
 }
 
 // Get handles GET /api/v1/interlockings/{id}.
+// Get handles GET /api/v1/interlockings/{id}. The response is scoped
+// to the caller's active layout (§6.3d): the row is returned with
+// `occupant` filled when present, and 404 when the box is not on the
+// layout's whitelist — admins included, since the interlocking view
+// shows occupation actions that only make sense inside a layout.
 func (h *InterlockingHandler) Get(w http.ResponseWriter, r *http.Request) {
 	interlockingID, ok := parseUintParam(r, "id")
 	if !ok {
 		writeJSONError(w, http.StatusBadRequest, "invalid_id")
 		return
 	}
-	row, err := h.svc.Get(r.Context(), interlockingID)
+	id, ok := IdentityFromContext(r.Context())
+	if !ok {
+		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	row, err := h.occupancy.GetForLayout(r.Context(), id.Layout.ID, interlockingID)
 	if err != nil {
-		writeInterlockingError(w, err)
+		switch {
+		case errors.Is(err, service.ErrInterlockingNotFound),
+			errors.Is(err, service.ErrInterlockingNotInLayout):
+			writeJSONError(w, http.StatusNotFound, "interlocking_not_found")
+		default:
+			writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		}
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(toInterlockingResponse(row))
+	_ = json.NewEncoder(w).Encode(toInterlockingWithOccupant(row))
 }
 
 type interlockingCreateRequest struct {

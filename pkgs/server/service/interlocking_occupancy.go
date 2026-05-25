@@ -74,6 +74,39 @@ func NewInterlockingOccupancyService(
 	}
 }
 
+// GetForLayout returns one whitelisted interlocking enriched with
+// occupant login. Returns ErrInterlockingNotInLayout when the row is
+// not whitelisted for the caller's layout (the dashboard / details
+// page only show layout-scoped boxes).
+func (s *InterlockingOccupancyService) GetForLayout(
+	ctx context.Context,
+	layoutID, interlockingID uint,
+) (InterlockingWithOccupant, error) {
+	whitelisted, err := s.layoutInterlockings.Exists(ctx, layoutID, interlockingID)
+	if err != nil {
+		return InterlockingWithOccupant{}, err
+	}
+	if !whitelisted {
+		return InterlockingWithOccupant{}, ErrInterlockingNotInLayout
+	}
+	row, err := s.interlockings.FindByID(ctx, interlockingID)
+	if err != nil {
+		if errors.Is(err, repo.ErrInterlockingNotFound) {
+			return InterlockingWithOccupant{}, ErrInterlockingNotFound
+		}
+		return InterlockingWithOccupant{}, err
+	}
+	out := InterlockingWithOccupant{Interlocking: row}
+	if sess, err := s.sessions.FindActiveByInterlocking(ctx, interlockingID); err == nil {
+		if user, err := s.users.FindByID(ctx, sess.SignalmanUserID); err == nil {
+			out.Occupant = &OccupantInfo{UserID: user.ID, Login: user.Login}
+		}
+	} else if !errors.Is(err, repo.ErrInterlockingSessionNotFound) {
+		return InterlockingWithOccupant{}, err
+	}
+	return out, nil
+}
+
 // ListForLayout returns whitelisted interlockings enriched with
 // occupant login.
 func (s *InterlockingOccupancyService) ListForLayout(ctx context.Context, layoutID uint) ([]InterlockingWithOccupant, error) {

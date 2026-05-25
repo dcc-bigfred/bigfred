@@ -1,42 +1,59 @@
-import { Navigate, Route, BrowserRouter, Routes } from "react-router-dom";
+import {
+  Navigate,
+  Route,
+  RouterProvider,
+  createBrowserRouter,
+  createRoutesFromElements,
+} from "react-router-dom";
+
 import AdminRoute from "./components/AdminRoute";
 import AppShell from "./components/AppShell";
 import ProtectedRoute from "./components/ProtectedRoute";
 import HomePage from "./pages/HomePage";
+import InterlockingPage from "./pages/InterlockingPage";
 import LoginPage from "./pages/LoginPage";
 import LayoutsAdminPage from "./pages/admin/LayoutsPage";
 import InterlockingsAdminPage from "./pages/admin/InterlockingsPage";
 
 // App is the route-tree root. Layout reads top-down:
 //
-//   /login                  → unauthenticated only
-//   <ProtectedRoute/>       → gate that bounces anon traffic to /login
-//     <AppShell/>           → top app bar shared by every authenticated page
-//       /                   → HomePage (placeholder for the bootstrap)
-//       <AdminRoute/>       → admin-only sub-tree (UI shortcut; the
-//                             backend enforces RequireRole(admin))
-//         /admin/layouts    → Layouts management (§4.1)
-//         /admin/interlockings → Interlockings catalogue (admin CRUD)
-//       /*                  → fall back to /
-export default function App() {
-  return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/login" element={<LoginPage />} />
-        <Route element={<ProtectedRoute />}>
-          <Route element={<AppShell />}>
-            <Route path="/" element={<HomePage />} />
-            <Route element={<AdminRoute />}>
-              <Route path="/admin/layouts" element={<LayoutsAdminPage />} />
-              <Route
-                path="/admin/interlockings"
-                element={<InterlockingsAdminPage />}
-              />
-            </Route>
-            <Route path="*" element={<Navigate to="/" replace />} />
+//   /login                       → unauthenticated only
+//   <ProtectedRoute/>            → gate that bounces anon traffic to /login
+//     <AppShell/>                → top app bar shared by every authenticated page
+//       /                        → HomePage (dashboard)
+//       /interlockings/:id       → InterlockingPage (§6.3d)
+//       <AdminRoute/>            → admin-only sub-tree
+//         /admin/layouts         → Layouts management (§4.1)
+//         /admin/interlockings   → Interlockings catalogue (admin CRUD)
+//       /*                       → fall back to /
+//
+// We deliberately use the **data router** (`createBrowserRouter` +
+// `<RouterProvider/>`) instead of the legacy `<BrowserRouter/>` because
+// `useBlocker` — used by `InterlockingPage` to prompt the user before
+// leaving while still occupying — is only available in the data
+// router APIs (react-router v6.4+).
+const router = createBrowserRouter(
+  createRoutesFromElements(
+    <>
+      <Route path="/login" element={<LoginPage />} />
+      <Route element={<ProtectedRoute />}>
+        <Route element={<AppShell />}>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/interlockings/:id" element={<InterlockingPage />} />
+          <Route element={<AdminRoute />}>
+            <Route path="/admin/layouts" element={<LayoutsAdminPage />} />
+            <Route
+              path="/admin/interlockings"
+              element={<InterlockingsAdminPage />}
+            />
           </Route>
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
-      </Routes>
-    </BrowserRouter>
-  );
+      </Route>
+    </>,
+  ),
+);
+
+export default function App() {
+  return <RouterProvider router={router} />;
 }

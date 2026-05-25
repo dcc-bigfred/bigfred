@@ -21,5 +21,6 @@
   "interlocking_occupied": "Nastawnia jest już obsadzona.",
   "interlocking_not_in_layout": "Ta nastawnia nie należy do aktywnej makiety.",
   "not_signalman": "Brak uprawnień nastawniczego w tej makiecie.",
-  "layout_mismatch": "Żądanie dotyczy innej makiety niż sesja."
+  "layout_mismatch": "Żądanie dotyczy innej makiety niż sesja.",
+  "invalid_id": "Nieprawidłowy identyfikator zasobu."
 }

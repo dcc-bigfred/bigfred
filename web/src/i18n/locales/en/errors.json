@@ -21,5 +21,6 @@
   "interlocking_occupied": "This interlocking is already staffed.",
   "interlocking_not_in_layout": "This interlocking is not on the active layout.",
   "not_signalman": "You don't have signalman rights on this layout.",
-  "layout_mismatch": "The request targets a different layout than your session."
+  "layout_mismatch": "The request targets a different layout than your session.",
+  "invalid_id": "Invalid resource id."
 }

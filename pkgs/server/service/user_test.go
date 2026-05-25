@@ -6,25 +6,38 @@ import (
 	"testing"
 
 	"github.com/keskad/loco/pkgs/server/domain"
+	"github.com/keskad/loco/pkgs/server/repo"
 	"github.com/keskad/loco/pkgs/server/service"
 )
+
+var testUserPool = []service.PoolRange{{From: 1000, To: 1999}}
+
+func userSvc(bundle repo.UsersBundle) *service.UserService {
+	pool := service.NewDCCPoolService(bundle.Pool)
+	return service.NewUserService(bundle.Users, bundle.Vehicles, bundle.Trains, pool)
+}
 
 func TestUserCreateAcceptsAdminAndDriver(t *testing.T) {
 	bundle, cleanup := freshRepo(t)
 	defer cleanup()
 
 	ctx := context.Background()
-	svc := service.NewUserService(bundle.Users, bundle.Vehicles, bundle.Trains)
+	svc := userSvc(bundle)
 
 	for name, role := range map[string]domain.Role{
 		"driver": domain.RoleDriver,
 		"admin":  domain.RoleAdmin,
 	} {
 		t.Run(name, func(t *testing.T) {
+			pool := testUserPool
+			if name == "admin" {
+				pool = []service.PoolRange{{From: 2000, To: 2999}}
+			}
 			row, err := svc.Create(ctx, service.UserCreateInput{
-				Login: name,
-				PIN:   "123456",
-				Role:  role,
+				Login:   name,
+				PIN:     "123456",
+				Role:    role,
+				DCCPool: pool,
 			})
 			if err != nil {
 				t.Fatalf("create: %v", err)
@@ -44,12 +57,13 @@ func TestUserCreateRejectsSignalmanRole(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	svc := service.NewUserService(bundle.Users, bundle.Vehicles, bundle.Trains)
+	svc := userSvc(bundle)
 
 	_, err := svc.Create(ctx, service.UserCreateInput{
-		Login: "sm",
-		PIN:   "123456",
-		Role:  domain.RoleSignalman,
+		Login:   "sm",
+		PIN:     "123456",
+		Role:    domain.RoleSignalman,
+		DCCPool: testUserPool,
 	})
 	if !errors.Is(err, service.ErrUserRoleInvalid) {
 		t.Fatalf("expected ErrUserRoleInvalid, got %v", err)
@@ -61,12 +75,13 @@ func TestUserCreateRejectsShortPIN(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	svc := service.NewUserService(bundle.Users, bundle.Vehicles, bundle.Trains)
+	svc := userSvc(bundle)
 
 	_, err := svc.Create(ctx, service.UserCreateInput{
-		Login: "alice",
-		PIN:   "12",
-		Role:  domain.RoleDriver,
+		Login:   "alice",
+		PIN:     "12",
+		Role:    domain.RoleDriver,
+		DCCPool: testUserPool,
 	})
 	if !errors.Is(err, service.ErrUserPINInvalid) {
 		t.Fatalf("expected ErrUserPINInvalid, got %v", err)
@@ -78,15 +93,15 @@ func TestUserCreateRejectsDuplicateLogin(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	svc := service.NewUserService(bundle.Users, bundle.Vehicles, bundle.Trains)
+	svc := userSvc(bundle)
 
 	if _, err := svc.Create(ctx, service.UserCreateInput{
-		Login: "alice", PIN: "123456", Role: domain.RoleDriver,
+		Login: "alice", PIN: "123456", Role: domain.RoleDriver, DCCPool: testUserPool,
 	}); err != nil {
 		t.Fatalf("first create: %v", err)
 	}
 	_, err := svc.Create(ctx, service.UserCreateInput{
-		Login: "alice", PIN: "999999", Role: domain.RoleAdmin,
+		Login: "alice", PIN: "999999", Role: domain.RoleAdmin, DCCPool: []service.PoolRange{{From: 2000, To: 2999}},
 	})
 	if !errors.Is(err, service.ErrUserLoginTaken) {
 		t.Fatalf("expected ErrUserLoginTaken, got %v", err)
@@ -98,17 +113,15 @@ func TestUserDeleteRefusedWhenOwnsVehicles(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	svc := service.NewUserService(bundle.Users, bundle.Vehicles, bundle.Trains)
+	svc := userSvc(bundle)
 	pool := service.NewDCCPoolService(bundle.Pool)
 
 	created, err := svc.Create(ctx, service.UserCreateInput{
 		Login: "alice", PIN: "123456", Role: domain.RoleDriver,
+		DCCPool: []service.PoolRange{{From: 1, To: 100}},
 	})
 	if err != nil {
 		t.Fatalf("create user: %v", err)
-	}
-	if _, err := pool.Replace(ctx, created.ID, []service.PoolRange{{From: 1, To: 100}}); err != nil {
-		t.Fatalf("seed pool: %v", err)
 	}
 	vSvc := service.NewVehicleService(bundle.Vehicles, pool, bundle.TrainMembers)
 	addr := uint16(42)
@@ -128,17 +141,15 @@ func TestUserDeleteRefusedWhenOwnsTrains(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	svc := service.NewUserService(bundle.Users, bundle.Vehicles, bundle.Trains)
+	svc := userSvc(bundle)
 	pool := service.NewDCCPoolService(bundle.Pool)
 
 	created, err := svc.Create(ctx, service.UserCreateInput{
 		Login: "alice", PIN: "123456", Role: domain.RoleDriver,
+		DCCPool: []service.PoolRange{{From: 1, To: 100}},
 	})
 	if err != nil {
 		t.Fatalf("create user: %v", err)
-	}
-	if _, err := pool.Replace(ctx, created.ID, []service.PoolRange{{From: 1, To: 100}}); err != nil {
-		t.Fatalf("seed pool: %v", err)
 	}
 	vSvc := service.NewVehicleService(bundle.Vehicles, pool, bundle.TrainMembers)
 	addr := uint16(42)
@@ -176,10 +187,10 @@ func TestUserSetActiveToggles(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	svc := service.NewUserService(bundle.Users, bundle.Vehicles, bundle.Trains)
+	svc := userSvc(bundle)
 
 	row, err := svc.Create(ctx, service.UserCreateInput{
-		Login: "alice", PIN: "123456", Role: domain.RoleDriver,
+		Login: "alice", PIN: "123456", Role: domain.RoleDriver, DCCPool: testUserPool,
 	})
 	if err != nil {
 		t.Fatalf("create: %v", err)
@@ -208,10 +219,10 @@ func TestUserUpdateChangesRoleAndPIN(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	svc := service.NewUserService(bundle.Users, bundle.Vehicles, bundle.Trains)
+	svc := userSvc(bundle)
 
 	row, err := svc.Create(ctx, service.UserCreateInput{
-		Login: "alice", PIN: "123456", Role: domain.RoleDriver,
+		Login: "alice", PIN: "123456", Role: domain.RoleDriver, DCCPool: testUserPool,
 	})
 	if err != nil {
 		t.Fatalf("create: %v", err)
@@ -232,5 +243,33 @@ func TestUserUpdateChangesRoleAndPIN(t *testing.T) {
 	}
 	if updated.PINHash == originalHash {
 		t.Fatalf("PIN hash should change after rotation")
+	}
+}
+
+func TestUserUpdateChangesDCCPool(t *testing.T) {
+	bundle, cleanup := freshRepo(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	svc := userSvc(bundle)
+
+	row, err := svc.Create(ctx, service.UserCreateInput{
+		Login: "alice", PIN: "123456", Role: domain.RoleDriver,
+		DCCPool: []service.PoolRange{{From: 100, To: 199}},
+	})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	newPool := []service.PoolRange{{From: 500, To: 599}}
+	if _, err := svc.Update(ctx, row.ID, service.UserUpdateInput{DCCPool: &newPool}); err != nil {
+		t.Fatalf("update pool: %v", err)
+	}
+	pool, err := svc.GetDCCPool(ctx, row.ID)
+	if err != nil {
+		t.Fatalf("get pool: %v", err)
+	}
+	if len(pool) != 1 || pool[0].FromAddr != 500 || pool[0].ToAddr != 599 {
+		t.Fatalf("unexpected pool: %+v", pool)
 	}
 }

@@ -107,7 +107,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	dccPoolSvc := service.NewDCCPoolService(dccPools)
 	vehicleSvc := service.NewVehicleService(vehicles, dccPoolSvc, trainMembers)
 	trainSvc := service.NewTrainService(trains, trainMembers, vehicles)
-	userSvc := service.NewUserService(users, vehicles, trains)
+	userSvc := service.NewUserService(users, vehicles, trains, dccPoolSvc)
 
 	hub := ws.NewHub()
 	presenceSvc := service.NewPresenceService(hub, authSvc, users, interlockingSessions, interlockings, layoutInterlockings)

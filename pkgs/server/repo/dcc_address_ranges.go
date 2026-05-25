@@ -39,6 +39,20 @@ func (d *DCCAddressRanges) Insert(ctx context.Context, row *domain.DCCAddressRan
 	return d.repo.Insert(ctx, row)
 }
 
+// ListAll returns every pool row in the database, ordered by user
+// and lower bound so overlap checks can scan a stable slice.
+func (d *DCCAddressRanges) ListAll(ctx context.Context) ([]domain.DCCAddressRange, error) {
+	var rows []domain.DCCAddressRange
+	err := d.repo.FindAll(ctx, &rows,
+		sort.Asc("user_id"),
+		sort.Asc("from_addr"),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
 // DeleteAllForUser removes every pool row for the user. Used by the
 // admin "replace pool" endpoint, which always writes a fresh set.
 func (d *DCCAddressRanges) DeleteAllForUser(ctx context.Context, userID uint) error {

@@ -148,10 +148,9 @@ export default function UsersPage() {
   const submitDialog = async () => {
     if (!dialog) return;
     try {
-      const dccPool = parseDccPoolRanges(dccPoolInput);
-      if (!dccPool) return;
-
       if (dialog.kind === "create") {
+        const dccPool = parseDccPoolRanges(dccPoolInput);
+        if (!dccPool) return;
         await create.mutateAsync({
           login: loginInput.trim(),
           pin: pinInput,
@@ -159,6 +158,8 @@ export default function UsersPage() {
           dccPool,
         });
       } else if (dialog.kind === "edit") {
+        const dccPool = parseDccPoolRanges(dccPoolInput);
+        if (!dccPool) return;
         await update.mutateAsync({
           id: dialog.target.id,
           login: loginInput.trim(),

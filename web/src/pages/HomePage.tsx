@@ -19,6 +19,7 @@ import { useNavigate } from "react-router-dom";
 import { useMe } from "../api/auth";
 import { useDashboardInterlockings } from "../api/interlockings";
 import { useLayoutPresence } from "../api/presence";
+import RosterSection from "../components/RosterSection";
 
 export default function HomePage() {
   const me = useMe().data;
@@ -134,6 +135,10 @@ export default function HomePage() {
                 </Table>
               </TableContainer>
             </Paper>
+
+            {layoutId != null && layoutId > 0 && (
+              <RosterSection layoutId={layoutId} />
+            )}
           </>
         )}
       </Stack>

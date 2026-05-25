@@ -94,10 +94,19 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	layoutInterlockings := repo.NewLayoutInterlockings(repository)
 	layoutSignalmen := repo.NewLayoutSignalmen(repository)
 	interlockingSessions := repo.NewInterlockingSessions(repository)
+	dccPools := repo.NewDCCAddressRanges(repository)
+	vehicles := repo.NewVehicles(repository)
+	trains := repo.NewTrains(repository)
+	trainMembers := repo.NewTrainMembers(repository)
+	layoutVehicles := repo.NewLayoutVehicles(repository)
+	layoutTrains := repo.NewLayoutTrains(repository)
 
 	layoutSvc := service.NewLayoutService(layouts, interlockings, layoutInterlockings)
 	interlockingSvc := service.NewInterlockingService(interlockings, layoutInterlockings)
 	authSvc := service.NewAuthService(users, layoutSvc, layoutSignalmen, service.AuthConfig{JWTSecret: secret})
+	dccPoolSvc := service.NewDCCPoolService(dccPools)
+	vehicleSvc := service.NewVehicleService(vehicles, dccPoolSvc, trainMembers)
+	trainSvc := service.NewTrainService(trains, trainMembers, vehicles)
 
 	hub := ws.NewHub()
 	presenceSvc := service.NewPresenceService(hub, authSvc, users, interlockingSessions, interlockings, layoutInterlockings)
@@ -105,6 +114,9 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	occupancySvc := service.NewInterlockingOccupancyService(
 		interlockings, layoutInterlockings, interlockingSessions, users, layoutSignalmen,
 		authSvc, hub, presenceSvc,
+	)
+	layoutVehicleSvc := service.NewLayoutVehicleService(
+		layoutVehicles, layoutTrains, vehicles, trains, trainMembers, users, hub,
 	)
 
 	go hub.Run(ctx)
@@ -129,12 +141,25 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		}).Warn("bootstrap admin account created — CHANGE THE PIN AFTER FIRST LOGIN")
 	}
 
+	// Seed a generous default pool for the bootstrap admin so a
+	// freshly initialised installation can register vehicles
+	// without an extra round trip through the admin pool page.
+	if admin, err := users.FindByLogin(ctx, service.SeedDefaults.Login); err == nil {
+		if err := dccPoolSvc.SeedAdminPoolIfEmpty(ctx, admin.ID); err != nil {
+			return fmt.Errorf("seed admin dcc pool: %w", err)
+		}
+	}
+
 	router := httpapi.NewRouter(httpapi.RouterConfig{
 		Auth:           authSvc,
 		Layouts:        layoutSvc,
 		Interlockings:  interlockingSvc,
 		Occupancy:      occupancySvc,
 		Presence:       presenceSvc,
+		Vehicles:       vehicleSvc,
+		Trains:         trainSvc,
+		LayoutVehicles: layoutVehicleSvc,
+		DCCPool:        dccPoolSvc,
 		Hub:            hub,
 		AllowedOrigins: f.AllowedOrigins,
 		SecureCookie:   f.SecureCookie,

@@ -1,0 +1,126 @@
+{
+  "kind": {
+    "loco": "Locomotive",
+    "emu": "EMU",
+    "driving_wagon": "Driving wagon",
+    "trolley": "Trolley",
+    "wagon": "Wagon"
+  },
+  "kindShort": {
+    "loco": "Loco",
+    "emu": "EMU",
+    "driving_wagon": "DW",
+    "trolley": "Trl",
+    "wagon": "Wag"
+  },
+  "dummyBadge": "Dummy",
+  "dccNone": "—",
+  "list": {
+    "title": "My vehicles",
+    "empty": "You don't have any vehicles yet.",
+    "addButton": "Add vehicle",
+    "columns": {
+      "name": "Name",
+      "kind": "Kind",
+      "number": "Number",
+      "dccAddress": "DCC address",
+      "actions": "Actions"
+    },
+    "actions": {
+      "edit": "Edit",
+      "delete": "Delete",
+      "addToLayout": "Add to layout",
+      "alreadyOnLayout": "Already on layout"
+    },
+    "deleteConfirm": "Delete vehicle “{{name}}”?",
+    "deleteConfirmBody": "This action cannot be undone. The vehicle must be removed from every train first."
+  },
+  "trainList": {
+    "title": "My trains",
+    "empty": "You don't have any trains yet.",
+    "addButton": "Add train",
+    "membersCount_one": "{{count}} vehicle",
+    "membersCount_other": "{{count}} vehicles",
+    "columns": {
+      "name": "Name",
+      "members": "Vehicles",
+      "actions": "Actions"
+    },
+    "actions": {
+      "edit": "Edit",
+      "delete": "Delete",
+      "addToLayout": "Add to layout",
+      "alreadyOnLayout": "Already on layout"
+    },
+    "deleteConfirm": "Delete train “{{name}}”?",
+    "deleteConfirmBody": "This action cannot be undone. Vehicles in this train will stay in your catalogue."
+  },
+  "roster": {
+    "vehicles": {
+      "title": "Vehicles on layout",
+      "empty": "No vehicles have been added to this layout yet.",
+      "columns": {
+        "name": "Name",
+        "kind": "Kind",
+        "number": "Number",
+        "dccAddress": "DCC address",
+        "owner": "Owner",
+        "actions": "Actions"
+      }
+    },
+    "trains": {
+      "title": "Trains on layout",
+      "empty": "No trains have been added to this layout yet.",
+      "columns": {
+        "name": "Name",
+        "members": "Vehicles",
+        "owner": "Owner",
+        "actions": "Actions"
+      }
+    },
+    "removeButton": "Remove from layout",
+    "ownedByYou": "(you)"
+  },
+  "dialog": {
+    "create": {
+      "title": "Add vehicle"
+    },
+    "edit": {
+      "title": "Edit vehicle"
+    },
+    "fields": {
+      "name": "Name",
+      "kind": "Vehicle kind",
+      "number": "Number (optional)",
+      "dccAddress": "DCC address (optional)",
+      "dccAddressHelp": "Leave empty to create a dummy vehicle – visible on the layout but not steerable.",
+      "poolHint": "Your DCC pool: {{ranges}}",
+      "poolEmpty": "You don't have any DCC pool assigned – you can still add dummy vehicles."
+    },
+    "submitCreate": "Add",
+    "submitEdit": "Save",
+    "cancel": "Cancel"
+  },
+  "trainDialog": {
+    "create": {
+      "title": "Add train"
+    },
+    "edit": {
+      "title": "Edit train"
+    },
+    "fields": {
+      "name": "Train name",
+      "members": "Member vehicles",
+      "membersHelp": "Pick at least one vehicle. Reorder with the arrow buttons; tick “reversed” for a vehicle coupled the other way around."
+    },
+    "addMember": "Add vehicle",
+    "movePrev": "Up",
+    "moveNext": "Down",
+    "removeMember": "Remove",
+    "reversed": "reversed",
+    "submitCreate": "Add",
+    "submitEdit": "Save",
+    "cancel": "Cancel",
+    "noVehicles": "You don't have any vehicles yet. Add one to your catalogue first."
+  }
+}

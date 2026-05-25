@@ -1,0 +1,128 @@
+{
+  "kind": {
+    "loco": "Lokomotywa",
+    "emu": "EZT",
+    "driving_wagon": "Wagon sterowniczy",
+    "trolley": "Drezyna",
+    "wagon": "Wagon"
+  },
+  "kindShort": {
+    "loco": "Lok",
+    "emu": "EZT",
+    "driving_wagon": "WS",
+    "trolley": "Drez",
+    "wagon": "Wag"
+  },
+  "dummyBadge": "Dummy",
+  "dccNone": "—",
+  "list": {
+    "title": "Moje pojazdy",
+    "empty": "Nie masz jeszcze żadnych pojazdów.",
+    "addButton": "Dodaj pojazd",
+    "columns": {
+      "name": "Nazwa",
+      "kind": "Typ",
+      "number": "Numer",
+      "dccAddress": "Adres DCC",
+      "actions": "Akcje"
+    },
+    "actions": {
+      "edit": "Edytuj",
+      "delete": "Usuń",
+      "addToLayout": "Dodaj do makiety",
+      "alreadyOnLayout": "Już w makiecie"
+    },
+    "deleteConfirm": "Usunąć pojazd „{{name}}”?",
+    "deleteConfirmBody": "Tej operacji nie można cofnąć. Pojazd musi być wcześniej usunięty ze wszystkich składów."
+  },
+  "trainList": {
+    "title": "Moje składy",
+    "empty": "Nie masz jeszcze żadnych składów.",
+    "addButton": "Dodaj skład",
+    "membersCount_one": "{{count}} pojazd",
+    "membersCount_few": "{{count}} pojazdy",
+    "membersCount_many": "{{count}} pojazdów",
+    "membersCount_other": "{{count}} pojazdów",
+    "columns": {
+      "name": "Nazwa",
+      "members": "Pojazdy",
+      "actions": "Akcje"
+    },
+    "actions": {
+      "edit": "Edytuj",
+      "delete": "Usuń",
+      "addToLayout": "Dodaj do makiety",
+      "alreadyOnLayout": "Już w makiecie"
+    },
+    "deleteConfirm": "Usunąć skład „{{name}}”?",
+    "deleteConfirmBody": "Tej operacji nie można cofnąć. Pojazdy wchodzące w skład zostaną zachowane w katalogu."
+  },
+  "roster": {
+    "vehicles": {
+      "title": "Pojazdy w makiecie",
+      "empty": "Żaden pojazd nie został jeszcze dodany do makiety.",
+      "columns": {
+        "name": "Nazwa",
+        "kind": "Typ",
+        "number": "Numer",
+        "dccAddress": "Adres DCC",
+        "owner": "Właściciel",
+        "actions": "Akcje"
+      }
+    },
+    "trains": {
+      "title": "Składy w makiecie",
+      "empty": "Żaden skład nie został jeszcze dodany do makiety.",
+      "columns": {
+        "name": "Nazwa",
+        "members": "Pojazdy",
+        "owner": "Właściciel",
+        "actions": "Akcje"
+      }
+    },
+    "removeButton": "Usuń z makiety",
+    "ownedByYou": "(Ty)"
+  },
+  "dialog": {
+    "create": {
+      "title": "Dodaj pojazd"
+    },
+    "edit": {
+      "title": "Edytuj pojazd"
+    },
+    "fields": {
+      "name": "Nazwa",
+      "kind": "Typ pojazdu",
+      "number": "Numer (opcjonalnie)",
+      "dccAddress": "Adres DCC (opcjonalnie)",
+      "dccAddressHelp": "Pozostaw puste, aby utworzyć pojazd „dummy” – widoczny na makiecie, ale niesterowalny.",
+      "poolHint": "Twoja pula adresów DCC: {{ranges}}",
+      "poolEmpty": "Nie masz przyznanej puli adresów DCC – możesz dodać tylko pojazdy „dummy”."
+    },
+    "submitCreate": "Dodaj",
+    "submitEdit": "Zapisz",
+    "cancel": "Anuluj"
+  },
+  "trainDialog": {
+    "create": {
+      "title": "Dodaj skład"
+    },
+    "edit": {
+      "title": "Edytuj skład"
+    },
+    "fields": {
+      "name": "Nazwa składu",
+      "members": "Pojazdy w składzie",
+      "membersHelp": "Wybierz przynajmniej jeden pojazd. Kolejność można zmieniać przyciskami strzałek; zaznaczenie „odwrócony” oznacza pojazd sprzęgnięty drugą stroną."
+    },
+    "addMember": "Dodaj pojazd",
+    "movePrev": "W górę",
+    "moveNext": "W dół",
+    "removeMember": "Usuń",
+    "reversed": "odwrócony",
+    "submitCreate": "Dodaj",
+    "submitEdit": "Zapisz",
+    "cancel": "Anuluj",
+    "noVehicles": "Nie masz żadnych pojazdów. Najpierw dodaj pojazd do katalogu."
+  }
+}

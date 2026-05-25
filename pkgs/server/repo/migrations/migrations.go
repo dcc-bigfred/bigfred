@@ -31,6 +31,10 @@ func register(m *migrator.Migrator) {
 	m.Register(20260525_000002, createInterlockingsUp, createInterlockingsDown)
 	m.Register(20260525_000003, createLayoutSignalmenUp, createLayoutSignalmenDown)
 	m.Register(20260525_000004, createInterlockingSessionsUp, createInterlockingSessionsDown)
+	m.Register(20260525_000005, createDCCAddressRangesUp, createDCCAddressRangesDown)
+	m.Register(20260525_000006, createVehiclesUp, createVehiclesDown)
+	m.Register(20260525_000007, createTrainsUp, createTrainsDown)
+	m.Register(20260525_000008, createLayoutVehiclesUp, createLayoutVehiclesDown)
 }
 
 func createUsersUp(s *rel.Schema) {
@@ -143,4 +147,126 @@ func createInterlockingSessionsUp(s *rel.Schema) {
 
 func createInterlockingSessionsDown(s *rel.Schema) {
 	s.DropTable("interlocking_sessions")
+}
+
+// createDCCAddressRangesUp installs the per-user DCC pool table
+// (goal 3, §3a.1). Several rows per user are allowed so the admin can
+// hand out non-contiguous windows ("100..199 + 3001..3010"). Bounds
+// are inclusive; service-side code rejects from>to.
+func createDCCAddressRangesUp(s *rel.Schema) {
+	s.CreateTable("dcc_address_ranges", func(t *rel.Table) {
+		t.ID("id")
+		t.Int("user_id", rel.Unsigned(true))
+		t.Int("from_addr", rel.Unsigned(true))
+		t.Int("to_addr", rel.Unsigned(true))
+
+		t.Fragment("CHECK (from_addr <= to_addr)")
+	})
+	s.Exec(rel.Raw(`CREATE INDEX dcc_address_ranges_user_id ON dcc_address_ranges(user_id)`))
+}
+
+func createDCCAddressRangesDown(s *rel.Schema) {
+	s.DropTable("dcc_address_ranges")
+}
+
+// createVehiclesUp wires the vehicles table that backs domain.Vehicle
+// (§3a.1). Key points:
+//
+//   - `dcc_address` is NULLABLE so dummy vehicles (vehicles without a
+//     DCC decoder, used as visual fillers / unpowered wagons attached
+//     to a train) coexist with the rest of the catalogue.
+//
+//   - The uniqueness constraint on `dcc_address` is a partial index
+//     (`WHERE dcc_address IS NOT NULL`) so multiple dummies can sit
+//     side-by-side in the catalogue without colliding on NULL.
+//
+//   - `kind` is a closed catalogue (loco | emu | driving_wagon |
+//     trolley | wagon); the CHECK enforces the enum at the DB so an
+//     out-of-band SQL UPDATE cannot wedge the application.
+func createVehiclesUp(s *rel.Schema) {
+	s.CreateTable("vehicles", func(t *rel.Table) {
+		t.ID("id")
+		t.Int("dcc_address", rel.Unsigned(true), rel.Required(false))
+		t.Int("owner_user_id", rel.Unsigned(true))
+		t.String("name")
+		t.String("kind")
+		t.String("number", rel.Default(""))
+		t.DateTime("created_at")
+		t.DateTime("updated_at")
+
+		t.Fragment("CHECK (kind IN ('loco','emu','driving_wagon','trolley','wagon'))")
+	})
+	s.Exec(rel.Raw(`CREATE UNIQUE INDEX vehicles_unique_dcc_address ON vehicles(dcc_address) WHERE dcc_address IS NOT NULL`))
+	s.Exec(rel.Raw(`CREATE INDEX vehicles_owner_user_id ON vehicles(owner_user_id)`))
+}
+
+func createVehiclesDown(s *rel.Schema) {
+	s.DropTable("vehicles")
+}
+
+// createTrainsUp installs the trains catalogue + the ordered
+// `train_members` join. Position is the throttle-render ordering;
+// Reversed flips the per-member DCC direction so a vehicle coupled
+// the other way around rolls the right way under a unified train
+// slider (§4.2 train.setSpeed).
+func createTrainsUp(s *rel.Schema) {
+	s.CreateTable("trains", func(t *rel.Table) {
+		t.ID("id")
+		t.Int("owner_user_id", rel.Unsigned(true))
+		t.String("name")
+		t.DateTime("created_at")
+		t.DateTime("updated_at")
+
+		t.Unique([]string{"owner_user_id", "name"})
+	})
+	s.Exec(rel.Raw(`CREATE INDEX trains_owner_user_id ON trains(owner_user_id)`))
+
+	s.CreateTable("train_members", func(t *rel.Table) {
+		t.ID("id")
+		t.Int("train_id", rel.Unsigned(true))
+		t.Int("vehicle_id", rel.Unsigned(true))
+		t.Int("position")
+		t.Bool("reversed", rel.Default(false))
+
+		t.Unique([]string{"train_id", "vehicle_id"})
+	})
+	s.Exec(rel.Raw(`CREATE INDEX train_members_train_id ON train_members(train_id)`))
+}
+
+func createTrainsDown(s *rel.Schema) {
+	s.DropTable("train_members")
+	s.DropTable("trains")
+}
+
+// createLayoutVehiclesUp installs the layout vehicle / train roster
+// (§3a.1, §6.3c). Unique indexes on (layout_id, vehicle_id) and
+// (layout_id, train_id) guarantee a vehicle/train appears at most
+// once on a given layout — matching the §3a.3 invariant.
+func createLayoutVehiclesUp(s *rel.Schema) {
+	s.CreateTable("layout_vehicles", func(t *rel.Table) {
+		t.ID("id")
+		t.Int("layout_id", rel.Unsigned(true))
+		t.Int("vehicle_id", rel.Unsigned(true))
+		t.Int("added_by_user_id", rel.Unsigned(true))
+		t.DateTime("added_at")
+
+		t.Unique([]string{"layout_id", "vehicle_id"})
+	})
+	s.Exec(rel.Raw(`CREATE INDEX layout_vehicles_layout_id ON layout_vehicles(layout_id)`))
+
+	s.CreateTable("layout_trains", func(t *rel.Table) {
+		t.ID("id")
+		t.Int("layout_id", rel.Unsigned(true))
+		t.Int("train_id", rel.Unsigned(true))
+		t.Int("added_by_user_id", rel.Unsigned(true))
+		t.DateTime("added_at")
+
+		t.Unique([]string{"layout_id", "train_id"})
+	})
+	s.Exec(rel.Raw(`CREATE INDEX layout_trains_layout_id ON layout_trains(layout_id)`))
+}
+
+func createLayoutVehiclesDown(s *rel.Schema) {
+	s.DropTable("layout_trains")
+	s.DropTable("layout_vehicles")
 }

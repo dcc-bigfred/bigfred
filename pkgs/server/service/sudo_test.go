@@ -245,6 +245,32 @@ func TestGrantSignalmanToUserByAdmin(t *testing.T) {
 	}
 }
 
+func TestRevokeSignalmanFromUserByAdmin(t *testing.T) {
+	bundle, cleanup := freshRepo(t)
+	defer cleanup()
+	ctx := context.Background()
+	admin := insertUser(t, ctx, bundle.Users, "admin", domain.RoleAdmin)
+	target := insertUser(t, ctx, bundle.Users, "bob", domain.RoleDriver)
+	sudo, layoutSvc, system := freshSudoSvc(t, ctx, bundle, 2*time.Minute)
+
+	if err := sudo.GrantSignalmanToUser(ctx, admin.ID, target.ID, system.ID); err != nil {
+		t.Fatalf("GrantSignalmanToUser: %v", err)
+	}
+	if err := sudo.RevokeSignalman(ctx, target.ID, system.ID); err != nil {
+		t.Fatalf("RevokeSignalman: %v", err)
+	}
+
+	auth := service.NewAuthService(bundle.Users, layoutSvc, bundle.LayoutSignalmen, bundle.SudoElevations,
+		service.AuthConfig{JWTSecret: []byte("test-secret-test-secret-test-aaaa")})
+	roles, err := auth.Effective(ctx, target, system.ID)
+	if err != nil {
+		t.Fatalf("Effective: %v", err)
+	}
+	if roles.Has(domain.RoleSignalman) {
+		t.Fatalf("expected signalman grant to be revoked")
+	}
+}
+
 func TestSignalmanRejectsWrongPIN(t *testing.T) {
 	bundle, cleanup := freshRepo(t)
 	defer cleanup()

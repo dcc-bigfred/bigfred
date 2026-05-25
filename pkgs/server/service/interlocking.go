@@ -8,12 +8,14 @@ import (
 
 	"github.com/keskad/loco/pkgs/server/domain"
 	"github.com/keskad/loco/pkgs/server/repo"
+	"github.com/keskad/loco/pkgs/server/security"
 )
 
 var (
 	ErrInterlockingNotFound     = errors.New("interlocking_not_found")
 	ErrInterlockingNameTaken    = errors.New("interlocking_name_taken")
 	ErrInterlockingNameRequired = errors.New("interlocking_name_required")
+	ErrInterlockingForbidden    = errors.New("forbidden")
 )
 
 const maxInterlockingNameLen = 64
@@ -21,8 +23,9 @@ const maxInterlockingLocationLen = 512
 
 // InterlockingService implements CRUD over the interlocking catalogue.
 type InterlockingService struct {
-	interlockings        *repo.Interlockings
-	layoutInterlockings  *repo.LayoutInterlockings
+	interlockings       *repo.Interlockings
+	layoutInterlockings *repo.LayoutInterlockings
+	sec                 security.InterlockingSecurityContext
 }
 
 // NewInterlockingService constructs an InterlockingService.
@@ -68,8 +71,12 @@ type InterlockingCreateInput struct {
 	Location string
 }
 
-// Create inserts a new interlocking into the catalogue.
-func (s *InterlockingService) Create(ctx context.Context, in InterlockingCreateInput) (domain.Interlocking, error) {
+// Create inserts a new interlocking into the catalogue. Authority is
+// decided by InterlockingSecurityContext.CanManageCatalog (§7a.3).
+func (s *InterlockingService) Create(ctx context.Context, eff domain.EffectiveRoles, in InterlockingCreateInput) (domain.Interlocking, error) {
+	if err := s.checkCatalogManage(eff); err != nil {
+		return domain.Interlocking{}, err
+	}
 	name := strings.TrimSpace(in.Name)
 	if name == "" || len(name) > maxInterlockingNameLen {
 		return domain.Interlocking{}, ErrInterlockingNameRequired
@@ -103,8 +110,12 @@ type InterlockingUpdateInput struct {
 	Location *string
 }
 
-// Update mutates an existing interlocking.
-func (s *InterlockingService) Update(ctx context.Context, id uint, in InterlockingUpdateInput) (domain.Interlocking, error) {
+// Update mutates an existing interlocking. Authority is decided by
+// InterlockingSecurityContext.CanManageCatalog (§7a.3).
+func (s *InterlockingService) Update(ctx context.Context, eff domain.EffectiveRoles, id uint, in InterlockingUpdateInput) (domain.Interlocking, error) {
+	if err := s.checkCatalogManage(eff); err != nil {
+		return domain.Interlocking{}, err
+	}
 	row, err := s.Get(ctx, id)
 	if err != nil {
 		return domain.Interlocking{}, err
@@ -141,8 +152,12 @@ func (s *InterlockingService) Update(ctx context.Context, id uint, in Interlocki
 }
 
 // Delete removes an interlocking and every layout whitelist row
-// pointing at it.
-func (s *InterlockingService) Delete(ctx context.Context, id uint) error {
+// pointing at it. Authority is decided by
+// InterlockingSecurityContext.CanManageCatalog (§7a.3).
+func (s *InterlockingService) Delete(ctx context.Context, eff domain.EffectiveRoles, id uint) error {
+	if err := s.checkCatalogManage(eff); err != nil {
+		return err
+	}
 	row, err := s.Get(ctx, id)
 	if err != nil {
 		return err
@@ -151,4 +166,17 @@ func (s *InterlockingService) Delete(ctx context.Context, id uint) error {
 		return err
 	}
 	return s.interlockings.Delete(ctx, &row)
+}
+
+func (s *InterlockingService) checkCatalogManage(eff domain.EffectiveRoles) error {
+	decision := s.sec.CanManageCatalog(eff)
+	if decision.Allowed {
+		return nil
+	}
+	switch decision.Reason {
+	case "forbidden":
+		return ErrInterlockingForbidden
+	default:
+		return errors.New(decision.Reason)
+	}
 }

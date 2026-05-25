@@ -8,6 +8,7 @@ import (
 
 	"github.com/keskad/loco/pkgs/server/domain"
 	"github.com/keskad/loco/pkgs/server/repo"
+	"github.com/keskad/loco/pkgs/server/security"
 )
 
 // Train sentinel errors.
@@ -58,6 +59,7 @@ type TrainService struct {
 	trains   *repo.Trains
 	members  *repo.TrainMembers
 	vehicles *repo.Vehicles
+	sec      security.TrainSecurityContext
 }
 
 // NewTrainService constructs a TrainService.
@@ -153,8 +155,9 @@ func (s *TrainService) Create(ctx context.Context, in TrainCreateInput) (TrainDe
 }
 
 // Update renames and/or replaces the member list of an existing
-// train.
-func (s *TrainService) Update(ctx context.Context, actorID, trainID uint, in TrainUpdateInput) (TrainDetail, error) {
+// train. Authority is decided by TrainSecurityContext.CanMutateTrain
+// (§7a.3).
+func (s *TrainService) Update(ctx context.Context, actorID, trainID uint, eff domain.EffectiveRoles, in TrainUpdateInput) (TrainDetail, error) {
 	t, err := s.trains.FindByID(ctx, trainID)
 	if err != nil {
 		if errors.Is(err, repo.ErrTrainNotFound) {
@@ -162,8 +165,8 @@ func (s *TrainService) Update(ctx context.Context, actorID, trainID uint, in Tra
 		}
 		return TrainDetail{}, err
 	}
-	if t.OwnerUserID != actorID {
-		return TrainDetail{}, ErrTrainNotOwned
+	if err := s.checkTrainMutate(eff, actorID, t.OwnerUserID); err != nil {
+		return TrainDetail{}, err
 	}
 
 	if in.Name != nil {
@@ -172,7 +175,7 @@ func (s *TrainService) Update(ctx context.Context, actorID, trainID uint, in Tra
 			return TrainDetail{}, err
 		}
 		if name != t.Name {
-			if other, err := s.trains.FindByOwnerAndName(ctx, actorID, name); err == nil {
+			if other, err := s.trains.FindByOwnerAndName(ctx, t.OwnerUserID, name); err == nil {
 				if other.ID != t.ID {
 					return TrainDetail{}, ErrTrainNameTaken
 				}
@@ -187,7 +190,7 @@ func (s *TrainService) Update(ctx context.Context, actorID, trainID uint, in Tra
 		if len(*in.Members) == 0 {
 			return TrainDetail{}, ErrTrainNoMembers
 		}
-		if err := s.validateMembers(ctx, actorID, *in.Members); err != nil {
+		if err := s.validateMembers(ctx, t.OwnerUserID, *in.Members); err != nil {
 			return TrainDetail{}, err
 		}
 		if err := s.replaceMembers(ctx, t.ID, *in.Members); err != nil {
@@ -202,8 +205,9 @@ func (s *TrainService) Update(ctx context.Context, actorID, trainID uint, in Tra
 	return s.Get(ctx, t.ID)
 }
 
-// Delete removes a train and its member rows.
-func (s *TrainService) Delete(ctx context.Context, actorID, trainID uint) (domain.Train, error) {
+// Delete removes a train and its member rows. Authority is decided
+// by TrainSecurityContext.CanMutateTrain (§7a.3).
+func (s *TrainService) Delete(ctx context.Context, actorID, trainID uint, eff domain.EffectiveRoles) (domain.Train, error) {
 	t, err := s.trains.FindByID(ctx, trainID)
 	if err != nil {
 		if errors.Is(err, repo.ErrTrainNotFound) {
@@ -211,8 +215,8 @@ func (s *TrainService) Delete(ctx context.Context, actorID, trainID uint) (domai
 		}
 		return domain.Train{}, err
 	}
-	if t.OwnerUserID != actorID {
-		return domain.Train{}, ErrTrainNotOwned
+	if err := s.checkTrainMutate(eff, actorID, t.OwnerUserID); err != nil {
+		return domain.Train{}, err
 	}
 	if err := s.members.DeleteAllForTrain(ctx, t.ID); err != nil {
 		return domain.Train{}, err
@@ -221,6 +225,19 @@ func (s *TrainService) Delete(ctx context.Context, actorID, trainID uint) (domai
 		return domain.Train{}, err
 	}
 	return t, nil
+}
+
+func (s *TrainService) checkTrainMutate(eff domain.EffectiveRoles, actorID, ownerUserID uint) error {
+	decision := s.sec.CanMutateTrain(eff, actorID, ownerUserID)
+	if decision.Allowed {
+		return nil
+	}
+	switch decision.Reason {
+	case "train_not_owned":
+		return ErrTrainNotOwned
+	default:
+		return errors.New(decision.Reason)
+	}
 }
 
 // validateMembers walks the candidate member list and confirms each

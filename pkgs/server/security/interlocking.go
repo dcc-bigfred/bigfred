@@ -55,6 +55,17 @@ func (InterlockingSecurityContext) CanDisplace(
 	return Allow
 }
 
+// CanManageCatalog decides whether the caller may create, update or
+// delete rows in the global interlocking catalogue (§7a.3). Only an
+// effective admin (permanent or sudo in the active layout, §7a.7)
+// qualifies.
+func (InterlockingSecurityContext) CanManageCatalog(eff domain.EffectiveRoles) Decision {
+	if eff.Has(domain.RoleAdmin) {
+		return Allow
+	}
+	return Deny("forbidden")
+}
+
 // IsSignalmanGrantActive reports whether the layout grant is valid at
 // now.
 func IsSignalmanGrantActive(grant domain.LayoutSignalman, now time.Time) bool {

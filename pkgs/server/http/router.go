@@ -65,7 +65,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	interlockingH := NewInterlockingHandler(cfg.Interlockings, cfg.Occupancy, cfg.Auth)
 	presenceH := NewPresenceHandler(cfg.Presence)
 	vehicleH := NewVehicleHandler(cfg.Vehicles, cfg.LayoutVehicles, cfg.DCCPool, cfg.Auth)
-	trainH := NewTrainHandler(cfg.Trains, cfg.LayoutVehicles)
+	trainH := NewTrainHandler(cfg.Trains, cfg.LayoutVehicles, cfg.Auth)
 	rosterH := NewLayoutRosterHandler(cfg.LayoutVehicles, cfg.Auth)
 	userH := NewUserHandler(cfg.Users)
 	sudoH := NewSudoHandler(cfg.Sudo, cfg.Auth, cfg.Users, cfg.Presence)
@@ -139,6 +139,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			r.Group(func(r chi.Router) {
 				r.Use(RequireRole(cfg.Auth, domain.RoleAdmin))
 				r.Post("/layouts/{id}/signalmen", sudoH.GrantSignalmanToUser)
+				r.Delete("/layouts/{id}/signalmen/{userId}", sudoH.RevokeSignalmanFromUser)
 				r.Get("/interlockings/catalogue", interlockingH.ListCatalogue)
 				r.Post("/layouts", layoutH.Create)
 				r.Put("/layouts/{id}", layoutH.Update)

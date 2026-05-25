@@ -13,11 +13,16 @@ import (
 type TrainHandler struct {
 	svc          *service.TrainService
 	layoutTrains *service.LayoutVehicleService
+	auth         *service.AuthService
 }
 
 // NewTrainHandler returns a TrainHandler.
-func NewTrainHandler(svc *service.TrainService, layoutTrains *service.LayoutVehicleService) *TrainHandler {
-	return &TrainHandler{svc: svc, layoutTrains: layoutTrains}
+func NewTrainHandler(
+	svc *service.TrainService,
+	layoutTrains *service.LayoutVehicleService,
+	auth *service.AuthService,
+) *TrainHandler {
+	return &TrainHandler{svc: svc, layoutTrains: layoutTrains, auth: auth}
 }
 
 type trainMemberRequest struct {
@@ -149,7 +154,12 @@ func (h *TrainHandler) Update(w http.ResponseWriter, r *http.Request) {
 		}
 		in.Members = &members
 	}
-	d, err := h.svc.Update(r.Context(), actor.User.ID, trainID, in)
+	eff, err := h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	d, err := h.svc.Update(r.Context(), actor.User.ID, trainID, eff, in)
 	if err != nil {
 		writeTrainError(w, err)
 		return
@@ -175,7 +185,12 @@ func (h *TrainHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
-	if _, err := h.svc.Delete(r.Context(), actor.User.ID, trainID); err != nil {
+	eff, err := h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	if _, err := h.svc.Delete(r.Context(), actor.User.ID, trainID, eff); err != nil {
 		writeTrainError(w, err)
 		return
 	}

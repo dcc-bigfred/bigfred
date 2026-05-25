@@ -4,8 +4,10 @@ import PeopleIcon from "@mui/icons-material/People";
 import MapIcon from "@mui/icons-material/Map";
 import EventIcon from "@mui/icons-material/Event";
 import AccountTreeIcon from "@mui/icons-material/AccountTree";
+import DirectionsRailwayIcon from "@mui/icons-material/DirectionsRailway";
 import HistoryIcon from "@mui/icons-material/History";
 import PersonIcon from "@mui/icons-material/Person";
+import TrainIcon from "@mui/icons-material/Train";
 import VpnKeyIcon from "@mui/icons-material/VpnKey";
 import LockResetIcon from "@mui/icons-material/LockReset";
 import LogoutIcon from "@mui/icons-material/Logout";
@@ -84,6 +86,25 @@ export default function AppShell() {
         icon: <HistoryIcon fontSize="small" />,
         disabled: true,
         tooltip: comingSoon("M3"),
+      },
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [t],
+  );
+
+  const myItems: TopBarMenuItem[] = useMemo(
+    () => [
+      {
+        id: "vehicles",
+        label: t("nav.my.vehicles"),
+        icon: <TrainIcon fontSize="small" />,
+        onClick: () => navigate("/my/vehicles"),
+      },
+      {
+        id: "trains",
+        label: t("nav.my.trains"),
+        icon: <DirectionsRailwayIcon fontSize="small" />,
+        onClick: () => navigate("/my/trains"),
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -174,6 +195,10 @@ export default function AppShell() {
                   }}
                 />
               </Tooltip>
+            )}
+
+            {me && (
+              <TopBarMenu label={t("nav.my.menuLabel")} items={myItems} />
             )}
 
             {me && isAdmin && (

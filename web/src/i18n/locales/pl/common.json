@@ -30,6 +30,11 @@
       "interlockings": "Nastawnie",
       "auditLog": "Dziennik audytu"
     },
+    "my": {
+      "menuLabel": "Moje",
+      "vehicles": "Pojazdy",
+      "trains": "Składy"
+    },
     "account": {
       "menuLabel": "Konto",
       "profile": "Profil",

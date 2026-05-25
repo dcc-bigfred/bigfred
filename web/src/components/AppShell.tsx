@@ -191,8 +191,8 @@ export default function AppShell() {
                 // without opening the dropdown. Role goes through
                 // the `role` namespace (graceful fallback to the
                 // raw code if the catalogue is behind the backend).
-                caption={`${me.login} · ${t(`role:${me.role}` as const, {
-                  defaultValue: me.role,
+                caption={`${me.login} · ${t(`role:${me.effectiveRole}` as const, {
+                  defaultValue: me.effectiveRole,
                 })}`}
                 items={accountItems}
               />

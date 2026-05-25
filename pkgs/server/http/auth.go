@@ -42,21 +42,33 @@ type loginRequest struct {
 // they are derived from the JWT and immutable for the lifetime of
 // the session.
 type meResponse struct {
-	ID             uint        `json:"id"`
-	Login          string      `json:"login"`
-	Role           domain.Role `json:"role"`
-	LayoutID       uint        `json:"layoutId"`
-	LayoutName     string      `json:"layoutName"`
-	LayoutIsSystem bool        `json:"layoutIsSystem"`
+	ID    uint        `json:"id"`
+	Login string      `json:"login"`
+	Role  domain.Role `json:"role"`
+	// EffectiveRole is the caller's resolved role label inside their
+	// active layout (§7a.2), used for display: admin > signalman
+	// (layout-scoped grant) > driver.
+	EffectiveRole domain.Role `json:"effectiveRole"`
+	// IsSignalman is true iff the caller currently holds an active
+	// LayoutSignalman grant in their active layout. An admin who also
+	// has a grant gets both `effectiveRole:"admin"` and
+	// `isSignalman:true` so the UI can render signalman-only actions
+	// (occupy interlocking, takeover, …) for them.
+	IsSignalman    bool `json:"isSignalman"`
+	LayoutID       uint `json:"layoutId"`
+	LayoutName     string `json:"layoutName"`
+	LayoutIsSystem bool   `json:"layoutIsSystem"`
 }
 
 // meFromIdentity collapses the identity → response mapping so the
 // Login and Me handlers stay in sync.
-func meFromIdentity(id service.Identity) meResponse {
+func meFromIdentity(id service.Identity, effectiveRole domain.Role, isSignalman bool) meResponse {
 	return meResponse{
 		ID:             id.User.ID,
 		Login:          id.User.Login,
 		Role:           id.User.Role,
+		EffectiveRole:  effectiveRole,
+		IsSignalman:    isSignalman,
 		LayoutID:       id.Layout.ID,
 		LayoutName:     id.Layout.Name,
 		LayoutIsSystem: id.Layout.IsSystem,
@@ -124,8 +136,17 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteLaxMode,
 	})
 
+	effectiveRole, err := h.auth.EffectiveDisplayRole(r.Context(), id.User, id.Layout.ID)
+	if err != nil {
+		effectiveRole = id.User.Role
+	}
+	isSignalman, err := h.auth.IsEffectiveSignalman(r.Context(), id.User, id.Layout.ID)
+	if err != nil {
+		isSignalman = false
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(meFromIdentity(id))
+	_ = json.NewEncoder(w).Encode(meFromIdentity(id, effectiveRole, isSignalman))
 }
 
 // Logout clears the session cookie. Idempotent — calling it without
@@ -152,6 +173,14 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
+	effectiveRole, err := h.auth.EffectiveDisplayRole(r.Context(), id.User, id.Layout.ID)
+	if err != nil {
+		effectiveRole = id.User.Role
+	}
+	isSignalman, err := h.auth.IsEffectiveSignalman(r.Context(), id.User, id.Layout.ID)
+	if err != nil {
+		isSignalman = false
+	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(meFromIdentity(id))
+	_ = json.NewEncoder(w).Encode(meFromIdentity(id, effectiveRole, isSignalman))
 }

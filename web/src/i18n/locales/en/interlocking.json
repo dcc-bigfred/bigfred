@@ -30,5 +30,32 @@
       }
     },
     "empty": "There are no interlockings to display."
+  },
+  "view": {
+    "overline": "Interlocking",
+    "backToDashboard": "Back to dashboard",
+    "vacant": "Vacant",
+    "occupant": "Staffed by {{login}}",
+    "occupantSelf": "You are staffing this box ({{login}})",
+    "signalmanOnlyHint": "Only signalmen of this layout can occupy or leave the interlocking.",
+    "radioTitle": "Radio",
+    "radioComingSoon": "Radio panel will be available together with the takeover flow in the next milestone.",
+    "actions": {
+      "occupy": "Occupy interlocking",
+      "leave": "Leave interlocking"
+    },
+    "displace": {
+      "title": "Interlocking already staffed",
+      "message": "This interlocking is currently staffed by {{login}}. Do you want to displace them and take over?",
+      "confirm": "Take over",
+      "cancel": "Cancel"
+    },
+    "leaveGuard": {
+      "title": "Leave the interlocking?",
+      "message": "You are staffing this interlocking. If you continue, your signalman session here will end.",
+      "confirm": "Leave",
+      "cancel": "Stay"
+    },
+    "displacedToast": "Another signalman has displaced you from this interlocking."
   }
 }

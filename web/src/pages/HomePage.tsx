@@ -14,6 +14,7 @@ import {
   Typography,
 } from "@mui/material";
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
 
 import { useMe } from "../api/auth";
 import { useDashboardInterlockings } from "../api/interlockings";
@@ -23,6 +24,7 @@ export default function HomePage() {
   const me = useMe().data;
   const layoutId = me?.layoutId ?? null;
   const { t } = useTranslation(["home", "role", "interlocking"]);
+  const navigate = useNavigate();
 
   const presence = useLayoutPresence(layoutId);
   const interlockings = useDashboardInterlockings();
@@ -114,7 +116,12 @@ export default function HomePage() {
                       </TableRow>
                     ) : (
                       (interlockings.data ?? []).map((row) => (
-                        <TableRow key={row.id}>
+                        <TableRow
+                          key={row.id}
+                          hover
+                          onClick={() => navigate(`/interlockings/${row.id}`)}
+                          sx={{ cursor: "pointer" }}
+                        >
                           <TableCell>{row.name}</TableCell>
                           <TableCell>{row.location || t("home:interlockings.noLocation")}</TableCell>
                           <TableCell>

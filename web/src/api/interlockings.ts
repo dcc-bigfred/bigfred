@@ -54,6 +54,106 @@ export function useDashboardInterlockings() {
   return query;
 }
 
+// interlockingQueryKey identifies the single-interlocking detail
+// query used by InterlockingPage.
+export function interlockingQueryKey(id: number) {
+  return ["interlockings", "detail", id] as const;
+}
+
+// useInterlocking loads one layout-scoped interlocking with its
+// current occupant and stays live via the
+// `interlocking.occupantChanged` WS event.
+export function useInterlocking(id: number | null) {
+  const qc = useQueryClient();
+  const { subscribe } = useSocket();
+
+  const query = useQuery({
+    queryKey: interlockingQueryKey(id ?? 0),
+    queryFn: () => apiFetch<Interlocking>(`/api/v1/interlockings/${id}`),
+    enabled: id != null && id > 0,
+    staleTime: 2 * 1000,
+  });
+
+  useEffect(() => {
+    if (id == null || id <= 0) return;
+    return subscribe("interlocking.occupantChanged", (payload) => {
+      const data = payload as {
+        interlockingId?: number;
+        occupant?: InterlockingOccupant;
+      };
+      if (data.interlockingId !== id) return;
+      qc.setQueryData<Interlocking>(interlockingQueryKey(id), (prev) =>
+        prev ? { ...prev, occupant: data.occupant ?? undefined } : prev,
+      );
+      // Also refresh the dashboard list cache so the row is
+      // consistent when the user navigates back.
+      qc.setQueryData<Interlocking[]>(interlockingsQueryKey, (prev) =>
+        prev
+          ? prev.map((row) =>
+              row.id === id ? { ...row, occupant: data.occupant ?? undefined } : row,
+            )
+          : prev,
+      );
+    });
+  }, [id, subscribe, qc]);
+
+  return query;
+}
+
+interface JoinResponse {
+  id: number;
+  name: string;
+  location: string;
+  occupant?: InterlockingOccupant;
+}
+
+// useJoinInterlocking calls POST /interlockings/{id}/join. On 409
+// interlocking_occupied the caller must decide whether to retry with
+// `{ force: true }` — the mutation function does NOT auto-retry.
+export function useJoinInterlocking() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { id: number; force?: boolean }) =>
+      apiFetch<JoinResponse>(`/api/v1/interlockings/${args.id}/join`, {
+        method: "POST",
+        body: JSON.stringify({ force: args.force ?? false }),
+      }),
+    onSuccess: (data, args) => {
+      qc.setQueryData<Interlocking>(interlockingQueryKey(args.id), (prev) =>
+        prev ? { ...prev, occupant: data.occupant } : { ...data },
+      );
+      qc.setQueryData<Interlocking[]>(interlockingsQueryKey, (prev) =>
+        prev
+          ? prev.map((row) =>
+              row.id === args.id ? { ...row, occupant: data.occupant } : row,
+            )
+          : prev,
+      );
+    },
+  });
+}
+
+// useLeaveInterlocking calls POST /interlockings/{id}/leave.
+export function useLeaveInterlocking() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      apiFetch<void>(`/api/v1/interlockings/${id}/leave`, { method: "POST" }),
+    onSuccess: (_, id) => {
+      qc.setQueryData<Interlocking>(interlockingQueryKey(id), (prev) =>
+        prev ? { ...prev, occupant: undefined } : prev,
+      );
+      qc.setQueryData<Interlocking[]>(interlockingsQueryKey, (prev) =>
+        prev
+          ? prev.map((row) =>
+              row.id === id ? { ...row, occupant: undefined } : row,
+            )
+          : prev,
+      );
+    },
+  });
+}
+
 export function useInterlockingsCatalogue() {
   return useQuery({
     queryKey: interlockingsCatalogueQueryKey,

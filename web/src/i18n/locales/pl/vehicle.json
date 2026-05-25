@@ -59,7 +59,7 @@
   },
   "roster": {
     "vehicles": {
-      "title": "Pojazdy w makiecie",
+      "title": "Pojazdy na makiecie",
       "empty": "Żaden pojazd nie został jeszcze dodany do makiety.",
       "columns": {
         "name": "Nazwa",
@@ -71,7 +71,7 @@
       }
     },
     "trains": {
-      "title": "Składy w makiecie",
+      "title": "Składy na makiecie",
       "empty": "Żaden skład nie został jeszcze dodany do makiety.",
       "columns": {
         "name": "Nazwa",

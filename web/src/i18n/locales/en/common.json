@@ -30,6 +30,11 @@
       "interlockings": "Interlockings",
       "auditLog": "Audit log"
     },
+    "my": {
+      "menuLabel": "My",
+      "vehicles": "Vehicles",
+      "trains": "Trains"
+    },
     "account": {
       "menuLabel": "Account",
       "profile": "Profile",

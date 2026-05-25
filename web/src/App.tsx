@@ -12,6 +12,8 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import HomePage from "./pages/HomePage";
 import InterlockingPage from "./pages/InterlockingPage";
 import LoginPage from "./pages/LoginPage";
+import MyTrainsPage from "./pages/MyTrainsPage";
+import MyVehiclesPage from "./pages/MyVehiclesPage";
 import LayoutsAdminPage from "./pages/admin/LayoutsPage";
 import InterlockingsAdminPage from "./pages/admin/InterlockingsPage";
 
@@ -39,6 +41,8 @@ const router = createBrowserRouter(
       <Route element={<ProtectedRoute />}>
         <Route element={<AppShell />}>
           <Route path="/" element={<HomePage />} />
+          <Route path="/my/vehicles" element={<MyVehiclesPage />} />
+          <Route path="/my/trains" element={<MyTrainsPage />} />
           <Route path="/interlockings/:id" element={<InterlockingPage />} />
           <Route element={<AdminRoute />}>
             <Route path="/admin/layouts" element={<LayoutsAdminPage />} />

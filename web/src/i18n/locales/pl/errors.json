@@ -55,5 +55,10 @@
   "user_has_trains": "Nie można usunąć użytkownika – ma przypisane składy.",
   "cannot_deactivate_self": "Nie możesz dezaktywować własnego konta.",
   "cannot_delete_self": "Nie możesz usunąć własnego konta.",
-  "account_deactivated": "Konto zostało dezaktywowane. Skontaktuj się z administratorem."
+  "account_deactivated": "Konto zostało dezaktywowane. Skontaktuj się z administratorem.",
+  "layout_admin_pin_invalid": "PIN administracyjny musi zawierać 4–8 cyfr.",
+  "layout_admin_pin_unset": "Makieta nie ma ustawionego PIN-u administracyjnego — poproś administratora o jego ustawienie.",
+  "sudo_invalid_pin": "Nieprawidłowy PIN administracyjny makiety.",
+  "sudo_layout_mismatch": "Sesja jest powiązana z inną makietą.",
+  "sudo_locked": "Zbyt wiele nieudanych prób — spróbuj ponownie za chwilę."
 }

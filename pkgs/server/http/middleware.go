@@ -44,9 +44,11 @@ func RequireAuth(auth *service.AuthService) func(http.Handler) http.Handler {
 }
 
 // RequireRole composes on top of RequireAuth: it returns 403 when the
-// authenticated user's permanent role isn't in the allow-list. Used
-// by admin-only endpoints in later milestones.
-func RequireRole(roles ...domain.Role) func(http.Handler) http.Handler {
+// authenticated user's effective role inside their active layout
+// isn't in the allow-list. Per §7a.7 a sudo admin grants the same
+// authority as a permanent admin everywhere, so the gate consults
+// AuthService.Effective rather than the JWT-pinned permanent role.
+func RequireRole(auth *service.AuthService, roles ...domain.Role) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			id, ok := IdentityFromContext(r.Context())
@@ -54,11 +56,18 @@ func RequireRole(roles ...domain.Role) func(http.Handler) http.Handler {
 				writeJSONError(w, http.StatusUnauthorized, "unauthorized")
 				return
 			}
-			if !id.HasRole(roles...) {
-				writeJSONError(w, http.StatusForbidden, "forbidden")
+			eff, err := auth.Effective(r.Context(), id.User, id.Layout.ID)
+			if err != nil {
+				writeJSONError(w, http.StatusInternalServerError, "internal_error")
 				return
 			}
-			next.ServeHTTP(w, r)
+			for _, role := range roles {
+				if eff.Has(role) {
+					next.ServeHTTP(w, r)
+					return
+				}
+			}
+			writeJSONError(w, http.StatusForbidden, "forbidden")
 		})
 	}
 }

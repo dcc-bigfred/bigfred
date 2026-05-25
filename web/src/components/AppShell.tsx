@@ -17,6 +17,7 @@ import { useTranslation } from "react-i18next";
 import { useLogout, useMe } from "../api/auth";
 import { SocketProvider } from "../context/SocketContext";
 import LanguageMenu from "./LanguageMenu";
+import SudoIndicators from "./SudoIndicator";
 import TopBarMenu, { type TopBarMenuItem } from "./TopBarMenu";
 
 // AppShell renders the top app bar shared by every authenticated
@@ -148,7 +149,7 @@ export default function AppShell() {
     [t, logout.isPending],
   );
 
-  const isAdmin = me?.role === "admin";
+  const isAdmin = me?.effectiveRole === "admin";
 
   return (
     <SocketProvider enabled={!!me}>
@@ -195,6 +196,12 @@ export default function AppShell() {
                 />
               </Tooltip>
             )}
+
+            {/* Sudo indicators (§7a.7). The padlock drives the
+                temporary admin elevation; the engineer-cap drives
+                the permanent signalman self-grant. Both stay
+                hidden until the user is authenticated. */}
+            {me && <SudoIndicators />}
 
             {me && (
               <TopBarMenu label={t("nav.my.menuLabel")} items={myItems} />

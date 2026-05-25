@@ -28,14 +28,18 @@ func freshRepo(t *testing.T) (repo.UsersBundle, func()) {
 	migrations.MigrateUp(context.Background(), r)
 
 	bundle := repo.UsersBundle{
-		Users:           repo.NewUsers(r),
-		Pool:            repo.NewDCCAddressRanges(r),
-		Vehicles:        repo.NewVehicles(r),
-		Trains:          repo.NewTrains(r),
-		TrainMembers:    repo.NewTrainMembers(r),
-		LayoutVehicles:  repo.NewLayoutVehicles(r),
-		LayoutTrains:    repo.NewLayoutTrains(r),
-		LayoutSignalmen: repo.NewLayoutSignalmen(r),
+		Users:               repo.NewUsers(r),
+		Pool:                repo.NewDCCAddressRanges(r),
+		Vehicles:            repo.NewVehicles(r),
+		Trains:              repo.NewTrains(r),
+		TrainMembers:        repo.NewTrainMembers(r),
+		LayoutVehicles:      repo.NewLayoutVehicles(r),
+		LayoutTrains:        repo.NewLayoutTrains(r),
+		LayoutSignalmen:     repo.NewLayoutSignalmen(r),
+		Layouts:             repo.NewLayouts(r),
+		Interlockings:       repo.NewInterlockings(r),
+		LayoutInterlockings: repo.NewLayoutInterlockings(r),
+		SudoElevations:      repo.NewSudoElevations(r),
 	}
 	cleanup := func() {
 		_ = db.Close()

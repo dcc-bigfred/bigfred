@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/keskad/loco/pkgs/server/domain"
 	"github.com/keskad/loco/pkgs/server/service"
@@ -12,15 +13,22 @@ import (
 
 // AuthHandler bundles the three endpoints declared under
 // `/api/v1/auth` in §4.1 (login, logout, me).
+//
+// `sudo` is needed so the /me payload exposes the active admin
+// elevation (its `expiresAt` drives the AppBar countdown) and so
+// Logout drops the row — sudo state must NEVER survive a session
+// change. It MAY be nil in legacy tests; in that case the /me
+// payload simply reports `sudo: null`.
 type AuthHandler struct {
 	auth   *service.AuthService
+	sudo   *service.SudoService
 	secure bool // toggles the Secure cookie flag (off in dev over http://)
 }
 
 // NewAuthHandler returns an AuthHandler. `secureCookie` should be
 // true in any production deployment (HTTPS-only).
-func NewAuthHandler(auth *service.AuthService, secureCookie bool) *AuthHandler {
-	return &AuthHandler{auth: auth, secure: secureCookie}
+func NewAuthHandler(auth *service.AuthService, sudo *service.SudoService, secureCookie bool) *AuthHandler {
+	return &AuthHandler{auth: auth, sudo: sudo, secure: secureCookie}
 }
 
 // loginRequest mirrors the JSON body documented in §4.1:
@@ -36,6 +44,14 @@ type loginRequest struct {
 	LayoutID uint   `json:"layoutId"`
 }
 
+// sudoElevationDTO carries the active sudo grant (admin elevation,
+// §7a.7) so the AppBar countdown can start from `expiresAt`. The
+// pointer in meResponse is nil when no elevation is live.
+type sudoElevationDTO struct {
+	GrantedAt time.Time `json:"grantedAt"`
+	ExpiresAt time.Time `json:"expiresAt"`
+}
+
 // meResponse is the JSON shape returned by GET /api/v1/auth/me and
 // echoed by POST /api/v1/auth/login (so the frontend can hydrate its
 // store without a follow-up call). The layout fields mirror §4.1:
@@ -49,28 +65,16 @@ type meResponse struct {
 	// active layout (§7a.2), used for display: admin > signalman
 	// (layout-scoped grant) > driver.
 	EffectiveRole domain.Role `json:"effectiveRole"`
-	// IsSignalman is true when the caller may occupy an interlocking:
-	// permanent admins always; everyone else only with an active
-	// LayoutSignalman grant in their active layout.
-	IsSignalman    bool `json:"isSignalman"`
-	LayoutID       uint `json:"layoutId"`
+	// IsSignalman is true when the caller may operate as a
+	// signalman in the active layout: any (sudo or permanent)
+	// admin or a layout signalman grant satisfy it.
+	IsSignalman    bool   `json:"isSignalman"`
+	LayoutID       uint   `json:"layoutId"`
 	LayoutName     string `json:"layoutName"`
 	LayoutIsSystem bool   `json:"layoutIsSystem"`
-}
-
-// meFromIdentity collapses the identity → response mapping so the
-// Login and Me handlers stay in sync.
-func meFromIdentity(id service.Identity, effectiveRole domain.Role, isSignalman bool) meResponse {
-	return meResponse{
-		ID:             id.User.ID,
-		Login:          id.User.Login,
-		Role:           id.User.Role,
-		EffectiveRole:  effectiveRole,
-		IsSignalman:    isSignalman,
-		LayoutID:       id.Layout.ID,
-		LayoutName:     id.Layout.Name,
-		LayoutIsSystem: id.Layout.IsSystem,
-	}
+	// Sudo is the active admin elevation, or null when none is
+	// live. The UI drives the AppBar padlock indicator from it.
+	Sudo *sudoElevationDTO `json:"sudo"`
 }
 
 // Login validates credentials, mints a JWT and sets it as a Secure,
@@ -136,22 +140,26 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteLaxMode,
 	})
 
-	effectiveRole, err := h.auth.EffectiveDisplayRole(r.Context(), id.User, id.Layout.ID)
-	if err != nil {
-		effectiveRole = id.User.Role
-	}
-	isSignalman, err := h.auth.IsEffectiveSignalman(r.Context(), id.User, id.Layout.ID)
-	if err != nil {
-		isSignalman = false
-	}
-
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(meFromIdentity(id, effectiveRole, isSignalman))
+	_ = json.NewEncoder(w).Encode(h.buildMeResponse(r, id))
 }
 
 // Logout clears the session cookie. Idempotent — calling it without
 // an active session also returns 204.
+//
+// As a side effect the handler revokes the caller's sudo admin
+// elevation inside the current layout (§7a.7). Sudo state must NOT
+// survive a session change. The route is public (no RequireAuth
+// wrapper), so we re-verify the session inline and silently skip the
+// revoke when the cookie is missing or invalid.
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
+	if h.sudo != nil {
+		if token := readSessionToken(r); token != "" {
+			if id, err := h.auth.VerifyToken(r.Context(), token); err == nil {
+				_ = h.sudo.Revoke(r.Context(), id.User.ID, id.Layout.ID)
+			}
+		}
+	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     SessionCookieName,
 		Value:    "",
@@ -173,6 +181,16 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(h.buildMeResponse(r, id))
+}
+
+// buildMeResponse runs the per-request derivation that the Login
+// and Me handlers share. Failures inside the auth/sudo lookups fall
+// back to safe defaults (effectiveRole := user.Role, isSignalman :=
+// false, sudo := nil), so a transient repository hiccup never
+// breaks the cookie hand-off.
+func (h *AuthHandler) buildMeResponse(r *http.Request, id service.Identity) meResponse {
 	effectiveRole, err := h.auth.EffectiveDisplayRole(r.Context(), id.User, id.Layout.ID)
 	if err != nil {
 		effectiveRole = id.User.Role
@@ -181,6 +199,24 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		isSignalman = false
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(meFromIdentity(id, effectiveRole, isSignalman))
+	var sudo *sudoElevationDTO
+	if h.sudo != nil {
+		if row, err := h.sudo.FindActive(r.Context(), id.User.ID, id.Layout.ID, time.Now().UTC()); err == nil && row != nil {
+			sudo = &sudoElevationDTO{
+				GrantedAt: row.GrantedAt,
+				ExpiresAt: row.ExpiresAt,
+			}
+		}
+	}
+	return meResponse{
+		ID:             id.User.ID,
+		Login:          id.User.Login,
+		Role:           id.User.Role,
+		EffectiveRole:  effectiveRole,
+		IsSignalman:    isSignalman,
+		LayoutID:       id.Layout.ID,
+		LayoutName:     id.Layout.Name,
+		LayoutIsSystem: id.Layout.IsSystem,
+		Sudo:           sudo,
+	}
 }

@@ -187,33 +187,28 @@ type LayoutSecurityContext struct{}
 func (LayoutSecurityContext) CanLoginToLayout(actor domain.User, p domain.Layout) Decision
 
 // Layout-management policies. Every method here takes a
-// `domain.EffectiveRoles` (§7a.2) instead of a bare `domain.User`
-// because the rule for these operations is **non-sudo `admin` only**:
-// a sudo-elevated `admin` is operationally allowed (§7a.7) but is
-// explicitly denied edits to the layout itself, otherwise a sudo user
-// could rotate the layout admin PIN to lock the real admin out. The
-// shared rejection reason is `requires_non_sudo_admin`.
-func (LayoutSecurityContext) CanCreateLayout(eff domain.EffectiveRoles) Decision                                  // non-sudo admin only
-func (LayoutSecurityContext) CanEditLayout(eff domain.EffectiveRoles, p domain.Layout) Decision                   // non-sudo admin only; system layout name/isSystem still rejected via service-side rules
-func (LayoutSecurityContext) CanDeleteLayout(eff domain.EffectiveRoles, p domain.Layout) Decision                 // non-sudo admin only; system layout (p.IsSystem) is undeletable
+// `domain.EffectiveRoles` (§7a.2) and asks `eff.Has(domain.RoleAdmin)`.
+// A sudo admin grants the SAME authority as a permanent admin — the
+// 2-minute window plus the rate-limiter on the PIN dialog are the
+// only guard rails (§7a.7).
+func (LayoutSecurityContext) CanCreateLayout(eff domain.EffectiveRoles) Decision                                  // admin
+func (LayoutSecurityContext) CanEditLayout(eff domain.EffectiveRoles, p domain.Layout) Decision                   // admin; system layout name/isSystem still rejected via service-side rules
+func (LayoutSecurityContext) CanDeleteLayout(eff domain.EffectiveRoles, p domain.Layout) Decision                 // admin; system layout (p.IsSystem) is undeletable
 
 // CanRotateAdminPIN is the policy behind PUT /api/v1/layouts/{id}
-// when the request body carries a non-empty `adminPin`. The rule is
-// the same as CanEditLayout (non-sudo admin only) AND it is the
-// single most important place this discrimination matters: a sudo
-// admin must never be able to rotate the PIN that gated their own
-// elevation, otherwise the layout's PIN can be silently changed
-// during the 2-minute window. The system layout is allowed (the
-// system layout still needs a rotatable PIN even though name /
-// command-station-set are immutable).
-func (LayoutSecurityContext) CanRotateAdminPIN(eff domain.EffectiveRoles, p domain.Layout) Decision               // non-sudo admin only
+// when the request body carries a non-empty `adminPin`. Any
+// effective admin (sudo or permanent) may rotate the PIN — the
+// 2-minute sudo window means a hijacked tab cannot change the PIN
+// long enough to lock the real admin out, and the rate-limiter
+// blocks brute-force attempts on the PIN itself.
+func (LayoutSecurityContext) CanRotateAdminPIN(eff domain.EffectiveRoles, p domain.Layout) Decision               // admin
 
 // Lock / unlock toggle Layout.Locked. The system layout cannot be
 // locked (CanLockLayout returns Deny("default_layout_cannot_be_locked")
 // when p.IsSystem == true). Unlocking a non-locked layout is a no-op
-// at the service layer; the policy still gates it on non-sudo admin.
-func (LayoutSecurityContext) CanLockLayout(eff domain.EffectiveRoles, p domain.Layout) Decision                   // non-sudo admin only; deny if p.IsSystem
-func (LayoutSecurityContext) CanUnlockLayout(eff domain.EffectiveRoles, p domain.Layout) Decision                 // non-sudo admin only
+// at the service layer.
+func (LayoutSecurityContext) CanLockLayout(eff domain.EffectiveRoles, p domain.Layout) Decision                   // admin; deny if p.IsSystem
+func (LayoutSecurityContext) CanUnlockLayout(eff domain.EffectiveRoles, p domain.Layout) Decision                 // admin
 
 // Attach / detach command stations to a non-system layout. The system
 // layout exposes the full catalogue virtually, so both methods deny
@@ -222,25 +217,25 @@ func (LayoutSecurityContext) CanUnlockLayout(eff domain.EffectiveRoles, p domain
 // non-system layout with zero stations
 // ("layout_needs_at_least_one_command_station") – the caller supplies
 // the current count.
-func (LayoutSecurityContext) CanAttachCommandStation(eff domain.EffectiveRoles, p domain.Layout) Decision         // non-sudo admin only
-func (LayoutSecurityContext) CanDetachCommandStation(eff domain.EffectiveRoles, p domain.Layout, currentCount int) Decision // non-sudo admin only
+func (LayoutSecurityContext) CanAttachCommandStation(eff domain.EffectiveRoles, p domain.Layout) Decision         // admin
+func (LayoutSecurityContext) CanDetachCommandStation(eff domain.EffectiveRoles, p domain.Layout, currentCount int) Decision // admin
 
-func (LayoutSecurityContext) CanAddSignalman(eff domain.EffectiveRoles, p domain.Layout) Decision                 // non-sudo admin only
-func (LayoutSecurityContext) CanRemoveSignalman(eff domain.EffectiveRoles, p domain.Layout) Decision              // non-sudo admin only
+func (LayoutSecurityContext) CanAddSignalman(eff domain.EffectiveRoles, p domain.Layout) Decision                 // admin
+func (LayoutSecurityContext) CanRemoveSignalman(eff domain.EffectiveRoles, p domain.Layout) Decision              // admin
 
-// Adding an interlocking is allowed for non-sudo admin OR a signalman
-// of THIS layout (sudo signalman is fine here – this is operational,
-// not organisational). Caller passes the matching LayoutSignalman row
-// (or nil); the policy resolves "is the actor a signalman here?" via
-// `eff.Has(domain.RoleSignalman) && actorIsSignalmanHere != nil`.
+// Adding an interlocking is allowed for admin OR a signalman of
+// THIS layout. Caller passes the matching LayoutSignalman row
+// (or nil); the policy resolves "is the actor a signalman here?"
+// via `eff.Has(domain.RoleSignalman) && actorIsSignalmanHere != nil`.
 func (LayoutSecurityContext) CanAddInterlocking(eff domain.EffectiveRoles, p domain.Layout, actorIsSignalmanHere *domain.LayoutSignalman) Decision
-func (LayoutSecurityContext) CanRemoveInterlocking(eff domain.EffectiveRoles, p domain.Layout) Decision           // non-sudo admin only
+func (LayoutSecurityContext) CanRemoveInterlocking(eff domain.EffectiveRoles, p domain.Layout) Decision           // admin
 
-// CanSudo gates `POST /api/v1/layouts/{id}/sudo` (§7a.7). Every
-// authenticated user MAY call it from the layout they are logged into;
-// the only structural rejection is a layout-id mismatch (caller's JWT
-// `layoutId` must equal `p.ID`). PIN verification, rate-limiting and
-// the sudo-row insert live in `AuthService.Sudo`, not in the policy
+// CanSudo gates `POST /api/v1/layouts/{id}/sudo` and
+// `POST /api/v1/layouts/{id}/signalman` (§7a.7). Every authenticated
+// user MAY call them from the layout they are logged into; the only
+// structural rejection is a layout-id mismatch (caller's JWT
+// `layoutId` must equal `p.ID`). PIN verification, rate-limiting
+// and the row insert live in `SudoService`, not in the policy
 // layer (those are stateful concerns and the policy layer is pure).
 func (LayoutSecurityContext) CanSudo(actor domain.User, p domain.Layout) Decision
 

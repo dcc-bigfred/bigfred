@@ -163,6 +163,34 @@ func (h *Hub) BroadcastToLayout(layoutID uint, eventType string, payload any) {
 	}
 }
 
+// BroadcastToUserInLayout sends an envelope to every WS session of
+// `userID` that is pinned to `layoutID`. Used by the sudo flow to
+// notify all open tabs of the same login that their effective role
+// just changed (§7a.7). Other users in the same layout don't see
+// the event — sudo state is private to its owner.
+func (h *Hub) BroadcastToUserInLayout(layoutID, userID uint, eventType string, payload any) {
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return
+	}
+	env := Envelope{Type: eventType, Payload: data}
+
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	for c := range h.clients {
+		if c.session.LayoutID != layoutID {
+			continue
+		}
+		if c.session.UserID != userID {
+			continue
+		}
+		select {
+		case c.send <- env:
+		default:
+		}
+	}
+}
+
 // NewDriveSession allocates a session for a freshly upgraded client.
 func NewDriveSession(userID uint, login string, layoutID uint) *DriveSession {
 	return &DriveSession{
@@ -210,4 +238,15 @@ type OccupantChangedPayload struct {
 type OccupantPayload struct {
 	UserID uint   `json:"userId"`
 	Login  string `json:"login"`
+}
+
+// ElevationChangedPayload is the server → client
+// `auth.elevationChanged` event body (§7a.7). The client refetches
+// `/api/v1/auth/me` on receipt to pick up the fresh
+// effectiveRole / sudo set; we deliberately don't ship the new role
+// inline so the wire shape stays small and the source of truth
+// remains the REST endpoint.
+type ElevationChangedPayload struct {
+	LayoutID uint `json:"layoutId"`
+	UserID   uint `json:"userId"`
 }

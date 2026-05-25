@@ -7,6 +7,14 @@ import { ApiError, apiFetch } from "./client";
 
 export type Role = "driver" | "signalman" | "admin";
 
+// SudoElevation mirrors the active admin sudo grant reported by
+// /me (§7a.7). Null when no elevation is live. The UI drives the
+// AppBar countdown purely from `expiresAt`.
+export interface SudoElevation {
+  grantedAt: string; // ISO-8601
+  expiresAt: string; // ISO-8601
+}
+
 // CurrentUser mirrors `meResponse` in pkgs/server/http/auth.go. The
 // layout fields are derived from the JWT and immutable for the
 // lifetime of the session (§7a.1): the user must log out and log in
@@ -15,17 +23,22 @@ export interface CurrentUser {
   id: number;
   login: string;
   role: Role;
-  /** effectiveRole resolves signalman grants for the active layout (§7a.2). */
+  /** effectiveRole resolves signalman grants and sudo for the active layout (§7a.2). */
   effectiveRole: Role;
   /**
-   * isSignalman is true when the caller may occupy an interlocking in
-   * the active layout: permanent admins always, everyone else only
-   * with an active LayoutSignalman grant.
+   * isSignalman is true when the caller may operate as a signalman
+   * in the active layout — admins (sudo or permanent) and layout
+   * signalman grants both count.
    */
   isSignalman: boolean;
   layoutId: number;
   layoutName: string;
   layoutIsSystem: boolean;
+  /**
+   * sudo carries the active admin elevation (§7a.7), or null when
+   * none is live.
+   */
+  sudo: SudoElevation | null;
 }
 
 export interface LoginRequest {

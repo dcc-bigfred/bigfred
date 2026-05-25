@@ -44,7 +44,6 @@ type InterlockingOccupancyService struct {
 	layoutInterlockings *repo.LayoutInterlockings
 	sessions            *repo.InterlockingSessions
 	users               *repo.Users
-	signalmen           *repo.LayoutSignalmen
 	auth                *AuthService
 	hub                 *ws.Hub
 	presence            *PresenceService
@@ -57,7 +56,6 @@ func NewInterlockingOccupancyService(
 	layoutInterlockings *repo.LayoutInterlockings,
 	sessions *repo.InterlockingSessions,
 	users *repo.Users,
-	signalmen *repo.LayoutSignalmen,
 	auth *AuthService,
 	hub *ws.Hub,
 	presence *PresenceService,
@@ -67,7 +65,6 @@ func NewInterlockingOccupancyService(
 		layoutInterlockings: layoutInterlockings,
 		sessions:            sessions,
 		users:               users,
-		signalmen:           signalmen,
 		auth:                auth,
 		hub:                 hub,
 		presence:            presence,
@@ -174,10 +171,8 @@ func (s *InterlockingOccupancyService) Join(ctx context.Context, in JoinInput) (
 		}
 	}
 
-	var grant *domain.LayoutSignalman
-	if g, err := s.signalmen.FindActiveGrant(ctx, in.LayoutID, in.Actor.ID, now); err == nil {
-		grant = &g
-	} else if !errors.Is(err, repo.ErrLayoutSignalmanNotFound) {
+	eff, err := s.auth.Effective(ctx, in.Actor, in.LayoutID)
+	if err != nil {
 		return JoinResult{}, err
 	}
 
@@ -195,7 +190,7 @@ func (s *InterlockingOccupancyService) Join(ctx context.Context, in JoinInput) (
 		}, nil
 	}
 
-	decision := s.sec.CanOccupy(in.Actor, layoutRow, grant, current)
+	decision := s.sec.CanOccupy(eff, in.Actor.ID, layoutRow, current)
 	if !decision.Allowed {
 		switch decision.Reason {
 		case "interlocking_not_in_layout":
@@ -213,7 +208,7 @@ func (s *InterlockingOccupancyService) Join(ctx context.Context, in JoinInput) (
 
 	if current != nil && current.SignalmanUserID != in.Actor.ID {
 		if in.Force {
-			if d := s.sec.CanDisplace(in.Actor, grant, current); !d.Allowed {
+			if d := s.sec.CanDisplace(eff, current, in.Actor.ID); !d.Allowed {
 				return JoinResult{}, ErrNotSignalman
 			}
 		}

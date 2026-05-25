@@ -1,0 +1,39 @@
+{
+  "tooltip": {
+    "admin": {
+      "idle": "Chwilowo aktywuj uprawnienia administratora",
+      "active": "Aktywne sudo: administrator — pozostało {{remaining}}"
+    },
+    "signalman": {
+      "idle": "Awansuj się na nastawniczego w tej makiecie",
+      "active": "Jesteś nastawniczym w tej makiecie — kliknij, aby zrezygnować"
+    }
+  },
+  "aria": {
+    "admin": {
+      "idle": "Wejdź na chwilę w uprawnienia administratora",
+      "active": "Wyłącz sudo administratora"
+    },
+    "signalman": {
+      "idle": "Zostań nastawniczym",
+      "active": "Zrezygnuj z roli nastawniczego"
+    }
+  },
+  "dialog": {
+    "title": {
+      "admin": "PIN administratora makiety",
+      "signalman": "PIN administratora makiety"
+    },
+    "description": {
+      "admin": "Wpisz PIN administracyjny makiety, aby uzyskać uprawnienia administratora na 2 minuty.",
+      "signalman": "Wpisz PIN administracyjny makiety, aby otrzymać rolę nastawniczego na stałe w tej makiecie."
+    },
+    "pinLabel": "PIN",
+    "submit": "Aktywuj",
+    "cancel": "Anuluj"
+  },
+  "settings": {
+    "pinLabel": "PIN administratora makiety",
+    "pinHelp": "Pozostaw puste, aby zachować obecny PIN. Wymagane 4–8 cyfr."
+  }
+}

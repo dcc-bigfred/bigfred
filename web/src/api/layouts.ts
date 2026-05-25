@@ -55,10 +55,18 @@ export function useAdminLayouts() {
 // admin list so the new row appears immediately. The login dropdown
 // query is also invalidated because a freshly-created (non-locked)
 // layout should appear there on the next page load.
+//
+// `adminPin` is optional (§7a.7). Empty / omitted means "seed with
+// the well-known default" — same UX as the system layout. The
+// backend validates the digit / length policy.
 export function useCreateLayout() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { name: string; interlockingIds?: number[] }) =>
+    mutationFn: (body: {
+      name: string;
+      interlockingIds?: number[];
+      adminPin?: string;
+    }) =>
       apiFetch<Layout>("/api/v1/layouts", {
         method: "POST",
         body: JSON.stringify(body),
@@ -70,6 +78,11 @@ export function useCreateLayout() {
   });
 }
 
+// useUpdateLayout sends PUT /api/v1/layouts/{id}. `adminPin` is
+// optional — leaving it blank in the dialog MUST keep the existing
+// digest, so the helper omits the field from the body when it is
+// empty/undefined (no over-the-wire signal that the field even
+// exists).
 export function useUpdateLayout() {
   const qc = useQueryClient();
   return useMutation({
@@ -77,14 +90,20 @@ export function useUpdateLayout() {
       id: number;
       name: string;
       interlockingIds?: number[];
-    }) =>
-      apiFetch<Layout>(`/api/v1/layouts/${args.id}`, {
+      adminPin?: string;
+    }) => {
+      const body: Record<string, unknown> = {
+        name: args.name,
+        interlockingIds: args.interlockingIds,
+      };
+      if (args.adminPin && args.adminPin.length > 0) {
+        body.adminPin = args.adminPin;
+      }
+      return apiFetch<Layout>(`/api/v1/layouts/${args.id}`, {
         method: "PUT",
-        body: JSON.stringify({
-          name: args.name,
-          interlockingIds: args.interlockingIds,
-        }),
-      }),
+        body: JSON.stringify(body),
+      });
+    },
     onSuccess: (_data, args) => {
       void qc.invalidateQueries({ queryKey: layoutsQueryKey });
       void qc.invalidateQueries({ queryKey: loginLayoutsQueryKey });

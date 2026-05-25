@@ -115,6 +115,11 @@ func (h *LayoutHandler) Get(w http.ResponseWriter, r *http.Request) {
 type createRequest struct {
 	Name            string `json:"name"`
 	InterlockingIDs []uint `json:"interlockingIds"`
+	// AdminPIN is the initial layout admin PIN (§7a.7). Empty
+	// means "default" — the service falls back to the well-known
+	// SystemLayoutDefaultAdminPIN ("0000"), mirroring the
+	// bootstrap UX of the system layout.
+	AdminPIN string `json:"adminPin"`
 }
 
 // Create handles `POST /api/v1/layouts` (admin only). The HTTP wiring
@@ -135,6 +140,7 @@ func (h *LayoutHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Name:            req.Name,
 		CreatedBy:       id.User.ID,
 		InterlockingIDs: req.InterlockingIDs,
+		AdminPIN:        req.AdminPIN,
 	})
 	if err != nil {
 		if errors.Is(err, service.ErrInterlockingNotFound) {
@@ -206,14 +212,23 @@ func (h *LayoutHandler) SetInterlockings(w http.ResponseWriter, r *http.Request)
 }
 
 // updateRequest models the JSON body of PUT /api/v1/layouts/{id}.
+//
+// `adminPin` carries the layout admin PIN rotation (§7a.7). The
+// empty string means "no change" — leaving the dialog field blank
+// MUST keep the existing digest. A non-empty value replaces the
+// digest after passing the digit / length policy.
 type updateRequest struct {
 	Name            string `json:"name"`
 	InterlockingIDs []uint `json:"interlockingIds"`
+	AdminPIN        string `json:"adminPin"`
 }
 
 // Update handles `PUT /api/v1/layouts/{id}` (admin only). Renames
-// non-system layouts and replaces the interlocking whitelist when
-// `interlockingIds` is present (including an empty slice).
+// non-system layouts, replaces the interlocking whitelist when
+// `interlockingIds` is present (including an empty slice), and
+// rotates the admin PIN when `adminPin` is non-empty. Every branch
+// is open to every effective admin (permanent or sudo) — sudo grants
+// the same authority as a permanent admin everywhere (§7a.7).
 func (h *LayoutHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseUintParam(r, "id")
 	if !ok {
@@ -240,6 +255,14 @@ func (h *LayoutHandler) Update(w http.ResponseWriter, r *http.Request) {
 			writeLayoutInterlockingError(w, err)
 			return
 		}
+	}
+	if req.AdminPIN != "" {
+		updated, err := h.svc.UpdateAdminPIN(r.Context(), id, req.AdminPIN)
+		if err != nil {
+			writeLayoutError(w, err)
+			return
+		}
+		layout = updated
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(toLayoutResponse(layout))
@@ -308,6 +331,8 @@ func writeLayoutError(w http.ResponseWriter, err error) {
 		writeJSONError(w, http.StatusUnprocessableEntity, "default_layout_undeletable")
 	case errors.Is(err, service.ErrSystemLayoutCannotBeLocked):
 		writeJSONError(w, http.StatusUnprocessableEntity, "default_layout_cannot_be_locked")
+	case errors.Is(err, service.ErrLayoutAdminPINInvalid):
+		writeJSONError(w, http.StatusUnprocessableEntity, "layout_admin_pin_invalid")
 	default:
 		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 	}

@@ -203,9 +203,11 @@ export default function InterlockingPage() {
   if (!row) return null;
 
   const occupant = row.occupant;
-  // Permanent admins may always staff a box; everyone else needs the
-  // layout-scoped signalman grant reflected in isSignalman.
-  const canActAsSignalman = !!me?.isSignalman || me?.role === "admin";
+  // /me.isSignalman is true for layout signalman grants AND for any
+  // effective admin (permanent or sudo). Occupying while sudo is
+  // active is allowed; leaving only needs isOccupying — rights may
+  // have expired since join.
+  const canJoin = !!me?.isSignalman;
   const busy = join.isPending || leave.isPending;
 
   return (
@@ -251,7 +253,7 @@ export default function InterlockingPage() {
               </Alert>
             )}
 
-            {canActAsSignalman ? (
+            {isOccupying || canJoin ? (
               <Stack direction="row" spacing={1}>
                 {isOccupying ? (
                   <Button

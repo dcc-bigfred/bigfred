@@ -7,6 +7,7 @@ import (
 
 	"github.com/keskad/loco/pkgs/server/domain"
 	"github.com/keskad/loco/pkgs/server/repo"
+	"github.com/keskad/loco/pkgs/server/security"
 	"github.com/keskad/loco/pkgs/server/ws"
 )
 
@@ -55,6 +56,7 @@ type LayoutVehicleService struct {
 	members        *repo.TrainMembers
 	users          *repo.Users
 	hub            *ws.Hub
+	sec            security.LayoutSecurityContext
 }
 
 // NewLayoutVehicleService constructs a LayoutVehicleService.
@@ -202,10 +204,10 @@ func (s *LayoutVehicleService) AddVehicle(ctx context.Context, layoutID, actorID
 	return entry, nil
 }
 
-// RemoveVehicle detaches a vehicle from the layout roster. Only the
-// owner may call this; admins are intentionally NOT special-cased
-// here because the spec keeps roster mutation owner-only (§3a.3).
-func (s *LayoutVehicleService) RemoveVehicle(ctx context.Context, layoutID, actorID, vehicleID uint) error {
+// RemoveVehicle detaches a vehicle from the layout roster. Authority
+// is decided by LayoutSecurityContext.CanRemoveVehicleFromRoster
+// (§7a.3).
+func (s *LayoutVehicleService) RemoveVehicle(ctx context.Context, layoutID, actorID, vehicleID uint, eff domain.EffectiveRoles) error {
 	row, err := s.layoutVehicles.FindByLayoutAndVehicle(ctx, layoutID, vehicleID)
 	if err != nil {
 		if errors.Is(err, repo.ErrLayoutVehicleNotFound) {
@@ -220,8 +222,14 @@ func (s *LayoutVehicleService) RemoveVehicle(ctx context.Context, layoutID, acto
 		}
 		return err
 	}
-	if v.OwnerUserID != actorID {
-		return ErrVehicleNotOwned
+	decision := s.sec.CanRemoveVehicleFromRoster(eff, actorID, v.OwnerUserID)
+	if !decision.Allowed {
+		switch decision.Reason {
+		case "vehicle_not_owned":
+			return ErrVehicleNotOwned
+		default:
+			return errors.New(decision.Reason)
+		}
 	}
 	if err := s.layoutVehicles.Delete(ctx, &row); err != nil {
 		return err
@@ -273,8 +281,9 @@ func (s *LayoutVehicleService) AddTrain(ctx context.Context, layoutID, actorID, 
 	return entry, nil
 }
 
-// RemoveTrain detaches a train from the layout roster (owner-only).
-func (s *LayoutVehicleService) RemoveTrain(ctx context.Context, layoutID, actorID, trainID uint) error {
+// RemoveTrain detaches a train from the layout roster. Authority is
+// decided by LayoutSecurityContext.CanRemoveTrainFromRoster (§7a.3).
+func (s *LayoutVehicleService) RemoveTrain(ctx context.Context, layoutID, actorID, trainID uint, eff domain.EffectiveRoles) error {
 	row, err := s.layoutTrains.FindByLayoutAndTrain(ctx, layoutID, trainID)
 	if err != nil {
 		if errors.Is(err, repo.ErrLayoutTrainNotFound) {
@@ -289,8 +298,14 @@ func (s *LayoutVehicleService) RemoveTrain(ctx context.Context, layoutID, actorI
 		}
 		return err
 	}
-	if t.OwnerUserID != actorID {
-		return ErrTrainNotOwned
+	decision := s.sec.CanRemoveTrainFromRoster(eff, actorID, t.OwnerUserID)
+	if !decision.Allowed {
+		switch decision.Reason {
+		case "train_not_owned":
+			return ErrTrainNotOwned
+		default:
+			return errors.New(decision.Reason)
+		}
 	}
 	if err := s.layoutTrains.Delete(ctx, &row); err != nil {
 		return err

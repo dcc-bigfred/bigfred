@@ -7,15 +7,26 @@ WebSocket error code.
 
 ```go
 // pkgs/server/http/middleware.go
-func RequireRole(roles ...domain.Role) func(http.Handler) http.Handler {
+//
+// RequireRole consults the EFFECTIVE role set inside the JWT-pinned
+// layout (§7a.2). Sudo admins pass the same gate as permanent admins
+// — there is no "non-sudo" carve-out (§7a.7).
+func RequireRole(auth *service.AuthService, roles ...domain.Role) func(http.Handler) http.Handler {
     return func(next http.Handler) http.Handler {
         return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-            id := auth.FromCtx(r.Context())
-            if !id.HasAnyRole(roles...) {
-                http.Error(w, "forbidden", http.StatusForbidden)
+            id, _ := IdentityFromContext(r.Context())
+            eff, err := auth.Effective(r.Context(), id.User, id.Layout.ID)
+            if err != nil {
+                http.Error(w, "internal_error", http.StatusInternalServerError)
                 return
             }
-            next.ServeHTTP(w, r)
+            for _, role := range roles {
+                if eff.Has(role) {
+                    next.ServeHTTP(w, r)
+                    return
+                }
+            }
+            http.Error(w, "forbidden", http.StatusForbidden)
         })
     }
 }

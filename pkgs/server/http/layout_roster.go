@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/keskad/loco/pkgs/server/domain"
 	"github.com/keskad/loco/pkgs/server/service"
 )
 
@@ -16,12 +17,13 @@ import (
 // session layout (§7a.1). Mismatch returns 422 layout_mismatch — a
 // hand-crafted request cannot peek into another layout's roster.
 type LayoutRosterHandler struct {
-	svc *service.LayoutVehicleService
+	svc  *service.LayoutVehicleService
+	auth *service.AuthService
 }
 
 // NewLayoutRosterHandler returns a LayoutRosterHandler.
-func NewLayoutRosterHandler(svc *service.LayoutVehicleService) *LayoutRosterHandler {
-	return &LayoutRosterHandler{svc: svc}
+func NewLayoutRosterHandler(svc *service.LayoutVehicleService, auth *service.AuthService) *LayoutRosterHandler {
+	return &LayoutRosterHandler{svc: svc, auth: auth}
 }
 
 // rosterVehicleResponse is the dashboard row shape. We piggy-back on
@@ -89,6 +91,18 @@ func requireOwnLayout(w http.ResponseWriter, r *http.Request) (uint, service.Ide
 		return 0, service.Identity{}, false
 	}
 	return layoutID, actor, true
+}
+
+// actorEffectiveRoles returns the caller's role membership inside
+// their pinned layout (§7a.2).
+func (h *LayoutRosterHandler) actorEffectiveRoles(r *http.Request, actor service.Identity) (domain.EffectiveRoles, error) {
+	if h.auth == nil {
+		if actor.User.Role == domain.RoleAdmin {
+			return domain.NewEffectiveRoles(domain.RoleAdmin), nil
+		}
+		return domain.NewEffectiveRoles(actor.User.Role), nil
+	}
+	return h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
 }
 
 // ListVehicles handles GET /api/v1/layouts/{id}/vehicles.
@@ -169,7 +183,12 @@ func (h *LayoutRosterHandler) RemoveVehicle(w http.ResponseWriter, r *http.Reque
 		writeJSONError(w, http.StatusBadRequest, "invalid_id")
 		return
 	}
-	if err := h.svc.RemoveVehicle(r.Context(), layoutID, actor.User.ID, vehicleID); err != nil {
+	eff, err := h.actorEffectiveRoles(r, actor)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	if err := h.svc.RemoveVehicle(r.Context(), layoutID, actor.User.ID, vehicleID, eff); err != nil {
 		writeLayoutRosterError(w, err)
 		return
 	}
@@ -216,7 +235,12 @@ func (h *LayoutRosterHandler) RemoveTrain(w http.ResponseWriter, r *http.Request
 		writeJSONError(w, http.StatusBadRequest, "invalid_id")
 		return
 	}
-	if err := h.svc.RemoveTrain(r.Context(), layoutID, actor.User.ID, trainID); err != nil {
+	eff, err := h.actorEffectiveRoles(r, actor)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	if err := h.svc.RemoveTrain(r.Context(), layoutID, actor.User.ID, trainID, eff); err != nil {
 		writeLayoutRosterError(w, err)
 		return
 	}

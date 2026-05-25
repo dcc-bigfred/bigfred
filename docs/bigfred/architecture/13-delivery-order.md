@@ -117,24 +117,25 @@ Implemented in milestones; each milestone is independently shippable.
     field = no change" semantic). Add the
     `POST/DELETE /api/v1/layouts/{id}/sudo` endpoints and the
     `auth.elevationChanged` WS fan-out. Wire the existing janitor
-    goroutine to reap expired rows and emit `auth.sudo_expired`.
-    Plumb the `EffectiveRoles.Sudo` source through
-    `AuthService.Effective` and tighten
-    `LayoutSecurityContext.CanRotateAdminPIN` /
-    `CanEditLayout` / `CanLockLayout` / `CanUnlockLayout` /
-    `CanAttachCommandStation` / `CanDetachCommandStation` /
-    `CanAddSignalman` / `CanRemoveSignalman` /
-    `CanRemoveInterlocking` / `CanDeleteLayout` so they refuse
-    sudo-only admins with `requires_non_sudo_admin`. Cascade the
-    cleanup on `AuthService.Logout` and `LayoutService.Delete`.
-    Front-end: add the closed-padlock and engineer-cap icons to
-    `AppShell.tsx`, the `<SudoPinDialog>` and the live MM:SS
-    countdown badge; add the layout admin PIN field to the
-    `/admin/layouts` settings page (with the "leaving blank does NOT
-    reset the PIN" helper, §7a.7.4). Ship `pl/sudo.json` +
-    `en/sudo.json` and the new error codes (`invalid_pin`,
-    `sudo_locked`, `pin_missing`, `pin_too_weak`,
-    `requires_non_sudo_admin`, `layout_mismatch`).
+    goroutine to reap expired rows and emit
+    `auth.elevationChanged`. Plumb the sudo admin source through
+    `AuthService.Effective` (a flat `domain.EffectiveRoles` set —
+    sudo admin grants the same authority as a permanent admin
+    everywhere). Cascade the cleanup on `AuthService.Logout` and
+    `LayoutService.Delete`. Add the second endpoint
+    `POST/DELETE /api/v1/layouts/{id}/signalman` driven by
+    `SudoService.GrantSignalman / RevokeSignalman` — the
+    engineer's-cap icon writes a permanent
+    `LayoutSignalman` row with `expires_at = NULL` after the
+    same PIN check. Front-end: add the closed-padlock indicator
+    (with live MM:SS countdown badge) and the engineer's-cap
+    indicator (binary toggle, no countdown) to `AppShell.tsx`, the
+    shared `<SudoPinDialog>`, and the layout admin PIN field on
+    the `/admin/layouts` settings page (with the "leaving blank
+    does NOT reset the PIN" helper, §7a.7.5). Ship `pl/sudo.json`
+    + `en/sudo.json` and the new error codes (`sudo_invalid_pin`,
+    `sudo_locked`, `sudo_layout_mismatch`,
+    `layout_admin_pin_invalid`, `layout_admin_pin_unset`).
 
 **M5 – Interlockings, takeover, radio.**
 

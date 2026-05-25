@@ -58,3 +58,48 @@ func (l *LayoutSignalmen) HasActiveGrant(ctx context.Context, layoutID, userID u
 	}
 	return false, err
 }
+
+// Upsert persists a permanent (ExpiresAt = nil) or temporary grant.
+// When a row already exists for (layout_id, user_id) the timestamps
+// are refreshed in place — the unique index on the join keeps the
+// "at most one row per (layout, user)" invariant intact. The
+// supplied struct is rewritten with the persisted ID so the caller
+// can audit / broadcast straight after the call.
+func (l *LayoutSignalmen) Upsert(ctx context.Context, row *domain.LayoutSignalman) error {
+	var existing domain.LayoutSignalman
+	err := l.repo.Find(ctx, &existing,
+		where.Eq("layout_id", row.LayoutID),
+		where.Eq("user_id", row.UserID),
+	)
+	if err == nil {
+		existing.GrantedBy = row.GrantedBy
+		existing.GrantedAt = row.GrantedAt
+		existing.ExpiresAt = row.ExpiresAt
+		if err := l.repo.Update(ctx, &existing); err != nil {
+			return err
+		}
+		*row = existing
+		return nil
+	}
+	if !errors.Is(err, rel.ErrNotFound) {
+		return err
+	}
+	return l.repo.Insert(ctx, row)
+}
+
+// Delete removes the grant for (layoutID, userID). Idempotent —
+// returns nil when no row exists.
+func (l *LayoutSignalmen) Delete(ctx context.Context, layoutID, userID uint) error {
+	var row domain.LayoutSignalman
+	err := l.repo.Find(ctx, &row,
+		where.Eq("layout_id", layoutID),
+		where.Eq("user_id", userID),
+	)
+	if err != nil {
+		if errors.Is(err, ErrLayoutSignalmanNotFound) || errors.Is(err, rel.ErrNotFound) {
+			return nil
+		}
+		return err
+	}
+	return l.repo.Delete(ctx, &row)
+}

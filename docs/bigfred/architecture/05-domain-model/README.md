@@ -8,10 +8,10 @@ stays free of any ORM imports.
 
 ## Subsections
 
-1. [Entities](./01-entities.md) — `User`, `Vehicle`, `Train`, `Lease`, `Interlocking`, `Layout`, `Party`, `Function`, `Template`, `Script`, `AuditLog`, …
+1. [Entities](./01-entities.md) — `User`, `Vehicle`, `Train`, `Lease`, `Interlocking`, `CommandStation`, `Layout`, `Function`, `Template`, `Script`, `AuditLog`, …
 2. [REL repository – Data Mapper in practice](./02-rel-repository.md)
 3. [Invariants enforced by services + DB constraints](./03-invariants.md)
-4. [Party-and-layout addressing rules](./04-party-layout-addressing.md)
+4. [Layout-and-command station addressing rules](./04-layout-command-station-addressing.md)
 5. [Audit log](./05-audit-log.md)
 6. [Vehicle functions and template inheritance (copy-on-write)](./06-functions-and-templates.md)
 7. [Server-side scripts (Goja sandbox in a sibling executor process)](./07-scripts.md)

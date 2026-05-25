@@ -164,48 +164,65 @@ func (LeaseSecurityContext) CanRevokeTrainLease(actor domain.User, lease domain.
 type InterlockingSecurityContext struct{}
 
 // CanOccupy now also verifies that the interlocking is whitelisted in
-// the actor's active party (PartyInterlocking row exists). The caller
+// the actor's active layout (LayoutInterlocking row exists). The caller
 // provides that row (or nil) – the policy stays pure.
-func (InterlockingSecurityContext) CanOccupy(actor domain.User, ilk domain.Interlocking, partyILK *domain.PartyInterlocking, current *domain.InterlockingSession, partySignalman *domain.PartySignalman) Decision
+func (InterlockingSecurityContext) CanOccupy(actor domain.User, ilk domain.Interlocking, layoutILK *domain.LayoutInterlocking, current *domain.InterlockingSession, layoutSignalman *domain.LayoutSignalman) Decision
 func (InterlockingSecurityContext) CanRequestTakeover(actor domain.User, current *domain.InterlockingSession) Decision
+
+// pkgs/server/security/command_station.go
+type CommandStationSecurityContext struct{}
+
+func (CommandStationSecurityContext) CanEditCommandStation(actor domain.User) Decision  // admin only
+func (CommandStationSecurityContext) CanViewConnection(actor domain.User) Decision // admin only
 
 // pkgs/server/security/layout.go
 type LayoutSecurityContext struct{}
 
-func (LayoutSecurityContext) CanEditLayout(actor domain.User) Decision  // admin only
-func (LayoutSecurityContext) CanViewConnection(actor domain.User) Decision // admin only
+// CanLoginToLayout is the policy behind POST /api/v1/auth/login. The
+// layout is picked on the login form (§7a.1); this method gates the
+// transition from "valid credentials" to "session opened in layout".
+// A locked layout is rejected so a hand-crafted request cannot bypass
+// the filter applied by GET /api/v1/layouts/login.
+func (LayoutSecurityContext) CanLoginToLayout(actor domain.User, p domain.Layout) Decision
 
-// pkgs/server/security/party.go
-type PartySecurityContext struct{}
+func (LayoutSecurityContext) CanCreateLayout(actor domain.User) Decision                       // admin only
+func (LayoutSecurityContext) CanEditLayout(actor domain.User, p domain.Layout) Decision        // admin only
+func (LayoutSecurityContext) CanDeleteLayout(actor domain.User, p domain.Layout) Decision      // admin only; system layout (p.IsSystem) is undeletable
 
-type PartyJoinInput struct {
-    Actor  domain.User
-    Party  domain.Party
-    Layout *domain.Layout // nil is OK iff Party.IsDefault(); otherwise deny
-}
+// Lock / unlock toggle Layout.Locked. The system layout cannot be
+// locked (CanLockLayout returns Deny("default_layout_cannot_be_locked")
+// when p.IsSystem == true). Unlocking a non-locked layout is a no-op
+// at the service layer; the policy still gates it on admin.
+func (LayoutSecurityContext) CanLockLayout(actor domain.User, p domain.Layout) Decision        // admin only; deny if p.IsSystem
+func (LayoutSecurityContext) CanUnlockLayout(actor domain.User, p domain.Layout) Decision      // admin only
 
-// CanJoinParty enforces a single rule per branch:
-//   - non-default party: Layout must be non-nil; otherwise deny
-//     ("layout_not_configured")
-//   - default party:     Layout MAY be nil (driver will pick later via
-//     session.setLayout); allowed unconditionally
-func (PartySecurityContext) CanJoinParty(in PartyJoinInput) Decision
-func (PartySecurityContext) CanCreateParty(actor domain.User) Decision                   // admin only
-func (PartySecurityContext) CanEditParty(actor domain.User, p domain.Party) Decision     // admin only
-func (PartySecurityContext) CanDeleteParty(actor domain.User, p domain.Party) Decision   // admin only; default is undeletable
-func (PartySecurityContext) CanAddSignalman(actor domain.User, p domain.Party) Decision  // admin only
-func (PartySecurityContext) CanRemoveSignalman(actor domain.User, p domain.Party) Decision // admin only
+// Attach / detach command stations to a non-system layout. The system
+// layout exposes the full catalogue virtually, so both methods deny
+// with "default_layout_command_stations_immutable" when p.IsSystem ==
+// true. DetachCommandStation must additionally refuse to leave a
+// non-system layout with zero stations
+// ("layout_needs_at_least_one_command_station") – the caller supplies
+// the current count.
+func (LayoutSecurityContext) CanAttachCommandStation(actor domain.User, p domain.Layout) Decision   // admin only
+func (LayoutSecurityContext) CanDetachCommandStation(actor domain.User, p domain.Layout, currentCount int) Decision // admin only
+
+func (LayoutSecurityContext) CanAddSignalman(actor domain.User, p domain.Layout) Decision     // admin only
+func (LayoutSecurityContext) CanRemoveSignalman(actor domain.User, p domain.Layout) Decision  // admin only
 
 // Adding an interlocking is allowed for admin OR a signalman of THIS
-// party. Caller passes the matching PartySignalman row (or nil).
-func (PartySecurityContext) CanAddInterlocking(actor domain.User, p domain.Party, actorIsSignalmanHere *domain.PartySignalman) Decision
-func (PartySecurityContext) CanRemoveInterlocking(actor domain.User, p domain.Party) Decision // admin only
+// layout. Caller passes the matching LayoutSignalman row (or nil).
+func (LayoutSecurityContext) CanAddInterlocking(actor domain.User, p domain.Layout, actorIsSignalmanHere *domain.LayoutSignalman) Decision
+func (LayoutSecurityContext) CanRemoveInterlocking(actor domain.User, p domain.Layout) Decision // admin only
 
-// CanSetSessionLayout is the policy behind WS `session.setLayout`.
-// Allowed only when the session's party.LayoutPickedPerSession() is
-// true (i.e. the `default` party). For all other parties the layout
-// is pinned at join time and cannot be changed mid-session.
-func (PartySecurityContext) CanSetSessionLayout(actor domain.User, p domain.Party) Decision
+// CanSetSessionCommandStation is the policy behind WS
+// `session.setCommandStation`. The picked station must be currently
+// attached to the session's layout: for non-system layouts the caller
+// supplies the matching LayoutCommandStation row (or nil), for the
+// system layout the caller supplies the live CommandStation row (or
+// nil); a nil in either branch denies with
+// "command_station_not_attached_to_layout". The actor only needs to
+// be the session owner – every authenticated driver may pick.
+func (LayoutSecurityContext) CanSetSessionCommandStation(actor domain.User, p domain.Layout, attachment *domain.LayoutCommandStation, catalogue *domain.CommandStation) Decision
 
 // pkgs/server/security/audit.go
 // The audit log is read-only and admin-only. There is no Can*Write

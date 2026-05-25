@@ -39,8 +39,8 @@ Throttle / locomotive control:
      so a vehicle coupled the other way around runs in the opposite
      DCC direction and the whole consist moves rigidly;
   3. calls `Station.SetSpeed(member.DCCAddr, speed, effectiveForward)`
-     concurrently across members (each on the layout resolved from
-     `session.LayoutID`, §3a.4 rule 3);
+     concurrently across members (each on the command station resolved from
+     `session.CommandStationID`, §3a.4 rule 3);
   4. replies with a single `ack` that aggregates per-member outcomes:
      `{ ok: true, trainSpeed: { trainId, speed, forward, members:[
         { addr, ok: true | false, error? } ] } }`.

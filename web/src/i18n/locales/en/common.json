@@ -7,7 +7,11 @@
     "ok": "OK",
     "retry": "Retry",
     "logout": "Log out",
-    "back": "Back"
+    "back": "Back",
+    "create": "Create",
+    "rename": "Rename",
+    "delete": "Delete",
+    "confirm": "Confirm"
   },
   "language": {
     "menuLabel": "Language",
@@ -17,5 +21,23 @@
       "en": "English"
     }
   },
+  "nav": {
+    "administration": {
+      "menuLabel": "Administration",
+      "users": "Users",
+      "layouts": "Layouts",
+      "parties": "Parties",
+      "interlockings": "Interlockings",
+      "auditLog": "Audit log"
+    },
+    "account": {
+      "menuLabel": "Account",
+      "profile": "Profile",
+      "apiKeys": "API keys",
+      "changePin": "Change password",
+      "logout": "Log out"
+    }
+  },
+  "comingSoon": "Coming soon ({{milestone}})",
   "networkError": "Could not reach the server."
 }

@@ -1,7 +1,7 @@
 ### 10.3 Interlockings, takeover, radio (M5)
 
 - A signalman can occupy an interlocking that is whitelisted in their
-  active party; an interlocking not on the whitelist cannot be
+  active layout; an interlocking not on the whitelist cannot be
   occupied even by an admin.
 - A second signalman trying to occupy the same interlocking is
   rejected.

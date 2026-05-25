@@ -20,12 +20,14 @@ import plAuth from "./locales/pl/auth.json";
 import plErrors from "./locales/pl/errors.json";
 import plRole from "./locales/pl/role.json";
 import plHome from "./locales/pl/home.json";
+import plLayout from "./locales/pl/layout.json";
 
 import enCommon from "./locales/en/common.json";
 import enAuth from "./locales/en/auth.json";
 import enErrors from "./locales/en/errors.json";
 import enRole from "./locales/en/role.json";
 import enHome from "./locales/en/home.json";
+import enLayout from "./locales/en/layout.json";
 
 // SUPPORTED_LOCALES is the single source of truth. Adding a third
 // locale (e.g. "de") is: append it here → mirror every catalogue
@@ -45,6 +47,7 @@ export const resources = {
     errors: plErrors,
     role: plRole,
     home: plHome,
+    layout: plLayout,
   },
   en: {
     common: enCommon,
@@ -52,6 +55,7 @@ export const resources = {
     errors: enErrors,
     role: enRole,
     home: enHome,
+    layout: enLayout,
   },
 } as const;
 
@@ -68,7 +72,7 @@ void i18n
     fallbackLng: "pl",
     supportedLngs: SUPPORTED_LOCALES as unknown as string[],
     defaultNS: "common",
-    ns: ["common", "auth", "errors", "role", "home"],
+    ns: ["common", "auth", "errors", "role", "home", "layout"],
     interpolation: {
       // React already escapes everything; double-escaping inside
       // i18next would mangle apostrophes and quotes.

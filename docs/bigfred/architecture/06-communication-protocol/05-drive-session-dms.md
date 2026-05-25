@@ -1,24 +1,26 @@
 ### 4.5 Drive Session & Dead-Man's Switch
 
 The WebSocket connection is the user's **physical handle on the
-layout**: while it is open, the user is considered "at the throttle"
+command station**: while it is open, the user is considered "at the throttle"
 and the server keeps issuing their commands. The moment the handle is
 lost (closed tab, killed app, lost network) the server must fail
 **safe**, not silent.
 
 #### 4.5.1 Drive session
 
-Every successful WS upgrade creates an in-memory `DriveSession`:
+Every successful WS upgrade creates an in-memory `DriveSession`. The
+session's `LayoutID` is **not** chosen at WS-upgrade time – it is
+read **directly from the JWT** issued by `POST /api/v1/auth/login`
+(§7a.1). The layout is therefore baked in at authentication and is
+**immutable for the lifetime of the session**.
 
 ```go
 // pkgs/server/ws/session.go
 type DriveSession struct {
     ID            string              // uuid, also returned to the client
     UserID        uint
-    PartyID       uint                // active party for this session (§3a.4)
-    LayoutID      *uint               // resolved from Party.LayoutID at join,
-                                      // or nil in the `default` party until
-                                      // the driver picks via session.setLayout
+    LayoutID      uint                // copied from the JWT at WS upgrade; IMMUTABLE for the session lifetime (§3a.4 rule 1)
+    CommandStationID *uint            // starts as nil for every session. Set by the FIRST session.setCommandStation; may be changed later (controlled context switch). Cleared back to nil if the picked station is deleted or detached from the layout (§3a.4 rule 10).
     Client        *Client
     OpenedAt      time.Time
     LastHeartbeat time.Time           // updated on each ping/pong & action
@@ -28,14 +30,20 @@ type DriveSession struct {
 ```
 
 Throttle dispatch invariant: every command that needs a `Station`
-first validates `session.LayoutID != nil`, otherwise it returns
-`layout_not_selected`. In non-default parties this is a tautology
-(the field is always set); in `default` it gates the throttle until
-the dropdown has been used.
+first validates `session.CommandStationID != nil`, otherwise it returns
+`command_station_not_selected`. This is now true for **every** drive
+session – the system layout no longer is a special case, because every
+layout exposes a list of one or more command stations and the user
+must pick one before the throttle becomes active. The UI MAY fire
+`session.setCommandStation` automatically when the layout's
+`availableCommandStations` list contains exactly one entry, but the
+server-side contract is identical in that case.
 
 A user may have **N concurrent sessions** (phone + desktop +
 MCP-via-SSE). Sessions are indexed by `(UserID -> []*DriveSession)`
-inside the Hub.
+inside the Hub. All those sessions share the same `LayoutID` if the
+JWT is the same; a phone + desktop logged in with two different JWTs
+(possibly into two different layouts) can coexist independently.
 
 #### 4.5.2 Heartbeat protocol
 
@@ -114,32 +122,59 @@ Client → Server:
   `estop_all` requires the `admin` role).
 - `session.heartbeat` – alias for `ping` kept for symmetry in
   generated SDKs.
-- `session.setLayout` `{ layoutId }` – **only valid in the `default`
-  party** (the only party with `LayoutPickedPerSession=true`). Selects
-  the active layout for this drive session; subsequent throttle
-  commands are routed to that layout's `Station`. Calling it again
-  with a different `layoutId` is allowed and is treated as a
-  controlled context switch (§3a.4 rule 2): the server runs the
-  user's emergency plan against the previous `LayoutID` first, then
-  re-points the session. Calling this action from any non-default
-  party returns `ack { ok:false, error:"layout_already_pinned" }`.
+- `session.setCommandStation` `{ commandStationId }` – picks the
+  command station the throttle will talk to. **Valid in every
+  layout**, because every drive session starts with
+  `CommandStationID = nil` (§4.5.1). The server validates that
+  `commandStationId` is currently attached to the session's layout:
+  - for non-system layouts it checks `LayoutCommandStation` rows;
+  - for the **system layout** (`IsSystem = true`) it checks the live
+    `command_stations` catalogue directly (the system layout's set
+    is virtual, §3a.4 rule 2).
+  Mismatch returns `ack { ok:false, error:"command_station_not_attached_to_layout" }`.
+  Calling it again with a different `commandStationId` is allowed and
+  is treated as a controlled context switch (§3a.4 rule 4): the
+  server runs the user's emergency plan against the previous
+  `CommandStationID` first, then re-points the session and broadcasts
+  `session.commandStationChanged` to every concurrent session of the
+  same user.
 
 Server → Client:
 
-- `session.opened` `{ sessionId, partyId, partyName, layoutId?, layoutName?, layoutPickedPerSession, availableLayouts?: [{id,name}], emergencyPlan, gracePeriod, resumed? }` –
+- `session.opened` `{ sessionId, layoutId, layoutName, layoutIsSystem, layoutLocked, availableCommandStations: [{id,name}], commandStationId?, commandStationName?, emergencyPlan, gracePeriod, resumed? }` –
   sent immediately after the WS upgrade so the UI can render the
-  active-party badge, the layout name, and the "Safety: stop my
-  vehicles after 5 s" indicator. For sessions in the `default` party,
-  `layoutId` / `layoutName` are absent and `layoutPickedPerSession` is
-  `true`; `availableLayouts` carries the catalogue the UI uses to
-  populate the dropdown in the vehicle control view. For any other
-  party, `layoutId` / `layoutName` are present and
-  `layoutPickedPerSession` is `false`.
-- `session.layoutChanged` `{ sessionId, layoutId, layoutName }` –
-  emitted after a successful `session.setLayout` (and to all the
-  user's other open sessions, if any are subscribed to the same drive
-  session). The UI uses this event to update the dropdown selection
-  on every device the driver has open and to gate the throttle.
+  active-layout badge, the **command-station dropdown** in the vehicle
+  control view, and the "Safety: stop my vehicles after 5 s" indicator.
+  `layoutId` / `layoutName` reflect the JWT-pinned layout
+  (`layoutName` is the i18n key `layout:system_default_label` when
+  `layoutIsSystem == true`, otherwise the user-entered name).
+  `layoutLocked` is informational: it can flip to `true` mid-session
+  when an admin locks the layout, which does NOT terminate the
+  session (§3a.4 rule 6) but lets the UI surface a "this layout was
+  locked – you can keep driving but won't be able to log back in
+  here" banner. `availableCommandStations` is always populated:
+  - for non-system layouts it lists the rows from `LayoutCommandStation`;
+  - for the system layout it lists every `command_stations` row.
+  `commandStationId` / `commandStationName` are absent on a fresh
+  session (since `CommandStationID == nil` until the user fires
+  `session.setCommandStation`) and present on a `resumed: true`
+  session where the previous pick was preserved.
+- `session.commandStationChanged` `{ sessionId, commandStationId, commandStationName?, reason? }` –
+  emitted after a successful `session.setCommandStation` (and broadcast
+  to all the user's other open sessions on the same drive session) so
+  every device can update its dropdown. `commandStationId` may be
+  `null`: this happens when the picked station is deleted or detached
+  from the session's layout mid-flight, in which case `reason` is
+  `"deleted"` or `"detached"` respectively and the throttle re-gates
+  until the user picks again from the refreshed
+  `availableCommandStations`.
+- `layout.commandStationsChanged` `{ layoutId, availableCommandStations: [{id,name}] }` –
+  fan-out event sent to every live drive session pinned to `layoutId`
+  after an admin attaches or detaches a command station on a non-system
+  layout, or after any `command_stations` mutation on the system layout.
+  Clients SHOULD refresh their dropdown contents in place; the current
+  `CommandStationID` is preserved if it is still in the new set, otherwise
+  the server itself emits a `session.commandStationChanged { commandStationId: null, reason:"detached" }` first.
 - `session.warning` `{ secondsUntilEmergency }` – sent when the server
   hasn't seen a heartbeat for `gracePeriod / 2`; lets the UI flash a
   warning so a temporarily backgrounded mobile tab can be brought back

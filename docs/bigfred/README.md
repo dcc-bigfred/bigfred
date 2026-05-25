@@ -19,7 +19,7 @@ cross-references inside the text still work via `Ctrl+F`.
 
 1. [Terminology](./architecture/00-terminology.md) — authoritative
    vocabulary (driver, signalman, vehicle, train, interlocking,
-   takeover, lease, radio, party, layout, function, vehicle template,
+   takeover, lease, radio, layout, command station, function, vehicle template,
    script).
 2. [Goals](./architecture/01-goals.md) — platform goals and the 18
    functional goals that drive everything else.

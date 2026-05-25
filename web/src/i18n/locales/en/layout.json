@@ -1,0 +1,54 @@
+{
+  "system_default_label": "Default (workshop)",
+  "loginPicker": {
+    "label": "Layout",
+    "loading": "Loading layouts…",
+    "loadError": "Could not load the list of layouts.",
+    "empty": "No layouts available."
+  },
+  "admin": {
+    "title": "Layouts",
+    "subtitle": "All layouts (the default layout is always available and cannot be deleted or locked).",
+    "columns": {
+      "name": "Name",
+      "status": "Status",
+      "type": "Type",
+      "actions": "Actions"
+    },
+    "type": {
+      "system": "System",
+      "custom": "Custom"
+    },
+    "status": {
+      "active": "Active",
+      "locked": "Locked"
+    },
+    "actions": {
+      "create": "New layout",
+      "rename": "Rename",
+      "lock": "Lock",
+      "unlock": "Unlock",
+      "delete": "Delete"
+    },
+    "dialogs": {
+      "create": {
+        "title": "New layout",
+        "nameLabel": "Name",
+        "nameHelp": "A short label identifying the layout (e.g. \"Modelfest 2026\")."
+      },
+      "rename": {
+        "title": "Rename layout",
+        "nameLabel": "Name"
+      },
+      "delete": {
+        "title": "Delete layout \"{{name}}\"",
+        "message": "This operation is irreversible. Active sessions pinned to this layout will keep running until they close, but nobody will be able to log into it any more."
+      },
+      "lock": {
+        "title": "Lock layout \"{{name}}\"",
+        "message": "A locked layout disappears from the login screen, but live sessions stay open. You can unlock it again at any time."
+      }
+    },
+    "empty": "There are no layouts to display."
+  }
+}

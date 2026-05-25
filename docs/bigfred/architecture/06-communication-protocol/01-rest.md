@@ -7,9 +7,10 @@ ownership/lease checks applied where applicable).
 
 ```
 # --- Authentication ---
-POST   /api/v1/auth/login              { login, pin }            *           # exchange login+PIN for session token
+GET    /api/v1/layouts/login                                     PUBLIC      # unauthenticated: list of layouts to pre-fill the login dropdown. Returns only non-locked rows: [{id, name, isSystem}]. UI substitutes the i18n key `layout:system_default_label` for rows where isSystem == true.
+POST   /api/v1/auth/login              { login, pin, layoutId }  *           # exchange login+PIN+layout for a session token. layoutId is REQUIRED. 422 layout_not_found / layout_locked are possible on top of 401 invalid_credentials. The issued JWT carries {userId, layoutId} and the binding is immutable for the token lifetime.
 POST   /api/v1/auth/logout                                       *
-GET    /api/v1/auth/me                                           *           # current user, effective roles, DCC pool
+GET    /api/v1/auth/me                                           *           # current user, effective roles, DCC pool, plus { layoutId, layoutName, layoutIsSystem } from the JWT
 
 # --- API keys (per-user temporary keys, max lifetime 365d) ---
 GET    /api/v1/apikeys                                           *           # own keys only (prefix + metadata, never plaintext)
@@ -78,45 +79,52 @@ POST   /api/v1/trains/{id}/lease       { toUserId, expiresAt }    owner
 DELETE /api/v1/trains/{id}/lease                                  owner
 
 # --- Interlockings ---
-GET    /api/v1/interlockings                                      *           # FILTERED to the caller's active party (only whitelisted IDs)
-POST   /api/v1/interlockings/{id}/join                            signalman   # join (becomes active session); requires interlocking ∈ active party
+GET    /api/v1/interlockings                                      *           # FILTERED to the caller's active layout (only whitelisted IDs)
+POST   /api/v1/interlockings/{id}/join                            signalman   # join (becomes active session); requires interlocking ∈ active layout
 POST   /api/v1/interlockings/{id}/leave                           signalman
 
-# --- Layouts (catalogue of `makiety`) ---
-GET    /api/v1/layouts                                            *           # list (name + connection type only; admin sees full Connection)
-GET    /api/v1/layouts/{id}                                       admin       # full details incl. Connection
-POST   /api/v1/layouts                 { name, connection }       admin
-PUT    /api/v1/layouts/{id}            { name, connection }       admin
-DELETE /api/v1/layouts/{id}                                       admin       # 409 if any Party still references it
+# --- Command Stations (catalogue of `centralki`) ---
+GET    /api/v1/command-stations                                            *           # list (name + connection type only; admin sees full Connection)
+GET    /api/v1/command-stations/{id}                                       admin       # full details incl. Connection
+POST   /api/v1/command-stations                 { name, connection }       admin
+PUT    /api/v1/command-stations/{id}            { name, connection }       admin
+DELETE /api/v1/command-stations/{id}                                       admin       # cascades: every LayoutCommandStation row pointing at it is removed and every live DriveSession pinned to it is detached (CommandStationID → nil + broadcast `session.commandStationChanged { commandStationId: null, reason:"deleted" }`). 409 layout_needs_at_least_one_command_station if removing the row would leave any non-system layout with zero attached stations.
 
-# --- Parties (modeling events) ---
-GET    /api/v1/parties                                            *           # list shown right after login; rows carry `canEdit:bool` for admin badge and `layoutPickedPerSession:bool` (true only for `default`)
-GET    /api/v1/parties/{id}                                       *
-POST   /api/v1/parties                 { name, layoutId }         admin       # layoutId REQUIRED – only the bootstrap `default` row is allowed to have a NULL layout (you cannot create another such row)
-PUT    /api/v1/parties/{id}            { name?, layoutId? }       admin       # 422 on attempt to set layoutId=null on a non-default party
-DELETE /api/v1/parties/{id}                                       admin       # cannot delete `default`
+# --- Layouts (modeling events) ---
+# Note: there is no /layouts/{id}/join or /leave endpoint. The layout
+# is picked on the login form and pinned to the drive session by the
+# JWT (§7a.1); switching layout requires logout + login.
+GET    /api/v1/layouts                                            *           # full list (incl. locked rows); admin sees an `canEdit:bool` badge. Each row carries: { id, name, isSystem, locked, commandStations:[{id,name}] }. For isSystem rows commandStations mirrors the live `command_stations` catalogue.
+GET    /api/v1/layouts/{id}                                       *
+POST   /api/v1/layouts                 { name, commandStationIds:[id,...] } admin   # commandStationIds REQUIRED and MUST contain at least one id; rejects with `layout_needs_at_least_one_command_station` otherwise. Trying to create a second `IsSystem=true` row is impossible (partial unique index).
+PUT    /api/v1/layouts/{id}            { name? }                  admin       # rename only. The system layout (isSystem) rejects with `default_layout_immutable`. The attached command-station set is mutated through the dedicated subresource below.
+DELETE /api/v1/layouts/{id}                                       admin       # 409 if any drive session is still pinned to it; the system layout (isSystem) always returns 422 default_layout_undeletable.
 
-POST   /api/v1/parties/{id}/join                                  *           # enter party.
-                                                                              #   - non-default: fails if its layout is unreachable
-                                                                              #   - default:     ALWAYS succeeds (session.LayoutID starts nil; driver picks later)
-POST   /api/v1/parties/{id}/leave                                 *           # equivalent to closing all drive sessions for that party
+# Lock / unlock (admin only; hides the layout from /api/v1/layouts/login)
+POST   /api/v1/layouts/{id}/lock                                  admin       # 422 default_layout_cannot_be_locked when isSystem; idempotent on a non-system layout (returns 200 with `locked:true`); NEVER closes live drive sessions.
+DELETE /api/v1/layouts/{id}/lock                                  admin       # unlock; idempotent (returns 200 with `locked:false`).
 
-# Party-scoped signalmen
-GET    /api/v1/parties/{id}/signalmen                             *
-POST   /api/v1/parties/{id}/signalmen  { userId, expiresAt? }     admin       # grant signalman role inside this party
-DELETE /api/v1/parties/{id}/signalmen/{userId}                    admin
+# Command-station attachment (admin only; not allowed on the system layout)
+GET    /api/v1/layouts/{id}/command-stations                      *           # returns the current set: for non-system layouts the LayoutCommandStation rows, for the system layout the entire `command_stations` catalogue (virtual)
+POST   /api/v1/layouts/{id}/command-stations { commandStationId } admin       # 422 default_layout_command_stations_immutable when isSystem; 404 command_station_not_found if the id is unknown; 409 already_attached when the row exists
+DELETE /api/v1/layouts/{id}/command-stations/{commandStationId}   admin       # 422 default_layout_command_stations_immutable when isSystem; 422 layout_needs_at_least_one_command_station when it would leave the layout with zero rows; live sessions pinned to the detached station are detached (CommandStationID → nil) and re-gated.
 
-# Party-scoped interlocking whitelist
-GET    /api/v1/parties/{id}/interlockings                         *
-POST   /api/v1/parties/{id}/interlockings { interlockingId }      admin OR signalman-of-this-party
-DELETE /api/v1/parties/{id}/interlockings/{interlockingId}        admin
+# Layout-scoped signalmen
+GET    /api/v1/layouts/{id}/signalmen                             *
+POST   /api/v1/layouts/{id}/signalmen  { userId, expiresAt? }     admin       # grant signalman role inside this layout
+DELETE /api/v1/layouts/{id}/signalmen/{userId}                    admin
+
+# Layout-scoped interlocking whitelist
+GET    /api/v1/layouts/{id}/interlockings                         *
+POST   /api/v1/layouts/{id}/interlockings { interlockingId }      admin OR signalman-of-this-layout
+DELETE /api/v1/layouts/{id}/interlockings/{interlockingId}        admin
 
 # --- Audit log (admin only, append-only) ---
-GET    /api/v1/audit-log                                          admin       # filterable: ?action=&actor=&objectType=&objectId=&partyId=&since=&until=&limit=&offset=
+GET    /api/v1/audit-log                                          admin       # filterable: ?action=&actor=&objectType=&objectId=&layoutId=&since=&until=&limit=&offset=
 GET    /api/v1/audit-log/{id}                                     admin
 
 # --- System ---
-GET    /api/v1/system/status                                      *           # command station info FOR THE CALLER'S ACTIVE PARTY
+GET    /api/v1/system/status                                      *           # command station info FOR THE CALLER'S CURRENTLY PICKED COMMAND STATION (resolved via the session's CommandStationID); returns `{ commandStationSelected:false }` until the user fires session.setCommandStation
 ```
 
 Takeover, throttle and radio are **all WebSocket-only** because they are

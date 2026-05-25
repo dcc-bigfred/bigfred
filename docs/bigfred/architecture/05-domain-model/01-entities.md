@@ -192,93 +192,131 @@ type RadioMessage struct {
 ```
 
 ```go
-// pkgs/server/domain/layout.go
-type LayoutConnectionType string
+// pkgs/server/domain/command_station.go
+type CommandStationConnectionType string
 
 const (
-    LayoutConnLoconetSerial LayoutConnectionType = "loconet_serial" // physical socket
-    LayoutConnZ21           LayoutConnectionType = "z21"            // Z21 over network
-    LayoutConnLoconetTCP    LayoutConnectionType = "loconet_tcp"    // LocoNet over Network
+    CommandStationConnLoconetSerial CommandStationConnectionType = "loconet_serial" // physical socket
+    CommandStationConnZ21           CommandStationConnectionType = "z21"            // Z21 over network
+    CommandStationConnLoconetTCP    CommandStationConnectionType = "loconet_tcp"    // LocoNet over Network
 )
 
 // Connection describes how the backend reaches the command station for
-// this layout. Different connection types use different fields; the
+// this command station. Different connection types use different fields; the
 // struct is intentionally flat so it serialises trivially to JSON in
 // REST responses.
-type LayoutConnection struct {
-    Type     LayoutConnectionType
+type CommandStationConnection struct {
+    Type     CommandStationConnectionType
     Device   string // loconet_serial: e.g. "/dev/ttyUSB0"
     Baudrate int    // loconet_serial: e.g. 57600
     Address  string // z21 / loconet_tcp: host or IP
     Port     uint16 // z21 / loconet_tcp: TCP/UDP port
 }
 
-// Layout (Polish: makieta) – a physical model railway layout plus its
+// CommandStation (Polish: centralka) – a physical model railway command station plus its
 // command-station endpoint. Editable only by admin.
-type Layout struct {
+type CommandStation struct {
     ID         uint
     Name       string           // unique
-    Connection LayoutConnection // stored as JSON column in SQLite
+    Connection CommandStationConnection // stored as JSON column in SQLite
     CreatedAt  time.Time
     UpdatedAt  time.Time
 }
 ```
 
 ```go
-// pkgs/server/domain/party.go
-// Party (Polish: impreza) – a modeling event / room. No end date.
+// pkgs/server/domain/layout.go
+// Layout (Polish: makieta) – a modeling event / room. The user picks a
+// layout on the login form (§7a.1) and the resulting drive session is
+// pinned to it for its entire lifetime.
 //
-// LayoutID is nullable EXCLUSIVELY for the bootstrap `default` party:
-//   - default party:    LayoutID = nil  → driver picks layout per session
-//                                          via session.setLayout (§4.5.x)
-//   - any other party:  LayoutID != nil → fixed layout for the whole party
+// Two flags steer the lifecycle of a Layout row:
 //
-// The "LayoutID nil iff name = 'default'" invariant is enforced both
-// by PartyService and by a DB CHECK constraint. Joining a NON-default
-// party whose layout has been deleted is impossible at the service
-// layer (FK enforcement).
-type Party struct {
+//   - IsSystem: true for the bootstrap row only. The system layout
+//     cannot be deleted, cannot be locked, its Name and IsSystem fields
+//     are immutable, and its set of attached command stations is a
+//     virtual view of `command_stations` (admin endpoints that try to
+//     mutate it return 422). The system row is seeded with
+//     Name = "default"; the UI renders it via the i18n key
+//     `layout:system_default_label` ("Domyślna (warsztat)" / "Default
+//     (workshop)").
+//
+//   - Locked: false for every layout right after creation; an admin
+//     may toggle it on a non-system layout via POST/DELETE on
+//     /api/v1/layouts/{id}/lock. A locked layout is hidden from the
+//     unauthenticated login dropdown (`GET /api/v1/layouts/login`) so no
+//     new sessions can open in it; existing drive sessions in that
+//     layout keep running until they close on their own. The system
+//     layout cannot be locked (DB CHECK + service rule).
+//
+// A Layout has **one or more attached command stations** (see
+// LayoutCommandStation below). The driver picks one of those at the
+// throttle via `session.setCommandStation` (§4.5). There is no longer
+// a single nullable CommandStationID column on Layout itself.
+type Layout struct {
     ID        uint
-    Name      string    // unique; the system-seeded row is name = "default"
-    LayoutID  *uint     // REQUIRED for non-default parties; nil only for `default`
-    CreatedBy uint      // admin user that created it (0 for `default` seed)
+    Name      string    // unique; system row is Name = "default" (immutable)
+    IsSystem  bool      // true ONLY for the system-seeded row; immutable
+    Locked    bool      // admin-toggleable on non-system layouts; always false for IsSystem rows
+    CreatedBy uint      // admin user that created it (0 for the system seed)
     CreatedAt time.Time
     UpdatedAt time.Time
 
-    Signalmen     []PartySignalman    `ref:"id" fk:"party_id"`
-    Interlockings []PartyInterlocking `ref:"id" fk:"party_id"`
+    Signalmen       []LayoutSignalman       `ref:"id" fk:"layout_id"`
+    Interlockings   []LayoutInterlocking    `ref:"id" fk:"layout_id"`
+    CommandStations []LayoutCommandStation  `ref:"id" fk:"layout_id"` // EMPTY for IsSystem rows: their set is virtual
 }
 
-// IsDefault returns true for the bootstrap `default` party. The
-// PartyService and the security policies use this helper rather than
-// hard-coding the literal string.
-func (p Party) IsDefault() bool { return p.Name == "default" }
+// IsDefault returns true for the bootstrap system layout. Callers must
+// use this helper (or the IsSystem field) – never compare Name against
+// the string literal, because the displayed name comes from i18n while
+// the stored Name is a stable system marker.
+func (p Layout) IsDefault() bool { return p.IsSystem }
 
-// LayoutPickedPerSession returns true when this party requires the
-// driver to pick a layout for each drive session (currently only the
-// `default` party). Mirrors the storage invariant LayoutID == nil.
-func (p Party) LayoutPickedPerSession() bool { return p.LayoutID == nil }
+// LayoutCommandStation pins a CommandStation to a non-system layout.
+// Rows exist ONLY for layouts with IsSystem == false:
+//
+//   - the system layout's "set of command stations" is virtual: any
+//     CommandStation row in the catalogue is implicitly attached,
+//     including ones added after the system layout was seeded.
+//   - inserting a row for a system layout is rejected with
+//     `default_layout_command_stations_immutable` (DB CHECK on
+//     `layout_id != <system_layout_id>` + service validation).
+//
+// Admin is the only writer; both adding and removing are audited
+// (`layout.command_station_attached` / `layout.command_station_detached`).
+// Deleting a CommandStation cascades: every LayoutCommandStation row
+// pointing at it disappears, and any drive session currently pinned to
+// that command station is gracefully detached (CommandStationID → nil;
+// throttle re-gated until the user re-picks). See §3a.3 invariants.
+type LayoutCommandStation struct {
+    ID               uint
+    LayoutID         uint
+    CommandStationID uint
+    AddedByUserID    uint      // admin user ID
+    AddedAt          time.Time
+}
 
-// PartySignalman grants the signalman role to UserID, but ONLY while
-// they are active in PartyID. The grant is administered by an admin
+// LayoutSignalman grants the signalman role to UserID, but ONLY while
+// they are active in LayoutID. The grant is administered by an admin
 // and may optionally carry an ExpiresAt (otherwise it is permanent
-// inside the party). See §7a.2 for how this changes effective roles.
-type PartySignalman struct {
+// inside the layout). See §7a.2 for how this changes effective roles.
+type LayoutSignalman struct {
     ID         uint
-    PartyID    uint
+    LayoutID    uint
     UserID     uint
     GrantedBy  uint      // admin user ID
     GrantedAt  time.Time
-    ExpiresAt  *time.Time // nil = permanent inside this party
+    ExpiresAt  *time.Time // nil = permanent inside this layout
 }
 
-// PartyInterlocking whitelists which interlockings are visible to
-// drivers (and which may be occupied) within a specific party. Both
-// the admin and any signalman of the party may add rows; only admin
+// LayoutInterlocking whitelists which interlockings are visible to
+// drivers (and which may be occupied) within a specific layout. Both
+// the admin and any signalman of the layout may add rows; only admin
 // may remove them.
-type PartyInterlocking struct {
+type LayoutInterlocking struct {
     ID              uint
-    PartyID         uint
+    LayoutID         uint
     InterlockingID  uint
     AddedByUserID   uint
     AddedAt         time.Time
@@ -308,13 +346,17 @@ const (
     AuditTrainLeaseRevoked AuditAction = "train.lease_revoked"
     AuditTrainLeaseExpired AuditAction = "train.lease_expired"
 
-    AuditLayoutCreated AuditAction = "layout.created"
-    AuditLayoutUpdated AuditAction = "layout.updated"
-    AuditLayoutDeleted AuditAction = "layout.deleted"
+    AuditCommandStationCreated AuditAction = "command_station.created"
+    AuditCommandStationUpdated AuditAction = "command_station.updated"
+    AuditCommandStationDeleted AuditAction = "command_station.deleted"
 
-    AuditPartyCreated AuditAction = "party.created"
-    AuditPartyUpdated AuditAction = "party.updated"
-    AuditPartyDeleted AuditAction = "party.deleted"
+    AuditLayoutCreated                  AuditAction = "layout.created"
+    AuditLayoutUpdated                  AuditAction = "layout.updated"
+    AuditLayoutDeleted                  AuditAction = "layout.deleted"
+    AuditLayoutLocked                   AuditAction = "layout.locked"
+    AuditLayoutUnlocked                 AuditAction = "layout.unlocked"
+    AuditLayoutCommandStationAttached   AuditAction = "layout.command_station_attached"
+    AuditLayoutCommandStationDetached   AuditAction = "layout.command_station_detached"
 
     // Vehicle function definitions (registration / detach / re-attach).
     // Runtime invocation (DCC F<n> ON/OFF) is NOT audited.
@@ -350,13 +392,13 @@ type AuditLogEntry struct {
     ActorUserID uint      // the user that triggered the action ("user ID")
     ActorLogin  string    // user.login at the moment of the event ("user name")
     OccurredAt  time.Time // UTC, ms precision ("date")
-    ObjectType  string    // "vehicle" | "train" | "layout" | "party" | "session"
+    ObjectType  string    // "vehicle" | "train" | "command_station" | "layout" | "session"
     ObjectID    uint      // ("object ID")
     ObjectName  string    // e.g. vehicle.name at write time ("object name")
 
     // Optional structured details for richer UIs. The audit log stays
     // readable without it; it is purely informational.
-    PartyID  *uint  // where the action happened, if applicable
+    LayoutID  *uint  // where the action happened, if applicable
     Metadata string // JSON-encoded; e.g. for lease: {to_user_id, to_login, expires_at}
 }
 ```

@@ -17,5 +17,9 @@
   "default_layout_cannot_be_locked": "The default layout cannot be locked.",
   "interlocking_not_found": "The selected interlocking no longer exists.",
   "interlocking_name_required": "Please enter an interlocking name.",
-  "interlocking_name_taken": "An interlocking with this name already exists."
+  "interlocking_name_taken": "An interlocking with this name already exists.",
+  "interlocking_occupied": "This interlocking is already staffed.",
+  "interlocking_not_in_layout": "This interlocking is not on the active layout.",
+  "not_signalman": "You don't have signalman rights on this layout.",
+  "layout_mismatch": "The request targets a different layout than your session."
 }

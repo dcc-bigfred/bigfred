@@ -71,10 +71,11 @@ func (i Identity) HasRole(roles ...domain.Role) bool {
 // trusts the network boundary and focuses on getting argon2id + JWT
 // right.
 type AuthService struct {
-	users        *repo.Users
-	layouts      *LayoutService
-	jwtSecret    []byte
-	sessionTTL   time.Duration
+	users      *repo.Users
+	layouts    *LayoutService
+	signalmen  *repo.LayoutSignalmen
+	jwtSecret  []byte
+	sessionTTL time.Duration
 	cookieDomain string
 }
 
@@ -93,12 +94,15 @@ type AuthConfig struct {
 // 2-3) and to rehydrate the Layout side of Identity from a verified
 // JWT (so a layout deleted out of band immediately invalidates
 // outstanding cookies, mirroring the User branch).
-func NewAuthService(users *repo.Users, layouts *LayoutService, cfg AuthConfig) *AuthService {
+func NewAuthService(users *repo.Users, layouts *LayoutService, signalmen *repo.LayoutSignalmen, cfg AuthConfig) *AuthService {
 	if len(cfg.JWTSecret) == 0 {
 		panic("service.NewAuthService: JWTSecret must not be empty")
 	}
 	if layouts == nil {
 		panic("service.NewAuthService: LayoutService must not be nil")
+	}
+	if signalmen == nil {
+		panic("service.NewAuthService: LayoutSignalmen must not be nil")
 	}
 	ttl := cfg.SessionTTL
 	if ttl == 0 {
@@ -107,6 +111,7 @@ func NewAuthService(users *repo.Users, layouts *LayoutService, cfg AuthConfig) *
 	return &AuthService{
 		users:      users,
 		layouts:    layouts,
+		signalmen:  signalmen,
 		jwtSecret:  cfg.JWTSecret,
 		sessionTTL: ttl,
 	}
@@ -206,6 +211,32 @@ func (s *AuthService) Login(ctx context.Context, login, pin string, layoutID uin
 	}
 
 	return Identity{User: user, Layout: layout}, nil
+}
+
+// EffectiveDisplayRole returns the single role label shown on the
+// dashboard (§6.3c): admin beats signalman beats driver.
+func (s *AuthService) EffectiveDisplayRole(ctx context.Context, user domain.User, layoutID uint) (domain.Role, error) {
+	if user.Role == domain.RoleAdmin {
+		return domain.RoleAdmin, nil
+	}
+	now := time.Now().UTC()
+	ok, err := s.signalmen.HasActiveGrant(ctx, layoutID, user.ID, now)
+	if err != nil {
+		return "", err
+	}
+	if ok {
+		return domain.RoleSignalman, nil
+	}
+	return domain.RoleDriver, nil
+}
+
+// IsEffectiveSignalman reports whether the user may operate as a
+// signalman inside the layout (layout-scoped grant, §7a.2).
+func (s *AuthService) IsEffectiveSignalman(ctx context.Context, user domain.User, layoutID uint) (bool, error) {
+	if user.Role == domain.RoleAdmin {
+		return false, nil
+	}
+	return s.signalmen.HasActiveGrant(ctx, layoutID, user.ID, time.Now().UTC())
 }
 
 // sessionClaims is the wire shape of the JWT payload. Keep it small —

@@ -12,18 +12,30 @@ import (
 // InterlockingHandler bundles REST endpoints for the interlocking
 // catalogue and layout-scoped listing.
 type InterlockingHandler struct {
-	svc *service.InterlockingService
+	svc       *service.InterlockingService
+	occupancy *service.InterlockingOccupancyService
+	auth      *service.AuthService
 }
 
 // NewInterlockingHandler returns an InterlockingHandler.
-func NewInterlockingHandler(svc *service.InterlockingService) *InterlockingHandler {
-	return &InterlockingHandler{svc: svc}
+func NewInterlockingHandler(
+	svc *service.InterlockingService,
+	occupancy *service.InterlockingOccupancyService,
+	auth *service.AuthService,
+) *InterlockingHandler {
+	return &InterlockingHandler{svc: svc, occupancy: occupancy, auth: auth}
 }
 
 type interlockingResponse struct {
-	ID       uint   `json:"id"`
-	Name     string `json:"name"`
-	Location string `json:"location"`
+	ID       uint              `json:"id"`
+	Name     string            `json:"name"`
+	Location string            `json:"location"`
+	Occupant *occupantResponse `json:"occupant,omitempty"`
+}
+
+type occupantResponse struct {
+	UserID uint   `json:"userId"`
+	Login  string `json:"login"`
 }
 
 func toInterlockingResponse(i domain.Interlocking) interlockingResponse {
@@ -34,9 +46,19 @@ func toInterlockingResponse(i domain.Interlocking) interlockingResponse {
 	}
 }
 
-// List handles GET /api/v1/interlockings. Admins receive the full
-// catalogue; everyone else receives only rows whitelisted for their
-// active layout (§4.1).
+func toInterlockingWithOccupant(row service.InterlockingWithOccupant) interlockingResponse {
+	out := toInterlockingResponse(row.Interlocking)
+	if row.Occupant != nil {
+		out.Occupant = &occupantResponse{
+			UserID: row.Occupant.UserID,
+			Login:  row.Occupant.Login,
+		}
+	}
+	return out
+}
+
+// List handles GET /api/v1/interlockings — filtered to the caller's
+// active layout with occupant enrichment (§4.1 / §6.3c).
 func (h *InterlockingHandler) List(w http.ResponseWriter, r *http.Request) {
 	id, ok := IdentityFromContext(r.Context())
 	if !ok {
@@ -44,18 +66,28 @@ func (h *InterlockingHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var rows []domain.Interlocking
-	var err error
-	if id.HasRole(domain.RoleAdmin) {
-		rows, err = h.svc.ListAll(r.Context())
-	} else {
-		rows, err = h.svc.ListForLayout(r.Context(), id.Layout.ID)
-	}
+	rows, err := h.occupancy.ListForLayout(r.Context(), id.Layout.ID)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 		return
 	}
 
+	out := make([]interlockingResponse, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, toInterlockingWithOccupant(row))
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(out)
+}
+
+// ListCatalogue handles GET /api/v1/interlockings/catalogue (admin
+// only) — the full catalogue for the admin CRUD screen.
+func (h *InterlockingHandler) ListCatalogue(w http.ResponseWriter, r *http.Request) {
+	rows, err := h.svc.ListAll(r.Context())
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
 	out := make([]interlockingResponse, 0, len(rows))
 	for _, row := range rows {
 		out = append(out, toInterlockingResponse(row))
@@ -146,6 +178,105 @@ func (h *InterlockingHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+type interlockingJoinRequest struct {
+	Force bool `json:"force"`
+}
+
+// Join handles POST /api/v1/interlockings/{id}/join (signalman).
+func (h *InterlockingHandler) Join(w http.ResponseWriter, r *http.Request) {
+	interlockingID, ok := parseUintParam(r, "id")
+	if !ok {
+		writeJSONError(w, http.StatusBadRequest, "invalid_id")
+		return
+	}
+	id, ok := IdentityFromContext(r.Context())
+	if !ok {
+		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	isSignalman, err := h.auth.IsEffectiveSignalman(r.Context(), id.User, id.Layout.ID)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	if !isSignalman {
+		writeJSONError(w, http.StatusForbidden, "not_signalman")
+		return
+	}
+
+	var req interlockingJoinRequest
+	if r.ContentLength > 0 {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSONError(w, http.StatusBadRequest, "invalid_body")
+			return
+		}
+	}
+
+	result, err := h.occupancy.Join(r.Context(), service.JoinInput{
+		InterlockingID: interlockingID,
+		LayoutID:       id.Layout.ID,
+		Actor:          id.User,
+		Force:          req.Force,
+	})
+	if err != nil {
+		writeInterlockingOccupancyError(w, err)
+		return
+	}
+
+	resp := toInterlockingWithOccupant(service.InterlockingWithOccupant{
+		Interlocking: result.Interlocking,
+		Occupant:     &result.Occupant,
+	})
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(resp)
+}
+
+// Leave handles POST /api/v1/interlockings/{id}/leave (signalman).
+func (h *InterlockingHandler) Leave(w http.ResponseWriter, r *http.Request) {
+	interlockingID, ok := parseUintParam(r, "id")
+	if !ok {
+		writeJSONError(w, http.StatusBadRequest, "invalid_id")
+		return
+	}
+	id, ok := IdentityFromContext(r.Context())
+	if !ok {
+		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	isSignalman, err := h.auth.IsEffectiveSignalman(r.Context(), id.User, id.Layout.ID)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	if !isSignalman {
+		writeJSONError(w, http.StatusForbidden, "not_signalman")
+		return
+	}
+
+	if err := h.occupancy.Leave(r.Context(), interlockingID, id.Layout.ID, id.User); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func writeInterlockingOccupancyError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, service.ErrInterlockingNotFound):
+		writeJSONError(w, http.StatusNotFound, "interlocking_not_found")
+	case errors.Is(err, service.ErrInterlockingOccupied):
+		writeJSONError(w, http.StatusConflict, "interlocking_occupied")
+	case errors.Is(err, service.ErrInterlockingNotInLayout):
+		writeJSONError(w, http.StatusUnprocessableEntity, "interlocking_not_in_layout")
+	case errors.Is(err, service.ErrNotSignalman):
+		writeJSONError(w, http.StatusForbidden, "not_signalman")
+	default:
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+	}
 }
 
 func writeInterlockingError(w http.ResponseWriter, err error) {

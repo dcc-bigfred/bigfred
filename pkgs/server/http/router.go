@@ -9,6 +9,7 @@ import (
 
 	"github.com/keskad/loco/pkgs/server/domain"
 	"github.com/keskad/loco/pkgs/server/service"
+	"github.com/keskad/loco/pkgs/server/ws"
 )
 
 // RouterConfig collects everything the chi router needs at construction
@@ -18,6 +19,9 @@ type RouterConfig struct {
 	Auth          *service.AuthService
 	Layouts       *service.LayoutService
 	Interlockings *service.InterlockingService
+	Occupancy     *service.InterlockingOccupancyService
+	Presence      *service.PresenceService
+	Hub           *ws.Hub
 
 	// AllowedOrigins is forwarded verbatim to the CORS middleware.
 	// In development the Vite dev server lives on a different port
@@ -52,9 +56,15 @@ func NewRouter(cfg RouterConfig) http.Handler {
 
 	authH := NewAuthHandler(cfg.Auth, cfg.SecureCookie)
 	layoutH := NewLayoutHandler(cfg.Layouts)
-	interlockingH := NewInterlockingHandler(cfg.Interlockings)
+	interlockingH := NewInterlockingHandler(cfg.Interlockings, cfg.Occupancy, cfg.Auth)
+	presenceH := NewPresenceHandler(cfg.Presence)
 
 	r.Route("/api/v1", func(r chi.Router) {
+		// WebSocket upgrade — auth reads cookie / ?token= inline.
+		r.Get("/ws", func(w http.ResponseWriter, r *http.Request) {
+			ServeWS(cfg.Hub, cfg.Auth, w, r)
+		})
+
 		// Public auth endpoints (login does its own credential check).
 		r.Post("/auth/login", authH.Login)
 		r.Post("/auth/logout", authH.Logout)
@@ -72,6 +82,10 @@ func NewRouter(cfg RouterConfig) http.Handler {
 
 			r.Get("/interlockings", interlockingH.List)
 			r.Get("/interlockings/{id}", interlockingH.Get)
+			r.Post("/interlockings/{id}/join", interlockingH.Join)
+			r.Post("/interlockings/{id}/leave", interlockingH.Leave)
+
+			r.Get("/layouts/{id}/presence", presenceH.List)
 
 			// Layouts: read endpoints are open to every
 			// authenticated user; mutating endpoints require admin.
@@ -81,6 +95,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 
 			r.Group(func(r chi.Router) {
 				r.Use(RequireRole(domain.RoleAdmin))
+				r.Get("/interlockings/catalogue", interlockingH.ListCatalogue)
 				r.Post("/layouts", layoutH.Create)
 				r.Put("/layouts/{id}", layoutH.Update)
 				r.Delete("/layouts/{id}", layoutH.Delete)

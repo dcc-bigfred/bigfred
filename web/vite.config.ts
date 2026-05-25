@@ -20,6 +20,7 @@ export default defineConfig({
       "/api/v1": {
         target: "http://localhost:8080",
         changeOrigin: true,
+        ws: true,
       },
       "/healthz": {
         target: "http://localhost:8080",

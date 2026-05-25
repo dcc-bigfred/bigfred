@@ -1,8 +1,27 @@
 {
-  "greeting": "Witaj, {{login}}!",
+  "title": "Pulpit makiety",
+  "subtitle": "Zalogowano jako {{login}}.",
   "greetingAnon": "Witaj!",
-  "intro": "Logowanie zakończone sukcesem. Strona główna powstanie w kolejnych etapach implementacji (zobacz <code>docs/bigfred/architecture/13-delivery-order.md</code>, milestones M2–M8).",
-  "milestoneOverline": "Status milestone",
-  "milestoneTitle": "M2 — Persistence + auth (in progress)",
-  "milestoneBody": "Backend uruchomiony, baza SQLite zainicjowana, logowanie z argon2id + JWT działa. Następny krok: zarządzanie użytkownikami (CRUD), DCC pool, rate-limiting w Redis."
+  "loadError": "Nie udało się załadować danych pulpitu.",
+  "onlineUsers": {
+    "title": "Użytkownicy online",
+    "empty": "Nikogo nie ma online w tej makiecie.",
+    "noInterlocking": "—",
+    "columns": {
+      "login": "Login",
+      "role": "Rola",
+      "interlocking": "Nastawnia"
+    }
+  },
+  "interlockings": {
+    "title": "Nastawnie",
+    "empty": "Brak nastawni przypisanych do tej makiety.",
+    "vacant": "wolna",
+    "noLocation": "—",
+    "columns": {
+      "name": "Nazwa",
+      "location": "Opis",
+      "occupant": "Obstawia"
+    }
+  }
 }

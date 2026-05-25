@@ -1,63 +1,134 @@
-import { Box, Container, Paper, Stack, Typography } from "@mui/material";
-import { Trans, useTranslation } from "react-i18next";
+import {
+  Alert,
+  Box,
+  CircularProgress,
+  Container,
+  Paper,
+  Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Typography,
+} from "@mui/material";
+import { useTranslation } from "react-i18next";
 
 import { useMe } from "../api/auth";
+import { useDashboardInterlockings } from "../api/interlockings";
+import { useLayoutPresence } from "../api/presence";
 
-// HomePage is the placeholder landing screen for the bootstrap
-// milestone. It exists so the rest of the auth plumbing
-// (ProtectedRoute → AppShell → child) has something to render after
-// a successful login. Real content (party picker, vehicle list, …)
-// will replace this in M3+.
 export default function HomePage() {
   const me = useMe().data;
-  const { t } = useTranslation("home");
+  const layoutId = me?.layoutId ?? null;
+  const { t } = useTranslation(["home", "role", "interlocking"]);
+
+  const presence = useLayoutPresence(layoutId);
+  const interlockings = useDashboardInterlockings();
+
+  const loading = presence.isLoading || interlockings.isLoading;
+  const error = presence.error ?? interlockings.error;
 
   return (
-    <Container maxWidth="md" sx={{ py: { xs: 3, sm: 5 } }}>
+    <Container maxWidth="lg" sx={{ py: { xs: 3, sm: 4 } }}>
       <Stack spacing={3}>
         <Box>
           <Typography variant="h4" component="h1" gutterBottom>
-            {me
-              ? t("greeting", { login: me.login })
-              : t("greetingAnon")}
+            {me ? t("home:title") : t("home:greetingAnon")}
           </Typography>
-          <Typography variant="body1" color="text.secondary">
-            {/* Trans renders inline elements (<code/>) sourced from
-                the catalogue. Components are passed by name; the
-                index matches the i18nKey markup, so `<code>...</code>`
-                in JSON maps to <Box component="code" .../>. */}
-            <Trans
-              i18nKey="intro"
-              t={t}
-              components={{
-                code: (
-                  <Box
-                    component="code"
-                    sx={{
-                      px: 0.5,
-                      py: 0.25,
-                      borderRadius: 0.5,
-                      bgcolor: "action.hover",
-                      fontFamily: "monospace",
-                    }}
-                  />
-                ),
-              }}
-            />
-          </Typography>
+          {me && (
+            <Typography variant="body1" color="text.secondary">
+              {t("home:subtitle", { login: me.login })}
+            </Typography>
+          )}
         </Box>
 
-        <Paper variant="outlined" sx={{ p: { xs: 2, sm: 3 } }}>
-          <Typography variant="overline" color="text.secondary">
-            {t("milestoneOverline")}
-          </Typography>
-          <Typography variant="h6" gutterBottom>
-            {t("milestoneTitle")}
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            {t("milestoneBody")}
-          </Typography>
-        </Paper>
+        {error && (
+          <Alert severity="error">{t("home:loadError")}</Alert>
+        )}
+
+        {loading ? (
+          <Stack alignItems="center" py={6}>
+            <CircularProgress />
+          </Stack>
+        ) : (
+          <>
+            <Paper variant="outlined">
+              <Box sx={{ px: 2, py: 1.5, borderBottom: 1, borderColor: "divider" }}>
+                <Typography variant="h6">{t("home:onlineUsers.title")}</Typography>
+              </Box>
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>{t("home:onlineUsers.columns.login")}</TableCell>
+                      <TableCell>{t("home:onlineUsers.columns.role")}</TableCell>
+                      <TableCell>{t("home:onlineUsers.columns.interlocking")}</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {(presence.data ?? []).length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={3} align="center" sx={{ py: 3, color: "text.secondary" }}>
+                          {t("home:onlineUsers.empty")}
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      (presence.data ?? []).map((user) => (
+                        <TableRow key={user.userId}>
+                          <TableCell>{user.login}</TableCell>
+                          <TableCell>
+                            {t(`role:${user.role}` as const, { defaultValue: user.role })}
+                          </TableCell>
+                          <TableCell>
+                            {user.occupiedInterlocking?.name ?? t("home:onlineUsers.noInterlocking")}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Paper>
+
+            <Paper variant="outlined">
+              <Box sx={{ px: 2, py: 1.5, borderBottom: 1, borderColor: "divider" }}>
+                <Typography variant="h6">{t("home:interlockings.title")}</Typography>
+              </Box>
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>{t("home:interlockings.columns.name")}</TableCell>
+                      <TableCell>{t("home:interlockings.columns.location")}</TableCell>
+                      <TableCell>{t("home:interlockings.columns.occupant")}</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {(interlockings.data ?? []).length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={3} align="center" sx={{ py: 3, color: "text.secondary" }}>
+                          {t("home:interlockings.empty")}
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      (interlockings.data ?? []).map((row) => (
+                        <TableRow key={row.id}>
+                          <TableCell>{row.name}</TableCell>
+                          <TableCell>{row.location || t("home:interlockings.noLocation")}</TableCell>
+                          <TableCell>
+                            {row.occupant?.login ?? t("home:interlockings.vacant")}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Paper>
+          </>
+        )}
       </Stack>
     </Container>
   );

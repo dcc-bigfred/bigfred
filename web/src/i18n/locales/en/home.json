@@ -1,8 +1,27 @@
 {
-  "greeting": "Welcome, {{login}}!",
+  "title": "Layout dashboard",
+  "subtitle": "Signed in as {{login}}.",
   "greetingAnon": "Welcome!",
-  "intro": "You're signed in. A real landing page will arrive in later milestones (see <code>docs/bigfred/architecture/13-delivery-order.md</code>, milestones M2–M8).",
-  "milestoneOverline": "Milestone status",
-  "milestoneTitle": "M2 — Persistence + auth (in progress)",
-  "milestoneBody": "Backend is up, the SQLite database is initialised, and argon2id + JWT login is wired. Next up: user management (CRUD), DCC pool, Redis-backed rate limiting."
+  "loadError": "Could not load dashboard data.",
+  "onlineUsers": {
+    "title": "Online users",
+    "empty": "No one is online on this layout.",
+    "noInterlocking": "—",
+    "columns": {
+      "login": "Login",
+      "role": "Role",
+      "interlocking": "Interlocking"
+    }
+  },
+  "interlockings": {
+    "title": "Interlockings",
+    "empty": "No interlockings are assigned to this layout.",
+    "vacant": "vacant",
+    "noLocation": "—",
+    "columns": {
+      "name": "Name",
+      "location": "Description",
+      "occupant": "Staffed by"
+    }
+  }
 }

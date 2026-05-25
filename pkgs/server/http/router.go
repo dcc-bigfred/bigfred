@@ -64,11 +64,11 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	layoutH := NewLayoutHandler(cfg.Layouts)
 	interlockingH := NewInterlockingHandler(cfg.Interlockings, cfg.Occupancy, cfg.Auth)
 	presenceH := NewPresenceHandler(cfg.Presence)
-	vehicleH := NewVehicleHandler(cfg.Vehicles, cfg.LayoutVehicles, cfg.DCCPool)
+	vehicleH := NewVehicleHandler(cfg.Vehicles, cfg.LayoutVehicles, cfg.DCCPool, cfg.Auth)
 	trainH := NewTrainHandler(cfg.Trains, cfg.LayoutVehicles)
 	rosterH := NewLayoutRosterHandler(cfg.LayoutVehicles, cfg.Auth)
 	userH := NewUserHandler(cfg.Users)
-	sudoH := NewSudoHandler(cfg.Sudo)
+	sudoH := NewSudoHandler(cfg.Sudo, cfg.Auth, cfg.Users, cfg.Presence)
 
 	r.Route("/api/v1", func(r chi.Router) {
 		// WebSocket upgrade — auth reads cookie / ?token= inline.
@@ -138,6 +138,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 
 			r.Group(func(r chi.Router) {
 				r.Use(RequireRole(cfg.Auth, domain.RoleAdmin))
+				r.Post("/layouts/{id}/signalmen", sudoH.GrantSignalmanToUser)
 				r.Get("/interlockings/catalogue", interlockingH.ListCatalogue)
 				r.Post("/layouts", layoutH.Create)
 				r.Put("/layouts/{id}", layoutH.Update)

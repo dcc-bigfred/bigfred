@@ -84,8 +84,7 @@ func (l *Layouts) ListAll(ctx context.Context) ([]domain.Layout, error) {
 }
 
 // ListSelectable returns rows the login dropdown should offer: every
-// non-locked layout. The system layout is always present (it cannot
-// be locked, enforced by the DB CHECK + service rule).
+// non-locked layout.
 func (l *Layouts) ListSelectable(ctx context.Context) ([]domain.Layout, error) {
 	var layouts []domain.Layout
 	err := l.repo.FindAll(ctx, &layouts,

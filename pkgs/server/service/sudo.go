@@ -238,6 +238,33 @@ func (s *SudoService) GrantSignalman(ctx context.Context, userID, layoutID uint,
 	return nil
 }
 
+// GrantSignalmanToUser persists a permanent signalman grant for
+// targetUserID inside layoutID. grantedBy is recorded on the row
+// (typically an effective admin). Unlike GrantSignalman no PIN is
+// verified here — the HTTP layer must gate the call.
+func (s *SudoService) GrantSignalmanToUser(ctx context.Context, grantedBy, targetUserID, layoutID uint) error {
+	if grantedBy == 0 || targetUserID == 0 || layoutID == 0 {
+		return ErrSudoInvalidInput
+	}
+	if _, err := s.layouts.Get(ctx, layoutID); err != nil {
+		return err
+	}
+
+	now := time.Now().UTC()
+	row := domain.LayoutSignalman{
+		LayoutID:  layoutID,
+		UserID:    targetUserID,
+		GrantedBy: grantedBy,
+		GrantedAt: now,
+		ExpiresAt: nil,
+	}
+	if err := s.signalmen.Upsert(ctx, &row); err != nil {
+		return err
+	}
+	s.broadcastElevationChanged(targetUserID, layoutID)
+	return nil
+}
+
 // RevokeSignalman drops the user's permanent signalman grant inside
 // the layout. Idempotent — a missing row returns nil.
 func (s *SudoService) RevokeSignalman(ctx context.Context, userID, layoutID uint) error {

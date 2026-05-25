@@ -22,11 +22,13 @@
   "dialog": {
     "title": {
       "admin": "Layout admin PIN",
-      "signalman": "Layout admin PIN"
+      "signalman": "Layout admin PIN",
+      "promoteSignalman": "Layout admin PIN"
     },
     "description": {
       "admin": "Enter the layout admin PIN to gain administrator powers for 2 minutes.",
-      "signalman": "Enter the layout admin PIN to permanently take the signalman role in this layout."
+      "signalman": "Enter the layout admin PIN to permanently take the signalman role in this layout.",
+      "promoteSignalman": "Enter the layout admin PIN to promote {{login}} to signalman in this layout."
     },
     "pinLabel": "PIN",
     "submit": "Elevate",

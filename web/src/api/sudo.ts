@@ -59,6 +59,22 @@ export function useGrantSignalman() {
   });
 }
 
+export function useGrantSignalmanToUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { layoutId: number; userId: number }) =>
+      apiFetch<void>(`/api/v1/layouts/${args.layoutId}/signalmen`, {
+        method: "POST",
+        body: JSON.stringify({ userId: args.userId }),
+      }),
+    onSuccess: (_data, args) => {
+      void qc.invalidateQueries({
+        queryKey: ["layouts", args.layoutId, "presence"],
+      });
+    },
+  });
+}
+
 // useRevokeSignalman drops the user's signalman grant in the layout.
 // Idempotent.
 export function useRevokeSignalman() {

@@ -15,6 +15,7 @@ type VehicleHandler struct {
 	svc            *service.VehicleService
 	layoutVehicles *service.LayoutVehicleService
 	pool           *service.DCCPoolService
+	auth           *service.AuthService
 }
 
 // NewVehicleHandler returns a VehicleHandler.
@@ -22,8 +23,9 @@ func NewVehicleHandler(
 	svc *service.VehicleService,
 	layoutVehicles *service.LayoutVehicleService,
 	pool *service.DCCPoolService,
+	auth *service.AuthService,
 ) *VehicleHandler {
-	return &VehicleHandler{svc: svc, layoutVehicles: layoutVehicles, pool: pool}
+	return &VehicleHandler{svc: svc, layoutVehicles: layoutVehicles, pool: pool, auth: auth}
 }
 
 // vehicleResponse is the JSON shape the frontend consumes. DCCAddress
@@ -143,7 +145,12 @@ func (h *VehicleHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if req.DCCAddressSet {
 		in.DCCAddress = service.VehicleAddressPatch{IsSet: true, Value: req.DCCAddress}
 	}
-	row, err := h.svc.Update(r.Context(), actor.User.ID, vehicleID, in)
+	eff, err := h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	row, err := h.svc.Update(r.Context(), actor.User.ID, vehicleID, eff, in)
 	if err != nil {
 		writeVehicleError(w, err)
 		return
@@ -169,7 +176,12 @@ func (h *VehicleHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
-	if _, err := h.svc.Delete(r.Context(), actor.User.ID, vehicleID); err != nil {
+	eff, err := h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	if _, err := h.svc.Delete(r.Context(), actor.User.ID, vehicleID, eff); err != nil {
 		writeVehicleError(w, err)
 		return
 	}

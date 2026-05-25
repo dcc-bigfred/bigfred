@@ -56,8 +56,7 @@ func toLayoutResponse(l domain.Layout) layoutResponse {
 }
 
 // ListForLogin handles the unauthenticated `GET /api/v1/layouts/login`
-// endpoint. It returns every non-locked layout (the system layout is
-// always present because it can never be locked). The frontend reads
+// endpoint. It returns every non-locked layout. The frontend reads
 // the response BEFORE the user submits the login form to populate the
 // layout dropdown.
 func (h *LayoutHandler) ListForLogin(w http.ResponseWriter, r *http.Request) {
@@ -329,8 +328,6 @@ func writeLayoutError(w http.ResponseWriter, err error) {
 		writeJSONError(w, http.StatusUnprocessableEntity, "default_layout_immutable")
 	case errors.Is(err, service.ErrSystemLayoutUndeletable):
 		writeJSONError(w, http.StatusUnprocessableEntity, "default_layout_undeletable")
-	case errors.Is(err, service.ErrSystemLayoutCannotBeLocked):
-		writeJSONError(w, http.StatusUnprocessableEntity, "default_layout_cannot_be_locked")
 	case errors.Is(err, service.ErrLayoutAdminPINInvalid):
 		writeJSONError(w, http.StatusUnprocessableEntity, "layout_admin_pin_invalid")
 	default:

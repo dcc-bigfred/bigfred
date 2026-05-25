@@ -328,9 +328,7 @@ func (s *AuthService) IssueToken(id Identity) (string, time.Time, error) {
 //
 // Tokens minted before the layout binding existed have LID = 0 — for
 // those we fall back to the system layout so M2-era sessions keep
-// working across the upgrade. The fallback is harmless: locked is
-// false on the system row and `ValidateForLogin` already greenlit it
-// at login time.
+// working across the upgrade.
 func (s *AuthService) VerifyToken(ctx context.Context, raw string) (Identity, error) {
 	parsed, err := jwt.ParseWithClaims(raw, &sessionClaims{}, func(t *jwt.Token) (interface{}, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {

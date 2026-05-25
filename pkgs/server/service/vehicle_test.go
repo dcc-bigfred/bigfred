@@ -176,7 +176,79 @@ func TestVehicleDeleteRefusedWhenInTrain(t *testing.T) {
 		t.Fatalf("create train: %v", err)
 	}
 
-	if _, err := vSvc.Delete(ctx, user.ID, v.ID); !errors.Is(err, service.ErrVehicleInUse) {
+	if _, err := vSvc.Delete(ctx, user.ID, v.ID, domain.NewEffectiveRoles(domain.RoleDriver)); !errors.Is(err, service.ErrVehicleInUse) {
 		t.Fatalf("expected ErrVehicleInUse, got %v", err)
+	}
+}
+
+func TestVehicleAdminCanMutateOthersVehicle(t *testing.T) {
+	bundle, cleanup := freshRepo(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	owner := insertUser(t, ctx, bundle.Users, "owner", domain.RoleDriver)
+	admin := insertUser(t, ctx, bundle.Users, "admin", domain.RoleAdmin)
+
+	pool := service.NewDCCPoolService(bundle.Pool)
+	if _, err := pool.Replace(ctx, owner.ID, []service.PoolRange{{From: 1, To: 9999}}); err != nil {
+		t.Fatalf("seed owner pool: %v", err)
+	}
+	svc := service.NewVehicleService(bundle.Vehicles, pool, bundle.TrainMembers)
+
+	v, err := svc.Create(ctx, service.VehicleCreateInput{
+		OwnerUserID: owner.ID,
+		Name:        "Loco",
+		Kind:        domain.VehicleKindLoco,
+	})
+	if err != nil {
+		t.Fatalf("create vehicle: %v", err)
+	}
+
+	adminEff := domain.NewEffectiveRoles(domain.RoleAdmin)
+	newName := "Renamed by admin"
+	updated, err := svc.Update(ctx, admin.ID, v.ID, adminEff, service.VehicleUpdateInput{
+		Name: &newName,
+	})
+	if err != nil {
+		t.Fatalf("admin update: %v", err)
+	}
+	if updated.Name != newName {
+		t.Fatalf("name = %q, want %q", updated.Name, newName)
+	}
+
+	if _, err := svc.Delete(ctx, admin.ID, v.ID, adminEff); err != nil {
+		t.Fatalf("admin delete: %v", err)
+	}
+}
+
+func TestVehicleNonOwnerDriverCannotMutateOthersVehicle(t *testing.T) {
+	bundle, cleanup := freshRepo(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	owner := insertUser(t, ctx, bundle.Users, "owner", domain.RoleDriver)
+	other := insertUser(t, ctx, bundle.Users, "other", domain.RoleDriver)
+
+	pool := service.NewDCCPoolService(bundle.Pool)
+	svc := service.NewVehicleService(bundle.Vehicles, pool, bundle.TrainMembers)
+
+	v, err := svc.Create(ctx, service.VehicleCreateInput{
+		OwnerUserID: owner.ID,
+		Name:        "Loco",
+		Kind:        domain.VehicleKindLoco,
+	})
+	if err != nil {
+		t.Fatalf("create vehicle: %v", err)
+	}
+
+	driverEff := domain.NewEffectiveRoles(domain.RoleDriver)
+	newName := "Hijacked"
+	_, err = svc.Update(ctx, other.ID, v.ID, driverEff, service.VehicleUpdateInput{Name: &newName})
+	if !errors.Is(err, service.ErrVehicleNotOwned) {
+		t.Fatalf("expected ErrVehicleNotOwned on update, got %v", err)
+	}
+	_, err = svc.Delete(ctx, other.ID, v.ID, driverEff)
+	if !errors.Is(err, service.ErrVehicleNotOwned) {
+		t.Fatalf("expected ErrVehicleNotOwned on delete, got %v", err)
 	}
 }

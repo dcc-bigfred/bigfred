@@ -11,8 +11,10 @@
     "columns": {
       "login": "Login",
       "role": "Role",
-      "interlocking": "Interlocking"
-    }
+      "interlocking": "Interlocking",
+      "actions": "Actions"
+    },
+    "promoteSignalman": "Promote {{login}} to signalman"
   },
   "interlockings": {
     "title": "Interlockings",

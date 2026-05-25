@@ -22,7 +22,7 @@ func (InterlockingSecurityContext) CanOccupy(
 	if layoutILK == nil {
 		return Deny("interlocking_not_in_layout")
 	}
-	if layoutSignalman == nil {
+	if actor.Role != domain.RoleAdmin && layoutSignalman == nil {
 		return Deny("not_signalman")
 	}
 	if current != nil && current.SignalmanUserID == actor.ID {
@@ -41,7 +41,7 @@ func (InterlockingSecurityContext) CanDisplace(
 	layoutSignalman *domain.LayoutSignalman,
 	current *domain.InterlockingSession,
 ) Decision {
-	if layoutSignalman == nil {
+	if actor.Role != domain.RoleAdmin && layoutSignalman == nil {
 		return Deny("not_signalman")
 	}
 	if current == nil {

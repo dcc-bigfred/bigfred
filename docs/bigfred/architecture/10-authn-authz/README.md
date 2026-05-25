@@ -11,3 +11,4 @@ interlockings into concrete code-level rules.
 4. [Middleware – using the policies](./04-middleware.md)
 5. [Permission matrix](./05-permission-matrix.md)
 6. [Session reconciliation on WS connect](./06-session-reconciliation.md)
+7. [Sudo elevation – temporary `admin` / `signalman` via the layout PIN](./07-sudo-elevation.md)

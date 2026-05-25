@@ -18,11 +18,9 @@ export interface CurrentUser {
   /** effectiveRole resolves signalman grants for the active layout (§7a.2). */
   effectiveRole: Role;
   /**
-   * isSignalman is true iff the caller currently holds an active
-   * LayoutSignalman grant in their active layout. Used to gate
-   * signalman-only UI actions (occupy interlocking, takeover, …)
-   * independently of `effectiveRole`, which an admin always shows as
-   * "admin" even when they also have a signalman grant.
+   * isSignalman is true when the caller may occupy an interlocking in
+   * the active layout: permanent admins always, everyone else only
+   * with an active LayoutSignalman grant.
    */
   isSignalman: boolean;
   layoutId: number;

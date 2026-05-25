@@ -230,10 +230,13 @@ func (s *AuthService) EffectiveDisplayRole(ctx context.Context, user domain.User
 	return domain.RoleDriver, nil
 }
 
-// IsEffectiveSignalman reports whether the user holds an active
-// LayoutSignalman grant in the layout (§7a.2). Admin role does NOT
-// imply signalman: the grant is the only path to signalman authority.
+// IsEffectiveSignalman reports whether the user may operate as a
+// signalman inside the layout: permanent admins always may; everyone
+// else needs an active LayoutSignalman grant (§7a.2).
 func (s *AuthService) IsEffectiveSignalman(ctx context.Context, user domain.User, layoutID uint) (bool, error) {
+	if user.Role == domain.RoleAdmin {
+		return true, nil
+	}
 	return s.signalmen.HasActiveGrant(ctx, layoutID, user.ID, time.Now().UTC())
 }
 

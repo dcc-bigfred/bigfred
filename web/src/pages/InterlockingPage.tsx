@@ -203,7 +203,9 @@ export default function InterlockingPage() {
   if (!row) return null;
 
   const occupant = row.occupant;
-  const canActAsSignalman = !!me?.isSignalman;
+  // Permanent admins may always staff a box; everyone else needs the
+  // layout-scoped signalman grant reflected in isSignalman.
+  const canActAsSignalman = !!me?.isSignalman || me?.role === "admin";
   const busy = join.isPending || leave.isPending;
 
   return (

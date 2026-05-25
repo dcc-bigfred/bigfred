@@ -49,11 +49,9 @@ type meResponse struct {
 	// active layout (§7a.2), used for display: admin > signalman
 	// (layout-scoped grant) > driver.
 	EffectiveRole domain.Role `json:"effectiveRole"`
-	// IsSignalman is true iff the caller currently holds an active
-	// LayoutSignalman grant in their active layout. An admin who also
-	// has a grant gets both `effectiveRole:"admin"` and
-	// `isSignalman:true` so the UI can render signalman-only actions
-	// (occupy interlocking, takeover, …) for them.
+	// IsSignalman is true when the caller may occupy an interlocking:
+	// permanent admins always; everyone else only with an active
+	// LayoutSignalman grant in their active layout.
 	IsSignalman    bool `json:"isSignalman"`
 	LayoutID       uint `json:"layoutId"`
 	LayoutName     string `json:"layoutName"`

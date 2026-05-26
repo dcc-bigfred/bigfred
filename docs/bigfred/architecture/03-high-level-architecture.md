@@ -1,90 +1,103 @@
 ## 2. High-Level Architecture
 
 ```
-┌────────────────────────────────────────────────────────────────────┐
-│  Browser (React + Vite, mobile/desktop)                            │
-│                                                                    │
-│  ┌─────────────┐  REST (CRUD)  ┌──────────────┐                    │
-│  │ TanStack    │ ────────────► │              │                    │
-│  │ Query       │ ◄──────────── │              │                    │
-│  └─────────────┘               │              │                    │
-│  ┌─────────────┐  WebSocket    │  Go backend  │                    │
-│  │ Zustand +   │ ◄────────────►│              │                    │
-│  │ useSocket   │  (real-time)  │              │                    │
-│  └─────────────┘               └──────┬───────┘                    │
-└────────────────────────────────────────┼───────────────────────────┘
-                                         │
-        ┌────────────────────────────────┼──────────────────────────┐
-        │                                ▼                          │
-        │  ┌──────────────┐   ┌────────────────────┐                │
-        │  │ HTTP (chi)   │   │ WebSocket Hub      │                │
-        │  │ /api/v1/...  │   │ (coder/websocket)  │                │
-        │  └──────┬───────┘   └─────────┬──────────┘                │
-        │         │                     │                           │
-        │         └──────────┬──────────┘                           │
-        │                    ▼                                      │
-        │           ┌─────────────────┐    EventBus (channels +     │
-        │           │  Services       │◄── Redis Pub/Sub)           │
-        │           │  (LocoApp)      │                             │
-        │           └────┬────────┬───┘                             │
-        │                │        │                                 │
-        │      ┌─────────▼──┐  ┌──▼────────────┐  ┌───────────────┐ │
-        │      │ Repository │  │ CommandStation│  │ Cache (Redis) │ │
-        │      │ (SQLite)   │  │ (Z21/LocoNet) │  │               │ │
-        │      └────────────┘  └───────────────┘  └───────────────┘ │
-        │                          ▲                                │
-        │                          │ (every DSL call from a         │
-        │                          │  running script ends up here)  │
-        │                          │                                │
-        │  ┌───────────────────────┴────────────────────────────┐   │
-        │  │  ExecutorClient                                    │   │
-        │  │  ────────────────────────────────────────────────  │   │
-        │  │  Unix socket (length-prefixed JSON frames):        │   │
-        │  │    server → executor:  run.start / run.stop / ack  │   │
-        │  │    executor → server:  run.event { kind=log|call|  │   │
-        │  │                                    started|done }  │   │
-        │  │    server → executor:  call.result                 │   │
-        │  └───────────────────────┬────────────────────────────┘   │
-        │  Go backend `server` process                              │
-        └──────────────────────────┼────────────────────────────────┘
-                                   │ same machine, ~/.cache/loco/exec.sock
-                                   ▼
-        ┌──────────────────────────────────────────────────────────┐
-        │  Go backend `scripts-executor` process (same binary,     │
-        │                                  different main entry)   │
-        │  ┌─────────────────────────────────────────────────────┐ │
-        │  │  one goroutine + one *goja.Runtime per active run   │ │
-        │  │                                                     │ │
-        │  │  Goja VM owns the user's JS source; bindings:       │ │
-        │  │    findFirstLoco, findByDCCAddr, members,           │ │
-        │  │    Vehicle.setSpeed/funcOn/funcOff, sleep, log      │ │
-        │  │                                                     │ │
-        │  │  Each binding → RPC `call` back to server, blocks   │ │
-        │  │  on the matching `call.result`. Server runs the     │ │
-        │  │  service + re-checks LocoSecurityContext, then      │ │
-        │  │  replies. vm.Interrupt() from supervisor goroutine  │ │
-        │  │  for deadline / user-stop / dead-man's switch.      │ │
-        │  └─────────────────────────────────────────────────────┘ │
-        │                                                          │
-        │  Supervised by `server`: if this process dies, `server`  │
-        │  fan-outs script.runStopped{reason:"executor_crashed"}   │
-        │  to every owner of an in-flight run and respawns the     │
-        │  executor with exponential backoff (§7.x).               │
-        └──────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────────┐
+│  Browser (React + Vite, mobile/desktop)                                    │
+│                                                                            │
+│  ┌─────────────┐  REST (CRUD)        ┌──────────────────────────┐          │
+│  │ TanStack    │ ───────────────────►│                          │          │
+│  │ Query       │ ◄───────────────────│                          │          │
+│  └─────────────┘                     │   loco-server            │          │
+│  ┌─────────────┐  control-plane WS   │   (control plane)        │          │
+│  │ Zustand +   │ ◄──────────────────►│                          │          │
+│  │ useSocket   │  /api/v1/ws         │                          │          │
+│  └─────────────┘                     └─────────┬────────────────┘          │
+│  ┌─────────────┐  data-plane WS                │                           │
+│  │ Throttle    │ ◄──────────────────────────┐  │                           │
+│  │ Zustand     │ ws://host:<port>/ws        │  │                           │
+│  └─────────────┘   (per picked cs)          │  │                           │
+└─────────────────────────────────────────────┼──┼───────────────────────────┘
+                                              │  │
+        ┌─────────────────────────────────────┼──┼───────────────────────────┐
+        │                                     │  │                           │
+        │  ┌────────────────────────────────  │  ▼   ──────────────────────┐ │
+        │  │ HTTP (chi)             ┌────────────────────┐                 │ │
+        │  │ /api/v1/...            │ WebSocket Hub      │  control plane  │ │
+        │  └──────┬─────────────────└─────────┬──────────┘                 │ │
+        │         │                           │                            │ │
+        │         └────────────┬──────────────┘                            │ │
+        │                      ▼                                           │ │
+        │             ┌─────────────────┐                                  │ │
+        │             │  Services       │   AuditService, AuthService,     │ │
+        │             │  (no DCC writes;│   LayoutService, TakeoverService,│ │
+        │             │   delegates to  │   ScriptService, RadioService,   │ │
+        │             │   dcc-bus via   │   DccBusService (orchestrator),  │ │
+        │             │   Redis cmd ch.)│   SupervisordService             │ │
+        │             └────┬────────────┘                                  │ │
+        │                  │                                               │ │
+        │        ┌─────────▼──┐                       ┌───────────────┐    │ │
+        │        │ Repository │                       │ Cache (Redis) │    │ │
+        │        │ (SQLite,   │                       │ - loco:state  │    │ │
+        │        │  RW writer)│                       │ - dcc-bus:cmd │    │ │
+        │        └────────────┘                       │ - dcc-bus:evt │    │ │
+        │                                             │ - pubsub      │    │ │
+        │                                             └──────┬────────┘    │ │
+        │  loco-server process (Go, non-root)                │             │ │
+        └────────────────────┬───────────────────────────────┼─────────────┘ │
+                             │ owns supervisord              │               │
+                             ▼                               │               │
+                ┌────────────────────────────────────┐       │               │
+                │ supervisord (Python, §7d)          │       │               │
+                │   group: loco                      │       │               │
+                │     - scripts-executor             │       │               │
+                │   group: dcc-bus (§7e)             │       │               │
+                │     - dcc-bus-<L>-<C> (per pair)   │       │               │
+                └────────┬───────────────────────┬───┘       │               │
+                         │                       │           │               │
+                         ▼                       ▼           ▼               │
+        ┌──────────────────────────┐   ┌──────────────────────────────────┐  │
+        │  scripts-executor        │   │  dcc-bus (one per layout × cs)   │  │
+        │  (sibling Goja runtime)  │   │  ──────────────────────────────  │  │
+        │  ──────────────────────  │   │  · pkgs/loco/commandstation      │  │
+        │  Per active run:         │   │    (Z21 / LocoNet)               │  │
+        │   1 goroutine            │   │  · ws://*:<port>/ws (data plane) │  │
+        │   1 *goja.Runtime        │   │  · pkgs/server/security re-check │  │
+        │   vm.Interrupt for       │   │  · subscribe vehicles from       │  │
+        │   deadline / user-stop / │   │    LayoutVehicle roster          │  │
+        │   dead-man's switch      │   │  · Redis loco:state writer       │  │
+        │                          │   │  · consumes dcc-bus:cmd          │  │
+        │  DSL bindings (setSpeed, │   │    (scripts, train fan-out,      │  │
+        │  funcOn/Off, …)          │   │     dead-man, takeover)          │  │
+        │   ─► RPC to loco-server  │   │  · publishes dcc-bus:evt         │  │
+        │     ─► DccBusService     │   │    (state, errors, emergency)    │  │
+        │       ─► Redis cmd ch.   │   └────────────┬─────────────────────┘  │
+        │         ─► dcc-bus       │                │                        │
+        │           ─► DCC bus     │                ▼                        │
+        └──────────────────────────┘   ┌────────────────────────┐            │
+                                       │  Z21 / LocoNet master  │            │
+                                       │  (physical command     │            │
+                                       │   station hardware)    │            │
+                                       └────────────────────────┘            │
 ```
 
 Core idea:
 
 - **REST is used for CRUD-like, idempotent traffic** (list of locos, edit
   metadata, read/write CVs, system status).
-- **WebSocket is used for real-time traffic** (throttle, direction,
-  functions, push events coming from the command station).
-- **The command station (Z21 / LocoNet) lives in the `server`
-  process only.** The `scripts-executor` never touches the DCC bus
-  directly; it always rounds through `server` so authorization, audit
-  and the dead-man's switch stay in one place.
-- **The executor is a sibling process, not a child library.** It can
-  crash, OOM, or be killed without affecting the throttle. The
-  process boundary is what gives that guarantee – inside a single
-  process a runaway `for (;;) {}` in Goja, even with `vm.Interrupt`,
-  could still starve the Go scheduler.
+- **Control-plane WebSocket** (`/api/v1/ws` on `loco-server`) carries
+  session, takeover, radio, scripts, presence, sudo elevation and the
+  layout/command-station picker.
+- **Data-plane WebSocket** (`ws://host:<port>/ws` on each `dcc-bus`)
+  carries throttle traffic (`loco.subscribe` / `loco.setSpeed` /
+  `loco.toggleFn` / `system.estop`). One `dcc-bus` daemon per
+  `(layout × command station)` pair, spawned lazily by `loco-server`
+  via supervisord (§7d, §7e).
+- **The command station (Z21 / LocoNet) lives in the `dcc-bus`
+  process, not in `loco-server`.** A `scripts-executor` script never
+  touches the DCC bus directly; it rounds through `loco-server` →
+  `DccBusService` → Redis command channel → `dcc-bus` so authorization,
+  audit and the dead-man's switch stay layered.
+- **Both sibling processes are isolated.** `scripts-executor` and
+  `dcc-bus` can crash, OOM, or be killed without affecting
+  `loco-server`'s REST or control-plane WS. supervisord respawns
+  them; the process boundary is what gives that guarantee.

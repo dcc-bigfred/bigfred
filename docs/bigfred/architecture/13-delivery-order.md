@@ -2,13 +2,14 @@
 
 Implemented in milestones; each milestone is independently shippable.
 
-**M1 – Real-time throttle (no users).**
+**M1 – Real-time throttle (no users, in-process baseline).**
 
 1. Add the new `pkgs/server` package with `chi` + `coder/websocket` and a
    single `/api/v1/ws` endpoint that echoes messages. Build it as a third
    binary next to `loco` and `rb`.
 2. Expose `LocoService` as a thin wrapper over the existing `app.LocoApp`
-   (reuse, do not rewrite).
+   (reuse, do not rewrite). DCC dispatch stays **in-process**; §7e will
+   move it into the sibling `dcc-bus` daemon in M4.5 below.
 3. Bring up the Vite + React + TS frontend with a `useSocket` hook and a
    single speed slider, just to validate the full loop:
    UI → WS → `Station.SetSpeed` → poller → broadcast → UI.
@@ -136,6 +137,84 @@ Implemented in milestones; each milestone is independently shippable.
     + `en/sudo.json` and the new error codes (`sudo_invalid_pin`,
     `sudo_locked`, `sudo_layout_mismatch`,
     `layout_admin_pin_invalid`, `layout_admin_pin_unset`).
+
+**M4.5 – `dcc-bus` daemon split (throttle data plane out of `loco-server`).**
+
+For the full specification see [§7e DCC bus daemon](./16-dcc-bus/README.md).
+
+After M4 the system has multiple command stations attached to multiple
+layouts but the DCC bus still lives inside `loco-server`. M4.5 extracts
+the throttle data plane into a per-`(layoutId, commandStationId)`
+sibling daemon supervised by §7d (`SupervisordService`).
+
+16a. Add `pkgs/dcc-bus/` (cobra subcommand on the same `loco-server`
+    binary) with `--layout-id`, `--command-station-id`, `--port`,
+    `--bind`, `--db-path`, `--jwt-secret`, `--redis-addr`,
+    `--poll-interval`, `--heartbeat-grace`, `--shutdown-timeout`
+    flags. The daemon opens SQLite read-only, dials Redis, dials the
+    command station via `pkgs/loco/commandstation`, starts an HTTP
+    server on `--port` that upgrades to WebSocket, and exits
+    non-zero on any boot-time validation failure (§7e.2).
+16b. Build the WebSocket handlers inside `dcc-bus`:
+    `loco.subscribe`, `loco.unsubscribe`, `loco.setSpeed`,
+    `loco.toggleFn`, `system.estop`, `ping`. JWT auth (`?token=`)
+    rejects upgrades whose `layoutId` does not match `--layout-id`.
+    `coder/websocket` is reused; the policy gate goes through
+    `pkgs/server/security` byte-for-byte (§7e.5).
+16c. Add the per-daemon poller (§7e.3) that ticks
+    `Station.GetSpeed` / `ListFunctions` for subscribed addresses
+    in the *interesting set* — vehicles from the layout's
+    `LayoutVehicle` roster (or the full catalogue for the system
+    layout) with a non-NULL DCC address. Writes
+    `loco:state:<csId>` in Redis on change and broadcasts to WS
+    subscribers. Skips addresses with no current subscriber.
+16d. Wire the per-daemon dead-man's switch (§7e.5): per-session
+    `LastHeartbeat`, `gracePeriod` snapshot from
+    `domain.EmergencyPlan`, on lost handle run `SetSpeed(0)` on
+    `DriveTargets` for the user, publish on
+    `bigfred:layout:<L>:emergency:<userId>` (Redis), emit
+    `session.warning` and `session.emergencyExecuted` on the WS.
+16e. Add `DccBusService` to `loco-server` (§7e.6): desired-state
+    map keyed by `(layoutID, csID)`, port pool (default
+    `[9200, 9299]`), `EnsureRunning` / `Stop` / `PublishCommand`
+    methods, persistence of the port mapping in Redis
+    (`HSET dcc-bus:ports`). Constructed in `cli/root.go` after
+    `SupervisordService`; on boot `RestoreFromPersisted` re-reads
+    the mapping so a `loco-server` restart does not lose track of
+    already-running daemons.
+16f. Move throttle dispatch out of `LocoService.SetSpeed` /
+    `ToggleFn` / `EStop` into a new `LocoServiceDriver` that
+    publishes onto `dcc-bus:cmd:<L>:<C>` (Redis pub/sub) via
+    `DccBusService.PublishCommand`. Update `TrainService.SetSpeed`,
+    `TakeoverService` release and `ScriptService` (executor RPC
+    handler) to use the new driver. Keep the legacy in-process
+    path under a `--no-supervisor` dev flag for testing.
+16g. Extend the WS hub: extend `session.opened`,
+    `session.commandStationChanged` and `layout.commandStationsChanged`
+    payloads to include `availableCommandStations[i].wsUrl` and
+    `status` (§7e.6). On `session.setCommandStation { commandStationId }`,
+    call `DccBusService.EnsureRunning(L, C)` before acking; on
+    failure return `ack { ok:false, error:"dcc_bus_unavailable" }`
+    or `error:"no_dcc_bus_ports_available"`. Mirror the chosen
+    `wsUrl` back to every concurrent session of the user via
+    `session.commandStationChanged`.
+16h. Add a Redis pub/sub consumer in `loco-server`
+    (`dcc_bus_consumer.go`) that psubscribes to `dcc-bus:evt:*`,
+    parses `session.emergencyExecuted` / takeover-relevant
+    `loco.state` events, writes the matching audit rows (§3a.5),
+    and fans them out to the control-plane WS for non-throttle
+    listeners (admin dashboards, MCP SSE).
+16i. On the frontend: extend the throttle overlay (§6.3b) with the
+    dual-WebSocket lifecycle (§7e.7). Add `<CommandStationPicker>`,
+    `<SharedBusChip>` and `<DeadmanIndicator>` components. Open
+    the data-plane WS on `session.commandStationChanged`; close it
+    on overlay close, logout, or cs switch. Add `useDataPlane()`
+    and `useControlPlane()` hooks; rewire `<ThrottleSlider>` and
+    `<FunctionButtons>` to dispatch on the data plane.
+    Ship `pl/throttle.json` + `en/throttle.json` (§7e.7).
+16j. Add §7e.8 acceptance criteria to
+    `14-acceptance-criteria/10-dcc-bus.md` and verify them
+    end-to-end on a dev box.
 
 **M5 – Interlockings, takeover, radio.**
 

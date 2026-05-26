@@ -1,10 +1,17 @@
 ### 4.5 Drive Session & Dead-Man's Switch
 
-The WebSocket connection is the user's **physical handle on the
-command station**: while it is open, the user is considered "at the throttle"
-and the server keeps issuing their commands. The moment the handle is
-lost (closed tab, killed app, lost network) the server must fail
-**safe**, not silent.
+The WebSocket connections are the user's **physical handles on the
+command stations**: while they are open, the user is considered "at the
+throttle" and the system keeps issuing their commands. The moment a
+handle is lost (closed tab, killed app, lost network) the system must
+fail **safe**, not silent.
+
+After §7e, "the WebSocket" is a pair — the control-plane WS to
+`loco-server` and the data-plane WS to the picked `dcc-bus`. Each
+endpoint tracks heartbeats for its own connection; the cross-process
+"user has no live handle anywhere" decision is coordinated via Redis
+pub/sub. See §7e.5 for the daemon side; this section keeps the canonical
+state machine for the control plane.
 
 #### 4.5.1 Drive session
 
@@ -106,6 +113,19 @@ Resolution rules:
    interrupted **before** the throttle's `SetSpeed(0)` fan-out
    starts, so a sleeping `sleep(60)` script cannot race the
    emergency stop and re-issue `setSpeed(50)` after it.
+3b. **Cross-process coordination after §7e.** The `loco-server` Hub
+   coordinates with every running `dcc-bus` via the Redis channel
+   `bigfred:layout:<L>:emergency:<userId>`. When `loco-server` fires
+   the plan because its own control-plane WS for U closed, it
+   publishes on that channel; every `dcc-bus` U is connected to
+   stops U's drive targets on its command station and `acks` on
+   `dcc-bus:evt:<L>:<C>` so the audit row aggregates affected
+   vehicles across stations. Symmetrically, when a `dcc-bus`
+   detects loss of its own last session for U, it publishes the
+   same channel; `loco-server` consumes the event and runs
+   `ScriptService.StopAllForUser` even though `loco-server`'s own
+   WS may still be alive. The "fire only once per 5 s per user"
+   debounce on both sides prevents feedback loops.
 4. The user may **opt into per-session override** by sending
    `session.setEmergencyPlan { action, gracePeriod }` immediately after
    connecting; this only weakens safety if explicitly chosen (e.g.

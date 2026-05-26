@@ -323,6 +323,41 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 `ThrottleOverlay` hosts vehicle/train selection and mounts
 `LocoControlPage` / `TrainControlPage` content from §6.3 and §6.3a.
 
+#### Dual-WebSocket model (after §7e ships)
+
+When §7e is live, the overlay manages **two** independent WebSocket
+connections (see §7e.7 for the full lifecycle):
+
+1. **Control-plane WS** to `loco-server` (`/api/v1/ws`) — already
+   open since login. Carries `session.*`, `takeover.*`, `radio.*`,
+   `script.*`, `presence`, `auth.elevationChanged`, `train.*`, and
+   the command-station picker (`session.setCommandStation` /
+   `session.commandStationChanged`).
+2. **Data-plane WS** to the picked `dcc-bus` daemon
+   (`ws://host:<port>/ws?token=<jwt>`, returned via
+   `session.opened.availableCommandStations[i].wsUrl`). Carries
+   `loco.subscribe` / `loco.unsubscribe` / `loco.setSpeed` /
+   `loco.toggleFn` / `system.estop` / `ping` only. Re-opened when
+   the user switches command stations.
+
+`<ThrottleSlider>` and `<FunctionButtons>` dispatch on the data
+plane via a `useDataPlane()` hook; `<ScriptButtons>`, the takeover
+banner and the radio panel keep using `useControlPlane()`. Selecting
+the right socket is encapsulated; component code does **not** know
+about ports. The Zustand store splits accordingly: a `dccBusUrl` /
+`dccBusOpened` slice for the daemon connection, the existing
+`session` slice for the server connection. Until §7e ships, both
+hooks resolve to the same control-plane connection (the M1 baseline
+is unchanged).
+
+The command-station dropdown inside `<ThrottleHeader>` renders
+`status` per row (`RUNNING` / `STOPPED` / `STARTING` / `DEGRADED`)
+based on `availableCommandStations[i].status` and disables rows
+whose `wsUrl == null` until the user selects them (selection
+triggers daemon spawn). The `<SharedBusChip>` lights up when
+`dcc-bus.opened.sharedBus === true` to surface §3a.4 rule 9 to the
+driver.
+
 ### 6.3c Layout dashboard (`HomePage`)
 
 After login the default route is `/` (`HomePage.tsx`). This **dashboard**

@@ -47,7 +47,18 @@ pkgs/
     │   │                       #                Run/Stop dispatch to executor,
     │   │                       #                fan-out of script.changed / script.runStarted etc.
     │   ├── audit.go            # AuditService – append-only audit log writer
-    │   └── poller.go           # background: polls Station, emits events
+    │   ├── dcc_bus.go          # NEW (§7e.6) – DccBusService: orchestrator
+    │   │                       #   for sibling dcc-bus daemons (port pool,
+    │   │                       #   EnsureRunning/Stop, PublishCommand)
+    │   ├── dcc_bus_consumer.go # NEW – psubscribe on dcc-bus:evt:* and fan
+    │   │                       #   incoming events into AuditService / Bus /
+    │   │                       #   ScriptService / WebSocket Hub
+    │   ├── loco_driver.go      # NEW – LocoServiceDriver: thin replacement
+    │   │                       #   of LocoService.{SetSpeed,ToggleFn,EStop}
+    │   │                       #   that goes through DccBusService instead of
+    │   │                       #   talking to commandstation.Station directly
+    │   └── poller.go           # legacy: kept only as a fallback when running
+    │                           #   without dcc-bus (--no-supervisor dev mode)
     ├── security/               # PURE, STATELESS policy layer – see §7a.3
     │   ├── decision.go         # Decision type + Allow / Deny helpers
     │   ├── loco.go             # LocoSecurityContext – CanDriveLoco / CanEditLoco
@@ -123,6 +134,34 @@ pkgs/
 pkgs/scripts-executor/          # NEW – sandbox process for user JS
 ├── main.go                     # cmd entrypoint for `loco scripts-executor`
 └── cli/                        # cobra command + flags (socket path, cpu/mem caps)
+
+# Sibling process – same module, different main(). One process per
+# (layout × command_station) pair (§7e). Reuses pkgs/loco/commandstation
+# (DCC), pkgs/server/security (policies), pkgs/server/domain (entities),
+# pkgs/server/repo (read-only catalogue), pkgs/server/cache (Redis).
+# Does NOT import pkgs/server/http; exposes a single WebSocket on
+# the --port flag for throttle traffic.
+pkgs/dcc-bus/                   # NEW – throttle data-plane daemon
+├── main.go                     # cmd entrypoint for `loco-server dcc-bus`
+├── cli/
+│   └── root.go                 # cobra command + flags (--layout-id,
+│                               #   --command-station-id, --port, --db-path,
+│                               #   --jwt-secret, --redis-addr, --poll-interval,
+│                               #   --heartbeat-grace, --shutdown-timeout)
+├── daemon.go                   # bootstraps Station, Poller, Hub, Redis client
+├── poller.go                   # ticks Station.GetSpeed / ListFunctions for
+│                               #   subscribed addrs in the interesting set
+├── ws/
+│   ├── hub.go                  # per-daemon Hub: clients, addr subscriptions
+│   ├── client.go               # WS client (read/write loops, heartbeat)
+│   ├── auth.go                 # JWT verification, layoutId match
+│   ├── handlers.go             # loco.subscribe/.setSpeed/.toggleFn/system.estop/ping
+│   └── protocol.go             # envelope + Action/Event types (tygo source)
+├── roster.go                   # in-memory cache of LayoutVehicle for the layout
+├── cmdchan.go                  # consumes dcc-bus:cmd:<L>:<C> from Redis
+├── evtchan.go                  # publishes dcc-bus:evt:<L>:<C> to Redis
+├── deadman.go                  # per-daemon dead-man's switch (§7e.5)
+└── audit.go                    # outbound audit-event publisher (loco-server consumes)
 
 web/                            # NEW – frontend
 ├── package.json

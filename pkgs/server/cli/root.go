@@ -36,6 +36,7 @@ type Flags struct {
 	JWTSecret      string
 	AllowedOrigins []string
 	SecureCookie   bool
+	NoSupervisor   bool
 }
 
 // NewRootCommand returns the top-level cobra command. It is invoked
@@ -65,6 +66,8 @@ real-time throttle commands.`,
 		"CORS allowed origins (Vite dev server on :5173 by default)")
 	cmd.Flags().BoolVar(&f.SecureCookie, "secure-cookie", false,
 		"set the Secure flag on the session cookie (REQUIRED in production, off for local http://)")
+	cmd.Flags().BoolVar(&f.NoSupervisor, "no-supervisor", false,
+		"skip supervisord process management (for local dev without the supervisor package)")
 
 	return cmd
 }
@@ -126,6 +129,20 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	// Janitor for expired sudo elevations (§7a.7). Runs in its own
 	// goroutine so a slow SQLite write doesn't block the WS hub.
 	go sudoSvc.RunJanitor(ctx)
+
+	var supSvc *service.SupervisordService
+	if !f.NoSupervisor {
+		supSvc, err = service.NewSupervisordService(service.SupervisordConfig{})
+		if err != nil {
+			return fmt.Errorf("supervisord init: %w", err)
+		}
+		if err := supSvc.Start(ctx); err != nil {
+			return fmt.Errorf("supervisord start: %w", err)
+		}
+		supSvc.RunHealthLoop(ctx, 5*time.Second, func(states []service.ProgramState) {
+			log.WithField("programs", states).Debug("supervisord status changed")
+		})
+	}
 
 	// Seed the bootstrap system layout BEFORE the admin account so
 	// the very first login can pick it from the dropdown without
@@ -207,6 +224,13 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	if supSvc != nil {
+		stopCtx, stopCancel := context.WithTimeout(context.Background(), 15*time.Second)
+		if err := supSvc.Stop(stopCtx); err != nil {
+			log.WithError(err).Warn("supervisord shutdown")
+		}
+		stopCancel()
+	}
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		return fmt.Errorf("shutdown: %w", err)
 	}

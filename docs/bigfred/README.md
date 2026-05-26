@@ -60,3 +60,6 @@ cross-references inside the text still work via `Ctrl+F`.
     — M1..M8, incrementally shippable.
 16. [Acceptance Criteria](./architecture/14-acceptance-criteria/README.md)
     — externally observable behaviours each milestone must demonstrate.
+17. [Process Supervisor (Supervisord)](./architecture/15-supervisord/README.md)
+    — non-root supervisord integration: process groups, Go templates,
+    config regeneration, hot reload (`reread`+`update`), health observation.

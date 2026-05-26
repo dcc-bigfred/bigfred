@@ -1,0 +1,267 @@
+### §7d.2 Service API & configuration model
+
+#### Package layout
+
+```
+pkgs/server/supervisord/
+├── templates/
+│   └── supervisord.conf.tmpl    # embedded via //go:embed
+├── config.go                    # ProgramSpec, GroupSpec, RenderConfig
+├── render.go                    # text/template execution + atomic write
+├── ctl.go                       # supervisorctl wrapper (unix socket)
+└── daemon.go                    # spawn / wait / stop supervisord process
+
+pkgs/server/service/supervisord.go
+└── SupervisordService           # public façade used by cli/ and other services
+```
+
+Low-level supervisord interaction stays in `pkgs/server/supervisord`
+(no HTTP imports). `SupervisordService` in `service/` follows the same
+rule as `AuthService` / `LayoutService`: plain Go API, no transport
+awareness.
+
+#### Domain structs
+
+```go
+// pkgs/server/supervisord/config.go
+
+// ProgramSpec is one supervisord [program:NAME] entry.
+type ProgramSpec struct {
+    Name        string // unique across the entire supervisord instance
+    Command     string // passed to /bin/bash -c (see template); may contain pipes, env, etc.
+    Autostart   bool
+    Autorestart bool
+    // Optional overrides (zero = template default)
+    StopWaitSecs int
+    StartSecs    int
+}
+
+// GroupSpec groups programs under [group:NAME].
+// supervisorctl can target the whole group: supervisorctl restart loco:*
+type GroupSpec struct {
+    Name     string
+    Programs []ProgramSpec
+}
+
+// DesiredState is the full desired supervisord configuration.
+type DesiredState struct {
+    Groups []GroupSpec
+}
+```
+
+Validation rules (enforced before render):
+
+- `Name` matches `^[a-z][a-z0-9_-]*$` (supervisord-friendly).
+- `Command` is non-empty.
+- Program names are **globally unique** (supervisord requirement), even
+  when listed in different groups.
+- A program appears in at most one group.
+
+#### SupervisordService
+
+```go
+// pkgs/server/service/supervisord.go
+
+type SupervisordConfig struct {
+    // Binaries — default "supervisord" / "supervisorctl"
+    SupervisordBin  string
+    SupervisorctlBin string
+
+    // Paths — default to XDG locations under …/loco/supervisord/
+    ConfigDir  string
+    ConfigPath string
+    SocketPath string
+    PIDFile    string
+    LogDir     string
+
+    // Initial desired state (may be empty; callers add before Start)
+    InitialState supervisord.DesiredState
+}
+
+type SupervisordService struct {
+    // …
+}
+
+func NewSupervisordService(cfg SupervisordConfig) (*SupervisordService, error)
+
+// Start ensures directories exist, renders config, launches supervisord if
+// not already running (detected via pidfile + live PID check).
+func (s *SupervisordService) Start(ctx context.Context) error
+
+// Stop sends supervisorctl shutdown and waits for the daemon to exit.
+func (s *SupervisordService) Stop(ctx context.Context) error
+
+// Apply replaces the entire desired state, re-renders config, and reloads
+// supervisord (§7d.3): hot reload via reread+update when only program/group
+// sections changed; full daemon restart when global sections changed.
+func (s *SupervisordService) Apply(ctx context.Context, state supervisord.DesiredState) error
+
+// Convenience helpers — each delegates to Apply with a copy of current state.
+
+func (s *SupervisordService) SetGroups(ctx context.Context, groups []supervisord.GroupSpec) error
+func (s *SupervisordService) UpsertProgram(ctx context.Context, group string, prog supervisord.ProgramSpec) error
+func (s *SupervisordService) RemoveProgram(ctx context.Context, group, name string) error
+
+// Observation
+
+type ProgramState struct {
+    Name    string
+    Group   string
+    Status  string // RUNNING | STOPPED | FATAL | BACKOFF | EXITED | UNKNOWN
+    PID     int
+    Uptime  time.Duration
+    ExitStatus int // when EXITED/FATAL
+}
+
+func (s *SupervisordService) ProgramStatus(ctx context.Context, name string) (ProgramState, error)
+func (s *SupervisordService) GroupStatus(ctx context.Context, group string) ([]ProgramState, error)
+func (s *SupervisordService) AllStatus(ctx context.Context) ([]ProgramState, error)
+
+// Imperative control (does NOT rewrite config)
+
+func (s *SupervisordService) RestartProgram(ctx context.Context, name string) error
+func (s *SupervisordService) StopProgram(ctx context.Context, name string) error
+func (s *SupervisordService) StartProgram(ctx context.Context, name string) error
+```
+
+All mutating methods hold an internal `sync.Mutex` so concurrent
+`Apply` calls serialize. Read-only status methods may run concurrently
+but see a snapshot.
+
+#### Go template
+
+The template is embedded and executed with a single root struct:
+
+```go
+// pkgs/server/supervisord/render.go
+
+type templateData struct {
+    RunAsUser  string
+    SocketPath string
+    PIDFile    string
+    LogDir     string
+    Groups     []GroupSpec
+}
+```
+
+Example template (`supervisord.conf.tmpl`):
+
+```ini
+; Generated by BigFred — do not edit manually.
+[unix_http_server]
+file={{ .SocketPath }}
+chmod=0700
+
+[supervisord]
+logfile={{ .LogDir }}/supervisord.log
+pidfile={{ .PIDFile }}
+childlogdir={{ .LogDir }}
+nodaemon=false
+user={{ .RunAsUser }}
+
+[rpcinterface:supervisor]
+supervisor.rpcinterface_factory = supervisor.rpcinterface:make_main_rpcinterface
+
+[supervisorctl]
+serverurl=unix://{{ .SocketPath }}
+
+{{- range .Groups }}
+
+[group:{{ .Name }}]
+programs={{ joinProgramNames .Programs }}
+
+{{- range .Programs }}
+[program:{{ .Name }}]
+command=/bin/bash -c {{ shellQuote .Command }}
+directory={{ $.ConfigDir }}
+autostart={{ .Autostart }}
+autorestart={{ .Autorestart }}
+stdout_logfile={{ $.LogDir }}/{{ .Name }}.stdout.log
+stderr_logfile={{ $.LogDir }}/{{ .Name }}.stderr.log
+stdout_logfile_maxbytes=10MB
+stderr_logfile_maxbytes=10MB
+stopwaitsecs={{ or .StopWaitSecs 10 }}
+startsecs={{ or .StartSecs 1 }}
+{{- end }}
+{{- end }}
+```
+
+Template helpers (registered in `render.go`):
+
+- `joinProgramNames` — comma-separated program list for `[group:…]`.
+- `shellQuote` — single-quote escaping for safe `/bin/bash -c '…'` embedding.
+- `or` — default integers when struct field is zero.
+
+Callers pass the **inner** shell command only; the template always wraps it
+as `/bin/bash -c '…'`. Example: `Command: "/usr/bin/loco scripts-executor --executor-socket /run/…"`.
+
+`autostart` and `autorestart` render as lowercase `true` / `false` per
+supervisord INI conventions.
+
+#### Atomic write & rollback
+
+`render.go` implements:
+
+1. Render into memory (`bytes.Buffer`).
+2. Write to `supervisord.conf.tmp` in the same directory.
+3. `fsync` the temp file.
+4. If a previous config exists, copy it to `supervisord.conf.prev`.
+5. `rename(2)` temp → `supervisord.conf`.
+
+If reload fails after a successful write, `Apply` attempts to restore
+`supervisord.conf.prev` and re-run `reread` + `update` (or daemon
+restart, if that was the path taken) before returning an error to the
+caller.
+
+#### Example desired state (scripts-executor)
+
+```go
+state := supervisord.DesiredState{
+    Groups: []supervisord.GroupSpec{{
+        Name: "loco",
+        Programs: []supervisord.ProgramSpec{{
+            Name:        "scripts-executor",
+            Command:     fmt.Sprintf("%s scripts-executor --executor-socket %s", selfPath, socketPath),
+            Autostart:   true,
+            Autorestart: true,
+            StopWaitSecs: 5,
+        }},
+    }},
+}
+```
+
+`selfPath` is `os.Executable()` resolved once at boot — the same binary
+that runs `loco server` also provides `loco scripts-executor`.
+
+#### Mapping autostart / autorestart
+
+| Field | supervisord directive | Semantics |
+|---|---|---|
+| `Autostart: true` | `autostart=true` | start when supervisord starts |
+| `Autostart: false` | `autostart=false` | only manual / `StartProgram` |
+| `Autorestart: true` | `autorestart=true` | restart on unexpected exit |
+| `Autorestart: false` | `autorestart=false` | stay stopped after exit |
+
+For programs that should run at most once (migrations, batch jobs),
+use `Autostart: true, Autorestart: false`.
+
+#### ctl.go — supervisorctl wrapper
+
+Thin wrapper around execing `supervisorctl -c <path> <subcommand>`:
+
+```go
+func (c *Ctl) Status(ctx context.Context) ([]ProgramStatus, error)
+func (c *Ctl) Reread(ctx context.Context) error
+func (c *Ctl) Update(ctx context.Context) error
+func (c *Ctl) Shutdown(ctx context.Context) error
+func (c *Ctl) RestartProgram(ctx context.Context, name string) error
+// …
+```
+
+`Reread` + `Update` are supervisord's built-in hot-reload pair: `reread`
+parses the on-disk config; `update` starts/stops/restarts affected
+programs while the daemon keeps running.
+
+Output parsing follows the stable `supervisorctl status` column layout.
+Parse errors surface as typed errors (`ErrSupervisorctl`, `ErrParseStatus`)
+for logging and tests.

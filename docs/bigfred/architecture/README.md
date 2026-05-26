@@ -27,3 +27,5 @@ carries its own `README.md` with its sub-TOC.
 14. [Makefile Additions](./12-makefile.md)
 15. [Delivery Order (Milestones)](./13-delivery-order.md)
 16. [Acceptance Criteria](./14-acceptance-criteria/README.md)
+17. [Process Supervisor (Supervisord)](./15-supervisord/README.md) — non-root
+    process groups, Go templates, hot reload, daemon lifecycle

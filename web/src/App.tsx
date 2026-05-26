@@ -14,6 +14,7 @@ import InterlockingPage from "./pages/InterlockingPage";
 import LoginPage from "./pages/LoginPage";
 import MyTrainsPage from "./pages/MyTrainsPage";
 import MyVehiclesPage from "./pages/MyVehiclesPage";
+import ThrottlePage from "./pages/ThrottlePage";
 import LayoutsAdminPage from "./pages/admin/LayoutsPage";
 import InterlockingsAdminPage from "./pages/admin/InterlockingsPage";
 import UsersAdminPage from "./pages/admin/UsersPage";
@@ -44,6 +45,7 @@ const router = createBrowserRouter(
           <Route path="/" element={<HomePage />} />
           <Route path="/my/vehicles" element={<MyVehiclesPage />} />
           <Route path="/my/trains" element={<MyTrainsPage />} />
+          <Route path="/throttle" element={<ThrottlePage />} />
           <Route path="/interlockings/:id" element={<InterlockingPage />} />
           <Route element={<AdminRoute />}>
             <Route path="/admin/users" element={<UsersAdminPage />} />

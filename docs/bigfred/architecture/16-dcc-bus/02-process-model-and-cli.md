@@ -24,7 +24,7 @@ deployment ships one binary.
 | `--layout-id` | uint | yes | – | `LayoutID` the daemon is bound to. Validates against the JWT on every WS upgrade. |
 | `--command-station-id` | uint | yes | – | `CommandStationID` the daemon owns. Resolved against `command_stations` at boot; absence → fatal startup error. |
 | `--port` | uint16 | yes | – | TCP port the WebSocket listener binds to. **Allocated by `loco-server`**, never hard-coded. |
-| `--bind` | string | no | `127.0.0.1` | Interface to bind on. Loopback by default so the daemon is firewalled by the host kernel; an operator may expose it on a LAN address when running `dcc-bus` on a separate host. |
+| `--bind` | string | no | `127.0.0.1` | Interface to bind on. **Always loopback by default** because the frontend reaches the daemon through `loco-server`'s reverse proxy (§7e.6); the operator only widens this when running `dcc-bus` on a separate host. |
 | `--db-path` | string | yes | – | SQLite file shared with `loco-server`. Opened read-only (`?mode=ro&_journal=WAL`). |
 | `--jwt-secret` | string | no | `$BIGFRED_JWT_SECRET` | HMAC secret used by `AuthService`. Identical to `loco-server` so JWTs validate. Missing secret → fatal startup error (no per-process random fallback like `loco-server` has in dev mode). |
 | `--redis-addr` | string | no | `127.0.0.1:6379` | Redis used for state cache + pub/sub. The daemon refuses to start if Redis is unreachable for 10 s. |
@@ -98,9 +98,11 @@ does **not** disturb other `dcc-bus-*` programs.
 a "free" port and hands it to a child cleanly across processes, so
 the chosen scheme is:
 
-1. A configurable range, default `[9200, 9299]`, is reserved at
-   server boot (`--dcc-bus-port-min`, `--dcc-bus-port-max` flags on
-   `loco-server`).
+1. A configurable range, **default `[9200, 9209]`** (10 ports — in
+   practice an installation has at most a handful of command stations,
+   typically one "main track" + one "programming track"), is reserved
+   at server boot via `--dcc-bus-port-min` / `--dcc-bus-port-max`
+   flags on `loco-server`.
 2. `LocoService` (renamed to `DccBusOrchestrator`, §7e.6) keeps a
    `map[(layoutID, csID)] → port` allocation table in memory and
    mirrored to Redis (`HSET dcc-bus:ports <layoutId>:<csID> <port>`)

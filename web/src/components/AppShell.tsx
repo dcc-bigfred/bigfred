@@ -106,6 +106,12 @@ export default function AppShell() {
         icon: <DirectionsRailwayIcon fontSize="small" />,
         onClick: () => navigate("/my/trains"),
       },
+      {
+        id: "throttle",
+        label: t("nav.my.throttle"),
+        icon: <TrainIcon fontSize="small" />,
+        onClick: () => navigate("/throttle"),
+      },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [t],

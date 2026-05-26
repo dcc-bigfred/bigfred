@@ -24,6 +24,17 @@ type PresenceRefresher interface {
 	RefreshAndBroadcast(ctx context.Context, layoutID uint)
 }
 
+// ControlHandler is the dispatch surface every inbound control-plane
+// frame (other than ping) is routed through. The Hub passes it the
+// Client so handlers can broadcast back or fan-out via the hub. The
+// implementation lives in `pkgs/server/service.SessionControlService`
+// (§7e.6); the Hub stays transport-only and never imports services.
+type ControlHandler interface {
+	HandleEnvelope(ctx context.Context, sender *Client, env Envelope)
+	HandleOpened(ctx context.Context, sender *Client)
+	HandleClosed(ctx context.Context, sender *Client)
+}
+
 // Hub is the central registry of live WebSocket drive sessions (§5.1).
 type Hub struct {
 	mu sync.RWMutex
@@ -37,6 +48,7 @@ type Hub struct {
 	unregister chan *Client
 
 	presence PresenceRefresher
+	control  ControlHandler
 }
 
 // NewHub constructs a Hub. Call Run before accepting connections.
@@ -55,6 +67,15 @@ func NewHub() *Hub {
 func (h *Hub) SetPresenceRefresher(p PresenceRefresher) {
 	h.presence = p
 }
+
+// SetControlHandler wires the inbound-envelope dispatcher. Must be
+// called before Run; the Hub will route every non-ping client frame
+// through it once set.
+func (h *Hub) SetControlHandler(c ControlHandler) { h.control = c }
+
+// ControlHandler returns the currently-wired dispatcher (or nil when
+// none is set). Used by the Client read loop.
+func (h *Hub) ControlHandler() ControlHandler { return h.control }
 
 // Run processes register/unregister until ctx is cancelled.
 func (h *Hub) Run(ctx context.Context) {
@@ -203,13 +224,36 @@ func NewDriveSession(userID uint, login string, layoutID uint) *DriveSession {
 }
 
 // DriveSession is the in-memory handle created on every WS upgrade
-// (§4.5.1). Throttle fields land in later milestones.
+// (§4.5.1). It also carries the current command-station picked on
+// the throttle (§7e.6); zero means "no station selected yet".
 type DriveSession struct {
+	mu sync.Mutex
+
 	ID       string
 	UserID   uint
 	Login    string
 	LayoutID uint
 	OpenedAt time.Time
+
+	currentCS uint
+}
+
+// CurrentCommandStation returns the cs ID the user has selected for
+// this session, or 0 when none is selected.
+func (s *DriveSession) CurrentCommandStation() uint {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.currentCS
+}
+
+// SetCommandStation updates the session's current cs. Returns the
+// previous value so the caller can detect a change.
+func (s *DriveSession) SetCommandStation(csID uint) uint {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	prev := s.currentCS
+	s.currentCS = csID
+	return prev
 }
 
 // Envelope is the common wire format for every WS frame (§4.2).

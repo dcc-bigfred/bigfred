@@ -19,6 +19,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
+	dccbuscli "github.com/keskad/loco/pkgs/dcc-bus/cli"
 	httpapi "github.com/keskad/loco/pkgs/server/http"
 	"github.com/keskad/loco/pkgs/server/repo"
 	"github.com/keskad/loco/pkgs/server/repo/migrations"
@@ -37,6 +38,17 @@ type Flags struct {
 	AllowedOrigins []string
 	SecureCookie   bool
 	NoSupervisor   bool
+
+	// Redis. By default loco-server spawns its own redis-server via
+	// supervisord on RedisBindAddr:RedisPort; pass --redis-external
+	// to skip the managed daemon and dial RedisAddr instead.
+	RedisBin      string
+	RedisBindAddr string
+	RedisPort     uint16
+	RedisDataDir  string
+	RedisAddr     string
+	RedisExternal bool
+	RedisPersist  bool
 }
 
 // NewRootCommand returns the top-level cobra command. It is invoked
@@ -68,6 +80,23 @@ real-time throttle commands.`,
 		"set the Secure flag on the session cookie (REQUIRED in production, off for local http://)")
 	cmd.Flags().BoolVar(&f.NoSupervisor, "no-supervisor", false,
 		"skip supervisord process management (for local dev without the supervisor package)")
+
+	cmd.Flags().StringVar(&f.RedisBin, "redis-bin", "valkey-server",
+		"redis-server binary path (PATH-relative or absolute) used by the managed daemon")
+	cmd.Flags().StringVar(&f.RedisBindAddr, "redis-bind", "127.0.0.1",
+		"interface the managed redis-server binds on; loopback by default")
+	cmd.Flags().Uint16Var(&f.RedisPort, "redis-port", 6380,
+		"TCP port the managed redis-server listens on (default 6380 to avoid colliding with a system redis on 6379)")
+	cmd.Flags().StringVar(&f.RedisDataDir, "redis-data-dir", "",
+		"working directory for redis-server (defaults to the supervisord log directory)")
+	cmd.Flags().StringVar(&f.RedisAddr, "redis-addr", "",
+		"redis dial address (host:port) used by loco-server and dcc-bus; defaults to redis-bind:redis-port")
+	cmd.Flags().BoolVar(&f.RedisExternal, "redis-external", false,
+		"do not spawn a managed redis-server; dial --redis-addr instead (operator runs Redis out-of-band)")
+	cmd.Flags().BoolVar(&f.RedisPersist, "redis-persist", false,
+		"keep RDB snapshots / AOF for the managed redis-server; off by default because dcc-bus rebuilds state cheaply")
+
+	cmd.AddCommand(dccbuscli.NewCommand(log))
 
 	return cmd
 }
@@ -104,6 +133,10 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	trainMembers := repo.NewTrainMembers(repository)
 	layoutVehicles := repo.NewLayoutVehicles(repository)
 	layoutTrains := repo.NewLayoutTrains(repository)
+	commandStations := repo.NewCommandStations(repository)
+	layoutCommandStations := repo.NewLayoutCommandStations(repository)
+	_ = layoutTrains
+	_ = commandStations
 
 	layoutSvc := service.NewLayoutService(layouts, interlockings, layoutInterlockings)
 	interlockingSvc := service.NewInterlockingService(interlockings, layoutInterlockings)
@@ -130,9 +163,24 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	// goroutine so a slow SQLite write doesn't block the WS hub.
 	go sudoSvc.RunJanitor(ctx)
 
+	redisAddr := f.RedisAddr
+	if redisAddr == "" {
+		redisAddr = fmt.Sprintf("%s:%d", f.RedisBindAddr, f.RedisPort)
+	}
+	redisSvc := service.NewRedisService(service.RedisServiceConfig{Addr: redisAddr})
+	defer func() { _ = redisSvc.Close() }()
+
 	var supSvc *service.SupervisordService
 	if !f.NoSupervisor {
-		supSvc, err = service.NewSupervisordService(service.SupervisordConfig{})
+		initial := service.DefaultInfraProcesses(service.RedisConfig{
+			Bin:                  f.RedisBin,
+			BindAddr:             f.RedisBindAddr,
+			Port:                 f.RedisPort,
+			DataDir:              f.RedisDataDir,
+			EphemeralPersistence: !f.RedisPersist,
+			Disable:              f.RedisExternal,
+		})
+		supSvc, err = service.NewSupervisordService(service.SupervisordConfig{InitialState: initial})
 		if err != nil {
 			return fmt.Errorf("supervisord init: %w", err)
 		}
@@ -142,6 +190,67 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		supSvc.RunHealthLoop(ctx, 5*time.Second, func(states []service.ProgramState) {
 			log.WithField("programs", states).Debug("supervisord status changed")
 		})
+	}
+
+	// Block until Redis is reachable so anything that publishes
+	// during the rest of bootstrap (presence broadcasts, future
+	// dcc-bus enqueues) won't race the daemon's first byte. The
+	// timeout is generous because supervisord's StartSecs already
+	// gates "RUNNING" on a healthy boot.
+	redisReady := true
+	if !f.RedisExternal || f.NoSupervisor {
+		readyCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		if err := redisSvc.WaitReady(readyCtx, 10*time.Second); err != nil {
+			cancel()
+			redisReady = false
+			if f.NoSupervisor {
+				log.WithError(err).Warn("redis unreachable; continuing because --no-supervisor was set")
+			} else {
+				return fmt.Errorf("redis wait ready: %w", err)
+			}
+		} else {
+			cancel()
+			log.WithField("addr", redisAddr).Info("redis ready")
+		}
+	}
+
+	// dcc-bus orchestrator. Disabled when supervisord / redis are
+	// off-line because both are hard dependencies.
+	var dccBusSvc *service.DccBusService
+	if supSvc != nil && redisReady {
+		executable, _ := os.Executable()
+		dccBusSvc = service.NewDccBusService(service.DccBusConfig{
+			Executable:   executable,
+			DBPath:       f.DBPath,
+			RedisAddr:    redisAddr,
+			JWTSecret:    secret,
+			PortMin:      9200,
+			PortMax:      9209,
+			SpawnTimeout: 10 * time.Second,
+			ProxyEnabled: true,
+		}, supSvc, redisSvc, log)
+		if err := dccBusSvc.HydratePorts(ctx); err != nil {
+			log.WithError(err).Warn("dcc-bus hydrate ports")
+		}
+	}
+
+	if dccBusSvc != nil {
+		sessionCtl := service.NewSessionControlService(service.SessionControlConfig{
+			Log:         log,
+			DccBus:      dccBusSvc,
+			CommandStns: commandStations,
+			Layouts:     layoutCommandStations,
+		})
+		hub.SetControlHandler(sessionCtl)
+
+		// Fan dcc-bus daemon events back onto the control plane so
+		// the dashboard / sudo UI reacts to estop audits, daemon
+		// crashes and (future) takeover broadcasts.
+		evtConsumer := service.NewDccBusEventConsumer(redisSvc, hub, log)
+		if err := evtConsumer.Start(ctx); err != nil {
+			log.WithError(err).Warn("dcc-bus event consumer start")
+		}
+		defer evtConsumer.Stop()
 	}
 
 	// Seed the bootstrap system layout BEFORE the admin account so
@@ -187,6 +296,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		DCCPool:        dccPoolSvc,
 		Sudo:           sudoSvc,
 		Hub:            hub,
+		DccBus:         dccBusSvc,
 		AllowedOrigins: f.AllowedOrigins,
 		SecureCookie:   f.SecureCookie,
 	})

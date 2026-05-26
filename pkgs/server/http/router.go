@@ -28,6 +28,7 @@ type RouterConfig struct {
 	DCCPool        *service.DCCPoolService
 	Sudo           *service.SudoService
 	Hub            *ws.Hub
+	DccBus         *service.DccBusService
 
 	// AllowedOrigins is forwarded verbatim to the CORS middleware.
 	// In development the Vite dev server lives on a different port
@@ -75,6 +76,16 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		r.Get("/ws", func(w http.ResponseWriter, r *http.Request) {
 			ServeWS(cfg.Hub, cfg.Auth, w, r)
 		})
+
+		// dcc-bus data-plane reverse proxy (§7e.6). Verifies the
+		// session JWT, looks up the daemon's loopback port and
+		// forwards the WebSocket upgrade. The proxy is the default
+		// path the SPA dials in production; --redis-external /
+		// --dcc-bus-proxy=false setups bypass it.
+		if cfg.DccBus != nil {
+			proxy := NewDccBusProxy(cfg.Auth, cfg.DccBus)
+			r.Get("/dcc-bus/{commandStationId}/ws", proxy.ServeHTTP)
+		}
 
 		// Public auth endpoints (login does its own credential check).
 		r.Post("/auth/login", authH.Login)

@@ -32,7 +32,7 @@ machine and the dead-man's switch. See `LocoServiceDriver` below.
 // pkgs/server/service/dcc_bus.go
 type DccBusConfig struct {
     PortMin           uint16        // default 9200
-    PortMax           uint16        // default 9299
+    PortMax           uint16        // default 9209 (small pool; one main track + one programming track is typical)
     BindAddr          string        // default 127.0.0.1
     PollInterval      time.Duration // default 200ms
     HeartbeatGrace    time.Duration // default 5s
@@ -234,24 +234,40 @@ If `loco-server` itself is restarted while daemons are running, the
 goroutine simply resubscribes; events emitted during the gap are not
 backfilled but the next polling cycle produces fresh state.
 
-#### Reverse proxy (optional)
+#### Reverse proxy (default)
 
-For deployments behind a single TLS terminator, `loco-server` may
-expose `/api/v1/dcc-bus/{commandStationId}/ws` as a reverse-proxy
-endpoint that forwards the upgrade to `127.0.0.1:<port>` for the
-matching daemon. This keeps a single public origin and reuses the
-TLS cert; the daemon then binds to `127.0.0.1` only.
+`loco-server` exposes `/api/v1/dcc-bus/{commandStationId}/ws` as a
+reverse-proxy endpoint by default. It accepts the WebSocket upgrade
+on the same origin as the rest of the SPA and forwards it to
+`127.0.0.1:<port>` of the matching daemon. This keeps a single public
+origin (no separate CORS rules, no TLS cert per daemon, no exposed
+DCC-bus ports on the LAN/Internet) and lets the daemon stay bound to
+loopback — the firewall story is trivially "block everything except
+the `loco-server` HTTP listener".
 
-In that case:
+Rules:
 
 - `session.opened.availableCommandStations[i].wsUrl` returns the
-  proxy path (`ws://example.com/api/v1/dcc-bus/2/ws`) rather than the
-  daemon's port.
-- The proxy verifies the JWT before forwarding (defence in depth)
-  and adds `X-Forwarded-For`.
+  proxy path (`/api/v1/dcc-bus/2/ws`) **without scheme or host** so
+  the SPA computes the URL from `window.location` (handles HTTP /
+  HTTPS / dev-mode-from-Vite uniformly). When the SPA detects a
+  same-origin path it just opens
+  `new WebSocket(\`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${wsUrl}?token=${jwt}\`)`.
+- The proxy **verifies the JWT** itself before forwarding (defence
+  in depth — same `AuthService.VerifyToken` call as `/api/v1/ws`)
+  and adds `X-Forwarded-For`. The daemon **also** re-verifies, so
+  removing the proxy in a dev setup does not weaken auth.
+- The proxy is **lookup-table-driven**: it resolves
+  `commandStationId` to the daemon's loopback port through
+  `DccBusService.PortFor(session.LayoutID, commandStationId)`. A
+  mismatched layout (the WS user's layout does not own the cs)
+  closes the upgrade with HTTP 403 before forwarding.
 
-The flag `--dcc-bus-proxy=true` on `loco-server` switches between
-direct (default for dev) and proxied (recommended for production).
+The opt-out flag `--dcc-bus-proxy=false` on `loco-server` switches
+the daemon to direct mode for cross-host deployments; in that case
+the daemon's `--bind` MUST be widened beyond loopback and the
+operator is responsible for firewalling / TLS-terminating. The
+default is `true`.
 
 #### Wiring summary
 
@@ -290,12 +306,13 @@ server-side poller for DCC state anymore; the server reads `loco:state`
 from Redis if it ever needs an authoritative snapshot for REST
 responses.
 
-§7 #5 (Long operations such as CV read) **stays on `loco-server`**
-because CV operations are catalogue-style writes that affect SQLite;
-they are exposed via REST (`POST /api/v1/vehicles/{addr}/cv`). The CV
-write call internally goes through `DccBusService.PublishCommand`
-with a new `cv.write` command type when M3 ships; for now CVs are
-read/written through a future synchronous helper.
+§7 #5 (Long operations such as CV read/write on the track) is
+**explicitly out of scope** for this milestone. No `cv.read` /
+`cv.write` command goes through `DccBusService.PublishCommand` yet,
+and the daemon's command channel only carries throttle commands
+(`loco.setSpeed`, `loco.setFunction`, `system.estop`,
+`session.adopt`). When CV operations are scheduled, they will be
+slotted into the same channel without a new daemon-level RPC.
 
 When this milestone lands, §5 should be updated in place to point to
 §7e for the throttle data plane; the existing §5 prose stays as a

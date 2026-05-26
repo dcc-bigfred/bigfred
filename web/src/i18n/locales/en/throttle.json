@@ -1,0 +1,48 @@
+{
+  "title": "Throttle",
+  "commandStation": "Command station",
+  "selectCommandStation": "Select a command station",
+  "noCommandStations": "No command station is attached to this layout.",
+  "vehicle": "Vehicle",
+  "speed": "Speed",
+  "direction": {
+    "forward": "Forward",
+    "reverse": "Reverse"
+  },
+  "functions": "Functions",
+  "fnLabel": "F{{n}}",
+  "emergencyStop": "Emergency stop",
+  "deadman": {
+    "warning": "Idle — auto stop in {{seconds}} s",
+    "executed": "Emergency plan applied ({{action}})"
+  },
+  "csStatus": {
+    "running": "Connected",
+    "starting": "Starting…",
+    "spawning": "Hold on, first connection to the command station…",
+    "stopped": "Disconnected",
+    "draining": "Shutting down",
+    "degraded": "Error"
+  },
+  "controlPlane": {
+    "online": "Control: online",
+    "offline": "Control: offline"
+  },
+  "dataPlane": {
+    "online": "DCC bus: online",
+    "offline": "DCC bus: offline",
+    "connecting": "DCC bus: connecting…"
+  },
+  "errors": {
+    "command_station_disconnected": "Lost connection to the command station",
+    "vehicle_not_on_layout": "This vehicle is not on the active layout",
+    "vehicle_is_dummy": "Vehicle has no DCC address",
+    "not_authorized_to_drive": "You are not authorised to drive this vehicle",
+    "taken_over": "Vehicle taken over by a signalman",
+    "lease_expired": "Lease expired",
+    "dcc_bus_unavailable": "dcc-bus daemon unavailable — try again in a moment",
+    "no_dcc_bus_ports_available": "No free port for a new command station — stop an unused one",
+    "command_station_not_attached": "Command station is not attached to this layout",
+    "dcc_bus_not_configured": "Command-station control is not configured on this server"
+  }
+}

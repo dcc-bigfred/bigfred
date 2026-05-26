@@ -1,7 +1,7 @@
 {
-  "title": "Layout dashboard",
+  "title": "Layout: {{layoutName}}",
   "editLayoutSettings": "Edit layout settings",
-  "subtitle": "Signed in as {{login}}.",
+  "subtitle": "Signed in as {{login}} with role {{role}}.",
   "greetingAnon": "Welcome!",
   "loadError": "Could not load dashboard data.",
   "onlineUsers": {

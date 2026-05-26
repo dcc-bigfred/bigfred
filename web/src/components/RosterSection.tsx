@@ -87,6 +87,83 @@ export default function RosterSection({ layoutId }: Props) {
           }}
         >
           <Typography variant="h6" sx={{ flexGrow: 1 }}>
+            {t("vehicle:roster.trains.title")}
+          </Typography>
+        </Box>
+        <TableContainer>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>{t("vehicle:roster.trains.columns.name")}</TableCell>
+                <TableCell>{t("vehicle:roster.trains.columns.members")}</TableCell>
+                <TableCell>{t("vehicle:roster.trains.columns.owner")}</TableCell>
+                <TableCell align="right">
+                  {t("vehicle:roster.trains.columns.actions")}
+                </TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {(layoutTrains.data ?? []).length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4} align="center" sx={{ py: 3, color: "text.secondary" }}>
+                    {t("vehicle:roster.trains.empty")}
+                  </TableCell>
+                </TableRow>
+              ) : (
+                (layoutTrains.data ?? []).map((row: RosterTrain) => (
+                  <TableRow key={row.id}>
+                    <TableCell>{row.name}</TableCell>
+                    <TableCell>
+                      {t("vehicle:trainList.membersCount", { count: row.members.length })}
+                    </TableCell>
+                    <TableCell>
+                      {row.ownerLogin}
+                      {ownsRow(row.ownerId) && (
+                        <Typography component="span" variant="caption" color="text.secondary">
+                          {" "}
+                          {t("vehicle:roster.ownedByYou")}
+                        </Typography>
+                      )}
+                    </TableCell>
+                    <TableCell align="right">
+                      {canRemoveFromRoster(row.ownerId) && (
+                        <Tooltip title={t("vehicle:roster.removeButton")}>
+                          <IconButton
+                            size="small"
+                            onClick={() =>
+                              removeTrainFromRoster.mutate({
+                                layoutId,
+                                trainId: row.id,
+                              })
+                            }
+                            aria-label={t("vehicle:roster.removeButton")}
+                          >
+                            <RemoveCircleOutlineIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </Paper>
+
+      <Paper variant="outlined">
+        <Box
+          sx={{
+            px: 2,
+            py: 1.5,
+            borderBottom: 1,
+            borderColor: "divider",
+            display: "flex",
+            alignItems: "center",
+            gap: 1,
+          }}
+        >
+          <Typography variant="h6" sx={{ flexGrow: 1 }}>
             {t("vehicle:roster.vehicles.title")}
           </Typography>
         </Box>
@@ -136,83 +213,6 @@ export default function RosterSection({ layoutId }: Props) {
                               removeVehicleFromRoster.mutate({
                                 layoutId,
                                 vehicleId: row.id,
-                              })
-                            }
-                            aria-label={t("vehicle:roster.removeButton")}
-                          >
-                            <RemoveCircleOutlineIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </Paper>
-
-      <Paper variant="outlined">
-        <Box
-          sx={{
-            px: 2,
-            py: 1.5,
-            borderBottom: 1,
-            borderColor: "divider",
-            display: "flex",
-            alignItems: "center",
-            gap: 1,
-          }}
-        >
-          <Typography variant="h6" sx={{ flexGrow: 1 }}>
-            {t("vehicle:roster.trains.title")}
-          </Typography>
-        </Box>
-        <TableContainer>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>{t("vehicle:roster.trains.columns.name")}</TableCell>
-                <TableCell>{t("vehicle:roster.trains.columns.members")}</TableCell>
-                <TableCell>{t("vehicle:roster.trains.columns.owner")}</TableCell>
-                <TableCell align="right">
-                  {t("vehicle:roster.trains.columns.actions")}
-                </TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {(layoutTrains.data ?? []).length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={4} align="center" sx={{ py: 3, color: "text.secondary" }}>
-                    {t("vehicle:roster.trains.empty")}
-                  </TableCell>
-                </TableRow>
-              ) : (
-                (layoutTrains.data ?? []).map((row: RosterTrain) => (
-                  <TableRow key={row.id}>
-                    <TableCell>{row.name}</TableCell>
-                    <TableCell>
-                      {t("vehicle:trainList.membersCount", { count: row.members.length })}
-                    </TableCell>
-                    <TableCell>
-                      {row.ownerLogin}
-                      {ownsRow(row.ownerId) && (
-                        <Typography component="span" variant="caption" color="text.secondary">
-                          {" "}
-                          {t("vehicle:roster.ownedByYou")}
-                        </Typography>
-                      )}
-                    </TableCell>
-                    <TableCell align="right">
-                      {canRemoveFromRoster(row.ownerId) && (
-                        <Tooltip title={t("vehicle:roster.removeButton")}>
-                          <IconButton
-                            size="small"
-                            onClick={() =>
-                              removeTrainFromRoster.mutate({
-                                layoutId,
-                                trainId: row.id,
                               })
                             }
                             aria-label={t("vehicle:roster.removeButton")}

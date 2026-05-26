@@ -28,7 +28,7 @@ import RosterSection from "../components/RosterSection";
 export default function HomePage() {
   const me = useMe().data;
   const layoutId = me?.layoutId ?? null;
-  const { t } = useTranslation(["home", "role", "interlocking"]);
+  const { t } = useTranslation(["home", "role", "layout", "interlocking"]);
   const navigate = useNavigate();
 
   const presence = useLayoutPresence(layoutId);
@@ -42,11 +42,22 @@ export default function HomePage() {
       <Stack spacing={3}>
         <Box>
           <Typography variant="h4" component="h1" gutterBottom>
-            {me ? t("home:title") : t("home:greetingAnon")}
+            {me
+              ? t("home:title", {
+                  layoutName: me.layoutIsSystem
+                    ? t("layout:system_default_label")
+                    : me.layoutName,
+                })
+              : t("home:greetingAnon")}
           </Typography>
           {me && (
             <Typography variant="body1" color="text.secondary">
-              {t("home:subtitle", { login: me.login })}
+              {t("home:subtitle", {
+                login: me.login,
+                role: t(`role:${me.effectiveRole}` as const, {
+                  defaultValue: me.effectiveRole,
+                }),
+              })}
             </Typography>
           )}
           {me?.effectiveRole === "admin" && layoutId != null && layoutId > 0 && (

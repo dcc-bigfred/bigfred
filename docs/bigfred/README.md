@@ -63,3 +63,7 @@ cross-references inside the text still work via `Ctrl+F`.
 17. [Process Supervisor (Supervisord)](./architecture/15-supervisord/README.md)
     — non-root supervisord integration: process groups, Go templates,
     config regeneration, hot reload (`reread`+`update`), health observation.
+18. [DCC Bus Daemon (`dcc-bus`)](./architecture/16-dcc-bus/README.md)
+    — per-`(layout × command station)` sibling daemon owning the DCC
+    bus and the throttle WebSocket; session-aware authorization via
+    `pkgs/server/security`; Redis state cache; supervised by §7d.

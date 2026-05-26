@@ -67,8 +67,9 @@ source of truth** for *what* should run.
 │  │    group:loco                                         │  │
 │  │      ├─ program:scripts-executor   autostart=true    │  │
 │  │      └─ program:…                  autorestart=…    │  │
-│  │    group:command-stations (future)                    │  │
-│  │      └─ program:cs-z21-main        autostart=false   │  │
+│  │    group:dcc-bus (added by §7e M4.5)                  │  │
+│  │      ├─ program:dcc-bus-1-2        autostart=true    │  │
+│  │      └─ program:dcc-bus-1-3        autostart=true    │  │
 │  └───────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────┘
 ```

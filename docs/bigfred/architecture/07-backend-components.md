@@ -1,5 +1,15 @@
 ## 5. Backend Components
 
+> §7e supersedes the DCC dispatch parts of this section. The
+> `LocoService.SetSpeed` and background poller described in §5.4 and
+> §5.5 still describe the **M1 baseline**, but in the §7e milestone
+> they move into the sibling `dcc-bus` daemon (§16-dcc-bus). The
+> `loco-server`-side `LocoService` shrinks to a thin
+> `LocoServiceDriver` that delegates throttle writes to
+> `DccBusService.PublishCommand` over Redis. See
+> [§7e.6 Server integration](../16-dcc-bus/06-server-integration.md)
+> for the post-§7e shape.
+
 ### 5.1 WebSocket Hub
 
 `pkgs/server/ws/hub.go` – central registry of connected clients with a
@@ -199,7 +209,16 @@ func (c *Client) handle(ctx context.Context, env Envelope) {
 }
 ```
 
-### 5.4 LocoService – Thin Wrapper Over the Existing `LocoApp`
+### 5.4 LocoService – Thin Wrapper Over the Existing `LocoApp` (M1 baseline)
+
+> After §7e, the body of `SetSpeed` becomes a one-liner that publishes
+> a `loco.setSpeed` command on `dcc-bus:cmd:<L>:<C>` (Redis pub/sub)
+> via `DccBusService.PublishCommand`. The `Station` interface and
+> the call into `pkgs/loco/commandstation` live inside the
+> `dcc-bus` daemon. The snippet below is preserved as the M1 baseline
+> – useful when running `loco-server` standalone without the
+> daemon (e.g. integration tests, `--no-supervisor` dev mode).
+
 
 ```go
 package service
@@ -221,7 +240,7 @@ func (s *LocoService) SetSpeed(ctx context.Context, addr uint16, speed uint8, fw
 }
 ```
 
-### 5.5 Background Poller (Authoritative State From the Command Station)
+### 5.5 Background Poller (M1 baseline; moves into `dcc-bus` in §7e)
 
 A DCC track is shared state – another throttle or another app may also be
 driving locomotives. The backend therefore periodically polls

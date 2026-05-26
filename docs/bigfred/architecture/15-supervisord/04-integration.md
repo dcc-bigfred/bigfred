@@ -56,11 +56,16 @@ loop.
 |---|---|---|---|---|
 | `loco` | `scripts-executor` | true | true | same flags as today (`--executor-socket`) |
 
-Future rows (not M7):
+Rows added by M4.5 (§7e DCC bus daemon):
 
 | Group | Program | Autostart | Autorestart | Notes |
 |---|---|---|---|---|
-| `command-stations` | `cs-<id>` | per CS config | true | one worker per active command station |
+| `dcc-bus` | `dcc-bus-<layoutId>-<commandStationId>` | true | true | one daemon per `(LayoutCommandStation OR system-layout × cs)` selected by at least one drive session; spawned lazily by `DccBusService.EnsureRunning` (§7e.6) via `SupervisordService.UpsertProgram`. Program name follows the `^[a-z][a-z0-9_-]*$` rule. Command-line includes `--layout-id`, `--command-station-id`, `--port`, `--jwt-secret` (§7e.2). |
+
+Future rows (post-M4.5):
+
+| Group | Program | Autostart | Autorestart | Notes |
+|---|---|---|---|---|
 | `loco` | `mcp-stdio-bridge` | false | false | on-demand, admin-triggered |
 
 Adding a row is one `UpsertProgram` call — no supervisord knowledge in

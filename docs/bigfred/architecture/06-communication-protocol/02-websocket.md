@@ -1,7 +1,21 @@
 ### 4.2 WebSocket
 
-A single endpoint: `GET /api/v1/ws`, which upgrades to a WebSocket
-connection.
+Two endpoints share the same envelope shape but have different
+authoritative scopes (§7e splits the data plane out of `loco-server`):
+
+| Endpoint | Process | Scope |
+|---|---|---|
+| `GET /api/v1/ws` | `loco-server` | **Control plane** — sessions, takeover, radio, scripts, presence, sudo elevation, layout / command-station picker. Always open while the user is logged in. |
+| `GET ws://host:<port>/ws?token=<jwt>` | `dcc-bus` (one process per `(layoutId, commandStationId)` pair, §7e) | **Data plane** — throttle traffic (`loco.subscribe`, `loco.setSpeed`, `loco.toggleFn`, `system.estop`, `ping`). Opened when the user picks a command station, re-opened against a different daemon when the user switches command stations. |
+
+The frontend therefore holds **two** WebSocket connections in
+throttle mode (§6.3b, §7e.7). The control plane carries everything
+that is not a per-DCC-address operation; the data plane carries the
+high-frequency throttle traffic and is the only WS that ever speaks
+to `commandstation.Station`. The two are independent at the WS
+layer and reconnect separately. Until §7e is implemented the data
+plane is hosted on the same `/api/v1/ws` endpoint as the control
+plane (the M1 baseline).
 
 Every frame uses a common envelope format in both directions:
 
@@ -19,12 +33,20 @@ of vehicles/trains this connection is allowed to interact with.
 
 #### Client → Server (Actions)
 
-Throttle / locomotive control:
+Throttle / locomotive control — **hosted by `dcc-bus`** (§7e.4) once
+§7e ships; on the M1 baseline they live on `loco-server`'s
+`/api/v1/ws` exactly as listed:
 
 - `loco.subscribe` `{ addr }` – start receiving events for this locomotive.
 - `loco.unsubscribe` `{ addr }`.
 - `loco.setSpeed` `{ addr, speed, forward }`.
 - `loco.toggleFn` `{ addr, fn, on }`.
+
+Train control — **stays on `loco-server`'s `/api/v1/ws`** even after
+§7e (a train may span multiple command stations; the server fans
+per-member writes onto the appropriate `dcc-bus:cmd:<L>:<C>`
+channels):
+
 - `train.subscribe` `{ trainId }` – convenience action: server expands
   the train into its current member set and subscribes the caller to
   every member's `loco.state` events in a single round trip. Sent by
@@ -64,8 +86,13 @@ Throttle / locomotive control:
     currently under signalman takeover, the ack lists that member as
     `{ ok:false, error:"taken_over" }`; the rest of the train is
     driven normally.
-- `system.estop` `{}` – global emergency stop.
-- `ping`.
+- `system.estop` `{}` – emergency stop. Hosted by `dcc-bus` once §7e
+  ships; scope is the command station this `dcc-bus` owns (not a
+  global track-power cut). On `loco-server`'s baseline WS the scope
+  is global.
+- `ping`. Both endpoints have independent application-level
+  heartbeats; the dead-man's switch (§4.5) fires per-endpoint with
+  cross-process coordination via Redis.
 
 Interlocking / signal box:
 
@@ -209,3 +236,24 @@ Common:
 The protocol is a discriminated union on `type`, both in Go (switch) and
 TypeScript (literal union). Sharing types automatically (via `tygo` or
 similar) prevents drift.
+
+#### `dcc-bus`-only frames (§7e)
+
+`dcc-bus` adds a small set of events on top of the existing
+throttle vocabulary. They are scoped to a single
+`(layoutId, commandStationId)` daemon:
+
+Server → Client:
+
+- `dcc-bus.opened` `{ sessionId, layoutId, commandStationId, commandStationName, sharedBus: bool, pollIntervalMs, heartbeatGraceMs }`
+  – sent immediately after the data-plane WS upgrade. The daemon
+  allocates a fresh `sessionId` distinct from the `loco-server`
+  control-plane sessionId. `sharedBus: true` when a peer
+  `dcc-bus` is also pinned to the same command station (§3a.4 rule 9).
+
+The daemon also re-emits the existing throttle events
+(`loco.state`, `loco.error`, `vehicle.functionsChanged`,
+`system.status`, `session.warning`, `session.emergencyExecuted`,
+`pong`, `ack`) with semantics identical to those defined in this
+section, scoped to its `(layoutId, commandStationId)` slice. See
+§7e.4 for the full per-frame contract.

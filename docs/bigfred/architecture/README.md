@@ -29,3 +29,6 @@ carries its own `README.md` with its sub-TOC.
 16. [Acceptance Criteria](./14-acceptance-criteria/README.md)
 17. [Process Supervisor (Supervisord)](./15-supervisord/README.md) — non-root
     process groups, Go templates, hot reload, daemon lifecycle
+18. [DCC Bus Daemon (`dcc-bus`)](./16-dcc-bus/README.md) — per-
+    `(layout × command station)` sibling daemon for the throttle
+    data plane; session-aware, security-policy-driven, Redis-cached

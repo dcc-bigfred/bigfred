@@ -58,9 +58,23 @@ type ThrottleState = {
    The server:
    - Authorizes via `LayoutSecurityContext.CanSetSessionCommandStation`.
    - Calls `DccBusService.EnsureRunning(L, C)`.
-   - Replies `ack { ok:true }` once the daemon is RUNNING + dial-able.
-   - Broadcasts `session.commandStationChanged { commandStationId, wsUrl }`
-     to every session of the user.
+   - **Lazy spawn UX.** If the daemon needs to be spawned (no existing
+     `dcc-bus-<L>-<C>` program in supervisord), the server immediately
+     emits an interim event
+     `session.commandStationChanged { commandStationId, wsUrl: null, status: "starting", reason: "spawning" }`
+     so the SPA can render the placeholder
+     **"Potrzebuję chwili, pierwsze połączenie z centralką…"**
+     (i18n key `throttle:csStatus.spawning`). It then waits up to
+     `dcc-bus startSecs + dial timeout` (≈ 10 s) for the daemon to
+     reach RUNNING and accept a WS dial.
+   - On success: replies `ack { ok:true }` on the original
+     `session.setCommandStation` envelope **and** broadcasts the
+     final `session.commandStationChanged { commandStationId, wsUrl, status: "running" }`
+     to every concurrent session of the user.
+   - On failure: replies `ack { ok:false, error:"dcc_bus_unavailable" }`
+     (or `error:"no_dcc_bus_ports_available"` when the pool is
+     exhausted); the SPA flips the placeholder to a red banner
+     mapped from `throttle:errors.dcc_bus_unavailable`.
 
 5. **SPA opens `dccBusWs`** at the received `wsUrl`. The two
    WebSockets are now both live.
@@ -187,6 +201,7 @@ overlay strings. Initial coverage:
   "csStatus": {
     "running": "Połączona",
     "starting": "Uruchamianie…",
+    "spawning": "Potrzebuję chwili, pierwsze połączenie z centralką…",
     "stopped": "Niepołączona",
     "draining": "Kończy pracę",
     "degraded": "Błąd"
@@ -204,7 +219,8 @@ overlay strings. Initial coverage:
     "not_authorized_to_drive": "Brak uprawnień do sterowania tym pojazdem",
     "taken_over": "Pojazd przejęty przez nastawniczego",
     "lease_expired": "Wypożyczenie wygasło",
-    "dcc_bus_unavailable": "Demon dcc-bus niedostępny — spróbuj ponownie za chwilę"
+    "dcc_bus_unavailable": "Demon dcc-bus niedostępny — spróbuj ponownie za chwilę",
+    "no_dcc_bus_ports_available": "Brak wolnego portu dla nowej centralki — zatrzymaj nieużywaną"
   }
 }
 ```

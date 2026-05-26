@@ -1,0 +1,48 @@
+{
+  "title": "Sterowanie",
+  "commandStation": "Centralka",
+  "selectCommandStation": "Wybierz centralkę",
+  "noCommandStations": "Do tej makiety nie podpięto żadnej centralki.",
+  "vehicle": "Pojazd",
+  "speed": "Prędkość",
+  "direction": {
+    "forward": "Naprzód",
+    "reverse": "Wstecz"
+  },
+  "functions": "Funkcje",
+  "fnLabel": "F{{n}}",
+  "emergencyStop": "Stop awaryjny",
+  "deadman": {
+    "warning": "Brak aktywności — automatyczny stop za {{seconds}} s",
+    "executed": "Wykonano plan awaryjny ({{action}})"
+  },
+  "csStatus": {
+    "running": "Połączona",
+    "starting": "Uruchamianie…",
+    "spawning": "Potrzebuję chwili, pierwsze połączenie z centralką…",
+    "stopped": "Niepołączona",
+    "draining": "Kończy pracę",
+    "degraded": "Błąd"
+  },
+  "controlPlane": {
+    "online": "Sterowanie: online",
+    "offline": "Sterowanie: offline"
+  },
+  "dataPlane": {
+    "online": "Centralka: online",
+    "offline": "Centralka: offline",
+    "connecting": "Centralka: łączenie…"
+  },
+  "errors": {
+    "command_station_disconnected": "Utracono połączenie z centralką",
+    "vehicle_not_on_layout": "Ten pojazd nie znajduje się na obecnej makiecie",
+    "vehicle_is_dummy": "Pojazd nie posiada adresu DCC",
+    "not_authorized_to_drive": "Brak uprawnień do sterowania tym pojazdem",
+    "taken_over": "Pojazd przejęty przez nastawniczego",
+    "lease_expired": "Wypożyczenie wygasło",
+    "dcc_bus_unavailable": "Demon dcc-bus niedostępny — spróbuj ponownie za chwilę",
+    "no_dcc_bus_ports_available": "Brak wolnego portu dla nowej centralki — zatrzymaj nieużywaną",
+    "command_station_not_attached": "Centralka nie jest podpięta do tej makiety",
+    "dcc_bus_not_configured": "Sterowanie centralką nie jest skonfigurowane na tym serwerze"
+  }
+}

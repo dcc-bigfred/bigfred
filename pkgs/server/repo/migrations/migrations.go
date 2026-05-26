@@ -39,6 +39,59 @@ func register(m *migrator.Migrator) {
 	m.Register(20260525_000010, addLayoutsAdminPINUp, addLayoutsAdminPINDown)
 	m.Register(20260525_000011, createSudoElevationsUp, createSudoElevationsDown)
 	m.Register(20260525_000012, dropSystemLayoutLockCheckUp, dropSystemLayoutLockCheckDown)
+	m.Register(20260526_000001, createCommandStationsUp, createCommandStationsDown)
+	m.Register(20260526_000002, createLayoutCommandStationsUp, createLayoutCommandStationsDown)
+}
+
+// createCommandStationsUp installs the `command_stations` catalogue
+// row backing domain.CommandStation (§7e). One row per physical DCC
+// command station. `kind` is a closed enum that drives which driver
+// `pkgs/loco/commandstation` should construct; `connection_uri` is
+// a kind-specific URI parsed by the daemon (e.g.
+// `udp://192.168.1.10:21105` for z21, `serial:///dev/ttyUSB0:57600`
+// for loconet-serial). `speed_steps` is the catalogue default the
+// daemon advertises to clients; admins may override per session in
+// later milestones.
+func createCommandStationsUp(s *rel.Schema) {
+	s.CreateTable("command_stations", func(t *rel.Table) {
+		t.ID("id")
+		t.String("name")
+		t.String("kind")
+		t.Text("connection_uri", rel.Default(""))
+		t.Int("speed_steps", rel.Unsigned(true), rel.Default(128))
+		t.DateTime("created_at")
+		t.DateTime("updated_at")
+
+		t.Unique([]string{"name"})
+		t.Fragment("CHECK (kind IN ('z21','loconet_serial','loconet_tcp'))")
+		t.Fragment("CHECK (speed_steps IN (14,28,128))")
+	})
+}
+
+func createCommandStationsDown(s *rel.Schema) {
+	s.DropTable("command_stations")
+}
+
+// createLayoutCommandStationsUp installs the join between layouts
+// and command_stations. A command station may be attached to many
+// layouts (e.g. a roving Z21 lent between rooms); the UNIQUE index
+// makes (layout_id, command_station_id) a set rather than a multi-
+// set. `dcc-bus` daemons are keyed by this pair (§7e.2).
+func createLayoutCommandStationsUp(s *rel.Schema) {
+	s.CreateTable("layout_command_stations", func(t *rel.Table) {
+		t.ID("id")
+		t.Int("layout_id", rel.Unsigned(true))
+		t.Int("command_station_id", rel.Unsigned(true))
+		t.Int("added_by_user_id", rel.Unsigned(true), rel.Default(0))
+		t.DateTime("added_at")
+
+		t.Unique([]string{"layout_id", "command_station_id"})
+	})
+	s.Exec(rel.Raw(`CREATE INDEX layout_command_stations_layout_id ON layout_command_stations(layout_id)`))
+}
+
+func createLayoutCommandStationsDown(s *rel.Schema) {
+	s.DropTable("layout_command_stations")
 }
 
 func createUsersUp(s *rel.Schema) {

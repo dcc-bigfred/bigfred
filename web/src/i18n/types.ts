@@ -29,6 +29,7 @@ import type plInterlocking from "./locales/pl/interlocking.json";
 import type plVehicle from "./locales/pl/vehicle.json";
 import type plUser from "./locales/pl/user.json";
 import type plSudo from "./locales/pl/sudo.json";
+import type plThrottle from "./locales/pl/throttle.json";
 
 declare module "i18next" {
   interface CustomTypeOptions {
@@ -44,6 +45,7 @@ declare module "i18next" {
       vehicle: typeof plVehicle;
       user: typeof plUser;
       sudo: typeof plSudo;
+      throttle: typeof plThrottle;
     };
     // returnNull is false in index.ts; mirror that here so the t()
     // return type is `string` (not `string | null`).

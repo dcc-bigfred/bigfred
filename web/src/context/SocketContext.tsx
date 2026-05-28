@@ -75,6 +75,35 @@ function nextRequestID(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+// waitForControlSocket resolves once the active control-plane socket
+// is OPEN. This avoids a race where React's `connected` flag is still
+// true while socketRef was cleared during a reconnect cleanup.
+function waitForControlSocket(
+  getSocket: () => WebSocket | null,
+  timeoutMs: number,
+): Promise<WebSocket | null> {
+  return new Promise((resolve) => {
+    const started = Date.now();
+    const tick = () => {
+      const socket = getSocket();
+      if (socket?.readyState === WebSocket.OPEN) {
+        resolve(socket);
+        return;
+      }
+      if (!socket || socket.readyState === WebSocket.CLOSED) {
+        resolve(null);
+        return;
+      }
+      if (Date.now() - started >= timeoutMs) {
+        resolve(null);
+        return;
+      }
+      window.setTimeout(tick, 50);
+    };
+    tick();
+  });
+}
+
 // SocketProvider maintains one WebSocket per authenticated session.
 export function SocketProvider({
   enabled,
@@ -101,54 +130,45 @@ export function SocketProvider({
     };
   }, []);
 
-  const sendAction = useCallback<SocketContextValue["sendAction"]>(
-    (type, payload) =>
-      new Promise((resolve) => {
-        const socket = socketRef.current;
-        if (!socket || socket.readyState !== WebSocket.OPEN) {
-          resolve({ ok: false, error: "control_offline" });
-          return;
+  const sendOnControlSocket = useCallback(
+    (
+      type: string,
+      payload: unknown,
+      ackTimeoutMs: number,
+    ): Promise<{ ok: boolean; error?: string }> =>
+      waitForControlSocket(() => socketRef.current, 5_000).then((socket) => {
+        if (!socket) {
+          return { ok: false, error: "control_offline" };
         }
-        const id = nextRequestID();
-        pending.current.set(id, resolve);
-        socket.send(JSON.stringify({ type, id, payload }));
-        // Safety net: drop the resolver after 12 s so a buggy
-        // backend doesn't pin memory indefinitely.
-        window.setTimeout(() => {
-          if (pending.current.delete(id)) {
-            resolve({ ok: false, error: "ack_timeout" });
-          }
-        }, 12_000);
+        return new Promise<{ ok: boolean; error?: string }>((resolve) => {
+          const id = nextRequestID();
+          pending.current.set(id, resolve);
+          socket.send(JSON.stringify({ type, id, payload }));
+          window.setTimeout(() => {
+            if (pending.current.delete(id)) {
+              resolve({ ok: false, error: "ack_timeout" });
+            }
+          }, ackTimeoutMs);
+        });
       }),
     [],
+  );
+
+  const sendAction = useCallback<SocketContextValue["sendAction"]>(
+    (type, payload) => sendOnControlSocket(type, payload, 12_000),
+    [sendOnControlSocket],
   );
 
   const setCommandStationAckTimeoutMs = 45_000;
 
   const setCommandStation = useCallback(
     (csID: number) =>
-      new Promise<{ ok: boolean; error?: string }>((resolve) => {
-        const socket = socketRef.current;
-        if (!socket || socket.readyState !== WebSocket.OPEN) {
-          resolve({ ok: false, error: "control_offline" });
-          return;
-        }
-        const id = nextRequestID();
-        pending.current.set(id, resolve);
-        socket.send(
-          JSON.stringify({
-            type: "session.setCommandStation",
-            id,
-            payload: { commandStationId: csID },
-          }),
-        );
-        window.setTimeout(() => {
-          if (pending.current.delete(id)) {
-            resolve({ ok: false, error: "ack_timeout" });
-          }
-        }, setCommandStationAckTimeoutMs);
-      }),
-    [],
+      sendOnControlSocket(
+        "session.setCommandStation",
+        { commandStationId: csID },
+        setCommandStationAckTimeoutMs,
+      ),
+    [sendOnControlSocket],
   );
 
   useEffect(() => {
@@ -162,10 +182,13 @@ export function SocketProvider({
     socketRef.current = socket;
 
     socket.onopen = () => setConnected(true);
+    socket.onerror = () => setConnected(false);
     socket.onclose = () => {
       setConnected(false);
       setSession(null);
-      socketRef.current = null;
+      if (socketRef.current === socket) {
+        socketRef.current = null;
+      }
     };
 
     socket.onmessage = (ev) => {
@@ -234,10 +257,12 @@ export function SocketProvider({
 
     return () => {
       window.clearInterval(ping);
-      socket.close();
-      socketRef.current = null;
       setConnected(false);
       setSession(null);
+      if (socketRef.current === socket) {
+        socketRef.current = null;
+      }
+      socket.close();
     };
   }, [enabled]);
 

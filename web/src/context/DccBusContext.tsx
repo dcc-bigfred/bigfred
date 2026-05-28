@@ -97,6 +97,7 @@ export function DccBusProvider({
     sock.onerror = () => {
       setStatus("error");
       setLastError("connection_error");
+      console.warn("[dcc-bus] WebSocket error", { wsUrl });
     };
     sock.onclose = () => {
       setStatus("closed");
@@ -130,8 +131,15 @@ export function DccBusProvider({
           break;
         }
         case "loco.error": {
-          const err = msg.payload as { address?: number; code?: string };
-          if (err?.code) setLastError(err.code);
+          const err = msg.payload as {
+            address?: number;
+            code?: string;
+            detail?: string;
+          };
+          if (err?.code) {
+            setLastError(err.code);
+            console.warn("[dcc-bus] loco.error", err);
+          }
           break;
         }
         case "dcc-bus.opened": {

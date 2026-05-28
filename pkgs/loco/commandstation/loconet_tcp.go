@@ -34,6 +34,7 @@ func newLnTCPTransport(host string, port uint16, rxCh chan<- lnPacket) (*lnTCPTr
 		stop: make(chan struct{}),
 		w:    bufio.NewWriter(conn),
 	}
+	logrus.WithField("addr", addr).Info("loconet command station: TCP connected")
 	go t.readLoop(rxCh)
 	return t, nil
 }

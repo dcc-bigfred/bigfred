@@ -57,6 +57,7 @@ func (z *Z21Roco) connect(netAddr string) error {
 		z.fnStateCache = make(map[LocoAddr]fnState)
 	}
 	z.fnStateMu.Unlock()
+	logrus.WithField("remote", netAddr).Info("z21 command station: UDP socket open")
 	return nil
 }
 
@@ -65,6 +66,7 @@ func (Z *Z21Roco) CleanUp() error {
 		logrus.Debug("Restoring power on programming track")
 		Z.buildTrackPowerOn()
 	}
+	logrus.Info("z21 command station: closing UDP socket")
 	return Z.conn.Close()
 }
 

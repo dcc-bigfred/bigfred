@@ -124,12 +124,28 @@ func New(ctx context.Context, log *logrus.Logger, cfg Config) (*Daemon, error) {
 	}
 	red := state.NewRedis(rds, cfg.LayoutID, cfg.CommandStationID)
 
+	log.WithFields(logrus.Fields{
+		"commandStationId": cs.ID,
+		"name":             cs.Name,
+		"kind":             cs.Kind,
+		"connection":       station.Describe(cs),
+		"speedSteps":       cs.SpeedSteps,
+	}).Info("dcc-bus opening command station driver")
+
 	st, err := station.Open(cs)
 	if err != nil {
+		log.WithError(err).WithFields(logrus.Fields{
+			"commandStationId": cs.ID,
+			"connection":       station.Describe(cs),
+		}).Error("dcc-bus command station driver open failed")
 		_ = sqlite.Close()
 		_ = rds.Close()
 		return nil, fmt.Errorf("open command station: %w", err)
 	}
+	log.WithFields(logrus.Fields{
+		"commandStationId": cs.ID,
+		"connection":       station.Describe(cs),
+	}).Info("dcc-bus command station driver ready")
 
 	hub := ws.NewHub()
 
@@ -141,6 +157,9 @@ func New(ctx context.Context, log *logrus.Logger, cfg Config) (*Daemon, error) {
 		Log:              log,
 		LayoutID:         cfg.LayoutID,
 		CommandStationID: cfg.CommandStationID,
+		StationName:      cs.Name,
+		StationKind:      cs.Kind,
+		StationURI:       cs.ConnectionURI,
 		SpeedSteps:       cs.SpeedSteps,
 	})
 	if err != nil {

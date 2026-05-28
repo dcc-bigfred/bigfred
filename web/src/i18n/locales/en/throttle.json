@@ -45,6 +45,8 @@
     "command_station_not_attached": "Command station is not attached to this layout",
     "dcc_bus_not_configured": "Command-station control is not configured on this server",
     "control_offline": "Control plane offline — refresh the page",
+    "connection_error": "dcc-bus WebSocket error (not the physical command station) — check proxy/network",
+    "command_station_error": "Command station rejected the DCC command — see dcc-bus logs",
     "ack_timeout": "Server did not respond in time — try again"
   },
   "retry": "Try again"

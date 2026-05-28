@@ -105,3 +105,74 @@ func (l *LayoutCommandStations) Detach(ctx context.Context, layoutID, commandSta
 	}
 	return l.repo.Delete(ctx, &row)
 }
+
+// CommandStationIDsForLayout returns command-station ids attached to a
+// layout, in chronological attachment order.
+func (l *LayoutCommandStations) CommandStationIDsForLayout(ctx context.Context, layoutID uint) ([]uint, error) {
+	rows, err := l.ListByLayout(ctx, layoutID)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]uint, 0, len(rows))
+	for _, row := range rows {
+		ids = append(ids, row.CommandStationID)
+	}
+	return ids, nil
+}
+
+// DeleteAllForLayout removes every join row for a layout.
+func (l *LayoutCommandStations) DeleteAllForLayout(ctx context.Context, layoutID uint) error {
+	rows, err := l.ListByLayout(ctx, layoutID)
+	if err != nil {
+		return err
+	}
+	for i := range rows {
+		if err := l.repo.Delete(ctx, &rows[i]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// DeleteAllForCommandStation removes every join row pointing at a
+// command station (used when the catalogue row is deleted).
+func (l *LayoutCommandStations) DeleteAllForCommandStation(ctx context.Context, commandStationID uint) error {
+	rows, err := l.ListByCommandStation(ctx, commandStationID)
+	if err != nil {
+		return err
+	}
+	for i := range rows {
+		if err := l.repo.Delete(ctx, &rows[i]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// CountLayoutsWithOnlyStation counts non-system layouts where
+// commandStationID is the sole attached station. Used before deleting
+// a catalogue row (§4.1).
+func (l *LayoutCommandStations) CountLayoutsWithOnlyStation(ctx context.Context, commandStationID uint, layouts *Layouts) (int, error) {
+	joins, err := l.ListByCommandStation(ctx, commandStationID)
+	if err != nil {
+		return 0, err
+	}
+	atRisk := 0
+	for _, join := range joins {
+		layout, err := layouts.FindByID(ctx, join.LayoutID)
+		if err != nil {
+			return 0, err
+		}
+		if layout.IsSystem {
+			continue
+		}
+		attached, err := l.ListByLayout(ctx, join.LayoutID)
+		if err != nil {
+			return 0, err
+		}
+		if len(attached) == 1 {
+			atRisk++
+		}
+	}
+	return atRisk, nil
+}

@@ -19,10 +19,11 @@ import (
 // session-scoped command-station selection, the lazy-spawn handshake
 // with DccBusService and the session.opened payload (§7e.6).
 type SessionControlService struct {
-	log     *logrus.Logger
-	dccBus  *DccBusService
-	cs      *repo.CommandStations
-	layouts *repo.LayoutCommandStations
+	log        *logrus.Logger
+	dccBus     *DccBusService
+	cs         *repo.CommandStations
+	layoutCS   *repo.LayoutCommandStations
+	layoutRows *repo.Layouts
 
 	// proxyPathFn turns (csID) into the URL the SPA should dial.
 	// Default returns "/api/v1/dcc-bus/<csId>/ws"; tests may override.
@@ -37,7 +38,8 @@ type SessionControlConfig struct {
 	Log         *logrus.Logger
 	DccBus      *DccBusService
 	CommandStns *repo.CommandStations
-	Layouts     *repo.LayoutCommandStations
+	LayoutCS    *repo.LayoutCommandStations
+	Layouts     *repo.Layouts
 }
 
 // NewSessionControlService returns a ready handler. dccBus may be
@@ -49,12 +51,13 @@ func NewSessionControlService(cfg SessionControlConfig) *SessionControlService {
 		log = logrus.New()
 	}
 	return &SessionControlService{
-		log:         log,
-		dccBus:      cfg.DccBus,
-		cs:          cfg.CommandStns,
-		layouts:     cfg.Layouts,
+		log:        log,
+		dccBus:     cfg.DccBus,
+		cs:         cfg.CommandStns,
+		layoutCS:   cfg.LayoutCS,
+		layoutRows: cfg.Layouts,
 		proxyPathFn: defaultProxyPath,
-		sessions:    make(map[*ws.Client]struct{}, 8),
+		sessions:   make(map[*ws.Client]struct{}, 8),
 	}
 }
 
@@ -129,7 +132,7 @@ func ptr(s string) *string { return &s }
 // other tabs.
 func (s *SessionControlService) handleSetCS(ctx context.Context, c *ws.Client, p sessionSetCSPayload, requestID string) {
 	sess := c.Session()
-	if s.layouts == nil || s.cs == nil {
+	if s.layoutCS == nil || s.cs == nil || s.layoutRows == nil {
 		c.SendAck(requestID, false, "dcc_bus_not_configured")
 		return
 	}
@@ -144,12 +147,8 @@ func (s *SessionControlService) handleSetCS(ctx context.Context, c *ws.Client, p
 		return
 	}
 
-	if _, err := s.layouts.Find(ctx, sess.LayoutID, p.CommandStationID); err != nil {
-		if errors.Is(err, repo.ErrLayoutCommandStationNotFound) {
-			c.SendAck(requestID, false, "command_station_not_attached")
-		} else {
-			c.SendAck(requestID, false, "internal_error")
-		}
+	if !s.commandStationAttached(ctx, sess.LayoutID, p.CommandStationID) {
+		c.SendAck(requestID, false, "command_station_not_attached")
 		return
 	}
 
@@ -241,22 +240,10 @@ func (s *SessionControlService) openedPayload(ctx context.Context, c *ws.Client)
 		SessionID: sess.ID,
 		LayoutID:  sess.LayoutID,
 	}
-	if s.layouts == nil || s.cs == nil {
+	if s.layoutCS == nil || s.cs == nil || s.layoutRows == nil {
 		return out
 	}
-	rows, err := s.layouts.ListByLayout(ctx, sess.LayoutID)
-	if err != nil {
-		s.log.WithError(err).Warn("session.opened: list layout cs")
-		return out
-	}
-	if len(rows) == 0 {
-		return out
-	}
-	ids := make([]uint, 0, len(rows))
-	for _, r := range rows {
-		ids = append(ids, r.CommandStationID)
-	}
-	stations, err := s.cs.ListByIDs(ctx, ids)
+	stations, err := s.listAvailableStations(ctx, sess.LayoutID)
 	if err != nil {
 		s.log.WithError(err).Warn("session.opened: list cs by ids")
 		return out
@@ -285,4 +272,39 @@ func (s *SessionControlService) openedPayload(ctx context.Context, c *ws.Client)
 		out.CurrentSession = &currentSessionPayload{CommandStationID: cur}
 	}
 	return out
+}
+
+func (s *SessionControlService) listAvailableStations(ctx context.Context, layoutID uint) ([]domain.CommandStation, error) {
+	layout, err := s.layoutRows.FindByID(ctx, layoutID)
+	if err != nil {
+		return nil, err
+	}
+	if layout.IsSystem {
+		return s.cs.ListAll(ctx)
+	}
+	rows, err := s.layoutCS.ListByLayout(ctx, layoutID)
+	if err != nil {
+		return nil, err
+	}
+	if len(rows) == 0 {
+		return nil, nil
+	}
+	ids := make([]uint, 0, len(rows))
+	for _, r := range rows {
+		ids = append(ids, r.CommandStationID)
+	}
+	return s.cs.ListByIDs(ctx, ids)
+}
+
+func (s *SessionControlService) commandStationAttached(ctx context.Context, layoutID, commandStationID uint) bool {
+	layout, err := s.layoutRows.FindByID(ctx, layoutID)
+	if err != nil {
+		return false
+	}
+	if layout.IsSystem {
+		_, err := s.cs.FindByID(ctx, commandStationID)
+		return err == nil
+	}
+	_, err = s.layoutCS.Find(ctx, layoutID, commandStationID)
+	return err == nil
 }

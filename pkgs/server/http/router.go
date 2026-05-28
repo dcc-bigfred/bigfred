@@ -26,9 +26,10 @@ type RouterConfig struct {
 	Trains         *service.TrainService
 	LayoutVehicles *service.LayoutVehicleService
 	DCCPool        *service.DCCPoolService
-	Sudo           *service.SudoService
-	Hub            *ws.Hub
-	DccBus         *service.DccBusService
+	Sudo            *service.SudoService
+	CommandStations *service.CommandStationService
+	Hub             *ws.Hub
+	DccBus          *service.DccBusService
 
 	// AllowedOrigins is forwarded verbatim to the CORS middleware.
 	// In development the Vite dev server lives on a different port
@@ -70,6 +71,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	rosterH := NewLayoutRosterHandler(cfg.LayoutVehicles, cfg.Auth)
 	userH := NewUserHandler(cfg.Users, cfg.Auth)
 	sudoH := NewSudoHandler(cfg.Sudo, cfg.Auth, cfg.Users, cfg.Presence)
+	commandStationH := NewCommandStationHandler(cfg.CommandStations, cfg.Auth)
 
 	r.Route("/api/v1", func(r chi.Router) {
 		// WebSocket upgrade — auth reads cookie / ?token= inline.
@@ -135,6 +137,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			r.Get("/layouts", layoutH.List)
 			r.Get("/layouts/{id}", layoutH.Get)
 			r.Get("/layouts/{id}/interlockings", layoutH.ListInterlockings)
+			r.Get("/layouts/{id}/command-stations", layoutH.ListCommandStations)
 
 			// Sudo elevation (§7a.7) — open to every authenticated
 			// caller; the service guards entry with the layout
@@ -158,6 +161,12 @@ func NewRouter(cfg RouterConfig) http.Handler {
 				r.Post("/layouts/{id}/lock", layoutH.Lock)
 				r.Delete("/layouts/{id}/lock", layoutH.Unlock)
 				r.Put("/layouts/{id}/interlockings", layoutH.SetInterlockings)
+				r.Put("/layouts/{id}/command-stations", layoutH.SetCommandStations)
+
+				r.Get("/command-stations/catalogue", commandStationH.ListCatalogue)
+				r.Post("/command-stations", commandStationH.Create)
+				r.Put("/command-stations/{id}", commandStationH.Update)
+				r.Delete("/command-stations/{id}", commandStationH.Delete)
 
 				r.Post("/interlockings", interlockingH.Create)
 				r.Put("/interlockings/{id}", interlockingH.Update)

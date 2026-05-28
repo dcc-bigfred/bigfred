@@ -136,9 +136,9 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	commandStations := repo.NewCommandStations(repository)
 	layoutCommandStations := repo.NewLayoutCommandStations(repository)
 	_ = layoutTrains
-	_ = commandStations
 
-	layoutSvc := service.NewLayoutService(layouts, interlockings, layoutInterlockings)
+	layoutSvc := service.NewLayoutService(layouts, interlockings, layoutInterlockings, commandStations, layoutCommandStations)
+	commandStationSvc := service.NewCommandStationService(commandStations, layoutCommandStations, layouts)
 	interlockingSvc := service.NewInterlockingService(interlockings, layoutInterlockings)
 	authSvc := service.NewAuthService(users, layoutSvc, layoutSignalmen, sudoElevations, service.AuthConfig{JWTSecret: secret})
 	dccPoolSvc := service.NewDCCPoolService(dccPools)
@@ -239,7 +239,8 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 			Log:         log,
 			DccBus:      dccBusSvc,
 			CommandStns: commandStations,
-			Layouts:     layoutCommandStations,
+			LayoutCS:    layoutCommandStations,
+			Layouts:     layouts,
 		})
 		hub.SetControlHandler(sessionCtl)
 
@@ -294,9 +295,10 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		Trains:         trainSvc,
 		LayoutVehicles: layoutVehicleSvc,
 		DCCPool:        dccPoolSvc,
-		Sudo:           sudoSvc,
-		Hub:            hub,
-		DccBus:         dccBusSvc,
+		Sudo:            sudoSvc,
+		CommandStations: commandStationSvc,
+		Hub:             hub,
+		DccBus:          dccBusSvc,
 		AllowedOrigins: f.AllowedOrigins,
 		SecureCookie:   f.SecureCookie,
 	})

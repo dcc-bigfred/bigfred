@@ -19,10 +19,13 @@ func TestLayoutCatalogAdminOnly(t *testing.T) {
 	adminEff := domain.NewEffectiveRoles(domain.RoleAdmin)
 	driverEff := domain.NewEffectiveRoles(domain.RoleDriver)
 
+	cs := insertCommandStation(t, ctx, bundle.CommandStations, "Z21 Workshop")
+
 	row, err := svc.Create(ctx, adminEff, service.CreateInput{
-		Name:      "Club Night",
-		CreatedBy: 1,
-		AdminPIN:  "1234",
+		Name:              "Club Night",
+		CreatedBy:         1,
+		CommandStationIDs: []uint{cs.ID},
+		AdminPIN:          "1234",
 	})
 	if err != nil {
 		t.Fatalf("admin create: %v", err)

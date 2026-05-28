@@ -16,6 +16,8 @@ type UsersBundle struct {
 	LayoutSignalmen     *LayoutSignalmen
 	Layouts             *Layouts
 	Interlockings       *Interlockings
-	LayoutInterlockings *LayoutInterlockings
-	SudoElevations      *SudoElevations
+	LayoutInterlockings   *LayoutInterlockings
+	CommandStations       *CommandStations
+	LayoutCommandStations *LayoutCommandStations
+	SudoElevations        *SudoElevations
 }

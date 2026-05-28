@@ -49,6 +49,10 @@ type Flags struct {
 	RedisAddr     string
 	RedisExternal bool
 	RedisPersist  bool
+
+	// LogLevel is a logrus level name (debug, info, warn, error). The
+	// BIGFRED_LOG_LEVEL env var overrides the flag when set.
+	LogLevel string
 }
 
 // NewRootCommand returns the top-level cobra command. It is invoked
@@ -80,6 +84,8 @@ real-time throttle commands.`,
 		"set the Secure flag on the session cookie (REQUIRED in production, off for local http://)")
 	cmd.Flags().BoolVar(&f.NoSupervisor, "no-supervisor", false,
 		"skip supervisord process management (for local dev without the supervisor package)")
+	cmd.Flags().StringVar(&f.LogLevel, "log-level", "info",
+		"logrus level (debug, info, warn, error). BIGFRED_LOG_LEVEL env overrides this flag.")
 
 	cmd.Flags().StringVar(&f.RedisBin, "redis-bin", "valkey-server",
 		"redis-server binary path (PATH-relative or absolute) used by the managed daemon")
@@ -102,6 +108,10 @@ real-time throttle commands.`,
 }
 
 func run(ctx context.Context, log *logrus.Logger, f Flags) error {
+	if err := configureLogLevel(log, f.LogLevel); err != nil {
+		return err
+	}
+
 	if absPath, err := filepath.Abs(f.DBPath); err == nil {
 		f.DBPath = absPath
 	}
@@ -180,7 +190,10 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 			EphemeralPersistence: !f.RedisPersist,
 			Disable:              f.RedisExternal,
 		})
-		supSvc, err = service.NewSupervisordService(service.SupervisordConfig{InitialState: initial})
+		supSvc, err = service.NewSupervisordService(service.SupervisordConfig{
+			InitialState: initial,
+			Log:          log,
+		})
 		if err != nil {
 			return fmt.Errorf("supervisord init: %w", err)
 		}
@@ -217,6 +230,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	// dcc-bus orchestrator. Disabled when supervisord / redis are
 	// off-line because both are hard dependencies.
 	var dccBusSvc *service.DccBusService
+	var dccLayoutSync *service.DccBusLayoutSync
 	if supSvc != nil && redisReady {
 		executable, _ := os.Executable()
 		dccBusSvc = service.NewDccBusService(service.DccBusConfig{
@@ -232,6 +246,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		if err := dccBusSvc.HydratePorts(ctx); err != nil {
 			log.WithError(err).Warn("dcc-bus hydrate ports")
 		}
+		dccLayoutSync = service.NewDccBusLayoutSync(dccBusSvc, layoutSvc, hub)
 	}
 
 	if dccBusSvc != nil {
@@ -290,7 +305,8 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		Layouts:        layoutSvc,
 		Interlockings:  interlockingSvc,
 		Occupancy:      occupancySvc,
-		Presence:       presenceSvc,
+		Presence:         presenceSvc,
+		DccBusLayoutSync: dccLayoutSync,
 		Vehicles:       vehicleSvc,
 		Trains:         trainSvc,
 		LayoutVehicles: layoutVehicleSvc,
@@ -346,6 +362,20 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		return fmt.Errorf("shutdown: %w", err)
 	}
+	return nil
+}
+
+func configureLogLevel(log *logrus.Logger, flagLevel string) error {
+	levelName := flagLevel
+	if env := os.Getenv("BIGFRED_LOG_LEVEL"); env != "" {
+		levelName = env
+	}
+	level, err := logrus.ParseLevel(levelName)
+	if err != nil {
+		return fmt.Errorf("log level %q: %w", levelName, err)
+	}
+	log.SetLevel(level)
+	log.WithField("level", level.String()).Debug("log level configured")
 	return nil
 }
 

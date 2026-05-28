@@ -16,20 +16,21 @@ import (
 // time. Keeping it as an explicit struct (rather than positional args)
 // makes future additions (Hub, LocoService, …) source-compatible.
 type RouterConfig struct {
-	Auth           *service.AuthService
-	Users          *service.UserService
-	Layouts        *service.LayoutService
-	Interlockings  *service.InterlockingService
-	Occupancy      *service.InterlockingOccupancyService
-	Presence       *service.PresenceService
-	Vehicles       *service.VehicleService
-	Trains         *service.TrainService
-	LayoutVehicles *service.LayoutVehicleService
-	DCCPool        *service.DCCPoolService
-	Sudo            *service.SudoService
-	CommandStations *service.CommandStationService
-	Hub             *ws.Hub
-	DccBus          *service.DccBusService
+	Auth             *service.AuthService
+	Users            *service.UserService
+	Layouts          *service.LayoutService
+	Interlockings    *service.InterlockingService
+	Occupancy        *service.InterlockingOccupancyService
+	Presence         *service.PresenceService
+	DccBusLayoutSync *service.DccBusLayoutSync
+	Vehicles         *service.VehicleService
+	Trains           *service.TrainService
+	LayoutVehicles   *service.LayoutVehicleService
+	DCCPool          *service.DCCPoolService
+	Sudo             *service.SudoService
+	CommandStations  *service.CommandStationService
+	Hub              *ws.Hub
+	DccBus           *service.DccBusService
 
 	// AllowedOrigins is forwarded verbatim to the CORS middleware.
 	// In development the Vite dev server lives on a different port
@@ -65,7 +66,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	authH := NewAuthHandler(cfg.Auth, cfg.Sudo, cfg.SecureCookie)
 	layoutH := NewLayoutHandler(cfg.Layouts, cfg.Auth)
 	interlockingH := NewInterlockingHandler(cfg.Interlockings, cfg.Occupancy, cfg.Auth)
-	presenceH := NewPresenceHandler(cfg.Presence)
+	presenceH := NewPresenceHandler(cfg.Presence, cfg.DccBusLayoutSync)
 	vehicleH := NewVehicleHandler(cfg.Vehicles, cfg.LayoutVehicles, cfg.DCCPool, cfg.Auth)
 	trainH := NewTrainHandler(cfg.Trains, cfg.LayoutVehicles, cfg.Auth)
 	rosterH := NewLayoutRosterHandler(cfg.LayoutVehicles, cfg.Auth)

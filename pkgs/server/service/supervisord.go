@@ -10,6 +10,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/keskad/loco/pkgs/server/supervisord"
 )
 
@@ -31,6 +33,10 @@ type SupervisordConfig struct {
 	LogDir     string
 
 	InitialState supervisord.DesiredState
+
+	// Log receives lifecycle / apply messages. Nil disables supervisord
+	// logging (tests).
+	Log *logrus.Logger
 }
 
 // ProgramState is the observable status of one managed program.
@@ -53,6 +59,7 @@ type SupervisordService struct {
 	configHash        string
 	globalFingerprint string
 	runAsUser         string
+	log               *logrus.Logger
 
 	healthCancel context.CancelFunc
 }
@@ -91,6 +98,7 @@ func NewSupervisordService(cfg SupervisordConfig) (*SupervisordService, error) {
 		},
 		state:     cfg.InitialState,
 		runAsUser: userName,
+		log:       cfg.Log,
 	}
 	return s, nil
 }
@@ -118,37 +126,61 @@ func (s *SupervisordService) Start(ctx context.Context) error {
 		return err
 	}
 
+	s.logInfo(logrus.Fields{
+		"configPath": s.cfg.ConfigPath,
+		"programs":   supervisordProgramSummary(s.state.Groups),
+		"configHash": hashPrefix(hash),
+	}, "supervisord bootstrap: rendered initial config")
+
 	running, _, err := s.daemon.IsRunning()
 	if err != nil {
 		return err
 	}
 
 	if !running {
+		s.logInfo(logrus.Fields{"configPath": s.cfg.ConfigPath}, "supervisord bootstrap: daemon not running, writing config and starting")
 		if err := supervisord.WriteConfigAtomically(s.cfg.ConfigPath, content); err != nil {
 			return err
 		}
 		s.configHash = hash
 		s.globalFingerprint = global
 		if err := s.daemon.Start(ctx); err != nil {
+			s.logError(err, logrus.Fields{"configPath": s.cfg.ConfigPath}, "supervisord bootstrap: start failed")
 			return err
 		}
-		return s.daemon.WaitUntilReady(ctx, &s.ctl, supervisordReadyTimeout)
+		if err := s.daemon.WaitUntilReady(ctx, &s.ctl, supervisordReadyTimeout); err != nil {
+			s.logError(err, nil, "supervisord bootstrap: wait ready failed")
+			return err
+		}
+		s.logInfo(nil, "supervisord bootstrap: daemon ready")
+		return nil
 	}
 
+	s.logInfo(nil, "supervisord bootstrap: daemon already running, reconciling config")
 	onDisk, err := os.ReadFile(s.cfg.ConfigPath)
 	if err != nil {
 		if !os.IsNotExist(err) {
 			return err
 		}
-		return s.applyLocked(ctx, content, hash, global)
+		s.logInfo(nil, "supervisord bootstrap: config file missing, applying desired state")
+		return s.applyLocked(ctx, content, hash, global, "bootstrap")
 	}
 	onDiskHash := hashBytes(onDisk)
 	if onDiskHash != hash {
-		return s.applyLocked(ctx, content, hash, global)
+		s.logInfo(logrus.Fields{
+			"onDiskHash": hashPrefix(onDiskHash),
+			"wantHash":   hashPrefix(hash),
+		}, "supervisord bootstrap: on-disk config stale, applying")
+		return s.applyLocked(ctx, content, hash, global, "bootstrap")
 	}
 	s.configHash = onDiskHash
 	s.globalFingerprint = supervisord.GlobalFingerprint(onDisk)
-	return s.daemon.WaitUntilReady(ctx, &s.ctl, supervisordReadyTimeout)
+	if err := s.daemon.WaitUntilReady(ctx, &s.ctl, supervisordReadyTimeout); err != nil {
+		s.logError(err, nil, "supervisord bootstrap: wait ready on existing daemon failed")
+		return err
+	}
+	s.logInfo(logrus.Fields{"configHash": hashPrefix(onDiskHash)}, "supervisord bootstrap: config already current")
+	return nil
 }
 
 // Stop shuts down supervisord and managed programs.
@@ -165,19 +197,24 @@ func (s *SupervisordService) Stop(ctx context.Context) error {
 		return err
 	}
 	if !running {
+		s.logInfo(nil, "supervisord shutdown: daemon not running")
 		return nil
 	}
 
+	s.logInfo(logrus.Fields{"configPath": s.cfg.ConfigPath}, "supervisord shutdown: requesting graceful shutdown")
 	shutdownCtx, cancel := context.WithTimeout(ctx, supervisordStopTimeout)
 	defer cancel()
 	if err := s.ctl.Shutdown(shutdownCtx); err != nil {
+		s.logError(err, nil, "supervisord shutdown: supervisorctl shutdown failed, forcing stop")
 		_ = s.daemon.ForceStop()
 		return err
 	}
 	if err := s.daemon.WaitUntilStopped(supervisordStopTimeout); err != nil {
+		s.logError(err, nil, "supervisord shutdown: wait stopped failed, forcing stop")
 		_ = s.daemon.ForceStop()
 		return err
 	}
+	s.logInfo(nil, "supervisord shutdown: complete")
 	return nil
 }
 
@@ -196,9 +233,18 @@ func (s *SupervisordService) Apply(ctx context.Context, state supervisord.Desire
 		return err
 	}
 	if hash == s.configHash {
+		s.logDebug(logrus.Fields{
+			"configHash": hashPrefix(hash),
+			"programs":   supervisordProgramSummary(s.state.Groups),
+		}, "supervisord apply: config unchanged, skipping")
 		return nil
 	}
-	return s.applyLocked(ctx, content, hash, global)
+	s.logInfo(logrus.Fields{
+		"prevHash":   hashPrefix(s.configHash),
+		"configHash": hashPrefix(hash),
+		"programs":   supervisordProgramSummary(s.state.Groups),
+	}, "supervisord apply: config changed")
+	return s.applyLocked(ctx, content, hash, global, "apply")
 }
 
 // SetGroups replaces all groups and applies the change.
@@ -220,6 +266,7 @@ func (s *SupervisordService) UpsertProgram(ctx context.Context, group string, pr
 		}
 	}
 	if idx < 0 {
+		s.logInfo(logrus.Fields{"group": group, "program": prog.Name}, "supervisord upsert: creating group")
 		groups = append(groups, supervisord.GroupSpec{Name: group, Programs: []supervisord.ProgramSpec{prog}})
 		return s.Apply(ctx, supervisord.DesiredState{Groups: groups})
 	}
@@ -237,6 +284,40 @@ func (s *SupervisordService) UpsertProgram(ctx context.Context, group string, pr
 		progs = append(progs, prog)
 	}
 	groups[idx].Programs = progs
+	action := "update"
+	if !found {
+		action = "insert"
+	}
+	s.logInfo(logrus.Fields{"group": group, "program": prog.Name, "action": action}, "supervisord upsert program")
+	return s.Apply(ctx, supervisord.DesiredState{Groups: groups})
+}
+
+// ReplaceGroupPrograms swaps every program in a group in one Apply.
+// Other groups are left untouched. Used when rebuilding the entire
+// dcc-bus catalogue for a set of layouts.
+func (s *SupervisordService) ReplaceGroupPrograms(ctx context.Context, group string, programs []supervisord.ProgramSpec) error {
+	s.mu.Lock()
+	groups := cloneGroups(s.state.Groups)
+	s.mu.Unlock()
+
+	idx := -1
+	for i, g := range groups {
+		if g.Name == group {
+			idx = i
+			break
+		}
+	}
+	names := make([]string, len(programs))
+	for i, p := range programs {
+		names[i] = p.Name
+	}
+	if idx < 0 {
+		s.logInfo(logrus.Fields{"group": group, "programs": names}, "supervisord replace group: creating group")
+		groups = append(groups, supervisord.GroupSpec{Name: group, Programs: programs})
+	} else {
+		s.logInfo(logrus.Fields{"group": group, "programs": names, "count": len(programs)}, "supervisord replace group")
+		groups[idx].Programs = append([]supervisord.ProgramSpec(nil), programs...)
+	}
 	return s.Apply(ctx, supervisord.DesiredState{Groups: groups})
 }
 
@@ -270,6 +351,7 @@ func (s *SupervisordService) RemoveProgram(ctx context.Context, group, name stri
 	if !found {
 		return supervisord.ErrProgramNotFound
 	}
+	s.logInfo(logrus.Fields{"group": group, "program": name}, "supervisord remove program")
 	groups[idx].Programs = out
 	return s.Apply(ctx, supervisord.DesiredState{Groups: groups})
 }
@@ -360,6 +442,7 @@ func (s *SupervisordService) RunHealthLoop(ctx context.Context, interval time.Du
 			case <-ticker.C:
 				rows, err := s.AllStatus(loopCtx)
 				if err != nil {
+					s.logWarn(err, nil, "supervisord health: status poll failed, attempting respawn")
 					s.tryRespawnDaemon(loopCtx)
 					continue
 				}
@@ -524,10 +607,18 @@ func (s *SupervisordService) renderLocked() ([]byte, string, string, error) {
 	return content, hash, global, nil
 }
 
-func (s *SupervisordService) applyLocked(ctx context.Context, content []byte, hash, global string) error {
+func (s *SupervisordService) applyLocked(ctx context.Context, content []byte, hash, global, reason string) error {
 	prevGlobal := s.globalFingerprint
 
+	s.logInfo(logrus.Fields{
+		"reason":     reason,
+		"configPath": s.cfg.ConfigPath,
+		"configHash": hashPrefix(hash),
+		"programs":   supervisordProgramSummary(s.state.Groups),
+	}, "supervisord apply: writing config")
+
 	if err := supervisord.WriteConfigAtomically(s.cfg.ConfigPath, content); err != nil {
+		s.logError(err, logrus.Fields{"reason": reason}, "supervisord apply: write config failed")
 		return err
 	}
 
@@ -539,21 +630,31 @@ func (s *SupervisordService) applyLocked(ctx context.Context, content []byte, ha
 		return err
 	}
 	if !running {
+		s.logInfo(logrus.Fields{"reason": reason}, "supervisord apply: daemon down, starting")
 		if err := s.daemon.Start(applyCtx); err != nil {
-			return s.rollbackApply(err)
+			return s.rollbackApply(err, reason)
 		}
 		if err := s.daemon.WaitUntilReady(applyCtx, &s.ctl, supervisordReadyTimeout); err != nil {
-			return s.rollbackApply(err)
+			return s.rollbackApply(err, reason)
 		}
 		s.configHash = hash
 		s.globalFingerprint = global
+		s.logInfo(logrus.Fields{"reason": reason, "configHash": hashPrefix(hash)}, "supervisord apply: daemon started")
 		return nil
 	}
 
 	var applyErr error
+	reloadMode := "reread+update"
 	if prevGlobal != "" && prevGlobal != global {
-		applyErr = s.restartDaemonLocked(applyCtx)
+		reloadMode = "daemon-restart"
+		s.logInfo(logrus.Fields{
+			"reason":     reason,
+			"prevGlobal": prevGlobal[:min(12, len(prevGlobal))],
+			"newGlobal":  global[:min(12, len(global))],
+		}, "supervisord apply: global section changed, restarting daemon")
+		applyErr = s.restartDaemonLocked(applyCtx, reason)
 	} else {
+		s.logInfo(logrus.Fields{"reason": reason}, "supervisord apply: reloading programs (supervisorctl reread + update)")
 		if err := s.ctl.Reread(applyCtx); err != nil {
 			applyErr = err
 		} else if err := s.ctl.Update(applyCtx); err != nil {
@@ -561,31 +662,41 @@ func (s *SupervisordService) applyLocked(ctx context.Context, content []byte, ha
 		}
 	}
 	if applyErr != nil {
-		return s.rollbackApply(applyErr)
+		s.logError(applyErr, logrus.Fields{"reason": reason, "reloadMode": reloadMode}, "supervisord apply: reload failed")
+		return s.rollbackApply(applyErr, reason)
 	}
 
 	s.configHash = hash
 	s.globalFingerprint = global
+	s.logInfo(logrus.Fields{"reason": reason, "reloadMode": reloadMode, "configHash": hashPrefix(hash)}, "supervisord apply: success")
 	return nil
 }
 
-func (s *SupervisordService) restartDaemonLocked(ctx context.Context) error {
+func (s *SupervisordService) restartDaemonLocked(ctx context.Context, reason string) error {
+	s.logInfo(logrus.Fields{"reason": reason}, "supervisord restart: shutting down daemon")
 	if err := s.ctl.Shutdown(ctx); err != nil {
+		s.logWarn(err, logrus.Fields{"reason": reason}, "supervisord restart: shutdown failed, forcing stop")
 		_ = s.daemon.ForceStop()
 	} else if err := s.daemon.WaitUntilStopped(supervisordStopTimeout); err != nil {
+		s.logWarn(err, logrus.Fields{"reason": reason}, "supervisord restart: wait stopped failed, forcing stop")
 		_ = s.daemon.ForceStop()
 	}
 	if err := s.daemon.Start(ctx); err != nil {
+		s.logError(err, logrus.Fields{"reason": reason}, "supervisord restart: start failed")
 		return fmt.Errorf("%w: %v", supervisord.ErrDaemonRestart, err)
 	}
 	if err := s.daemon.WaitUntilReady(ctx, &s.ctl, supervisordApplyTimeout); err != nil {
+		s.logError(err, logrus.Fields{"reason": reason}, "supervisord restart: wait ready failed")
 		return fmt.Errorf("%w: %v", supervisord.ErrDaemonRestart, err)
 	}
+	s.logInfo(logrus.Fields{"reason": reason}, "supervisord restart: daemon ready")
 	return nil
 }
 
-func (s *SupervisordService) rollbackApply(cause error) error {
+func (s *SupervisordService) rollbackApply(cause error, reason string) error {
+	s.logWarn(cause, logrus.Fields{"reason": reason}, "supervisord apply: rolling back config")
 	if err := supervisord.RestoreConfigPrev(s.cfg.ConfigPath); err != nil {
+		s.logError(err, logrus.Fields{"reason": reason}, "supervisord apply: rollback restore failed")
 		return fmt.Errorf("%w (rollback failed: %v)", cause, err)
 	}
 	onDisk, err := os.ReadFile(s.cfg.ConfigPath)
@@ -595,7 +706,7 @@ func (s *SupervisordService) rollbackApply(cause error) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), supervisordApplyTimeout)
 	defer cancel()
-	_ = s.restartDaemonLocked(ctx)
+	_ = s.restartDaemonLocked(ctx, reason+":rollback")
 	return fmt.Errorf("%w: %v", supervisord.ErrReloadFailed, cause)
 }
 
@@ -604,8 +715,76 @@ func (s *SupervisordService) tryRespawnDaemon(ctx context.Context) {
 	if err != nil || running {
 		return
 	}
-	_ = s.daemon.Start(ctx)
-	_ = s.daemon.WaitUntilReady(ctx, &s.ctl, supervisordReadyTimeout)
+	s.logInfo(nil, "supervisord health: daemon not running, respawning")
+	if err := s.daemon.Start(ctx); err != nil {
+		s.logError(err, nil, "supervisord health: respawn start failed")
+		return
+	}
+	if err := s.daemon.WaitUntilReady(ctx, &s.ctl, supervisordReadyTimeout); err != nil {
+		s.logError(err, nil, "supervisord health: respawn wait ready failed")
+		return
+	}
+	s.logInfo(nil, "supervisord health: daemon respawned")
+}
+
+func (s *SupervisordService) logInfo(fields logrus.Fields, msg string) {
+	if s.log == nil {
+		return
+	}
+	if fields == nil {
+		s.log.Info(msg)
+		return
+	}
+	s.log.WithFields(fields).Info(msg)
+}
+
+func (s *SupervisordService) logDebug(fields logrus.Fields, msg string) {
+	if s.log == nil {
+		return
+	}
+	s.log.WithFields(fields).Debug(msg)
+}
+
+func (s *SupervisordService) logWarn(err error, fields logrus.Fields, msg string) {
+	if s.log == nil {
+		return
+	}
+	entry := s.log.WithError(err)
+	if fields != nil {
+		entry = entry.WithFields(fields)
+	}
+	entry.Warn(msg)
+}
+
+func (s *SupervisordService) logError(err error, fields logrus.Fields, msg string) {
+	if s.log == nil {
+		return
+	}
+	entry := s.log.WithError(err)
+	if fields != nil {
+		entry = entry.WithFields(fields)
+	}
+	entry.Error(msg)
+}
+
+func hashPrefix(hash string) string {
+	if len(hash) <= 12 {
+		return hash
+	}
+	return hash[:12]
+}
+
+// supervisordProgramSummary returns group → program names for logs.
+func supervisordProgramSummary(groups []supervisord.GroupSpec) map[string][]string {
+	out := make(map[string][]string, len(groups))
+	for _, g := range groups {
+		names := make([]string, len(g.Programs))
+		for i, p := range g.Programs {
+			names[i] = p.Name
+		}
+		out[g.Name] = names
+	}
+	return out
 }
 
 func hashBytes(b []byte) string {

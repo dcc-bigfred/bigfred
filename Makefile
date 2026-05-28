@@ -14,7 +14,7 @@ build:
 # pkgs/server/repo/db.go).
 .PHONY: server server-build
 server:
-	go run ./pkgs/server --no-supervisor
+	go run ./pkgs/server -- --log-level=debug
 
 server-build:
 	CGO_ENABLED=0 GOOS=linux go build -o bin/loco-server ./pkgs/server

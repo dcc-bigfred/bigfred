@@ -48,6 +48,12 @@ type RosterTrainEntry struct {
 // The service also fans out `layout.vehiclesChanged` and
 // `layout.trainsChanged` WS events after every mutation so the
 // dashboards stay live without polling (§4.2).
+// layoutRosterInvalidator notifies dcc-bus daemons to reload the
+// layout vehicle roster from SQLite (see RedisService).
+type layoutRosterInvalidator interface {
+	PublishLayoutRosterInvalidate(ctx context.Context, layoutID uint) error
+}
+
 type LayoutVehicleService struct {
 	layoutVehicles *repo.LayoutVehicles
 	layoutTrains   *repo.LayoutTrains
@@ -56,6 +62,7 @@ type LayoutVehicleService struct {
 	members        *repo.TrainMembers
 	users          *repo.Users
 	hub            *ws.Hub
+	redis          layoutRosterInvalidator
 	sec            security.LayoutSecurityContext
 }
 
@@ -77,7 +84,14 @@ func NewLayoutVehicleService(
 		members:        members,
 		users:          users,
 		hub:            hub,
+		sec:            security.LayoutSecurityContext{},
 	}
+}
+
+// SetRedisInvalidator wires Redis pub/sub so roster mutations reach
+// running dcc-bus daemons. Call once during server bootstrap.
+func (s *LayoutVehicleService) SetRedisInvalidator(r layoutRosterInvalidator) {
+	s.redis = r
 }
 
 // ListVehicles returns the layout vehicle roster ordered by AddedAt.
@@ -396,6 +410,14 @@ func (s *LayoutVehicleService) broadcastVehicleChanged(layoutID, vehicleID uint,
 		Action:    action,
 		VehicleID: vehicleID,
 	})
+	s.invalidateDccBusRoster(layoutID)
+}
+
+func (s *LayoutVehicleService) invalidateDccBusRoster(layoutID uint) {
+	if s.redis == nil || layoutID == 0 {
+		return
+	}
+	_ = s.redis.PublishLayoutRosterInvalidate(context.Background(), layoutID)
 }
 
 func (s *LayoutVehicleService) broadcastTrainChanged(layoutID, trainID uint, action string) {

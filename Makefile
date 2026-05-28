@@ -14,7 +14,7 @@ build:
 # pkgs/server/repo/db.go).
 .PHONY: server server-build
 server:
-	go run ./pkgs/server -- --log-level=debug
+	go run ./pkgs/server -- --log-level=debug --http 0.0.0.0:8080
 
 server-build:
 	CGO_ENABLED=0 GOOS=linux go build -o bin/loco-server ./pkgs/server
@@ -23,12 +23,18 @@ server-build:
 # `web-dev` starts Vite on :5173 and proxies /api/v1 to the Go backend
 # on :8080 (see web/vite.config.ts). Run `make server` in another
 # terminal for the full loop.
+#
+# Override the dev-server bind address (default localhost), e.g.:
+#   make web-dev HOST=0.0.0.0
+#   make web-dev HOST=192.168.0.86
+HOST ?= localhost
+
 .PHONY: web-install web-dev web-build
 web-install:
 	cd web && npm install
 
 web-dev:
-	cd web && npm run dev
+	cd web && HOST="$(HOST)" npm run dev
 
 web-build:
 	cd web && npm run build

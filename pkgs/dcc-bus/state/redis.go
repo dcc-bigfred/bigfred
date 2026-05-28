@@ -58,7 +58,7 @@ func (r *Redis) CommandChannel() string {
 // `{kind:"signalmen"}`, ...) and the daemon reloads the affected
 // caches.
 func (r *Redis) InvalidateChannel() string {
-	return fmt.Sprintf("bigfred:layout:%d:invalidate", r.layoutID)
+	return fmt.Sprintf("bigfred:layout:%d:invalidate", r.layoutID) // keep in sync with service.LayoutRosterInvalidateChannel
 }
 
 // StoreState writes one snapshot atomically and publishes it on the

@@ -79,6 +79,7 @@ export function DccBusProvider({
   const [lastError, setLastError] = useState<string | null>(null);
 
   const sockRef = useRef<WebSocket | null>(null);
+  const connectGenRef = useRef(0);
   const pending = useRef<
     Map<string, (ack: { ok: boolean; error?: string }) => void>
   >(new Map());
@@ -89,19 +90,40 @@ export function DccBusProvider({
       setStates(new Map());
       return;
     }
+
+    const gen = ++connectGenRef.current;
+    let disposed = false;
+    const resolved = resolveURL(wsUrl);
+
     setStatus("connecting");
-    const sock = new WebSocket(resolveURL(wsUrl));
+    setLastError(null);
+
+    const sock = new WebSocket(resolved);
     sockRef.current = sock;
 
-    sock.onopen = () => setStatus("open");
+    sock.onopen = () => {
+      if (disposed || gen !== connectGenRef.current) {
+        return;
+      }
+      setStatus("open");
+      setLastError(null);
+    };
     sock.onerror = () => {
+      if (disposed || gen !== connectGenRef.current) {
+        return;
+      }
       setStatus("error");
       setLastError("connection_error");
-      console.warn("[dcc-bus] WebSocket error", { wsUrl });
+      console.warn("[dcc-bus] WebSocket error", { wsUrl: resolved });
     };
     sock.onclose = () => {
+      if (disposed || gen !== connectGenRef.current) {
+        return;
+      }
       setStatus("closed");
-      sockRef.current = null;
+      if (sockRef.current === sock) {
+        sockRef.current = null;
+      }
     };
     sock.onmessage = (ev) => {
       let msg: { type?: string; id?: string; payload?: unknown };
@@ -118,6 +140,9 @@ export function DccBusProvider({
           pending.current.delete(msg.id);
           const ack =
             (msg.payload as { ok?: boolean; error?: string }) ?? { ok: false };
+          if (ack.ok) {
+            setLastError(null);
+          }
           resolver({ ok: Boolean(ack.ok), error: ack.error });
           break;
         }
@@ -156,12 +181,26 @@ export function DccBusProvider({
     }, heartbeatSecs * 1000);
 
     return () => {
+      disposed = true;
       window.clearInterval(heartbeat);
-      sock.close();
-      sockRef.current = null;
+      sock.onopen = null;
+      sock.onerror = null;
+      sock.onclose = null;
+      sock.onmessage = null;
+      if (sockRef.current === sock) {
+        sockRef.current = null;
+      }
+      if (
+        sock.readyState === WebSocket.CONNECTING ||
+        sock.readyState === WebSocket.OPEN
+      ) {
+        sock.close();
+      }
       pending.current.clear();
-      setStates(new Map());
-      setStatus("idle");
+      if (gen === connectGenRef.current) {
+        setStates(new Map());
+        setStatus("idle");
+      }
     };
   }, [wsUrl, heartbeatSecs]);
 
@@ -185,19 +224,36 @@ export function DccBusProvider({
     [],
   );
 
+  const subscribe = useCallback(
+    (addresses: number[]) => send("loco.subscribe", { addresses }),
+    [send],
+  );
+  const setSpeed = useCallback(
+    (address: number, speed: number, forward: boolean, emergency?: boolean) =>
+      send("loco.setSpeed", { address, speed, forward, emergency }),
+    [send],
+  );
+  const setFunction = useCallback(
+    (address: number, fn: number, on: boolean) =>
+      send("loco.setFunction", { address, function: fn, on }),
+    [send],
+  );
+  const emergencyStop = useCallback(
+    (reason?: string) => send("system.estop", { reason: reason ?? "" }),
+    [send],
+  );
+
   const value = useMemo<DccBusContextValue>(
     () => ({
       status,
       states,
-      subscribe: (addresses) => send("loco.subscribe", { addresses }),
-      setSpeed: (address, speed, forward, emergency) =>
-        send("loco.setSpeed", { address, speed, forward, emergency }),
-      setFunction: (address, fn, on) =>
-        send("loco.setFunction", { address, function: fn, on }),
-      emergencyStop: (reason) => send("system.estop", { reason: reason ?? "" }),
+      subscribe,
+      setSpeed,
+      setFunction,
+      emergencyStop,
       lastError,
     }),
-    [status, states, send, lastError],
+    [status, states, subscribe, setSpeed, setFunction, emergencyStop, lastError],
   );
 
   return (

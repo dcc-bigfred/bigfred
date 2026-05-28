@@ -223,10 +223,20 @@ export function SocketProvider({
               next.availableCommandStations = [
                 ...next.availableCommandStations,
               ];
-              next.availableCommandStations[idx] = {
-                ...next.availableCommandStations[idx],
-                wsUrl: p.wsUrl,
-              };
+              const entry = { ...next.availableCommandStations[idx] };
+              // Lazy-spawn sends wsUrl=null while starting. Keep the
+              // previous URL so DccBusProvider is not torn down mid-
+              // CONNECTING (that surfaces as "closed before established").
+              if (p.wsUrl) {
+                entry.wsUrl = p.wsUrl;
+              } else if (
+                p.status === "stopped" ||
+                p.status === "degraded" ||
+                p.commandStationId === 0
+              ) {
+                entry.wsUrl = null;
+              }
+              next.availableCommandStations[idx] = entry;
             }
             if (
               p.commandStationId > 0 &&

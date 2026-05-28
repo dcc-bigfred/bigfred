@@ -1,0 +1,28 @@
+{
+  "title": "Diagnostyka",
+  "subtitle": "Podgląd dozwolonych plików logów supervisord, Redis i dcc-bus. Ścieżki są weryfikowane na serwerze.",
+  "groupLabel": "Źródło",
+  "fileLabel": "Plik",
+  "tailLines": "Ostatnie linie",
+  "refresh": "Odśwież",
+  "truncated": "pokazano tylko koniec pliku",
+  "empty": "(pusty lub brak pliku)",
+  "noFiles": "Brak plików logów",
+  "sources": {
+    "supervisord": {
+      "label": "Supervisord"
+    },
+    "redis": {
+      "label": "Redis"
+    },
+    "dcc-bus": {
+      "label": "dcc-bus"
+    }
+  },
+  "entries": {
+    "supervisord.log": "Główny log supervisord",
+    "supervisord.config": "supervisord.conf",
+    "redis.stdout": "stdout",
+    "redis.stderr": "stderr"
+  }
+}

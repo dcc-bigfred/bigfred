@@ -67,5 +67,8 @@
   "layout_admin_pin_unset": "Makieta nie ma ustawionego PIN-u administracyjnego — poproś administratora o jego ustawienie.",
   "sudo_invalid_pin": "Nieprawidłowy PIN administracyjny makiety.",
   "sudo_layout_mismatch": "Sesja jest powiązana z inną makietą.",
-  "sudo_locked": "Zbyt wiele nieudanych prób — spróbuj ponownie za chwilę."
+  "sudo_locked": "Zbyt wiele nieudanych prób — spróbuj ponownie za chwilę.",
+  "diagnostics_forbidden": "Ten plik nie jest na liście dozwolonych w diagnostyce.",
+  "diagnostics_not_found": "Plik logu jeszcze nie istnieje.",
+  "diagnostics_unavailable": "Diagnostyka jest niedostępna na tym serwerze."
 }

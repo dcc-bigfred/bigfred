@@ -1,0 +1,28 @@
+{
+  "title": "Diagnostics",
+  "subtitle": "Read-only view of whitelisted supervisord, Redis, and dcc-bus log files. Paths are validated on the server.",
+  "groupLabel": "Source",
+  "fileLabel": "File",
+  "tailLines": "Tail lines",
+  "refresh": "Refresh",
+  "truncated": "showing tail only",
+  "empty": "(empty or missing file)",
+  "noFiles": "No log files",
+  "sources": {
+    "supervisord": {
+      "label": "Supervisord"
+    },
+    "redis": {
+      "label": "Redis"
+    },
+    "dcc-bus": {
+      "label": "dcc-bus"
+    }
+  },
+  "entries": {
+    "supervisord.log": "Main supervisord log",
+    "supervisord.config": "supervisord.conf",
+    "redis.stdout": "stdout",
+    "redis.stderr": "stderr"
+  }
+}

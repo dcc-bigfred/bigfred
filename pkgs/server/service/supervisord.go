@@ -103,6 +103,13 @@ func NewSupervisordService(cfg SupervisordConfig) (*SupervisordService, error) {
 	return s, nil
 }
 
+// Paths returns the active supervisord config file and log directory.
+func (s *SupervisordService) Paths() (configPath, logDir string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.cfg.ConfigPath, s.cfg.LogDir
+}
+
 // Start ensures directories exist, renders config, and launches supervisord.
 func (s *SupervisordService) Start(ctx context.Context) error {
 	s.mu.Lock()

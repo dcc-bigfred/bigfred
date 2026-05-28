@@ -165,10 +165,13 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.log.WithFields(logrus.Fields{
-		"sessionId": sess.ID,
-		"userId":    sess.UserID,
-		"login":     sess.Login,
-	}).Info("dcc-bus session opened")
+		"sessionId":        sess.ID,
+		"userId":           sess.UserID,
+		"login":            sess.Login,
+		"layoutId":         s.layoutID,
+		"commandStationId": s.csID,
+		"speedSteps":       s.speedSteps,
+	}).Info("dcc-bus browser session opened (command station driver already bound at daemon start)")
 
 	s.readLoop(r.Context(), sess)
 }
@@ -192,6 +195,11 @@ func (s *Server) readLoop(ctx context.Context, sess *Session) {
 	for {
 		_, raw, err := sess.conn.Read(ctx)
 		if err != nil {
+			s.log.WithError(err).WithFields(logrus.Fields{
+				"sessionId":        sess.ID,
+				"layoutId":         s.layoutID,
+				"commandStationId": s.csID,
+			}).Info("dcc-bus browser WebSocket read ended")
 			return
 		}
 		sess.Touch()

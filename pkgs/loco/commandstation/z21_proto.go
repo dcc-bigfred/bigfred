@@ -225,5 +225,9 @@ func (z *Z21Roco) buildSetLocoSpeed(addr LocoAddr, speed uint8, forward bool, sp
 
 func (z *Z21Roco) write(b []byte) (n int, err error) {
 	logrus.Debugf("write: % X", b)
-	return z.conn.Write(b)
+	n, err = z.conn.Write(b)
+	if err != nil {
+		logrus.WithError(err).Warn("z21 command station: UDP write failed")
+	}
+	return n, err
 }

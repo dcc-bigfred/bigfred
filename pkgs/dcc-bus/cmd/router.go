@@ -15,8 +15,10 @@ import (
 
 	"github.com/keskad/loco/pkgs/dcc-bus/protocol"
 	"github.com/keskad/loco/pkgs/dcc-bus/state"
+	"github.com/keskad/loco/pkgs/dcc-bus/station"
 	"github.com/keskad/loco/pkgs/dcc-bus/ws"
 	"github.com/keskad/loco/pkgs/loco/commandstation"
+	"github.com/keskad/loco/pkgs/server/domain"
 )
 
 const (
@@ -39,6 +41,9 @@ type Router struct {
 	log              *logrus.Logger
 	layoutID         uint
 	commandStationID uint
+	stationName      string
+	stationKind      domain.CommandStationKind
+	stationURI       string
 
 	speedSteps uint
 	allowed    map[uint16]struct{} // DCC addresses on the layout roster
@@ -59,6 +64,9 @@ type Config struct {
 	Log              *logrus.Logger
 	LayoutID         uint
 	CommandStationID uint
+	StationName      string
+	StationKind      domain.CommandStationKind
+	StationURI       string
 	SpeedSteps       uint
 }
 
@@ -83,6 +91,9 @@ func NewRouter(ctx context.Context, cfg Config) (*Router, error) {
 		log:              log,
 		layoutID:         cfg.LayoutID,
 		commandStationID: cfg.CommandStationID,
+		stationName:      cfg.StationName,
+		stationKind:      cfg.StationKind,
+		stationURI:       cfg.StationURI,
 		speedSteps:       cfg.SpeedSteps,
 		allowed:          make(map[uint16]struct{}, 16),
 		fnCache:          make(map[fnKey]bool, 32),
@@ -90,7 +101,34 @@ func NewRouter(ctx context.Context, cfg Config) (*Router, error) {
 	if err := r.reloadRoster(ctx); err != nil {
 		return nil, fmt.Errorf("seed roster: %w", err)
 	}
+	r.log.WithFields(logrus.Fields{
+		"layoutId":         r.layoutID,
+		"commandStationId": r.commandStationID,
+		"stationName":      r.stationName,
+		"connection": station.Describe(domain.CommandStation{
+			ID:            r.commandStationID,
+			Name:          r.stationName,
+			Kind:          r.stationKind,
+			ConnectionURI: r.stationURI,
+			SpeedSteps:    r.speedSteps,
+		}),
+		"rosterAddrs": len(r.allowed),
+	}).Info("dcc-bus router ready")
 	return r, nil
+}
+
+func (r *Router) stationLogFields() logrus.Fields {
+	return logrus.Fields{
+		"commandStationId": r.commandStationID,
+		"stationKind":      r.stationKind,
+		"connection": station.Describe(domain.CommandStation{
+			ID:            r.commandStationID,
+			Name:          r.stationName,
+			Kind:          r.stationKind,
+			ConnectionURI: r.stationURI,
+			SpeedSteps:    r.speedSteps,
+		}),
+	}
 }
 
 // reloadRoster refreshes the `allowed` set from SQLite. Called at
@@ -126,8 +164,10 @@ func (r *Router) isAllowed(addr uint16) bool {
 // currently cached in Redis).
 func (r *Router) HandleSubscribe(ctx context.Context, sess *ws.Session, payload protocol.LocoSubscribePayload, requestID string) {
 	accepted := make([]uint16, 0, len(payload.Addresses))
+	rejected := make([]uint16, 0)
 	for _, addr := range payload.Addresses {
 		if !r.isAllowed(addr) {
+			rejected = append(rejected, addr)
 			_ = sess.SendTyped(ctx, protocol.TypeLocoError, protocol.LocoErrorPayload{
 				Address: addr,
 				Code:    "vehicle_not_on_layout",
@@ -136,6 +176,12 @@ func (r *Router) HandleSubscribe(ctx context.Context, sess *ws.Session, payload 
 		}
 		accepted = append(accepted, addr)
 	}
+	r.log.WithFields(logrus.Fields{
+		"sessionId": sess.ID,
+		"requested": payload.Addresses,
+		"accepted":  accepted,
+		"rejected":  rejected,
+	}).Info("dcc-bus loco.subscribe")
 	sess.Subscribe(accepted...)
 
 	for _, addr := range accepted {
@@ -161,10 +207,25 @@ func (r *Router) HandleSetSpeed(ctx context.Context, sess *ws.Session, p protoco
 		speed = 1 // DCC EMG-stop is "speed step 1" in 128-step mode
 	}
 	if err := r.station.SetSpeed(commandstation.LocoAddr(p.Address), speed, p.Forward, uint8(r.speedSteps)); err != nil {
-		r.log.WithError(err).WithField("addr", p.Address).Warn("dcc-bus setSpeed failed")
+		fields := r.stationLogFields()
+		fields["addr"] = p.Address
+		fields["speed"] = p.Speed
+		fields["forward"] = p.Forward
+		fields["emergency"] = p.Emergency
+		r.log.WithError(err).WithFields(fields).Warn("dcc-bus command station SetSpeed failed")
+		_ = sess.SendTyped(ctx, protocol.TypeLocoError, protocol.LocoErrorPayload{
+			Address: p.Address,
+			Code:    "command_station_error",
+			Detail:  err.Error(),
+		})
 		_ = sess.SendAck(ctx, requestID, false, "command_station_error")
 		return
 	}
+	r.log.WithFields(logrus.Fields{
+		"addr":    p.Address,
+		"speed":   p.Speed,
+		"forward": p.Forward,
+	}).Debug("dcc-bus command station SetSpeed ok")
 	snap := protocol.LocoStatePayload{
 		Address:            p.Address,
 		Speed:              p.Speed,
@@ -201,7 +262,16 @@ func (r *Router) HandleSetFunction(ctx context.Context, sess *ws.Session, p prot
 
 	toggle := !hadPrev || previous != p.On
 	if err := r.station.SendFn(commandstation.MainTrackMode, commandstation.LocoAddr(p.Address), commandstation.FuncNum(p.Function), toggle); err != nil {
-		r.log.WithError(err).Warn("dcc-bus setFunction failed")
+		fields := r.stationLogFields()
+		fields["addr"] = p.Address
+		fields["function"] = p.Function
+		fields["on"] = p.On
+		r.log.WithError(err).WithFields(fields).Warn("dcc-bus command station SendFn failed")
+		_ = sess.SendTyped(ctx, protocol.TypeLocoError, protocol.LocoErrorPayload{
+			Address: p.Address,
+			Code:    "command_station_error",
+			Detail:  err.Error(),
+		})
 		_ = sess.SendAck(ctx, requestID, false, "command_station_error")
 		return
 	}

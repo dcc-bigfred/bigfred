@@ -38,6 +38,10 @@ func newLnSerialTransport(device string, baudrate int, rxCh chan<- lnPacket) (*l
 		port: p,
 		stop: make(chan struct{}),
 	}
+	logrus.WithFields(logrus.Fields{
+		"device":   device,
+		"baudrate": baudrate,
+	}).Info("loconet command station: serial port open")
 	go t.readLoop(rxCh)
 	return t, nil
 }

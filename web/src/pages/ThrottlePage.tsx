@@ -19,7 +19,10 @@ import {
 import EmergencyIcon from "@mui/icons-material/EmergencyShare";
 import { useTranslation } from "react-i18next";
 
-import { useSocket } from "../context/SocketContext";
+import {
+  useSocket,
+  type CommandStationChangedPayload,
+} from "../context/SocketContext";
 import { DccBusProvider, useDccBus } from "../context/DccBusContext";
 import { useMe } from "../api/auth";
 import { useLayoutVehicles } from "../api/vehicles";
@@ -44,7 +47,7 @@ function translateErrorCode(
 // full-screen overlay (the M4.5 milestone introduces the page; the
 // overlay variant lands later when the AppShell drawer arrives).
 export default function ThrottlePage() {
-  const { session, setCommandStation, connected } = useSocket();
+  const { session, setCommandStation, connected, subscribe } = useSocket();
   const me = useMe().data;
   const { t } = useTranslation(["throttle", "common", "errors"]);
 
@@ -65,7 +68,28 @@ export default function ThrottlePage() {
 
   useEffect(() => {
     setSpawnAcked(false);
+    setSpawnError(null);
   }, [session?.sessionId, selectedCS]);
+
+  // The server may push wsUrl on commandStationChanged before (or
+  // without) the setCommandStation ack — honour that so a running
+  // dcc-bus is not blocked on a dropped ack frame.
+  useEffect(() => {
+    return subscribe("session.commandStationChanged", (raw) => {
+      const p = raw as CommandStationChangedPayload;
+      if (p.commandStationId !== selectedCS) {
+        return;
+      }
+      if (p.status === "running" && p.wsUrl) {
+        setSpawnAcked(true);
+        setSpawnError(null);
+        setSelecting(false);
+      } else if (p.status === "degraded") {
+        setSpawnError(p.reason ?? "dcc_bus_unavailable");
+        setSelecting(false);
+      }
+    });
+  }, [subscribe, selectedCS]);
 
   // Restore server-side pick after reconnect (session.opened).
   useEffect(() => {
@@ -120,9 +144,14 @@ export default function ThrottlePage() {
   }, []);
 
   const handleRetrySpawn = useCallback(() => {
+    if (!connected) {
+      setSpawnError("control_offline");
+      return;
+    }
     setSpawnError(null);
+    setSpawnAcked(false);
     setRetryTick((n) => n + 1);
-  }, []);
+  }, [connected]);
 
   // Render order:
   //   1. Header strip with control-plane / data-plane status chips.
@@ -191,7 +220,7 @@ export default function ThrottlePage() {
         </Alert>
       )}
 
-      {selectedCS !== 0 && spawnAcked && activeWsUrl && layoutID && (
+      {selectedCS !== 0 && activeWsUrl && layoutID && (
         <DccBusProvider wsUrl={activeWsUrl}>
           <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
             <DataPlaneStatusChip />

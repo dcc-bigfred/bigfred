@@ -445,6 +445,28 @@ func (s *LayoutService) ListInterlockings(ctx context.Context, layoutID uint) ([
 	return s.interlockings.ListByIDs(ctx, ids)
 }
 
+// CommandStationIDsForLayout returns the ids of command stations
+// available on a layout. For the system layout this is every row in
+// the catalogue (virtual attachment set, §4.1).
+func (s *LayoutService) CommandStationIDsForLayout(ctx context.Context, layoutID uint) ([]uint, error) {
+	layout, err := s.Get(ctx, layoutID)
+	if err != nil {
+		return nil, err
+	}
+	if layout.IsSystem {
+		rows, err := s.commandStations.ListAll(ctx)
+		if err != nil {
+			return nil, err
+		}
+		ids := make([]uint, 0, len(rows))
+		for _, row := range rows {
+			ids = append(ids, row.ID)
+		}
+		return ids, nil
+	}
+	return s.layoutCommandStations.CommandStationIDsForLayout(ctx, layoutID)
+}
+
 // ListCommandStations returns command stations attached to a layout.
 // For the system layout the live catalogue is synthesised (§4.1).
 func (s *LayoutService) ListCommandStations(ctx context.Context, layoutID uint) ([]domain.CommandStation, error) {

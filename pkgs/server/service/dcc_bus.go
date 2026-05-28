@@ -182,8 +182,14 @@ func (d *DccBusService) EnsureRunning(ctx context.Context, layoutID, commandStat
 
 	if ok {
 		if err := d.waitDialable(ctx, port); err == nil {
+			d.log.WithFields(logrus.Fields{
+				"program": name, "layoutId": layoutID, "commandStationId": commandStationID, "port": port,
+			}).Debug("dcc-bus ensure running: already up")
 			return port, name, nil
 		}
+		d.log.WithFields(logrus.Fields{
+			"program": name, "port": port,
+		}).Warn("dcc-bus ensure running: port assigned but not dialable, re-upserting")
 	}
 
 	if !ok {
@@ -192,9 +198,13 @@ func (d *DccBusService) EnsureRunning(ctx context.Context, layoutID, commandStat
 		if err != nil {
 			return 0, name, err
 		}
+		d.log.WithFields(logrus.Fields{
+			"program": name, "layoutId": layoutID, "commandStationId": commandStationID, "port": port,
+		}).Info("dcc-bus ensure running: allocated port")
 	}
 
 	spec := d.buildProgramSpec(name, layoutID, commandStationID, port)
+	d.log.WithFields(logrus.Fields{"program": name, "port": port}).Info("dcc-bus ensure running: upserting supervisord program")
 	if err := d.sup.UpsertProgram(ctx, DccBusGroupName, spec); err != nil {
 		return 0, name, fmt.Errorf("upsert dcc-bus program: %w", err)
 	}
@@ -211,9 +221,11 @@ func (d *DccBusService) EnsureRunning(ctx context.Context, layoutID, commandStat
 	}
 
 	if err := d.waitDialable(ctx, port); err != nil {
+		d.log.WithError(err).WithFields(logrus.Fields{"program": name, "port": port}).Error("dcc-bus ensure running: daemon not dialable")
 		return 0, name, fmt.Errorf("%w: %v", ErrDccBusUnavailable, err)
 	}
 	d.persistPort(ctx, key, port)
+	d.log.WithFields(logrus.Fields{"program": name, "port": port}).Info("dcc-bus ensure running: daemon ready")
 	return port, name, nil
 }
 
@@ -221,6 +233,9 @@ func (d *DccBusService) EnsureRunning(ctx context.Context, layoutID, commandStat
 // command station from the layout). Idempotent.
 func (d *DccBusService) Stop(ctx context.Context, layoutID, commandStationID uint) error {
 	name := programName(layoutID, commandStationID)
+	d.log.WithFields(logrus.Fields{
+		"program": name, "layoutId": layoutID, "commandStationId": commandStationID,
+	}).Info("dcc-bus stop: removing supervisord program")
 	_ = d.sup.StopProgram(ctx, name)
 	if err := d.sup.RemoveProgram(ctx, DccBusGroupName, name); err != nil {
 		if !errors.Is(err, supervisord.ErrProgramNotFound) {

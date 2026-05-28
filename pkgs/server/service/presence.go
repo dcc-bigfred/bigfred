@@ -54,6 +54,27 @@ func (s *PresenceService) ListForLayout(ctx context.Context, layoutID uint) ([]d
 	return out, nil
 }
 
+// ListForLayoutEnsuringCaller is the HTTP dashboard snapshot. The hub
+// only learns about a user after the WebSocket upgrade registers; the
+// first GET /presence on page load often races ahead of that, so the
+// authenticated caller is appended when missing from the hub set.
+func (s *PresenceService) ListForLayoutEnsuringCaller(ctx context.Context, layoutID uint, caller domain.User) ([]domain.PresenceUser, error) {
+	out, err := s.ListForLayout(ctx, layoutID)
+	if err != nil {
+		return nil, err
+	}
+	for _, u := range out {
+		if u.UserID == caller.ID {
+			return out, nil
+		}
+	}
+	entry, err := s.buildEntry(ctx, layoutID, caller.ID, caller.Login)
+	if err != nil {
+		return nil, err
+	}
+	return append(out, entry), nil
+}
+
 func (s *PresenceService) buildEntry(ctx context.Context, layoutID, userID uint, login string) (domain.PresenceUser, error) {
 	user, err := s.users.FindByID(ctx, userID)
 	if err != nil {

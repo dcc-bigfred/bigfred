@@ -149,6 +149,20 @@ func (h *Hub) Register(c *Client) {
 	h.register <- c
 }
 
+// LayoutIDsWithOnlineUsers returns every layout id that currently has
+// at least one connected WebSocket session (any user).
+func (h *Hub) LayoutIDsWithOnlineUsers() []uint {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	out := make([]uint, 0, len(h.online))
+	for layoutID, users := range h.online {
+		if len(users) > 0 {
+			out = append(out, layoutID)
+		}
+	}
+	return out
+}
+
 // OnlineUsers returns the deduplicated set of users connected to a
 // layout. Safe for concurrent readers.
 func (h *Hub) OnlineUsers(layoutID uint) []onlineUser {

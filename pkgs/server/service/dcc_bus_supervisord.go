@@ -108,20 +108,41 @@ func (d *DccBusService) SyncProgramsForLayouts(
 	return nil
 }
 
-// SyncProgramsForOnlineLayouts lists every layout that currently has
-// at least one live WebSocket session and rebuilds supervisord for
-// that set.
+// SyncProgramsForOnlineLayouts rebuilds supervisord for every layout
+// that has at least one live WebSocket session, plus any ids listed in
+// ensureLayoutIDs. The extras cover the dashboard HTTP poll racing
+// ahead of the WS upgrade (same issue as presence list).
 func (d *DccBusService) SyncProgramsForOnlineLayouts(
 	ctx context.Context,
 	hub *ws.Hub,
 	resolve CommandStationIDsForLayout,
+	ensureLayoutIDs ...uint,
 ) error {
-	if hub == nil {
-		return nil
+	var layoutIDs []uint
+	if hub != nil {
+		layoutIDs = hub.LayoutIDsWithOnlineUsers()
 	}
-	layoutIDs := hub.LayoutIDsWithOnlineUsers()
-	d.log.Debugf("dcc-bus supervisord sync: online layouts: %v", layoutIDs)
+	layoutIDs = mergeLayoutIDs(layoutIDs, ensureLayoutIDs...)
+	if d.log != nil {
+		d.log.WithField("layoutIds", layoutIDs).Debug("dcc-bus supervisord sync: target layouts")
+	}
 	return d.SyncProgramsForLayouts(ctx, layoutIDs, resolve)
+}
+
+func mergeLayoutIDs(base []uint, extra ...uint) []uint {
+	seen := make(map[uint]struct{}, len(base)+len(extra))
+	out := make([]uint, 0, len(base)+len(extra))
+	for _, id := range append(base, extra...) {
+		if id == 0 {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
+	}
+	return out
 }
 
 func (d *DccBusService) ensurePort(ctx context.Context, layoutID, commandStationID uint) (uint16, error) {
@@ -223,11 +244,8 @@ func (s *DccBusLayoutSync) ObserveLayout(ctx context.Context, layoutID uint) err
 			"csIds":    ids,
 		}).Info("dcc-bus layout sync: command-station set changed, refreshing supervisord")
 	}
-	if err := s.dcc.SyncProgramsForOnlineLayouts(ctx, s.hub, s.layouts); err != nil {
-		if s.dcc.log != nil {
-			s.dcc.log.WithError(err).WithField("layoutId", layoutID).
-				Error("dcc-bus layout sync: supervisord refresh failed")
-		}
+	if err := s.dcc.SyncProgramsForOnlineLayouts(ctx, s.hub, s.layouts, layoutID); err != nil {
+		s.dcc.log.WithError(err).WithField("layoutId", layoutID).Error("dcc-bus layout sync: supervisord refresh failed")
 	}
 	return nil
 }

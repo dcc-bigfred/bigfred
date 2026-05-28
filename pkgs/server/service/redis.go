@@ -8,6 +8,13 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+// LayoutRosterInvalidateChannel is the pub/sub topic every dcc-bus
+// daemon for layout L subscribes to. A publish forces a SQLite
+// roster re-read (layout_vehicles → DCC addresses).
+func LayoutRosterInvalidateChannel(layoutID uint) string {
+	return fmt.Sprintf("bigfred:layout:%d:invalidate", layoutID)
+}
+
 // RedisService wraps a singleton go-redis client used by the rest of
 // the server (DccBusService, ws hub fan-in, etc.) so test code and
 // production share one connection pool.
@@ -85,6 +92,15 @@ func (r *RedisService) WaitReady(ctx context.Context, timeout time.Duration) err
 		lastErr = fmt.Errorf("redis not ready")
 	}
 	return fmt.Errorf("redis not ready after %s: %w", timeout, lastErr)
+}
+
+// PublishLayoutRosterInvalidate notifies dcc-bus daemons serving
+// layoutID that the vehicle roster (or DCC addresses) changed.
+func (r *RedisService) PublishLayoutRosterInvalidate(ctx context.Context, layoutID uint) error {
+	if r == nil || layoutID == 0 {
+		return nil
+	}
+	return r.client.Publish(ctx, LayoutRosterInvalidateChannel(layoutID), "{}").Err()
 }
 
 // Close drains the underlying connection pool.

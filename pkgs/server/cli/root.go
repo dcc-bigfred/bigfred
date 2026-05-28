@@ -72,7 +72,8 @@ real-time throttle commands.`,
 		},
 	}
 
-	cmd.Flags().StringVar(&f.HTTPAddr, "http", ":8080", "address the HTTP server listens on")
+	cmd.Flags().StringVar(&f.HTTPAddr, "http", "0.0.0.0:8080",
+		"address the HTTP server listens on (0.0.0.0 = all interfaces)")
 	cmd.Flags().StringVar(&f.DBPath, "db", "bigfred.db", "path to the SQLite database file")
 	cmd.Flags().StringVar(&f.JWTSecret, "jwt-secret", "",
 		"hex/base64 secret used to sign session JWTs. Falls back to BIGFRED_JWT_SECRET "+
@@ -179,6 +180,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	}
 	redisSvc := service.NewRedisService(service.RedisServiceConfig{Addr: redisAddr})
 	defer func() { _ = redisSvc.Close() }()
+	layoutVehicleSvc.SetRedisInvalidator(redisSvc)
 
 	var supSvc *service.SupervisordService
 	if !f.NoSupervisor {

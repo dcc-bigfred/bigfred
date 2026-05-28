@@ -281,7 +281,7 @@ func (d *Daemon) runInvalidateConsumer(ctx context.Context, sub *redis.PubSub) {
 			if !ok {
 				return
 			}
-			d.log.WithField("payload", msg.Payload).Debug("dcc-bus invalidate")
+			d.log.WithField("payload", msg.Payload).Info("dcc-bus roster invalidate received")
 			if err := d.router.ReloadRoster(ctx); err != nil {
 				d.log.WithError(err).Warn("dcc-bus roster reload failed")
 			}

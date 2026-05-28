@@ -144,7 +144,11 @@ func (r *Router) reloadRoster(ctx context.Context) error {
 		r.allowed[a] = struct{}{}
 	}
 	r.allowedMu.Unlock()
-	r.log.WithField("addrs", len(addrs)).Debug("dcc-bus roster reloaded")
+	r.log.WithFields(logrus.Fields{
+		"layoutId": r.layoutID,
+		"addrs":    addrs,
+		"count":    len(addrs),
+	}).Info("dcc-bus roster reloaded")
 	return nil
 }
 
@@ -176,12 +180,17 @@ func (r *Router) HandleSubscribe(ctx context.Context, sess *ws.Session, payload 
 		}
 		accepted = append(accepted, addr)
 	}
-	r.log.WithFields(logrus.Fields{
+	fields := logrus.Fields{
 		"sessionId": sess.ID,
 		"requested": payload.Addresses,
 		"accepted":  accepted,
 		"rejected":  rejected,
-	}).Info("dcc-bus loco.subscribe")
+	}
+	if len(rejected) > 0 {
+		r.log.WithFields(fields).Warn("dcc-bus loco.subscribe rejected")
+	} else {
+		r.log.WithFields(fields).Debug("dcc-bus loco.subscribe")
+	}
 	sess.Subscribe(accepted...)
 
 	for _, addr := range accepted {

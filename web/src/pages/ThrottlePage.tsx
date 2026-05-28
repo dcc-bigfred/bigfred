@@ -294,13 +294,22 @@ function ThrottleSurface({ layoutID }: { layoutID: number }) {
   const roster = useLayoutVehicles(layoutID).data ?? [];
   const drivable = roster.filter((v) => v.dccAddress != null);
   const [selectedAddr, setSelectedAddr] = useState<number | null>(null);
-  const bus = useDccBus();
+  const { subscribe, status, states, lastError, setSpeed, setFunction } =
+    useDccBus();
   const { t } = useTranslation(["throttle", "errors"]);
 
+  // Subscribe once per (vehicle, roster, WS open) — not on every
+  // loco.state push (the whole context used to change each tick).
+  const rosterAddrKey = drivable
+    .map((v) => v.dccAddress)
+    .filter((a): a is number => a != null)
+    .join(",");
   useEffect(() => {
-    if (selectedAddr == null) return;
-    void bus.subscribe([selectedAddr]);
-  }, [selectedAddr, bus]);
+    if (selectedAddr == null || status !== "open") {
+      return;
+    }
+    void subscribe([selectedAddr]);
+  }, [selectedAddr, subscribe, rosterAddrKey, status]);
 
   // When the roster first arrives we pre-select the first drivable
   // vehicle so the user always sees a working slider.
@@ -311,26 +320,26 @@ function ThrottleSurface({ layoutID }: { layoutID: number }) {
   }, [drivable, selectedAddr]);
 
   const state =
-    selectedAddr != null ? bus.states.get(selectedAddr) : undefined;
+    selectedAddr != null ? states.get(selectedAddr) : undefined;
   const speed = state?.speed ?? 0;
   const forward = state?.forward ?? true;
   const functions = state?.functions ?? [];
 
   const handleSpeed = (next: number) => {
     if (selectedAddr == null) return;
-    void bus.setSpeed(selectedAddr, next, forward);
+    void setSpeed(selectedAddr, next, forward);
   };
   const handleDir = (newDir: "fwd" | "rev") => {
     if (selectedAddr == null) return;
-    void bus.setSpeed(selectedAddr, speed, newDir === "fwd");
+    void setSpeed(selectedAddr, speed, newDir === "fwd");
   };
   const handleFn = (n: number) => {
     if (selectedAddr == null) return;
-    void bus.setFunction(selectedAddr, n, !(functions[n] ?? false));
+    void setFunction(selectedAddr, n, !(functions[n] ?? false));
   };
   const handleEStop = () => {
     if (selectedAddr == null) return;
-    void bus.setSpeed(selectedAddr, 0, forward, true);
+    void setSpeed(selectedAddr, 0, forward, true);
   };
 
   return (
@@ -410,14 +419,14 @@ function ThrottleSurface({ layoutID }: { layoutID: number }) {
           {t("throttle:emergencyStop")}
         </Button>
 
-        {bus.lastError && (
+        {lastError && (
           <Alert severity="warning">
             {translateErrorCode(
               t as unknown as (
                 k: string,
                 opts?: { defaultValue?: string },
               ) => string,
-              bus.lastError,
+              lastError,
               t("throttle:errors.command_station_disconnected"),
             )}
           </Alert>

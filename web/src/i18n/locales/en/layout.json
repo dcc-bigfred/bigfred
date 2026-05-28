@@ -41,7 +41,10 @@
         "title": "Edit layout",
         "nameLabel": "Name",
         "interlockingsLabel": "Interlockings",
-        "interlockingsHelp": "Pick interlockings visible in this layout. The list may be empty."
+        "interlockingsHelp": "Pick interlockings visible in this layout. The list may be empty.",
+        "commandStationsLabel": "Command stations",
+        "commandStationsHelp": "Pick at least one command station attached to this layout.",
+        "commandStationsSystemHelp": "The system layout sees every catalogue command station — attachment is virtual."
       },
       "rename": {
         "title": "Rename layout",

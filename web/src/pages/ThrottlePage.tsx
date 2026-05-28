@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Box,
@@ -50,21 +50,79 @@ export default function ThrottlePage() {
 
   const layoutID = me?.layoutId ?? null;
   const stations = session?.availableCommandStations ?? [];
-  const currentCS = session?.currentSession?.commandStationId ?? 0;
-  const activeStation = useMemo(
-    () => stations.find((s) => s.id === currentCS),
-    [stations, currentCS],
-  );
-
+  const [selectedCS, setSelectedCS] = useState(0);
+  const [selecting, setSelecting] = useState(false);
+  const [spawnAcked, setSpawnAcked] = useState(false);
   const [spawnError, setSpawnError] = useState<string | null>(null);
+  const [retryTick, setRetryTick] = useState(0);
+  const spawnGenRef = useRef(0);
 
-  const handleCSChange = async (csID: number) => {
-    setSpawnError(null);
-    const result = await setCommandStation(csID);
-    if (!result.ok) {
-      setSpawnError(result.error ?? "dcc_bus_unavailable");
+  const activeStation = useMemo(
+    () => stations.find((s) => s.id === selectedCS),
+    [stations, selectedCS],
+  );
+  const activeWsUrl = activeStation?.wsUrl ?? null;
+
+  useEffect(() => {
+    setSpawnAcked(false);
+  }, [session?.sessionId, selectedCS]);
+
+  // Restore server-side pick after reconnect (session.opened).
+  useEffect(() => {
+    const fromSession = session?.currentSession?.commandStationId ?? 0;
+    if (fromSession > 0) {
+      setSelectedCS(fromSession);
     }
-  };
+  }, [session?.sessionId]);
+
+  // Single attached station: pre-select so the user does not need a
+  // no-op MUI Select click (onChange does not fire when re-picking the
+  // same value).
+  useEffect(() => {
+    if (stations.length === 1 && selectedCS === 0) {
+      setSelectedCS(stations[0].id);
+    }
+  }, [stations, selectedCS]);
+
+  // Always call session.setCommandStation when a cs is selected. Do not
+  // skip when session.opened carried a stale wsUrl from a cached port.
+  useEffect(() => {
+    if (!connected || !session?.sessionId || selectedCS <= 0) {
+      return;
+    }
+
+    const gen = ++spawnGenRef.current;
+    setSelecting(true);
+    setSpawnError(null);
+
+    void setCommandStation(selectedCS).then((result) => {
+      if (gen !== spawnGenRef.current) {
+        return;
+      }
+      setSelecting(false);
+      if (result.ok) {
+        setSpawnAcked(true);
+      } else {
+        setSpawnError(result.error ?? "dcc_bus_unavailable");
+      }
+    });
+  }, [
+    connected,
+    session?.sessionId,
+    selectedCS,
+    retryTick,
+    setCommandStation,
+  ]);
+
+  const handlePickerChange = useCallback((csID: number) => {
+    setSpawnError(null);
+    setSelectedCS(csID);
+  }, []);
+
+  const handleRetrySpawn = useCallback(() => {
+    setSpawnError(null);
+    setRetryTick((n) => n + 1);
+  }, []);
 
   // Render order:
   //   1. Header strip with control-plane / data-plane status chips.
@@ -84,19 +142,27 @@ export default function ThrottlePage() {
               : "throttle:controlPlane.offline",
           )}
         />
-        {activeStation && (
-          <DataPlaneStatusChip />
-        )}
       </Stack>
 
       <CommandStationPicker
         stations={stations}
-        currentID={currentCS}
-        onChange={handleCSChange}
+        currentID={selectedCS}
+        disabled={selecting}
+        onChange={handlePickerChange}
       />
 
       {spawnError && (
-        <Alert severity="error" sx={{ mt: 2 }}>
+        <Alert
+          severity="error"
+          sx={{ mt: 2 }}
+          action={
+            selectedCS > 0 ? (
+              <Button color="inherit" size="small" onClick={handleRetrySpawn}>
+                {t("retry")}
+              </Button>
+            ) : undefined
+          }
+        >
           {translateErrorCode(
             t as unknown as (
               k: string,
@@ -108,7 +174,7 @@ export default function ThrottlePage() {
         </Alert>
       )}
 
-      {currentCS === 0 && (
+      {selectedCS === 0 && (
         <Alert severity="info" sx={{ mt: 2 }}>
           {stations.length === 0
             ? t("throttle:noCommandStations")
@@ -116,14 +182,20 @@ export default function ThrottlePage() {
         </Alert>
       )}
 
-      {currentCS !== 0 && activeStation?.wsUrl == null && (
+      {selectedCS !== 0 &&
+        activeWsUrl == null &&
+        !spawnError &&
+        (selecting || spawnAcked) && (
         <Alert severity="info" icon={false} sx={{ mt: 2 }}>
           {t("throttle:csStatus.spawning")}
         </Alert>
       )}
 
-      {currentCS !== 0 && activeStation?.wsUrl && layoutID && (
-        <DccBusProvider wsUrl={activeStation.wsUrl}>
+      {selectedCS !== 0 && spawnAcked && activeWsUrl && layoutID && (
+        <DccBusProvider wsUrl={activeWsUrl}>
+          <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
+            <DataPlaneStatusChip />
+          </Stack>
           <ThrottleSurface layoutID={layoutID} />
         </DccBusProvider>
       )}
@@ -147,21 +219,34 @@ function DataPlaneStatusChip() {
 function CommandStationPicker({
   stations,
   currentID,
+  disabled,
   onChange,
 }: {
   stations: { id: number; name: string; kind: string }[];
   currentID: number;
+  disabled?: boolean;
   onChange: (id: number) => void;
 }) {
   const { t } = useTranslation("throttle");
   if (stations.length === 0) return null;
   return (
-    <FormControl fullWidth>
-      <InputLabel>{t("commandStation")}</InputLabel>
+    <FormControl fullWidth disabled={disabled}>
+      <InputLabel id="command-station-label">{t("commandStation")}</InputLabel>
       <Select
+        labelId="command-station-label"
         value={currentID > 0 ? String(currentID) : ""}
         label={t("commandStation")}
-        onChange={(ev) => onChange(Number(ev.target.value))}
+        onChange={(ev) => {
+          const raw = ev.target.value;
+          if (raw === "") {
+            onChange(0);
+            return;
+          }
+          const csID = Number(raw);
+          if (Number.isFinite(csID) && csID > 0) {
+            onChange(csID);
+          }
+        }}
       >
         <MenuItem value="">
           <em>—</em>

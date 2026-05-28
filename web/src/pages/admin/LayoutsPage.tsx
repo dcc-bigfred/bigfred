@@ -47,6 +47,11 @@ import {
   useLayoutInterlockings,
   type Interlocking,
 } from "../../api/interlockings";
+import {
+  useCommandStationsCatalogue,
+  useLayoutCommandStations,
+  type CommandStation,
+} from "../../api/command_stations";
 
 // LayoutsPage is the admin-only management screen for layouts
 // (Polish: makiety) wired in §4.1 of the spec. It exposes the four
@@ -64,6 +69,7 @@ export default function LayoutsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const list = useAdminLayouts();
   const interlockingsCatalog = useInterlockingsCatalogue();
+  const commandStationsCatalog = useCommandStationsCatalogue();
   const create = useCreateLayout();
   const update = useUpdateLayout();
   const remove = useDeleteLayout();
@@ -79,9 +85,13 @@ export default function LayoutsPage() {
   const [dialog, setDialog] = useState<DialogState>(null);
   const [editLayoutId, setEditLayoutId] = useState<number | null>(null);
   const layoutInterlockings = useLayoutInterlockings(editLayoutId);
+  const layoutCommandStations = useLayoutCommandStations(editLayoutId);
   const [nameInput, setNameInput] = useState("");
   const [selectedInterlockings, setSelectedInterlockings] = useState<
     Interlocking[]
+  >([]);
+  const [selectedCommandStations, setSelectedCommandStations] = useState<
+    CommandStation[]
   >([]);
   const [adminPinInput, setAdminPinInput] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
@@ -92,11 +102,18 @@ export default function LayoutsPage() {
     }
   }, [dialog, layoutInterlockings.data]);
 
+  useEffect(() => {
+    if (dialog?.kind === "edit" && layoutCommandStations.data) {
+      setSelectedCommandStations(layoutCommandStations.data);
+    }
+  }, [dialog, layoutCommandStations.data]);
+
   const closeDialog = () => {
     setDialog(null);
     setEditLayoutId(null);
     setNameInput("");
     setSelectedInterlockings([]);
+    setSelectedCommandStations([]);
     setAdminPinInput("");
     setActionError(null);
     create.reset();
@@ -122,6 +139,7 @@ export default function LayoutsPage() {
     setEditLayoutId(null);
     setNameInput("");
     setSelectedInterlockings([]);
+    setSelectedCommandStations([]);
     setAdminPinInput("");
     setActionError(null);
   };
@@ -131,6 +149,7 @@ export default function LayoutsPage() {
     setEditLayoutId(target.id);
     setNameInput(target.name);
     setSelectedInterlockings([]);
+    setSelectedCommandStations([]);
     setAdminPinInput("");
     setActionError(null);
   };
@@ -159,11 +178,13 @@ export default function LayoutsPage() {
     if (!dialog) return;
     try {
       const interlockingIds = selectedInterlockings.map((i) => i.id);
+      const commandStationIds = selectedCommandStations.map((cs) => cs.id);
       const adminPin = adminPinInput.trim();
       if (dialog.kind === "create") {
         await create.mutateAsync({
           name: nameInput.trim(),
           interlockingIds,
+          commandStationIds,
           adminPin: adminPin === "" ? undefined : adminPin,
         });
       } else if (dialog.kind === "edit") {
@@ -174,6 +195,9 @@ export default function LayoutsPage() {
           id: dialog.target.id,
           name,
           interlockingIds,
+          commandStationIds: dialog.target.isSystem
+            ? undefined
+            : commandStationIds,
           adminPin: adminPin === "" ? undefined : adminPin,
         });
       } else if (dialog.kind === "delete") {
@@ -191,6 +215,10 @@ export default function LayoutsPage() {
   const interlockingOptions = useMemo(
     () => interlockingsCatalog.data ?? [],
     [interlockingsCatalog.data],
+  );
+  const commandStationOptions = useMemo(
+    () => commandStationsCatalog.data ?? [],
+    [commandStationsCatalog.data],
   );
 
   const submitting =
@@ -440,7 +468,44 @@ export default function LayoutsPage() {
               )}
             />
 
-            {dialog?.kind === "edit" && layoutInterlockings.isLoading && (
+            <Autocomplete
+              multiple
+              options={commandStationOptions}
+              getOptionLabel={(option) => option.name}
+              value={selectedCommandStations}
+              onChange={(_event, value) => setSelectedCommandStations(value)}
+              isOptionEqualToValue={(a, b) => a.id === b.id}
+              loading={commandStationsCatalog.isLoading}
+              disabled={
+                commandStationsCatalog.isError ||
+                (dialog?.kind === "edit" && dialog.target.isSystem)
+              }
+              renderTags={(value, getTagProps) =>
+                value.map((option, index) => (
+                  <Chip
+                    {...getTagProps({ index })}
+                    key={option.id}
+                    label={option.name}
+                    size="small"
+                  />
+                ))
+              }
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label={t("layout:admin.dialogs.edit.commandStationsLabel")}
+                  helperText={
+                    dialog?.kind === "edit" && dialog.target.isSystem
+                      ? t("layout:admin.dialogs.edit.commandStationsSystemHelp")
+                      : t("layout:admin.dialogs.edit.commandStationsHelp")
+                  }
+                />
+              )}
+            />
+
+            {dialog?.kind === "edit" &&
+              (layoutInterlockings.isLoading ||
+                layoutCommandStations.isLoading) && (
               <Box sx={{ display: "flex", justifyContent: "center", py: 1 }}>
                 <CircularProgress size={24} />
               </Box>
@@ -479,11 +544,16 @@ export default function LayoutsPage() {
             onClick={submitDialog}
             disabled={
               submitting ||
-              (dialog?.kind === "create" && nameInput.trim() === "") ||
+              (dialog?.kind === "create" &&
+                (nameInput.trim() === "" ||
+                  selectedCommandStations.length === 0)) ||
               (dialog?.kind === "edit" &&
                 !dialog.target.isSystem &&
-                nameInput.trim() === "") ||
-              (dialog?.kind === "edit" && layoutInterlockings.isLoading)
+                (nameInput.trim() === "" ||
+                  selectedCommandStations.length === 0)) ||
+              (dialog?.kind === "edit" &&
+                (layoutInterlockings.isLoading ||
+                  layoutCommandStations.isLoading))
             }
           >
             {dialog?.kind === "edit"

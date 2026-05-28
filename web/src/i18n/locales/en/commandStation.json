@@ -1,0 +1,43 @@
+{
+  "admin": {
+    "title": "Command stations",
+    "subtitle": "DCC command-station catalogue. Attach stations to layouts from the layout edit dialog.",
+    "columns": {
+      "name": "Name",
+      "kind": "Kind",
+      "connection": "Connection",
+      "speedSteps": "Speed steps",
+      "actions": "Actions"
+    },
+    "actions": {
+      "create": "New command station",
+      "edit": "Edit",
+      "delete": "Delete"
+    },
+    "kind": {
+      "z21": "Z21 (UDP)",
+      "loconet_serial": "LocoNet (serial)",
+      "loconet_tcp": "LocoNet (TCP)"
+    },
+    "dialogs": {
+      "create": {
+        "title": "New command station"
+      },
+      "edit": {
+        "title": "Edit command station"
+      },
+      "delete": {
+        "title": "Delete command station \"{{name}}\"",
+        "message": "This cannot be undone. The station will be detached from every layout it was attached to."
+      },
+      "fields": {
+        "name": "Name",
+        "kind": "Kind",
+        "connectionUri": "Connection URI",
+        "connectionUriHelp": "e.g. udp://192.168.1.10:21105, serial:///dev/ttyUSB0:57600, tcp://192.168.1.20:1234",
+        "speedSteps": "Speed steps"
+      }
+    },
+    "empty": "No command stations to show."
+  }
+}

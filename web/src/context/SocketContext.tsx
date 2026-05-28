@@ -123,10 +123,32 @@ export function SocketProvider({
     [],
   );
 
+  const setCommandStationAckTimeoutMs = 45_000;
+
   const setCommandStation = useCallback(
     (csID: number) =>
-      sendAction("session.setCommandStation", { commandStationId: csID }),
-    [sendAction],
+      new Promise<{ ok: boolean; error?: string }>((resolve) => {
+        const socket = socketRef.current;
+        if (!socket || socket.readyState !== WebSocket.OPEN) {
+          resolve({ ok: false, error: "control_offline" });
+          return;
+        }
+        const id = nextRequestID();
+        pending.current.set(id, resolve);
+        socket.send(
+          JSON.stringify({
+            type: "session.setCommandStation",
+            id,
+            payload: { commandStationId: csID },
+          }),
+        );
+        window.setTimeout(() => {
+          if (pending.current.delete(id)) {
+            resolve({ ok: false, error: "ack_timeout" });
+          }
+        }, setCommandStationAckTimeoutMs);
+      }),
+    [],
   );
 
   useEffect(() => {
@@ -183,9 +205,16 @@ export function SocketProvider({
                 wsUrl: p.wsUrl,
               };
             }
-            if (p.status === "running" && p.commandStationId > 0) {
+            if (
+              p.commandStationId > 0 &&
+              (p.status === "running" || p.status === "starting")
+            ) {
               next.currentSession = { commandStationId: p.commandStationId };
-            } else if (p.status === "stopped" || p.commandStationId === 0) {
+            } else if (
+              p.status === "stopped" ||
+              p.status === "degraded" ||
+              p.commandStationId === 0
+            ) {
               next.currentSession = undefined;
             }
             return next;

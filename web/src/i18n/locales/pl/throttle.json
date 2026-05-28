@@ -43,6 +43,9 @@
     "dcc_bus_unavailable": "Demon dcc-bus niedostępny — spróbuj ponownie za chwilę",
     "no_dcc_bus_ports_available": "Brak wolnego portu dla nowej centralki — zatrzymaj nieużywaną",
     "command_station_not_attached": "Centralka nie jest podpięta do tej makiety",
-    "dcc_bus_not_configured": "Sterowanie centralką nie jest skonfigurowane na tym serwerze"
-  }
+    "dcc_bus_not_configured": "Sterowanie centralką nie jest skonfigurowane na tym serwerze",
+    "control_offline": "Brak połączenia ze sterowaniem — odśwież stronę",
+    "ack_timeout": "Serwer nie odpowiedział na czas — spróbuj ponownie"
+  },
+  "retry": "Spróbuj ponownie"
 }

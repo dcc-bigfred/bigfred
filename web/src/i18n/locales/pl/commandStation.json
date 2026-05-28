@@ -1,0 +1,43 @@
+{
+  "admin": {
+    "title": "Centralki",
+    "subtitle": "Katalog centralki DCC dostępnych w systemie. Przypisanie centralki do makiet odbywa się w edycji makiety.",
+    "columns": {
+      "name": "Nazwa",
+      "kind": "Typ",
+      "connection": "Połączenie",
+      "speedSteps": "Kroki prędkości",
+      "actions": "Akcje"
+    },
+    "actions": {
+      "create": "Nowa centralka",
+      "edit": "Edytuj",
+      "delete": "Usuń"
+    },
+    "kind": {
+      "z21": "Z21 (UDP)",
+      "loconet_serial": "LocoNet (serial)",
+      "loconet_tcp": "LocoNet (TCP)"
+    },
+    "dialogs": {
+      "create": {
+        "title": "Nowa centralka"
+      },
+      "edit": {
+        "title": "Edytuj centralkę"
+      },
+      "delete": {
+        "title": "Usuń centralkę \"{{name}}\"",
+        "message": "Operacja jest nieodwracalna. Centralka zostanie odpięta od wszystkich makiet, do których była przypisana."
+      },
+      "fields": {
+        "name": "Nazwa",
+        "kind": "Typ",
+        "connectionUri": "URI połączenia",
+        "connectionUriHelp": "np. udp://192.168.1.10:21105, serial:///dev/ttyUSB0:57600, tcp://192.168.1.20:1234",
+        "speedSteps": "Kroki prędkości"
+      }
+    },
+    "empty": "Brak centralki do wyświetlenia."
+  }
+}

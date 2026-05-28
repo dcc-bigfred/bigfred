@@ -41,7 +41,10 @@
         "title": "Edytuj makietę",
         "nameLabel": "Nazwa",
         "interlockingsLabel": "Nastawnie",
-        "interlockingsHelp": "Wybierz nastawnie widoczne w tej makiecie. Lista może być pusta."
+        "interlockingsHelp": "Wybierz nastawnie widoczne w tej makiecie. Lista może być pusta.",
+        "commandStationsLabel": "Centralki",
+        "commandStationsHelp": "Wybierz co najmniej jedną centralkę przypisaną do tej makiety.",
+        "commandStationsSystemHelp": "Makieta systemowa widzi wszystkie centralki z katalogu — przypisanie jest wirtualne."
       },
       "rename": {
         "title": "Zmień nazwę makiety",

@@ -79,6 +79,12 @@ export default function AppShell() {
         icon: <AccountTreeIcon fontSize="small" />,
         onClick: () => navigate("/admin/interlockings"),
       },
+      {
+        id: "commandStations",
+        label: t("nav.administration.commandStations"),
+        icon: <DirectionsRailwayIcon fontSize="small" />,
+        onClick: () => navigate("/admin/command-stations"),
+      },
       { id: "divider-1", divider: true },
       {
         id: "audit-log",

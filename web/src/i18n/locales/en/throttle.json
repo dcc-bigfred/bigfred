@@ -43,6 +43,9 @@
     "dcc_bus_unavailable": "dcc-bus daemon unavailable — try again in a moment",
     "no_dcc_bus_ports_available": "No free port for a new command station — stop an unused one",
     "command_station_not_attached": "Command station is not attached to this layout",
-    "dcc_bus_not_configured": "Command-station control is not configured on this server"
-  }
+    "dcc_bus_not_configured": "Command-station control is not configured on this server",
+    "control_offline": "Control plane offline — refresh the page",
+    "ack_timeout": "Server did not respond in time — try again"
+  },
+  "retry": "Try again"
 }

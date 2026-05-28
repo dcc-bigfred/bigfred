@@ -65,6 +65,7 @@ export function useCreateLayout() {
     mutationFn: (body: {
       name: string;
       interlockingIds?: number[];
+      commandStationIds?: number[];
       adminPin?: string;
     }) =>
       apiFetch<Layout>("/api/v1/layouts", {
@@ -90,12 +91,16 @@ export function useUpdateLayout() {
       id: number;
       name: string;
       interlockingIds?: number[];
+      commandStationIds?: number[];
       adminPin?: string;
     }) => {
       const body: Record<string, unknown> = {
         name: args.name,
         interlockingIds: args.interlockingIds,
       };
+      if (args.commandStationIds !== undefined) {
+        body.commandStationIds = args.commandStationIds;
+      }
       if (args.adminPin && args.adminPin.length > 0) {
         body.adminPin = args.adminPin;
       }
@@ -109,6 +114,9 @@ export function useUpdateLayout() {
       void qc.invalidateQueries({ queryKey: loginLayoutsQueryKey });
       void qc.invalidateQueries({
         queryKey: ["layouts", args.id, "interlockings"],
+      });
+      void qc.invalidateQueries({
+        queryKey: ["layouts", args.id, "command-stations"],
       });
     },
   });

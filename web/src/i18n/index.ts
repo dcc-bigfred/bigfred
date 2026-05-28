@@ -26,6 +26,7 @@ import plVehicle from "./locales/pl/vehicle.json";
 import plUser from "./locales/pl/user.json";
 import plSudo from "./locales/pl/sudo.json";
 import plThrottle from "./locales/pl/throttle.json";
+import plCommandStation from "./locales/pl/commandStation.json";
 
 import enCommon from "./locales/en/common.json";
 import enAuth from "./locales/en/auth.json";
@@ -38,6 +39,7 @@ import enVehicle from "./locales/en/vehicle.json";
 import enUser from "./locales/en/user.json";
 import enSudo from "./locales/en/sudo.json";
 import enThrottle from "./locales/en/throttle.json";
+import enCommandStation from "./locales/en/commandStation.json";
 
 // SUPPORTED_LOCALES is the single source of truth. Adding a third
 // locale (e.g. "de") is: append it here → mirror every catalogue
@@ -63,6 +65,7 @@ export const resources = {
     user: plUser,
     sudo: plSudo,
     throttle: plThrottle,
+    commandStation: plCommandStation,
   },
   en: {
     common: enCommon,
@@ -76,6 +79,7 @@ export const resources = {
     user: enUser,
     sudo: enSudo,
     throttle: enThrottle,
+    commandStation: enCommandStation,
   },
 } as const;
 
@@ -92,7 +96,7 @@ void i18n
     fallbackLng: "pl",
     supportedLngs: SUPPORTED_LOCALES as unknown as string[],
     defaultNS: "common",
-    ns: ["common", "auth", "errors", "role", "home", "layout", "interlocking", "vehicle", "user", "sudo", "throttle"],
+    ns: ["common", "auth", "errors", "role", "home", "layout", "interlocking", "vehicle", "user", "sudo", "throttle", "commandStation"],
     interpolation: {
       // React already escapes everything; double-escaping inside
       // i18next would mangle apostrophes and quotes.

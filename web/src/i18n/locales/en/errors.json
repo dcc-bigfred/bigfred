@@ -67,5 +67,8 @@
   "layout_admin_pin_unset": "This layout has no admin PIN — ask the administrator to set one first.",
   "sudo_invalid_pin": "Wrong layout admin PIN.",
   "sudo_layout_mismatch": "Your session is bound to a different layout.",
-  "sudo_locked": "Too many failed attempts — try again in a moment."
+  "sudo_locked": "Too many failed attempts — try again in a moment.",
+  "diagnostics_forbidden": "That file is not on the diagnostics whitelist.",
+  "diagnostics_not_found": "The log file does not exist yet.",
+  "diagnostics_unavailable": "Diagnostics are not available on this server."
 }

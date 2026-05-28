@@ -299,6 +299,11 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		}
 	}
 
+	diagSvc, err := service.NewDiagnosticsService(supSvc)
+	if err != nil {
+		return fmt.Errorf("diagnostics init: %w", err)
+	}
+
 	router := httpapi.NewRouter(httpapi.RouterConfig{
 		Auth:           authSvc,
 		Users:          userSvc,
@@ -313,6 +318,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		DCCPool:        dccPoolSvc,
 		Sudo:            sudoSvc,
 		CommandStations: commandStationSvc,
+		Diagnostics:     diagSvc,
 		Hub:             hub,
 		DccBus:          dccBusSvc,
 		AllowedOrigins: f.AllowedOrigins,

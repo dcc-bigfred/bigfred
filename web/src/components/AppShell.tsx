@@ -6,6 +6,7 @@ import EventIcon from "@mui/icons-material/Event";
 import AccountTreeIcon from "@mui/icons-material/AccountTree";
 import DirectionsRailwayIcon from "@mui/icons-material/DirectionsRailway";
 import HistoryIcon from "@mui/icons-material/History";
+import BugReportIcon from "@mui/icons-material/BugReport";
 import PersonIcon from "@mui/icons-material/Person";
 import TrainIcon from "@mui/icons-material/Train";
 import VpnKeyIcon from "@mui/icons-material/VpnKey";
@@ -84,6 +85,12 @@ export default function AppShell() {
         label: t("nav.administration.commandStations"),
         icon: <DirectionsRailwayIcon fontSize="small" />,
         onClick: () => navigate("/admin/command-stations"),
+      },
+      {
+        id: "diagnostics",
+        label: t("nav.administration.diagnostics"),
+        icon: <BugReportIcon fontSize="small" />,
+        onClick: () => navigate("/admin/diagnostics"),
       },
       { id: "divider-1", divider: true },
       {

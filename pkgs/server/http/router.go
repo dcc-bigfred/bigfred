@@ -29,6 +29,7 @@ type RouterConfig struct {
 	DCCPool          *service.DCCPoolService
 	Sudo             *service.SudoService
 	CommandStations  *service.CommandStationService
+	Diagnostics      *service.DiagnosticsService
 	Hub              *ws.Hub
 	DccBus           *service.DccBusService
 
@@ -73,6 +74,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	userH := NewUserHandler(cfg.Users, cfg.Auth)
 	sudoH := NewSudoHandler(cfg.Sudo, cfg.Auth, cfg.Users, cfg.Presence)
 	commandStationH := NewCommandStationHandler(cfg.CommandStations, cfg.Auth)
+	diagnosticsH := NewDiagnosticsHandler(cfg.Diagnostics)
 
 	r.Route("/api/v1", func(r chi.Router) {
 		// WebSocket upgrade — auth reads cookie / ?token= inline.
@@ -183,6 +185,9 @@ func NewRouter(cfg RouterConfig) http.Handler {
 				r.Delete("/users/{id}", userH.Delete)
 				r.Post("/users/{id}/activate", userH.Activate)
 				r.Post("/users/{id}/deactivate", userH.Deactivate)
+
+				r.Get("/diagnostics/sources", diagnosticsH.ListSources)
+				r.Get("/diagnostics/content", diagnosticsH.ReadContent)
 			})
 		})
 	})

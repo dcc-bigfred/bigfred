@@ -27,10 +27,7 @@ func NewLayoutHandler(svc *service.LayoutService, auth *service.AuthService) *La
 	return &LayoutHandler{svc: svc, auth: auth}
 }
 
-// layoutResponse is the canonical JSON shape of a Layout row. The
-// `commandStations` slice promised by §4.1 will be added together
-// with the command-station catalogue — for now it is omitted so the
-// payload only carries fields backed by real data.
+// layoutResponse is the canonical JSON shape of a Layout row.
 type layoutResponse struct {
 	ID       uint   `json:"id"`
 	Name     string `json:"name"`
@@ -113,8 +110,9 @@ func (h *LayoutHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 // createRequest models the JSON body of POST /api/v1/layouts.
 type createRequest struct {
-	Name            string `json:"name"`
-	InterlockingIDs []uint `json:"interlockingIds"`
+	Name              string `json:"name"`
+	InterlockingIDs   []uint `json:"interlockingIds"`
+	CommandStationIDs []uint `json:"commandStationIds"`
 	// AdminPIN is the initial layout admin PIN (§7a.7). Empty
 	// means "default" — the service falls back to the well-known
 	// SystemLayoutDefaultAdminPIN ("0000"), mirroring the
@@ -142,14 +140,20 @@ func (h *LayoutHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	layout, err := h.svc.Create(r.Context(), eff, service.CreateInput{
-		Name:            req.Name,
-		CreatedBy:       actor.User.ID,
-		InterlockingIDs: req.InterlockingIDs,
-		AdminPIN:        req.AdminPIN,
+		Name:              req.Name,
+		CreatedBy:         actor.User.ID,
+		InterlockingIDs:   req.InterlockingIDs,
+		CommandStationIDs: req.CommandStationIDs,
+		AdminPIN:          req.AdminPIN,
 	})
 	if err != nil {
 		if errors.Is(err, service.ErrInterlockingNotFound) {
 			writeLayoutInterlockingError(w, err)
+			return
+		}
+		if errors.Is(err, service.ErrCommandStationNotFound) ||
+			errors.Is(err, service.ErrLayoutNeedsAtLeastOneCommandStation) {
+			writeLayoutCommandStationError(w, err)
 			return
 		}
 		writeLayoutError(w, err)
@@ -158,6 +162,66 @@ func (h *LayoutHandler) Create(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(toLayoutResponse(layout))
+}
+
+// ListCommandStations handles GET /api/v1/layouts/{id}/command-stations.
+func (h *LayoutHandler) ListCommandStations(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseUintParam(r, "id")
+	if !ok {
+		writeJSONError(w, http.StatusBadRequest, "invalid_id")
+		return
+	}
+	rows, err := h.svc.ListCommandStations(r.Context(), id)
+	if err != nil {
+		writeLayoutCommandStationError(w, err)
+		return
+	}
+	out := make([]commandStationResponse, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, toCommandStationResponse(row))
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(out)
+}
+
+type setLayoutCommandStationsRequest struct {
+	CommandStationIDs []uint `json:"commandStationIds"`
+}
+
+// SetCommandStations handles PUT /api/v1/layouts/{id}/command-stations
+// (admin only). Replaces the entire attachment set in one shot.
+func (h *LayoutHandler) SetCommandStations(w http.ResponseWriter, r *http.Request) {
+	layoutID, ok := parseUintParam(r, "id")
+	if !ok {
+		writeJSONError(w, http.StatusBadRequest, "invalid_id")
+		return
+	}
+	actor, ok := IdentityFromContext(r.Context())
+	if !ok {
+		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	eff, err := h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	var req setLayoutCommandStationsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid_body")
+		return
+	}
+	rows, err := h.svc.SetCommandStations(r.Context(), eff, layoutID, actor.User.ID, req.CommandStationIDs)
+	if err != nil {
+		writeLayoutCommandStationError(w, err)
+		return
+	}
+	out := make([]commandStationResponse, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, toCommandStationResponse(row))
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(out)
 }
 
 // ListInterlockings handles GET /api/v1/layouts/{id}/interlockings.
@@ -228,9 +292,10 @@ func (h *LayoutHandler) SetInterlockings(w http.ResponseWriter, r *http.Request)
 // MUST keep the existing digest. A non-empty value replaces the
 // digest after passing the digit / length policy.
 type updateRequest struct {
-	Name            string `json:"name"`
-	InterlockingIDs []uint `json:"interlockingIds"`
-	AdminPIN        string `json:"adminPin"`
+	Name              string `json:"name"`
+	InterlockingIDs   []uint `json:"interlockingIds"`
+	CommandStationIDs []uint `json:"commandStationIds"`
+	AdminPIN          string `json:"adminPin"`
 }
 
 // Update handles `PUT /api/v1/layouts/{id}` (admin only). Renames
@@ -268,6 +333,12 @@ func (h *LayoutHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if req.InterlockingIDs != nil {
 		if _, err := h.svc.SetInterlockings(r.Context(), eff, id, actor.User.ID, req.InterlockingIDs); err != nil {
 			writeLayoutInterlockingError(w, err)
+			return
+		}
+	}
+	if req.CommandStationIDs != nil {
+		if _, err := h.svc.SetCommandStations(r.Context(), eff, id, actor.User.ID, req.CommandStationIDs); err != nil {
+			writeLayoutCommandStationError(w, err)
 			return
 		}
 	}
@@ -369,6 +440,23 @@ func writeLayoutInterlockingError(w http.ResponseWriter, err error) {
 		writeJSONError(w, http.StatusNotFound, "layout_not_found")
 	case errors.Is(err, service.ErrInterlockingNotFound):
 		writeJSONError(w, http.StatusNotFound, "interlocking_not_found")
+	case errors.Is(err, service.ErrLayoutForbidden):
+		writeJSONError(w, http.StatusForbidden, "forbidden")
+	default:
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+	}
+}
+
+func writeLayoutCommandStationError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, service.ErrLayoutNotFound):
+		writeJSONError(w, http.StatusNotFound, "layout_not_found")
+	case errors.Is(err, service.ErrCommandStationNotFound):
+		writeJSONError(w, http.StatusNotFound, "command_station_not_found")
+	case errors.Is(err, service.ErrLayoutNeedsAtLeastOneCommandStation):
+		writeJSONError(w, http.StatusUnprocessableEntity, "layout_needs_at_least_one_command_station")
+	case errors.Is(err, service.ErrSystemLayoutCommandStationsImmutable):
+		writeJSONError(w, http.StatusUnprocessableEntity, "default_layout_command_stations_immutable")
 	case errors.Is(err, service.ErrLayoutForbidden):
 		writeJSONError(w, http.StatusForbidden, "forbidden")
 	default:

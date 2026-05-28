@@ -16,7 +16,13 @@ import (
 // first call).
 func freshLayoutSvc(t *testing.T, ctx context.Context, bundle repo.UsersBundle) *service.LayoutService {
 	t.Helper()
-	svc := service.NewLayoutService(bundle.Layouts, bundle.Interlockings, bundle.LayoutInterlockings)
+	svc := service.NewLayoutService(
+		bundle.Layouts,
+		bundle.Interlockings,
+		bundle.LayoutInterlockings,
+		bundle.CommandStations,
+		bundle.LayoutCommandStations,
+	)
 	if _, err := svc.EnsureSystemLayout(ctx); err != nil {
 		t.Fatalf("seed system layout: %v", err)
 	}

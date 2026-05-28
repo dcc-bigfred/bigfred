@@ -96,10 +96,12 @@ const SystemLayoutDefaultAdminPIN = "0000"
 // layout on a freshly-created database via EnsureSystemLayout, which
 // runs out of the CLI startup sequence right after migrations.
 type LayoutService struct {
-	layouts             *repo.Layouts
-	interlockings       *repo.Interlockings
-	layoutInterlockings *repo.LayoutInterlockings
-	sec                 security.LayoutSecurityContext
+	layouts               *repo.Layouts
+	interlockings         *repo.Interlockings
+	layoutInterlockings   *repo.LayoutInterlockings
+	commandStations       *repo.CommandStations
+	layoutCommandStations *repo.LayoutCommandStations
+	sec                   security.LayoutSecurityContext
 }
 
 // NewLayoutService constructs a service bound to a Layouts
@@ -108,11 +110,15 @@ func NewLayoutService(
 	layouts *repo.Layouts,
 	interlockings *repo.Interlockings,
 	layoutInterlockings *repo.LayoutInterlockings,
+	commandStations *repo.CommandStations,
+	layoutCommandStations *repo.LayoutCommandStations,
 ) *LayoutService {
 	return &LayoutService{
-		layouts:             layouts,
-		interlockings:       interlockings,
-		layoutInterlockings: layoutInterlockings,
+		layouts:               layouts,
+		interlockings:         interlockings,
+		layoutInterlockings:   layoutInterlockings,
+		commandStations:       commandStations,
+		layoutCommandStations: layoutCommandStations,
 	}
 }
 
@@ -196,9 +202,10 @@ func (s *LayoutService) GetSystem(ctx context.Context) (domain.Layout, error) {
 
 // CreateInput is the validated payload of LayoutService.Create.
 type CreateInput struct {
-	Name            string
-	CreatedBy       uint
-	InterlockingIDs []uint
+	Name              string
+	CreatedBy         uint
+	InterlockingIDs   []uint
+	CommandStationIDs []uint
 	// AdminPIN is the layout's initial sudo PIN (§7a.7). Empty
 	// means "seed with SystemLayoutDefaultAdminPIN" — same UX as
 	// the system layout, so a freshly-created layout already has
@@ -210,12 +217,6 @@ type CreateInput struct {
 // Create inserts a brand-new non-system layout. Name uniqueness and
 // non-emptiness are enforced explicitly so the HTTP layer can return
 // the matching 4xx code without parsing SQL error strings.
-//
-// Note (§3a.1 / §4.1): in the full spec the request also carries
-// `commandStationIds: [...]`. Command stations are not yet a thing in
-// the codebase (they land in the milestone that introduces
-// CommandStationService); when that lands, this constructor will
-// gain a CommandStationIDs field with the matching ≥1 validation.
 func (s *LayoutService) Create(ctx context.Context, eff domain.EffectiveRoles, in CreateInput) (domain.Layout, error) {
 	if err := s.checkManageLayouts(eff); err != nil {
 		return domain.Layout{}, err
@@ -267,6 +268,9 @@ func (s *LayoutService) Create(ctx context.Context, eff domain.EffectiveRoles, i
 		return domain.Layout{}, err
 	}
 	if err := s.setInterlockings(ctx, layout.ID, in.CreatedBy, in.InterlockingIDs); err != nil {
+		return domain.Layout{}, err
+	}
+	if err := s.setCommandStations(ctx, layout.ID, in.CreatedBy, in.CommandStationIDs); err != nil {
 		return domain.Layout{}, err
 	}
 	return layout, nil
@@ -441,6 +445,44 @@ func (s *LayoutService) ListInterlockings(ctx context.Context, layoutID uint) ([
 	return s.interlockings.ListByIDs(ctx, ids)
 }
 
+// ListCommandStations returns command stations attached to a layout.
+// For the system layout the live catalogue is synthesised (§4.1).
+func (s *LayoutService) ListCommandStations(ctx context.Context, layoutID uint) ([]domain.CommandStation, error) {
+	layout, err := s.Get(ctx, layoutID)
+	if err != nil {
+		return nil, err
+	}
+	if layout.IsSystem {
+		return s.commandStations.ListAll(ctx)
+	}
+	ids, err := s.layoutCommandStations.CommandStationIDsForLayout(ctx, layoutID)
+	if err != nil {
+		return nil, err
+	}
+	return s.commandStations.ListByIDs(ctx, ids)
+}
+
+// SetCommandStations replaces the entire command-station attachment
+// set for a non-system layout. Unknown ids reject with
+// ErrCommandStationNotFound. The system layout rejects with
+// ErrSystemLayoutCommandStationsImmutable.
+func (s *LayoutService) SetCommandStations(ctx context.Context, eff domain.EffectiveRoles, layoutID, addedBy uint, commandStationIDs []uint) ([]domain.CommandStation, error) {
+	if err := s.checkManageLayouts(eff); err != nil {
+		return nil, err
+	}
+	layout, err := s.Get(ctx, layoutID)
+	if err != nil {
+		return nil, err
+	}
+	if layout.IsSystem {
+		return nil, ErrSystemLayoutCommandStationsImmutable
+	}
+	if err := s.setCommandStations(ctx, layoutID, addedBy, commandStationIDs); err != nil {
+		return nil, err
+	}
+	return s.ListCommandStations(ctx, layoutID)
+}
+
 // SetInterlockings replaces the entire interlocking whitelist for a
 // layout with the supplied id set. Unknown ids reject with
 // ErrInterlockingNotFound. Duplicate ids in the input are ignored.
@@ -468,6 +510,48 @@ func (s *LayoutService) checkManageLayouts(eff domain.EffectiveRoles) error {
 	default:
 		return errors.New(decision.Reason)
 	}
+}
+
+func (s *LayoutService) setCommandStations(ctx context.Context, layoutID, addedBy uint, commandStationIDs []uint) error {
+	seen := make(map[uint]struct{}, len(commandStationIDs))
+	unique := make([]uint, 0, len(commandStationIDs))
+	for _, id := range commandStationIDs {
+		if id == 0 {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		if _, err := s.commandStations.FindByID(ctx, id); err != nil {
+			if errors.Is(err, repo.ErrCommandStationNotFound) {
+				return ErrCommandStationNotFound
+			}
+			return err
+		}
+		unique = append(unique, id)
+	}
+	if len(unique) == 0 {
+		return ErrLayoutNeedsAtLeastOneCommandStation
+	}
+
+	if err := s.layoutCommandStations.DeleteAllForLayout(ctx, layoutID); err != nil {
+		return err
+	}
+
+	now := time.Now().UTC()
+	for _, id := range unique {
+		row := domain.LayoutCommandStation{
+			LayoutID:         layoutID,
+			CommandStationID: id,
+			AddedByUserID:    addedBy,
+			AddedAt:          now,
+		}
+		if err := s.layoutCommandStations.Attach(ctx, &row); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *LayoutService) setInterlockings(ctx context.Context, layoutID, addedBy uint, interlockingIDs []uint) error {

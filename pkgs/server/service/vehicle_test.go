@@ -38,14 +38,33 @@ func freshRepo(t *testing.T) (repo.UsersBundle, func()) {
 		LayoutSignalmen:     repo.NewLayoutSignalmen(r),
 		Layouts:             repo.NewLayouts(r),
 		Interlockings:       repo.NewInterlockings(r),
-		LayoutInterlockings: repo.NewLayoutInterlockings(r),
-		SudoElevations:      repo.NewSudoElevations(r),
+		LayoutInterlockings:   repo.NewLayoutInterlockings(r),
+		CommandStations:       repo.NewCommandStations(r),
+		LayoutCommandStations: repo.NewLayoutCommandStations(r),
+		SudoElevations:        repo.NewSudoElevations(r),
 	}
 	cleanup := func() {
 		_ = db.Close()
 		_ = os.Remove(path)
 	}
 	return bundle, cleanup
+}
+
+func insertCommandStation(t *testing.T, ctx context.Context, stations *repo.CommandStations, name string) domain.CommandStation {
+	t.Helper()
+	now := time.Now().UTC()
+	cs := domain.CommandStation{
+		Name:          name,
+		Kind:          domain.CommandStationKindZ21,
+		ConnectionURI: "udp://127.0.0.1:21105",
+		SpeedSteps:    128,
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}
+	if err := stations.Insert(ctx, &cs); err != nil {
+		t.Fatalf("insert command station: %v", err)
+	}
+	return cs
 }
 
 func insertUser(t *testing.T, ctx context.Context, users *repo.Users, login string, role domain.Role) domain.User {

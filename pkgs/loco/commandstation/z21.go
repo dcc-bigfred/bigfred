@@ -371,8 +371,8 @@ func (z *Z21Roco) parseLocoInfo(pkt []byte) (fnState, error) {
 	// Byte 4: X-Header 0xEF
 	// Byte 5: DB0 (address MSB)
 	// Byte 6: DB1 (address LSB)
-	// Byte 7: DB2 (speed/direction info)
-	// Byte 8: DB3 (speed value)
+	// Byte 7: DB2 (0000BKKK — speed-step mode in low 3 bits)
+	// Byte 8: DB3 (RVVVVVVV — direction in bit 7, speed in V)
 	// Byte 9: DB4 (F0-F4 with direction)
 	// Byte 10: DB5 (F5-F12)
 	// Byte 11: DB6 (F13-F20) [optional]
@@ -548,17 +548,7 @@ func (z *Z21Roco) GetSpeed(addr LocoAddr) (uint8, bool, error) {
 	}
 	logrus.Debugf("resp(LAN_X_LOCO_INFO): % X", buf[:n])
 
-	// Parse the response to extract speed and direction
-	// LAN_X_LOCO_INFO structure:
-	// Byte 0-1: DataLen (little endian)
-	// Byte 2-3: Header 0x0040 (little endian)
-	// Byte 4: X-Header 0xEF
-	// Byte 5: DB0 (address MSB)
-	// Byte 6: DB1 (address LSB)
-	// Byte 7: DB2 (speed/direction info) - bit 7: direction (0=forward, 1=reverse), bits 5-0: speed steps
-	// Byte 8: DB3 (speed value)
-
-	if len(buf) < 9 {
+	if len(buf) < 10 {
 		return 0, false, fmt.Errorf("response too short")
 	}
 
@@ -573,13 +563,29 @@ func (z *Z21Roco) GetSpeed(addr LocoAddr) (uint8, bool, error) {
 		return 0, false, fmt.Errorf("not a LAN_X_LOCO_INFO packet (X-Header: 0x%02X)", buf[4])
 	}
 
-	// Extract direction from DB2 (byte 7): bit 7 indicates direction
-	// bit 7: 0 = forward, 1 = reverse
-	directionBit := (buf[7] & 0x80) != 0
-	forward := !directionBit // invert because 1 means reverse
-
-	// Extract speed from DB3 (byte 8)
-	speed := buf[8]
-
+	speed, forward := decodeLocoDriveFromLocoInfo(buf[7], buf[8])
 	return speed, forward, nil
+}
+
+// decodeLocoDriveFromLocoInfo decodes DB2/DB3 from LAN_X_LOCO_INFO (§4.4).
+// DB3 is RVVVVVVV: bit 7 = direction (1=forward), low bits = speed.
+// DB2 low 3 bits (KKK) select 14 / 28 / 128 speed-step encoding.
+func decodeLocoDriveFromLocoInfo(db2, db3 byte) (speed uint8, forward bool) {
+	forward = (db3 & 0x80) != 0
+	v := db3 & 0x7F
+
+	switch db2 & 0x07 {
+	case 0: // DCC 14
+		return v & 0x0F, forward
+	case 2: // DCC 28
+		speedBits := v & 0x0F
+		speedBit5 := (v >> 4) & 0x01
+		encoded := int(speedBits)*2 + int(speedBit5)
+		if encoded < 3 {
+			return uint8(encoded), forward
+		}
+		return uint8(encoded - 3), forward
+	default: // 4 = DCC 128 (also default when KKK unknown)
+		return v, forward
+	}
 }

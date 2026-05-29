@@ -7,7 +7,6 @@ package cmd
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"sync"
 	"time"
 
@@ -17,6 +16,7 @@ import (
 	"github.com/keskad/loco/pkgs/dcc-bus/state"
 	"github.com/keskad/loco/pkgs/dcc-bus/station"
 	"github.com/keskad/loco/pkgs/dcc-bus/ws"
+	"github.com/keskad/loco/pkgs/layoutroster"
 	"github.com/keskad/loco/pkgs/loco/commandstation"
 	"github.com/keskad/loco/pkgs/server/domain"
 )
@@ -37,7 +37,6 @@ type Router struct {
 	station          commandstation.Station
 	hub              *ws.Hub
 	redis            *state.Redis
-	sqlite           *state.SQLite
 	log              *logrus.Logger
 	layoutID         uint
 	commandStationID uint
@@ -46,8 +45,11 @@ type Router struct {
 	stationURI       string
 
 	speedSteps uint
-	allowed    map[uint16]struct{} // DCC addresses on the layout roster
-	allowedMu  sync.RWMutex
+
+	allowedMu sync.RWMutex
+	allowed   map[uint16]struct{} // drivable DCC addresses on the layout
+	byAddr    map[uint16]layoutroster.AllowedVehicle
+	trains    []layoutroster.DefinedTrain
 
 	// fnCache mirrors the last sent function bit per (addr, fn) so a
 	// rapid toggle doesn't reissue the same DCC packet.
@@ -60,8 +62,9 @@ type Config struct {
 	Station          commandstation.Station
 	Hub              *ws.Hub
 	Redis            *state.Redis
-	SQLite           *state.SQLite
 	Log              *logrus.Logger
+	AllowedVehicles  layoutroster.AllowedVehicles
+	DefinedTrains    layoutroster.DefinedTrains
 	LayoutID         uint
 	CommandStationID uint
 	StationName      string
@@ -76,9 +79,8 @@ type fnKey struct {
 }
 
 // NewRouter assembles the router and seeds the layout roster cache
-// from SQLite so `loco.subscribe` requests can be vetted without
-// a query per call.
-func NewRouter(ctx context.Context, cfg Config) (*Router, error) {
+// from Redis snapshots published by loco-server.
+func NewRouter(_ context.Context, cfg Config) (*Router, error) {
 	log := cfg.Log
 	if log == nil {
 		log = logrus.New()
@@ -87,7 +89,6 @@ func NewRouter(ctx context.Context, cfg Config) (*Router, error) {
 		station:          cfg.Station,
 		hub:              cfg.Hub,
 		redis:            cfg.Redis,
-		sqlite:           cfg.SQLite,
 		log:              log,
 		layoutID:         cfg.LayoutID,
 		commandStationID: cfg.CommandStationID,
@@ -96,11 +97,11 @@ func NewRouter(ctx context.Context, cfg Config) (*Router, error) {
 		stationURI:       cfg.StationURI,
 		speedSteps:       cfg.SpeedSteps,
 		allowed:          make(map[uint16]struct{}, 16),
+		byAddr:           make(map[uint16]layoutroster.AllowedVehicle, 16),
 		fnCache:          make(map[fnKey]bool, 32),
 	}
-	if err := r.reloadRoster(ctx); err != nil {
-		return nil, fmt.Errorf("seed roster: %w", err)
-	}
+	r.ApplyAllowedVehicles(cfg.AllowedVehicles)
+	r.ApplyDefinedTrains(cfg.DefinedTrains)
 	r.log.WithFields(logrus.Fields{
 		"layoutId":         r.layoutID,
 		"commandStationId": r.commandStationID,
@@ -131,36 +132,80 @@ func (r *Router) stationLogFields() logrus.Fields {
 	}
 }
 
-// reloadRoster refreshes the `allowed` set from SQLite. Called at
-// boot and on every `bigfred:layout:<id>:invalidate` event.
-func (r *Router) reloadRoster(ctx context.Context) error {
-	addrs, err := r.sqlite.ListLayoutVehicleAddresses(ctx, r.layoutID)
-	if err != nil {
-		return err
+// ApplyAllowedVehicles replaces the in-memory drivable roster from a
+// loco-server snapshot (boot GET or pub/sub on allowed_vehicles).
+func (r *Router) ApplyAllowedVehicles(snap layoutroster.AllowedVehicles) {
+	if snap.LayoutID != 0 && snap.LayoutID != r.layoutID {
+		return
+	}
+	allowed := make(map[uint16]struct{}, len(snap.Vehicles))
+	byAddr := make(map[uint16]layoutroster.AllowedVehicle, len(snap.Vehicles))
+	addrs := make([]uint16, 0, len(snap.Vehicles))
+	for _, v := range snap.Vehicles {
+		allowed[v.Addr] = struct{}{}
+		byAddr[v.Addr] = v
+		addrs = append(addrs, v.Addr)
 	}
 	r.allowedMu.Lock()
-	r.allowed = make(map[uint16]struct{}, len(addrs))
-	for _, a := range addrs {
-		r.allowed[a] = struct{}{}
-	}
+	r.allowed = allowed
+	r.byAddr = byAddr
 	r.allowedMu.Unlock()
 	r.log.WithFields(logrus.Fields{
 		"layoutId": r.layoutID,
 		"addrs":    addrs,
 		"count":    len(addrs),
-	}).Info("dcc-bus roster reloaded")
-	return nil
+	}).Info("dcc-bus allowed vehicles updated")
 }
 
-// ReloadRoster is the exported sibling of reloadRoster used by the
-// daemon's pub/sub consumer.
-func (r *Router) ReloadRoster(ctx context.Context) error { return r.reloadRoster(ctx) }
+// ApplyDefinedTrains replaces the layout train roster cache.
+func (r *Router) ApplyDefinedTrains(snap layoutroster.DefinedTrains) {
+	if snap.LayoutID != 0 && snap.LayoutID != r.layoutID {
+		return
+	}
+	r.allowedMu.Lock()
+	r.trains = append([]layoutroster.DefinedTrain(nil), snap.Trains...)
+	count := len(r.trains)
+	r.allowedMu.Unlock()
+	r.log.WithFields(logrus.Fields{
+		"layoutId": r.layoutID,
+		"count":    count,
+	}).Info("dcc-bus defined trains updated")
+}
 
-func (r *Router) isAllowed(addr uint16) bool {
+func (r *Router) isLocoAllowedOnLayout(addr uint16) bool {
 	r.allowedMu.RLock()
 	defer r.allowedMu.RUnlock()
 	_, ok := r.allowed[addr]
 	return ok
+}
+
+// userCanControlLoco reports whether userID may drive the locomotive at
+// addr, using controllerUserIds from the allowed_vehicles snapshot.
+func (r *Router) userCanControlLoco(userID uint, addr uint16) bool {
+	r.allowedMu.RLock()
+	v, ok := r.byAddr[addr]
+	r.allowedMu.RUnlock()
+	if !ok {
+		return false
+	}
+	for _, id := range v.ControllerUserIDs {
+		if id == userID {
+			return true
+		}
+	}
+	return false
+}
+
+// denyDriveCommand returns a non-empty ack reason when the user may
+// not issue drive commands for addr (roster membership or control rights).
+func (r *Router) denyDriveCommand(userID uint, addr uint16) string {
+	if !r.isLocoAllowedOnLayout(addr) {
+		return "vehicle_not_on_layout"
+	}
+	if !r.userCanControlLoco(userID, addr) {
+		return "not_authorized"
+	}
+	return ""
 }
 
 // HandleSubscribe accepts a subscription request and immediately
@@ -170,7 +215,7 @@ func (r *Router) HandleSubscribe(ctx context.Context, sess *ws.Session, payload 
 	accepted := make([]uint16, 0, len(payload.Addresses))
 	rejected := make([]uint16, 0)
 	for _, addr := range payload.Addresses {
-		if !r.isAllowed(addr) {
+		if !r.isLocoAllowedOnLayout(addr) {
 			rejected = append(rejected, addr)
 			_ = sess.SendTyped(ctx, protocol.TypeLocoError, protocol.LocoErrorPayload{
 				Address: addr,
@@ -207,8 +252,8 @@ func (r *Router) HandleSubscribe(ctx context.Context, sess *ws.Session, payload 
 // updates the Redis cache and fans the new state out to every other
 // subscribed session.
 func (r *Router) HandleSetSpeed(ctx context.Context, sess *ws.Session, p protocol.LocoSetSpeedPayload, requestID string) {
-	if !r.isAllowed(p.Address) {
-		_ = sess.SendAck(ctx, requestID, false, "vehicle_not_on_layout")
+	if reason := r.denyDriveCommand(sess.UserID, p.Address); reason != "" {
+		_ = sess.SendAck(ctx, requestID, false, reason)
 		return
 	}
 	speed := p.Speed
@@ -259,8 +304,8 @@ func (r *Router) HandleSetSpeed(ctx context.Context, sess *ws.Session, p protoco
 // function bit is mirrored into the Redis cache so a re-connecting
 // client sees the right state immediately.
 func (r *Router) HandleSetFunction(ctx context.Context, sess *ws.Session, p protocol.LocoSetFunctionPayload, requestID string) {
-	if !r.isAllowed(p.Address) {
-		_ = sess.SendAck(ctx, requestID, false, "vehicle_not_on_layout")
+	if reason := r.denyDriveCommand(sess.UserID, p.Address); reason != "" {
+		_ = sess.SendAck(ctx, requestID, false, reason)
 		return
 	}
 	key := fnKey{Addr: p.Address, Fn: p.Function}
@@ -355,11 +400,11 @@ func (r *Router) applyEmergencyForSession(ctx context.Context, sess *ws.Session,
 	}
 
 	if err := r.redis.Publish(ctx, "system.estop.audit", map[string]any{
-		"reason":   reason,
-		"userId":   sess.UserID,
+		"reason":    reason,
+		"userId":    sess.UserID,
 		"sessionId": sess.ID,
-		"addrs":    addrs,
-		"at":       time.Now().UTC().UnixMilli(),
+		"addrs":     addrs,
+		"at":        time.Now().UTC().UnixMilli(),
 	}); err != nil {
 		r.log.WithError(err).Debug("dcc-bus estop publish")
 	}
@@ -408,7 +453,7 @@ func (r *Router) HandleControlCommand(ctx context.Context, raw []byte) {
 }
 
 func (r *Router) applyControlSetSpeed(ctx context.Context, p protocol.LocoSetSpeedPayload) {
-	if !r.isAllowed(p.Address) {
+	if !r.isLocoAllowedOnLayout(p.Address) {
 		return
 	}
 	speed := p.Speed
@@ -437,7 +482,7 @@ func (r *Router) applyControlSetSpeed(ctx context.Context, p protocol.LocoSetSpe
 }
 
 func (r *Router) applyControlSetFunction(ctx context.Context, p protocol.LocoSetFunctionPayload) {
-	if !r.isAllowed(p.Address) {
+	if !r.isLocoAllowedOnLayout(p.Address) {
 		return
 	}
 	if err := r.station.SendFn(commandstation.MainTrackMode, commandstation.LocoAddr(p.Address), commandstation.FuncNum(p.Function), true); err != nil {

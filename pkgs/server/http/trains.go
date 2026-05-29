@@ -115,6 +115,11 @@ func (h *TrainHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeTrainError(w, err)
 		return
 	}
+	// Train may already be on a layout roster; refresh dcc-bus snapshots.
+	if err := h.layoutTrains.SyncLayoutRosterForTrain(r.Context(), d.Train.ID); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(toTrainResponse(d))

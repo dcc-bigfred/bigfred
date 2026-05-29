@@ -48,10 +48,9 @@ type RosterTrainEntry struct {
 // The service also fans out `layout.vehiclesChanged` and
 // `layout.trainsChanged` WS events after every mutation so the
 // dashboards stay live without polling (§4.2).
-// layoutRosterInvalidator notifies dcc-bus daemons to reload the
-// layout vehicle roster from SQLite (see RedisService).
-type layoutRosterInvalidator interface {
-	PublishLayoutRosterInvalidate(ctx context.Context, layoutID uint) error
+// layoutRosterRedisSync publishes full roster snapshots for dcc-bus.
+type layoutRosterRedisSync interface {
+	layoutRosterPublisher
 }
 
 type LayoutVehicleService struct {
@@ -62,7 +61,7 @@ type LayoutVehicleService struct {
 	members        *repo.TrainMembers
 	users          *repo.Users
 	hub            *ws.Hub
-	redis          layoutRosterInvalidator
+	redis          layoutRosterRedisSync
 	sec            security.LayoutSecurityContext
 }
 
@@ -88,9 +87,9 @@ func NewLayoutVehicleService(
 	}
 }
 
-// SetRedisInvalidator wires Redis pub/sub so roster mutations reach
+// SetRedisRosterPublisher wires Redis so roster mutations reach
 // running dcc-bus daemons. Call once during server bootstrap.
-func (s *LayoutVehicleService) SetRedisInvalidator(r layoutRosterInvalidator) {
+func (s *LayoutVehicleService) SetRedisRosterPublisher(r layoutRosterRedisSync) {
 	s.redis = r
 }
 
@@ -375,19 +374,27 @@ func (s *LayoutVehicleService) BroadcastVehicleUpdated(ctx context.Context, vehi
 	for _, r := range rows {
 		s.broadcastVehicleChanged(r.LayoutID, vehicleID, "updated")
 	}
+	if err := s.syncRosterForVehicleInTrains(ctx, vehicleID); err != nil {
+		return err
+	}
 	return nil
 }
 
-// BroadcastTrainUpdated is the train-shaped sibling.
+// BroadcastTrainUpdated notifies dashboards and republishes Redis
+// train snapshots on every layout roster that references trainID.
 func (s *LayoutVehicleService) BroadcastTrainUpdated(ctx context.Context, trainID uint) error {
 	rows, err := s.layoutTrains.ListByTrain(ctx, trainID)
 	if err != nil {
 		return err
 	}
 	for _, r := range rows {
-		s.broadcastTrainChanged(r.LayoutID, trainID, "updated")
+		s.hub.BroadcastToLayout(r.LayoutID, "layout.trainsChanged", TrainChangedPayload{
+			LayoutID: r.LayoutID,
+			Action:   "updated",
+			TrainID:  trainID,
+		})
 	}
-	return nil
+	return s.SyncLayoutRosterForTrain(ctx, trainID)
 }
 
 // VehicleChangedPayload is the JSON body of `layout.vehiclesChanged`.
@@ -410,14 +417,14 @@ func (s *LayoutVehicleService) broadcastVehicleChanged(layoutID, vehicleID uint,
 		Action:    action,
 		VehicleID: vehicleID,
 	})
-	s.invalidateDccBusRoster(layoutID)
+	s.syncRosterToRedis(layoutID)
 }
 
-func (s *LayoutVehicleService) invalidateDccBusRoster(layoutID uint) {
+func (s *LayoutVehicleService) syncRosterToRedis(layoutID uint) {
 	if s.redis == nil || layoutID == 0 {
 		return
 	}
-	_ = s.redis.PublishLayoutRosterInvalidate(context.Background(), layoutID)
+	_ = s.SyncLayoutRosterToRedis(context.Background(), layoutID)
 }
 
 func (s *LayoutVehicleService) broadcastTrainChanged(layoutID, trainID uint, action string) {
@@ -426,4 +433,5 @@ func (s *LayoutVehicleService) broadcastTrainChanged(layoutID, trainID uint, act
 		Action:   action,
 		TrainID:  trainID,
 	})
+	s.syncRosterToRedis(layoutID)
 }

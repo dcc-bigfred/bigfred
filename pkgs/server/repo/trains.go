@@ -130,6 +130,18 @@ func (m *TrainMembers) ListByTrain(ctx context.Context, trainID uint) ([]domain.
 	return rows, nil
 }
 
+// ListByVehicle returns every train_members row referencing the
+// vehicle. Used to refresh layout train snapshots in Redis when a
+// member's DCC address changes outside the layout vehicle roster.
+func (m *TrainMembers) ListByVehicle(ctx context.Context, vehicleID uint) ([]domain.TrainMember, error) {
+	var rows []domain.TrainMember
+	err := m.repo.FindAll(ctx, &rows, where.Eq("vehicle_id", vehicleID))
+	if err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
 // CountReferencingVehicle is used by VehicleService.Delete to refuse
 // deleting a vehicle that is still part of any train.
 func (m *TrainMembers) CountReferencingVehicle(ctx context.Context, vehicleID uint) (int, error) {

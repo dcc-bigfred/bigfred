@@ -69,6 +69,23 @@ func (h *Hub) Broadcast(ctx context.Context, addr uint16, env protocol.Envelope)
 	}
 }
 
+// SubscribedAddrs returns the union of locomotive addresses that any
+// live session currently subscribes to. The state-feed poller uses it
+// to limit DCC traffic to addresses someone is actually watching.
+func (h *Hub) SubscribedAddrs() []uint16 {
+	seen := make(map[uint16]struct{}, 8)
+	for _, s := range h.Snapshot() {
+		for _, a := range s.SubscribedAddrs() {
+			seen[a] = struct{}{}
+		}
+	}
+	out := make([]uint16, 0, len(seen))
+	for a := range seen {
+		out = append(out, a)
+	}
+	return out
+}
+
 // SessionsForUser returns every live session belonging to userID.
 // Used by takeover handling to selectively close one user's tabs.
 func (h *Hub) SessionsForUser(userID uint) []*Session {

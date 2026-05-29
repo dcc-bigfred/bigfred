@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -21,7 +22,23 @@ type LocoNet struct {
 
 	timeout time.Duration
 
+	// rxCh receives every packet the transport reads off the bus.
+	// A single dispatch goroutine owns it (see dispatch): it updates
+	// the observation pipeline for ALL traffic — including packets
+	// authored by external throttles — and forwards packets to syncCh
+	// only while a request/response sequence is in flight.
 	rxCh chan lnPacket
+	// syncCh carries packets to the request/response waiters
+	// (ensureSlotLocked / querySlotLocked). The dispatcher feeds it
+	// only when syncActive is set so unsolicited bus traffic does not
+	// pile up while nobody is waiting.
+	syncCh     chan lnPacket
+	syncActive atomic.Bool
+
+	// obsCh streams observed state changes to StateObserver consumers.
+	obsCh chan LocoObservation
+
+	stop chan struct{}
 
 	// serialize request/response sequences
 	reqMu sync.Mutex
@@ -29,46 +46,190 @@ type LocoNet struct {
 	// state caches
 	slotMu   sync.Mutex
 	slotByAd map[LocoAddr]byte
+	slotAddr map[byte]LocoAddr // reverse map, needed to attribute bus traffic
 
 	stateMu sync.Mutex
 	dirfByA map[LocoAddr]byte
 	sndByA  map[LocoAddr]byte
 }
 
-func NewLocoNetSerial(device string, baudrate int) (*LocoNet, error) {
-	ln := &LocoNet{
+func newLocoNetBase() *LocoNet {
+	return &LocoNet{
 		timeout:  4 * time.Second,
 		rxCh:     make(chan lnPacket, 64),
+		syncCh:   make(chan lnPacket, 64),
+		obsCh:    make(chan LocoObservation, 64),
+		stop:     make(chan struct{}),
 		slotByAd: make(map[LocoAddr]byte),
+		slotAddr: make(map[byte]LocoAddr),
 		dirfByA:  make(map[LocoAddr]byte),
 		sndByA:   make(map[LocoAddr]byte),
 	}
+}
+
+func NewLocoNetSerial(device string, baudrate int) (*LocoNet, error) {
+	ln := newLocoNetBase()
 	t, err := newLnSerialTransport(device, baudrate, ln.rxCh)
 	if err != nil {
 		return nil, err
 	}
 	ln.t = t
+	go ln.dispatch()
 	return ln, nil
 }
 
 func NewLocoNetTCP(host string, port uint16) (*LocoNet, error) {
-	ln := &LocoNet{
-		timeout:  4 * time.Second,
-		rxCh:     make(chan lnPacket, 64),
-		slotByAd: make(map[LocoAddr]byte),
-		dirfByA:  make(map[LocoAddr]byte),
-		sndByA:   make(map[LocoAddr]byte),
-	}
+	ln := newLocoNetBase()
 	t, err := newLnTCPTransport(host, port, ln.rxCh)
 	if err != nil {
 		return nil, err
 	}
 	ln.t = t
+	go ln.dispatch()
 	return ln, nil
 }
 
 func (l *LocoNet) CleanUp() error {
+	select {
+	case <-l.stop:
+	default:
+		close(l.stop)
+	}
 	return l.t.Close()
+}
+
+// ObserveStates implements StateObserver: LocoNet is a shared bus, so
+// every speed/direction/function packet — including those authored by
+// an external throttle — is visible to the daemon and surfaces here.
+func (l *LocoNet) ObserveStates() <-chan LocoObservation {
+	return l.obsCh
+}
+
+// dispatch is the single owner of rxCh. It demultiplexes the shared bus
+// into two consumers: the observation pipeline (always) and the
+// request/response waiters (only while syncActive).
+func (l *LocoNet) dispatch() {
+	for {
+		select {
+		case <-l.stop:
+			return
+		case pkt, ok := <-l.rxCh:
+			if !ok {
+				return
+			}
+			logrus.Debugf("loconet RX: % X", []byte(pkt))
+			l.observe(pkt)
+			if l.syncActive.Load() {
+				select {
+				case l.syncCh <- pkt:
+				default:
+				}
+			}
+		}
+	}
+}
+
+// observe parses a bus packet, refreshes the local caches and emits a
+// LocoObservation for the change. Slot-keyed packets (SPD/DIRF/SND) are
+// attributed via the reverse slot→addr map populated from slot reads.
+func (l *LocoNet) observe(pkt []byte) {
+	if len(pkt) < 2 {
+		return
+	}
+	switch pkt[0] {
+	case lnOPC_SL_RD_DATA:
+		sd, ok := parseLnSlotData(pkt)
+		if !ok {
+			return
+		}
+		l.setSlot(sd.Addr, sd.Slot)
+		l.setDirf(sd.Addr, sd.DirF)
+		l.setSnd(sd.Addr, sd.Snd)
+		fns := make(map[int]bool, 9)
+		for fn := 0; fn <= 4; fn++ {
+			fns[fn] = getFnFromDirf(sd.DirF, fn)
+		}
+		for fn := 5; fn <= 8; fn++ {
+			fns[fn] = getFnFromSnd(sd.Snd, fn)
+		}
+		l.emit(LocoObservation{
+			Addr:       sd.Addr,
+			HasSpeed:   true,
+			Speed:      sd.Speed,
+			HasForward: true,
+			Forward:    (sd.DirF & 0x20) != 0,
+			Functions:  fns,
+		})
+	case lnOPC_LOCO_SPD:
+		if len(pkt) < 4 {
+			return
+		}
+		addr, ok := l.slotToAddr(pkt[1])
+		if !ok {
+			return
+		}
+		l.emit(LocoObservation{Addr: addr, HasSpeed: true, Speed: pkt[2]})
+	case lnOPC_LOCO_DIRF:
+		if len(pkt) < 4 {
+			return
+		}
+		addr, ok := l.slotToAddr(pkt[1])
+		if !ok {
+			return
+		}
+		dirf := pkt[2]
+		l.setDirf(addr, dirf)
+		fns := make(map[int]bool, 5)
+		for fn := 0; fn <= 4; fn++ {
+			fns[fn] = getFnFromDirf(dirf, fn)
+		}
+		l.emit(LocoObservation{Addr: addr, HasForward: true, Forward: (dirf & 0x20) != 0, Functions: fns})
+	case lnOPC_LOCO_SND:
+		if len(pkt) < 4 {
+			return
+		}
+		addr, ok := l.slotToAddr(pkt[1])
+		if !ok {
+			return
+		}
+		snd := pkt[2]
+		l.setSnd(addr, snd)
+		fns := make(map[int]bool, 4)
+		for fn := 5; fn <= 8; fn++ {
+			fns[fn] = getFnFromSnd(snd, fn)
+		}
+		l.emit(LocoObservation{Addr: addr, Functions: fns})
+	}
+}
+
+func (l *LocoNet) emit(obs LocoObservation) {
+	select {
+	case l.obsCh <- obs:
+	default:
+		logrus.Debug("loconet: observation channel full, dropping update")
+	}
+}
+
+// beginSync routes subsequent bus packets to the request/response
+// waiter. Callers hold reqMu, so only one sequence runs at a time.
+func (l *LocoNet) beginSync() {
+	l.drainSync()
+	l.syncActive.Store(true)
+}
+
+func (l *LocoNet) endSync() {
+	l.syncActive.Store(false)
+	l.drainSync()
+}
+
+func (l *LocoNet) drainSync() {
+	for {
+		select {
+		case <-l.syncCh:
+		default:
+			return
+		}
+	}
 }
 
 func (l *LocoNet) WriteCV(mode Mode, lcv LocoCV, options ...ctxOptions) error {
@@ -94,6 +255,8 @@ func (l *LocoNet) SendFn(mode Mode, addr LocoAddr, num FuncNum, toggle bool) err
 
 	l.reqMu.Lock()
 	defer l.reqMu.Unlock()
+	l.beginSync()
+	defer l.endSync()
 
 	slot, err := l.ensureSlotLocked(addr)
 	if err != nil {
@@ -129,6 +292,8 @@ func (l *LocoNet) SendFn(mode Mode, addr LocoAddr, num FuncNum, toggle bool) err
 func (l *LocoNet) ListFunctions(addr LocoAddr) ([]int, error) {
 	l.reqMu.Lock()
 	defer l.reqMu.Unlock()
+	l.beginSync()
+	defer l.endSync()
 
 	slot, err := l.ensureSlotLocked(addr)
 	if err != nil {
@@ -157,6 +322,8 @@ func (l *LocoNet) ListFunctions(addr LocoAddr) ([]int, error) {
 func (l *LocoNet) SetSpeed(addr LocoAddr, speed uint8, forward bool, speedSteps uint8) error {
 	l.reqMu.Lock()
 	defer l.reqMu.Unlock()
+	l.beginSync()
+	defer l.endSync()
 
 	slot, err := l.ensureSlotLocked(addr)
 	if err != nil {
@@ -189,6 +356,8 @@ func (l *LocoNet) SetSpeed(addr LocoAddr, speed uint8, forward bool, speedSteps 
 func (l *LocoNet) GetSpeed(addr LocoAddr) (speed uint8, forward bool, err error) {
 	l.reqMu.Lock()
 	defer l.reqMu.Unlock()
+	l.beginSync()
+	defer l.endSync()
 
 	slot, err := l.ensureSlotLocked(addr)
 	if err != nil {
@@ -267,8 +436,7 @@ func (l *LocoNet) readPacketUntil(deadline time.Time) (lnPacket, error) {
 		return nil, errors.New("timeout")
 	}
 	select {
-	case pkt := <-l.rxCh:
-		logrus.Debugf("loconet RX: % X", []byte(pkt))
+	case pkt := <-l.syncCh:
 		return pkt, nil
 	case <-time.After(timeout):
 		return nil, errors.New("timeout")
@@ -288,7 +456,17 @@ func (l *LocoNet) setSlot(addr LocoAddr, slot byte) {
 	}
 	l.slotMu.Lock()
 	l.slotByAd[addr] = slot
+	l.slotAddr[slot] = addr
 	l.slotMu.Unlock()
+}
+
+// slotToAddr resolves a slot number back to a loco address using the
+// reverse map populated whenever a slot read is seen on the bus.
+func (l *LocoNet) slotToAddr(slot byte) (LocoAddr, bool) {
+	l.slotMu.Lock()
+	defer l.slotMu.Unlock()
+	addr, ok := l.slotAddr[slot]
+	return addr, ok
 }
 
 func (l *LocoNet) getDirf(addr LocoAddr) byte {

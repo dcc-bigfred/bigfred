@@ -24,6 +24,11 @@ func (cv *CV) Translate() uint16 {
 	return uint16(cv.Num - 1)
 }
 
+// Station is the synchronous request/response surface every driver
+// implements. Drivers that can additionally report state changes seen
+// on the bus (including external throttles) also implement the optional
+// StateObserver interface (see observer.go); callers type-assert for it
+// and fall back to polling GetSpeed / ListFunctions when it is absent.
 type Station interface {
 	// WriteCV sends a write request to the command station to write CV of specific value for a given locomotive
 	WriteCV(mode Mode, lcv LocoCV, options ...ctxOptions) error

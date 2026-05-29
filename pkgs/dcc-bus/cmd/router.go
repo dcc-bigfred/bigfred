@@ -44,7 +44,8 @@ type Router struct {
 	stationKind      domain.CommandStationKind
 	stationURI       string
 
-	speedSteps uint
+	speedSteps   uint
+	pollInterval time.Duration
 
 	allowedMu sync.RWMutex
 	allowed   map[uint16]struct{} // drivable DCC addresses on the layout
@@ -71,6 +72,10 @@ type Config struct {
 	StationKind      domain.CommandStationKind
 	StationURI       string
 	SpeedSteps       uint
+	// PollIntervalMs is the cadence of the state-feed polling fallback
+	// used when the command-station driver cannot push state. 0 selects
+	// a sane default.
+	PollIntervalMs uint
 }
 
 type fnKey struct {
@@ -96,6 +101,7 @@ func NewRouter(_ context.Context, cfg Config) (*Router, error) {
 		stationKind:      cfg.StationKind,
 		stationURI:       cfg.StationURI,
 		speedSteps:       cfg.SpeedSteps,
+		pollInterval:     time.Duration(cfg.PollIntervalMs) * time.Millisecond,
 		allowed:          make(map[uint16]struct{}, 16),
 		byAddr:           make(map[uint16]layoutroster.AllowedVehicle, 16),
 		fnCache:          make(map[fnKey]bool, 32),

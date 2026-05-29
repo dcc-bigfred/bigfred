@@ -27,9 +27,9 @@ type Flags struct {
 
 	RedisAddr string
 
-	StationName      string
-	StationKind      string
-	StationURI       string
+	StationName       string
+	StationKind       string
+	StationURI        string
 	StationSpeedSteps uint
 
 	JWTSecret    string
@@ -37,6 +37,8 @@ type Flags struct {
 
 	HeartbeatSecs float64
 	DeadmanSecs   float64
+
+	PollIntervalMs uint
 
 	AllowedOrigins []string
 }
@@ -79,6 +81,7 @@ should rarely be invoked manually.`,
 				AllowedOrigins:   f.AllowedOrigins,
 				HeartbeatSecs:    f.HeartbeatSecs,
 				DeadmanSecs:      f.DeadmanSecs,
+				PollIntervalMs:   f.PollIntervalMs,
 			}
 			d, err := dccbus.New(c.Context(), log, cfg)
 			if err != nil {
@@ -102,6 +105,7 @@ should rarely be invoked manually.`,
 	cmd.Flags().StringVar(&f.JWTSecretEnv, "jwt-secret-env", "BIGFRED_JWT_SECRET", "env var name to read the JWT secret from when --jwt-secret is empty")
 	cmd.Flags().Float64Var(&f.HeartbeatSecs, "heartbeat-secs", 5, "WS keepalive interval the daemon advertises to clients")
 	cmd.Flags().Float64Var(&f.DeadmanSecs, "deadman-secs", 12, "idle window after which the daemon applies emergency stop to client subscriptions")
+	cmd.Flags().UintVar(&f.PollIntervalMs, "poll-interval-ms", 0, "state-feed polling cadence in ms for drivers without push (0 == default)")
 	cmd.Flags().StringSliceVar(&f.AllowedOrigins, "allowed-origin", nil, "explicit WS Origin allow-list (empty == accept any; the reverse proxy on loco-server gates Origin in production)")
 
 	return cmd

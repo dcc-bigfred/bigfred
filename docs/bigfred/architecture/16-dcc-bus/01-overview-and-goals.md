@@ -58,16 +58,22 @@ risk surfaces and deserve **process isolation**.
    fresh subscriber, a peer `dcc-bus` reading the same bus, or
    `loco-server` answering REST snapshots all converge on the same
    truth (§3a.7 invariants will be tightened to require this).
-6. **Hot-managed by `loco-server`.** The daemon is spawned, watched
+6. **Reflect external controllers.** The command station is a shared
+   controller: physical throttles plugged directly into it can change a
+   loco without BigFred's involvement. The daemon watches the bus and
+   mirrors those external speed / direction / function changes back into
+   the UI — by *subscription* where the driver supports it (LocoNet), by
+   *polling* otherwise (Z21). See §7e.9.
+7. **Hot-managed by `loco-server`.** The daemon is spawned, watched
    and restarted by `SupervisordService` (§7d). `loco-server` adds /
    removes `[program:dcc-bus-…]` entries via `UpsertProgram` /
    `RemoveProgram`; supervisord handles crash restart, log rotation
    and graceful shutdown.
-7. **Single-binary, single-source-of-truth.** `dcc-bus` is a cobra
+8. **Single-binary, single-source-of-truth.** `dcc-bus` is a cobra
    subcommand of the same `loco-server` binary, exactly like
    `scripts-executor` (§7d.4). One Go module, one set of REL
    migrations, one security package, one Redis layout.
-8. **Stays Linux/macOS only.** Same as `scripts-executor` (§7d.1
+9. **Stays Linux/macOS only.** Same as `scripts-executor` (§7d.1
    non-goals).
 
 #### Non-goals (this milestone)

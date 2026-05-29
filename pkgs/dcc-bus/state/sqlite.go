@@ -27,12 +27,9 @@ type SQLite struct {
 	repo rel.Repository
 	db   *sql.DB
 
-	users           *repo.Users
 	layouts         *repo.Layouts
 	commandStations *repo.CommandStations
 	layoutCmdStns   *repo.LayoutCommandStations
-	vehicles        *repo.Vehicles
-	layoutVehicles  *repo.LayoutVehicles
 }
 
 // OpenSQLite opens the database at path for read-only access. The
@@ -54,12 +51,9 @@ func OpenSQLite(path string) (*SQLite, error) {
 	return &SQLite{
 		repo:            r,
 		db:              db,
-		users:           repo.NewUsers(r),
 		layouts:         repo.NewLayouts(r),
 		commandStations: repo.NewCommandStations(r),
 		layoutCmdStns:   repo.NewLayoutCommandStations(r),
-		vehicles:        repo.NewVehicles(r),
-		layoutVehicles:  repo.NewLayoutVehicles(r),
 	}, nil
 }
 
@@ -92,33 +86,3 @@ func (s *SQLite) LayoutAttached(ctx context.Context, layoutID, commandStationID 
 	return false, err
 }
 
-// ListLayoutVehicleAddresses returns the DCC addresses of every
-// vehicle attached to the daemon's layout. The daemon uses this set
-// to (a) gate `loco.subscribe` and (b) seed the poller. Dummy
-// vehicles (DCCAddress == nil) are omitted because they can never
-// be driven.
-func (s *SQLite) ListLayoutVehicleAddresses(ctx context.Context, layoutID uint) ([]uint16, error) {
-	rosterRows, err := s.layoutVehicles.ListByLayout(ctx, layoutID)
-	if err != nil {
-		return nil, err
-	}
-	ids := make([]uint, 0, len(rosterRows))
-	for _, r := range rosterRows {
-		ids = append(ids, r.VehicleID)
-	}
-	if len(ids) == 0 {
-		return nil, nil
-	}
-	rows, err := s.vehicles.ListByIDs(ctx, ids)
-	if err != nil {
-		return nil, err
-	}
-	addrs := make([]uint16, 0, len(rows))
-	for _, v := range rows {
-		if v.DCCAddress == nil {
-			continue
-		}
-		addrs = append(addrs, *v.DCCAddress)
-	}
-	return addrs, nil
-}

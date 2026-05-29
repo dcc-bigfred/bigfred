@@ -17,7 +17,8 @@ import (
 //   - loco:state:<layoutId>:<addr>        — last-known per-loco snapshot
 //   - dcc-bus:evt:<layoutId>:<csId>       — daemon → server event channel
 //   - dcc-bus:cmd:<layoutId>:<csId>       — server → daemon command channel
-//   - bigfred:layout:<layoutId>:invalidate — server roster invalidation
+//   - bigfred:layout:<layoutId>:allowed_vehicles — roster snapshots
+//   - bigfred:layout:<layoutId>:defined_trains
 type Redis struct {
 	client           *redis.Client
 	layoutID         uint
@@ -51,14 +52,6 @@ func (r *Redis) EventChannel() string {
 // for cross-process estop fan-out (§7e.3).
 func (r *Redis) CommandChannel() string {
 	return fmt.Sprintf("dcc-bus:cmd:%d:%d", r.layoutID, r.commandStationID)
-}
-
-// InvalidateChannel is the layout-scoped "roster changed" topic.
-// loco-server publishes a small JSON envelope (`{kind:"vehicles"}`,
-// `{kind:"signalmen"}`, ...) and the daemon reloads the affected
-// caches.
-func (r *Redis) InvalidateChannel() string {
-	return fmt.Sprintf("bigfred:layout:%d:invalidate", r.layoutID) // keep in sync with service.LayoutRosterInvalidateChannel
 }
 
 // StoreState writes one snapshot atomically and publishes it on the
@@ -125,13 +118,3 @@ func (r *Redis) SubscribeCommands(ctx context.Context) (*redis.PubSub, error) {
 	return sub, nil
 }
 
-// SubscribeInvalidations opens the layout-scoped roster invalidation
-// channel.
-func (r *Redis) SubscribeInvalidations(ctx context.Context) (*redis.PubSub, error) {
-	sub := r.client.Subscribe(ctx, r.InvalidateChannel())
-	if _, err := sub.Receive(ctx); err != nil {
-		_ = sub.Close()
-		return nil, err
-	}
-	return sub, nil
-}

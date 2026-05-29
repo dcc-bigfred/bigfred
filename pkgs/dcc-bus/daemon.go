@@ -21,6 +21,7 @@ import (
 	"github.com/keskad/loco/pkgs/dcc-bus/state"
 	"github.com/keskad/loco/pkgs/dcc-bus/station"
 	"github.com/keskad/loco/pkgs/dcc-bus/ws"
+	"github.com/keskad/loco/pkgs/layoutroster"
 )
 
 // Config carries every runtime input the daemon needs. Populated
@@ -124,6 +125,23 @@ func New(ctx context.Context, log *logrus.Logger, cfg Config) (*Daemon, error) {
 	}
 	red := state.NewRedis(rds, cfg.LayoutID, cfg.CommandStationID)
 
+	allowedSnap := layoutroster.AllowedVehicles{LayoutID: cfg.LayoutID}
+	if snap, ok, err := red.LoadAllowedVehicles(ctx); err != nil {
+		_ = sqlite.Close()
+		_ = rds.Close()
+		return nil, fmt.Errorf("load allowed vehicles: %w", err)
+	} else if ok {
+		allowedSnap = snap
+	}
+	trainSnap := layoutroster.DefinedTrains{LayoutID: cfg.LayoutID}
+	if snap, ok, err := red.LoadDefinedTrains(ctx); err != nil {
+		_ = sqlite.Close()
+		_ = rds.Close()
+		return nil, fmt.Errorf("load defined trains: %w", err)
+	} else if ok {
+		trainSnap = snap
+	}
+
 	log.WithFields(logrus.Fields{
 		"commandStationId": cs.ID,
 		"name":             cs.Name,
@@ -153,7 +171,6 @@ func New(ctx context.Context, log *logrus.Logger, cfg Config) (*Daemon, error) {
 		Station:          st,
 		Hub:              hub,
 		Redis:            red,
-		SQLite:           sqlite,
 		Log:              log,
 		LayoutID:         cfg.LayoutID,
 		CommandStationID: cfg.CommandStationID,
@@ -161,6 +178,8 @@ func New(ctx context.Context, log *logrus.Logger, cfg Config) (*Daemon, error) {
 		StationKind:      cs.Kind,
 		StationURI:       cs.ConnectionURI,
 		SpeedSteps:       cs.SpeedSteps,
+		AllowedVehicles:  allowedSnap,
+		DefinedTrains:    trainSnap,
 	})
 	if err != nil {
 		_ = st.CleanUp()
@@ -217,14 +236,21 @@ func (d *Daemon) Run(ctx context.Context) error {
 	}
 	defer cmdSub.Close()
 
-	invSub, err := d.redis.SubscribeInvalidations(ctx)
+	vehSub, err := d.redis.SubscribeAllowedVehicles(ctx)
 	if err != nil {
-		return fmt.Errorf("subscribe invalidate channel: %w", err)
+		return fmt.Errorf("subscribe allowed_vehicles channel: %w", err)
 	}
-	defer invSub.Close()
+	defer vehSub.Close()
+
+	trainSub, err := d.redis.SubscribeDefinedTrains(ctx)
+	if err != nil {
+		return fmt.Errorf("subscribe defined_trains channel: %w", err)
+	}
+	defer trainSub.Close()
 
 	go d.runCommandConsumer(ctx, cmdSub)
-	go d.runInvalidateConsumer(ctx, invSub)
+	go d.runAllowedVehiclesConsumer(ctx, vehSub)
+	go d.runDefinedTrainsConsumer(ctx, trainSub)
 
 	serveErr := make(chan error, 1)
 	go func() {
@@ -271,7 +297,7 @@ func (d *Daemon) runCommandConsumer(ctx context.Context, sub *redis.PubSub) {
 	}
 }
 
-func (d *Daemon) runInvalidateConsumer(ctx context.Context, sub *redis.PubSub) {
+func (d *Daemon) runAllowedVehiclesConsumer(ctx context.Context, sub *redis.PubSub) {
 	ch := sub.Channel()
 	for {
 		select {
@@ -281,10 +307,32 @@ func (d *Daemon) runInvalidateConsumer(ctx context.Context, sub *redis.PubSub) {
 			if !ok {
 				return
 			}
-			d.log.WithField("payload", msg.Payload).Info("dcc-bus roster invalidate received")
-			if err := d.router.ReloadRoster(ctx); err != nil {
-				d.log.WithError(err).Warn("dcc-bus roster reload failed")
+			snap, err := layoutroster.UnmarshalAllowedVehicles([]byte(msg.Payload))
+			if err != nil {
+				d.log.WithError(err).Warn("dcc-bus allowed_vehicles: bad payload")
+				continue
 			}
+			d.router.ApplyAllowedVehicles(snap)
+		}
+	}
+}
+
+func (d *Daemon) runDefinedTrainsConsumer(ctx context.Context, sub *redis.PubSub) {
+	ch := sub.Channel()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case msg, ok := <-ch:
+			if !ok {
+				return
+			}
+			snap, err := layoutroster.UnmarshalDefinedTrains([]byte(msg.Payload))
+			if err != nil {
+				d.log.WithError(err).Warn("dcc-bus defined_trains: bad payload")
+				continue
+			}
+			d.router.ApplyDefinedTrains(snap)
 		}
 	}
 }

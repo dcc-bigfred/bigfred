@@ -6,14 +6,9 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
-)
 
-// LayoutRosterInvalidateChannel is the pub/sub topic every dcc-bus
-// daemon for layout L subscribes to. A publish forces a SQLite
-// roster re-read (layout_vehicles → DCC addresses).
-func LayoutRosterInvalidateChannel(layoutID uint) string {
-	return fmt.Sprintf("bigfred:layout:%d:invalidate", layoutID)
-}
+	"github.com/keskad/loco/pkgs/layoutroster"
+)
 
 // RedisService wraps a singleton go-redis client used by the rest of
 // the server (DccBusService, ws hub fan-in, etc.) so test code and
@@ -94,13 +89,40 @@ func (r *RedisService) WaitReady(ctx context.Context, timeout time.Duration) err
 	return fmt.Errorf("redis not ready after %s: %w", timeout, lastErr)
 }
 
-// PublishLayoutRosterInvalidate notifies dcc-bus daemons serving
-// layoutID that the vehicle roster (or DCC addresses) changed.
-func (r *RedisService) PublishLayoutRosterInvalidate(ctx context.Context, layoutID uint) error {
-	if r == nil || layoutID == 0 {
+// PublishLayoutAllowedVehicles stores the snapshot and notifies
+// subscribers on bigfred:layout:<id>:allowed_vehicles.
+func (r *RedisService) PublishLayoutAllowedVehicles(ctx context.Context, snap layoutroster.AllowedVehicles) error {
+	if r == nil || snap.LayoutID == 0 {
 		return nil
 	}
-	return r.client.Publish(ctx, LayoutRosterInvalidateChannel(layoutID), "{}").Err()
+	raw, err := layoutroster.Marshal(snap)
+	if err != nil {
+		return err
+	}
+	key := layoutroster.AllowedVehiclesKey(snap.LayoutID)
+	pipe := r.client.TxPipeline()
+	pipe.Set(ctx, key, raw, 0)
+	pipe.Publish(ctx, key, raw)
+	_, err = pipe.Exec(ctx)
+	return err
+}
+
+// PublishLayoutDefinedTrains stores the snapshot and notifies
+// subscribers on bigfred:layout:<id>:defined_trains.
+func (r *RedisService) PublishLayoutDefinedTrains(ctx context.Context, snap layoutroster.DefinedTrains) error {
+	if r == nil || snap.LayoutID == 0 {
+		return nil
+	}
+	raw, err := layoutroster.Marshal(snap)
+	if err != nil {
+		return err
+	}
+	key := layoutroster.DefinedTrainsKey(snap.LayoutID)
+	pipe := r.client.TxPipeline()
+	pipe.Set(ctx, key, raw, 0)
+	pipe.Publish(ctx, key, raw)
+	_, err = pipe.Exec(ctx)
+	return err
 }
 
 // Close drains the underlying connection pool.

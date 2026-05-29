@@ -180,7 +180,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	}
 	redisSvc := service.NewRedisService(service.RedisServiceConfig{Addr: redisAddr})
 	defer func() { _ = redisSvc.Close() }()
-	layoutVehicleSvc.SetRedisInvalidator(redisSvc)
+	layoutVehicleSvc.SetRedisRosterPublisher(redisSvc)
 
 	var supSvc *service.SupervisordService
 	if !f.NoSupervisor {
@@ -279,6 +279,19 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	} else if seeded {
 		log.WithField("admin_pin", service.SystemLayoutDefaultAdminPIN).
 			Warn("bootstrap system layout created — CHANGE THE ADMIN PIN AFTER FIRST LOGIN")
+	}
+
+	if redisReady {
+		all, err := layoutSvc.ListAll(ctx)
+		if err != nil {
+			log.WithError(err).Warn("layout roster redis sync: list layouts")
+		} else {
+			for _, l := range all {
+				if err := layoutVehicleSvc.SyncLayoutRosterToRedis(ctx, l.ID); err != nil {
+					log.WithError(err).WithField("layoutId", l.ID).Warn("layout roster redis sync")
+				}
+			}
+		}
 	}
 
 	seeded, err := service.SeedAdmin(ctx, users, service.SeedDefaults)

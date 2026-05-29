@@ -13,18 +13,42 @@ import (
 
 // NewZ21Roco constructor
 func NewZ21Roco(netAddr string, netPort uint16) (*Z21Roco, error) {
-	roco := Z21Roco{Timeout: time.Second * 10, wasPowerCutOff: false}
+	roco := Z21Roco{
+		Timeout:         time.Second * 10,
+		ReadInfoTimeout: 1500 * time.Millisecond,
+		wasPowerCutOff:  false,
+	}
 	return &roco, roco.connect(fmt.Sprintf("%s:%d", netAddr, netPort))
 }
 
 type Z21Roco struct {
-	conn           net.Conn
-	Timeout        time.Duration
-	wasPowerCutOff bool
+	conn net.Conn
+	// Timeout bounds CV programming-track read/verify cycles, which can
+	// be slow on some decoders.
+	Timeout time.Duration
+	// ReadInfoTimeout bounds the much faster LAN_X_GET_LOCO_INFO reads
+	// (GetSpeed / ListFunctions). It is kept short so the dcc-bus
+	// polling fallback never stalls the shared UDP socket — and with it
+	// every other throttle write — for seconds on an unresponsive loco.
+	ReadInfoTimeout time.Duration
+	wasPowerCutOff  bool
+	// ioMu serializes request/response sequences. The Z21 is a single
+	// UDP socket, so concurrent readers would split datagrams between
+	// goroutines and corrupt each other's responses. Every public
+	// entry point that talks to the socket takes it.
+	ioMu sync.Mutex
 	// fnStateCache keeps the last known function state bytes per locomotive.
 	// Keyed by address; value is 5 bytes covering F0..F31 as in LAN_X_LOCO_INFO (DB4..DB8).
 	fnStateCache map[LocoAddr]fnState
 	fnStateMu    sync.Mutex
+}
+
+// infoTimeout returns the read deadline used for loco-info queries.
+func (z *Z21Roco) infoTimeout() time.Duration {
+	if z.ReadInfoTimeout > 0 {
+		return z.ReadInfoTimeout
+	}
+	return z.Timeout
 }
 
 // fnState represents function bits F0..F31 for a single loco, as reported
@@ -100,6 +124,9 @@ func (z *Z21Roco) buildCVRequest(mode Mode, lcv LocoCV, isWriteRequest bool) ([]
 }
 
 func (z *Z21Roco) WriteCV(mode Mode, lcv LocoCV, options ...ctxOptions) error {
+	z.ioMu.Lock()
+	defer z.ioMu.Unlock()
+
 	ctx := RequestContext{timeout: z.Timeout, verify: false, retries: 2, settle: 200}
 	applyMethodsToCtx(&ctx, options)
 
@@ -135,6 +162,9 @@ func (z *Z21Roco) WriteCV(mode Mode, lcv LocoCV, options ...ctxOptions) error {
 
 // ReadCV reads a CV
 func (z *Z21Roco) ReadCV(mode Mode, lcv LocoCV, options ...ctxOptions) (int, error) {
+	z.ioMu.Lock()
+	defer z.ioMu.Unlock()
+
 	ctx := RequestContext{timeout: z.Timeout, verify: false, retries: 2, settle: 200}
 	applyMethodsToCtx(&ctx, options)
 
@@ -152,6 +182,9 @@ func (z *Z21Roco) ReadCV(mode Mode, lcv LocoCV, options ...ctxOptions) (int, err
 
 // Sends a function request to the decoder
 func (z *Z21Roco) SendFn(mode Mode, addr LocoAddr, num FuncNum, toggle bool) error {
+	z.ioMu.Lock()
+	defer z.ioMu.Unlock()
+
 	if mode != MainTrackMode {
 		return fmt.Errorf("SendFn: unsupported mode %s", mode)
 	}
@@ -176,6 +209,9 @@ func (z *Z21Roco) SendFn(mode Mode, addr LocoAddr, num FuncNum, toggle bool) err
 
 // ListFunctions retrieves all active functions for a locomotive and returns their numbers
 func (z *Z21Roco) ListFunctions(addr LocoAddr) ([]int, error) {
+	z.ioMu.Lock()
+	defer z.ioMu.Unlock()
+
 	// Query the command station using LAN_X_GET_LOCO_INFO
 	req := z.buildGetLocoInfo(addr)
 	logrus.Debugf("req(LAN_X_GET_LOCO_INFO): %v", req)
@@ -184,7 +220,7 @@ func (z *Z21Roco) ListFunctions(addr LocoAddr) ([]int, error) {
 	}
 
 	// Wait for response (LAN_X_LOCO_INFO)
-	_ = z.conn.SetReadDeadline(time.Now().Add(z.Timeout))
+	_ = z.conn.SetReadDeadline(time.Now().Add(z.infoTimeout()))
 	buf := make([]byte, 1500)
 	n, err := z.conn.Read(buf)
 	if err != nil {
@@ -464,6 +500,9 @@ func (z *Z21Roco) updateFunctionStateCache(addr LocoAddr, fnNum int, on bool) {
 // forward: true for forward, false for reverse
 // speedSteps: 14, 28, or 128 (will be converted to 0, 2, or 4 for the protocol)
 func (z *Z21Roco) SetSpeed(addr LocoAddr, speed uint8, forward bool, speedSteps uint8) error {
+	z.ioMu.Lock()
+	defer z.ioMu.Unlock()
+
 	// Convert speedSteps to protocol value
 	var speedStepsProto uint8
 	switch speedSteps {
@@ -490,6 +529,9 @@ func (z *Z21Roco) SetSpeed(addr LocoAddr, speed uint8, forward bool, speedSteps 
 // GetSpeed retrieves the current speed and direction of a locomotive
 // Returns: speed (0-127), forward (true for forward, false for reverse), error
 func (z *Z21Roco) GetSpeed(addr LocoAddr) (uint8, bool, error) {
+	z.ioMu.Lock()
+	defer z.ioMu.Unlock()
+
 	// Query the command station using LAN_X_GET_LOCO_INFO
 	req := z.buildGetLocoInfo(addr)
 	logrus.Debugf("req(LAN_X_GET_LOCO_INFO): %v", req)
@@ -498,7 +540,7 @@ func (z *Z21Roco) GetSpeed(addr LocoAddr) (uint8, bool, error) {
 	}
 
 	// Wait for response (LAN_X_LOCO_INFO)
-	_ = z.conn.SetReadDeadline(time.Now().Add(z.Timeout))
+	_ = z.conn.SetReadDeadline(time.Now().Add(z.infoTimeout()))
 	buf := make([]byte, 1500)
 	n, err := z.conn.Read(buf)
 	if err != nil {

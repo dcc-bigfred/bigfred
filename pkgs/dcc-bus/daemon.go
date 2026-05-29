@@ -57,7 +57,7 @@ type Daemon struct {
 	cfg Config
 	log *logrus.Logger
 
-	redis *state.Redis
+	redis  *state.Redis
 	rds    *redis.Client
 	srv    *http.Server
 	router *cmd.Router
@@ -160,6 +160,7 @@ func New(ctx context.Context, log *logrus.Logger, cfg Config) (*Daemon, error) {
 		StationKind:      cs.Kind,
 		StationURI:       cs.ConnectionURI,
 		SpeedSteps:       cs.SpeedSteps,
+		PollIntervalMs:   cfg.PollIntervalMs,
 		AllowedVehicles:  allowedSnap,
 		DefinedTrains:    trainSnap,
 	})
@@ -231,6 +232,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 	go d.runCommandConsumer(ctx, cmdSub)
 	go d.runAllowedVehiclesConsumer(ctx, vehSub)
 	go d.runDefinedTrainsConsumer(ctx, trainSub)
+	go d.router.RunStateFeed(ctx)
 
 	serveErr := make(chan error, 1)
 	go func() {

@@ -69,37 +69,58 @@ Finer-grained channels from the original design (`bigfred:vehicle:<id>:lease`,
 catalogue change that affects driving rights flows through a full
 roster snapshot on the two layout keys above.
 
-#### Poller
+#### State feed — external-throttle visibility
 
-A single poller goroutine ticks at `--poll-interval` and, for every
-address in the *interesting set with at least one WS subscriber*,
-issues `Station.GetSpeed(addr)` and `Station.ListFunctions(addr)` (the
-existing `commandstation.Station` API). For each address it:
+The command station this daemon owns is **only one of several possible
+controllers** for any given loco: a physical handheld throttle plugged
+straight into the Z21 or onto the LocoNet bus can change a loco's speed,
+direction or functions without BigFred ever issuing the command. To keep
+the throttle UI honest, `dcc-bus` runs a **state feed** that mirrors
+whatever it observes on the bus back into the `loco:state` cache and out
+to WS clients. See §7e.9 for the driver-capability research that drives
+the two implementations below.
 
-1. Compares against the last cached value.
-2. If changed, writes the new value to Redis
-   (`HSET loco:state:<csId> <addr> "{json}"`) and publishes to the
-   in-memory bus.
-3. The WS Hub fans the event out as `loco.state { addr, speed, forward,
-   functions, updatedAt, controlledBy }` to every subscriber of `addr`.
+The feed (`Router.RunStateFeed`) picks one of two strategies at startup
+depending on whether the driver implements the optional
+`commandstation.StateObserver` capability:
 
-The poller skips addresses with **no current subscribers** to avoid
-useless DCC traffic. As soon as the first subscribe arrives for an
-address, the poller adds it to its rotation and issues an immediate
-`GetSpeed` to populate the snapshot.
+- **Push** (LocoNet serial / TCP). The bus is shared, so every
+  `OPC_LOCO_SPD` / `OPC_LOCO_DIRF` / `OPC_LOCO_SND` / `OPC_SL_RD_DATA`
+  packet — including those an external throttle authored — is visible to
+  the driver. The driver demultiplexes its receive stream and emits a
+  `LocoObservation` per change; the feed consumes that channel in real
+  time.
+- **Polling fallback** (Z21). The driver cannot (yet) push, so the feed
+  ticks at `--poll-interval-ms` (default `750ms`) and, for every address
+  with **at least one live WS subscriber**, issues `Station.GetSpeed` +
+  `Station.ListFunctions`. Addresses nobody is watching are skipped to
+  avoid useless DCC traffic.
 
-`controlledBy` is computed inside the daemon from:
+Both strategies funnel into the same reconciler (`applyObservation`):
 
-- the most recent `setSpeed` / `toggleFn` caller (in-memory),
-- pub/sub-delivered takeover state,
-- explicit re-broadcasts from `loco-server` (see §7e.5).
+1. Merge the (possibly partial) observation onto the last cached
+   snapshot.
+2. **Only** store + fan when the merged state actually changes. This
+   change-guard also collapses the echo of BigFred's own writes (those
+   already wrote Redis with their real `source` / `controlledByUserId`),
+   so in-app driver attribution survives while genuine external changes
+   still surface.
+3. Write the snapshot to Redis (`loco:state:<layoutId>:<addr>`, TTL
+   refreshed) and fan `loco.state` out to every subscriber of `addr` via
+   the in-memory Hub (and, through `StoreState`, onto the
+   `dcc-bus:evt:<L>:<C>` event channel).
 
-Polling errors (`commandstation.Station` returning `error`) are
-counted; after `N` consecutive errors on an address (default `3`),
-the daemon emits `loco.error { addr, code:"poll_failed", message }`
-and marks the address as **unsynced** in Redis (`HSET
-loco:state:<csId>:meta <addr>:unsynced "1"`). The next successful
-poll clears the flag.
+An externally-driven change carries `controlledByUserId: 0` (nobody in
+BigFred owns it) and `source: "external"` (push) or `source: "poller"`
+(poll-detected drift). The frontend treats both as authoritative and
+applies them rather than suppressing them as its own optimistic echo.
+The feed also keeps the per-`(addr, fn)` `fnCache` honest after an
+external function change, so the next in-app toggle is not wrongly
+collapsed as a no-op.
+
+`controlledBy` for in-app writes is still computed inside the daemon
+from the most recent `setSpeed` / `toggleFn` caller, pub/sub takeover
+state, and explicit re-broadcasts from `loco-server` (see §7e.5).
 
 #### Redis key layout
 

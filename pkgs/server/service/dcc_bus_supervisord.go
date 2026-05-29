@@ -74,7 +74,11 @@ func (d *DccBusService) SyncProgramsForLayouts(
 				return fmt.Errorf("dcc-bus sync layout %d cs %d: %w", layoutID, csID, err)
 			}
 			name := programName(layoutID, csID)
-			programs = append(programs, d.buildProgramSpec(name, layoutID, csID, port))
+			spec, err := d.buildProgramSpec(ctx, name, layoutID, csID, port)
+			if err != nil {
+				return err
+			}
+			programs = append(programs, spec)
 		}
 	}
 

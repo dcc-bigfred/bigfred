@@ -9,54 +9,65 @@ output:
                    ┌──────────────────────────────────────────────────┐
                    │                  dcc-bus                          │
                    │                                                  │
-       SQLite ────►│  catalogue: Vehicle, VehicleFunction, Train,     │
-       (read-     │              LayoutVehicle, VehicleLease, …      │
-       only)       │                                                  │
+       Redis ─────►│  roster snapshots (allowed_vehicles,             │
+       GET+sub     │  defined_trains) + loco:state cache              │
                    │                                                  │
-       Redis ─────►│  pub/sub: invalidations + server-initiated cmds  │
+       Redis ─────►│  pub/sub: server-initiated cmds + roster updates │
        pub/sub     │                                                  │
                    │                                                  │
        command  ──►│  WebSocket frontend clients                      │
        station     │  (loco.* and system.estop)                       │
-       (DCC,        │                                                  │
+       (DCC,        │  (connection params from CLI --station-*)        │
        bidir)     ──┴──►  state cache + audit events                  │
                    │                                                  │
                    └────────┬─────────────────────────────────────────┘
                             │
                             ▼
-                          Redis (hash + pub/sub)
+                          Redis (string keys + pub/sub)
                             │
                             ▼
-                   loco-server (audit log, snapshot serving)
-                   peer dcc-bus  (cross-bus reconciliation)
+                   loco-server (SQLite catalogue, snapshot publisher)
                    browsers     (snapshot on subscribe)
 ```
 
-#### Vehicle subscription set
+Catalogue truth lives in **`loco-server`'s SQLite**. The daemon never
+queries it. Instead `loco-server` builds JSON snapshots and publishes
+them on Redis (types in `pkgs/layoutroster`).
 
-The daemon's *interesting set* is the union of:
+#### Layout roster snapshots
 
-1. `Vehicle` rows from `LayoutVehicle` where `LayoutID == --layout-id`
-   **and** `Vehicle.DCCAddress IS NOT NULL` (dummies are skipped — they
-   never reach DCC, §3a.3 invariants).
-2. *(when `Layout.IsSystem == true`)* every `Vehicle` row in the
-   global catalogue with a non-NULL DCC address.
+For each layout `L` the server maintains two Redis **string keys** and
+mirrors the same JSON on matching **pub/sub channels** (`SET` +
+`PUBLISH` in one pipeline so subscribers always match `GET`):
 
-The interesting set is loaded into memory on boot and refreshed
-incrementally via Redis pub/sub events published by `loco-server`:
-
-| Channel | Payload | Daemon reaction |
+| Key / channel | JSON root | Purpose |
 |---|---|---|
-| `bigfred:layout:<L>:vehicles` | `{ action:"added"\|"removed", vehicleAddr, vehicleId }` | Subscribe / unsubscribe the address with the poller and the WS Hub fan-out. |
-| `bigfred:vehicle:<id>:functions` | `{ vehicleId, addr }` | Invalidate function definition cache; broadcast `vehicle.functionsChanged { addr }` to WS subscribers. |
-| `bigfred:vehicle:<id>:invalidated` | `{ vehicleId, addr }` | Re-read the vehicle row from SQLite (covers rename, kind change, DCC-address change, deletion). |
-| `bigfred:vehicle:<id>:lease` | `{ vehicleId, leaseState }` | Invalidate the cached lease for the address; next authorization re-checks the policy. |
-| `bigfred:vehicle:<id>:takeover` | `{ vehicleId, state }` | Same as above. Also push an updated `loco.state { controlledBy }` to subscribed clients. |
-| `bigfred:layout:<L>:roster_full_invalidate` | – | Re-read the entire roster from SQLite. Emergency catch-all; used by `loco-server` after restoring from backup. |
+| `bigfred:layout:<L>:allowed_vehicles` | `{ layoutId, updatedAt, vehicles[] }` | Drivable vehicles on the layout roster. Each entry: `vehicleId`, `addr`, `ownerUserId`, `controllerUserIds[]`. Dummies (no DCC address) are omitted. |
+| `bigfred:layout:<L>:defined_trains` | `{ layoutId, updatedAt, trains[] }` | Trains on the layout roster with ordered `members[]` (`vehicleId`, `position`, `reversed`, optional `addr`). |
 
-The pub/sub layer is *advisory*: every authorization decision **also**
-re-reads the relevant row from SQLite. Redis is the latency
-optimisation; SQLite is the source of truth.
+**Daemon boot:** `GET` both keys (may be missing → empty roster until
+the server publishes).
+
+**Runtime:** `SUBSCRIBE` to both channels; each message replaces the
+in-memory cache (`Router.ApplyAllowedVehicles` /
+`ApplyDefinedTrains`).
+
+**Publisher:** `LayoutVehicleService.SyncLayoutRosterToRedis` after
+layout roster mutations, vehicle catalogue updates affecting roster
+trains, train catalogue changes, and once per layout at
+`loco-server` bootstrap.
+
+`loco.subscribe` gates on membership in `allowed_vehicles`.
+`loco.setSpeed` / `loco.toggleFn` additionally require
+`session.userId ∈ controllerUserIds` for that address (today the server
+publishes `[ownerUserId]`; leases/takeovers will extend the slice).
+
+#### Per-vehicle invalidation channels (planned)
+
+Finer-grained channels from the original design (`bigfred:vehicle:<id>:lease`,
+`takeover`, `functions`, …) remain **future work**. Until then, any
+catalogue change that affects driving rights flows through a full
+roster snapshot on the two layout keys above.
 
 #### Poller
 
@@ -94,19 +105,20 @@ poll clears the flag.
 
 | Key | Type | Owner | Purpose |
 |---|---|---|---|
-| `loco:state:<csId>` | hash | `dcc-bus` writes, `loco-server` and peer daemons read | `<addr>` → `{speed,forward,functions,controlledBy,updatedAt}` JSON. Latest known truth from the DCC bus. |
-| `loco:state:<csId>:meta` | hash | `dcc-bus` | `<addr>:unsynced` → `"1"` while polling is failing. Also `<addr>:lastPolledAt`. |
+| `loco:state:<layoutId>:<addr>` | string | `dcc-bus` writes | Per-loco JSON snapshot (`LocoStatePayload`). TTL refreshed on change. |
 | `dcc-bus:ports` | hash | `loco-server` | `<layoutId>:<csId>` → `<port>` allocation table; persisted across server restarts. |
 | `dcc-bus:<L>:<C>:status` | string | `dcc-bus` | One of `starting` \| `running` \| `draining` \| `degraded`; consumed by `loco-server` for the `system.status` event. |
 | `dcc-bus:<L>:<C>:sessions` | hash | `dcc-bus` | `<sessionId>` → `<openedAt,unix>`; lets `loco-server` and the operator inspect active throttles per daemon. |
 | `dcc-bus:cmd:<L>:<C>` | pub/sub channel | `loco-server` publishes, `dcc-bus` consumes | Server-initiated DCC commands (scripts, dead-man, takeover-release fan-out, train-level fan-out). See "Command channel" below. |
 | `dcc-bus:evt:<L>:<C>` | pub/sub channel | `dcc-bus` publishes, `loco-server` consumes | Outbound throttle events that `loco-server` needs to mirror onto its own WS (cross-tab fan-out, audit fan-in). See "Event channel" below. |
-| `bigfred:layout:<L>:vehicles` | pub/sub channel | `loco-server` publishes | Roster mutations. |
-| `bigfred:vehicle:<id>:*` | pub/sub channel | `loco-server` publishes | Per-vehicle invalidations (functions, lease, takeover, definition). |
-| `bigfred:layout:<L>:emergency:<userId>` | pub/sub channel | `loco-server` publishes | Cross-process dead-man's switch fan-out (§7e.5). |
+| `bigfred:layout:<L>:allowed_vehicles` | string + pub/sub | `loco-server` publishes | Full drivable-vehicle roster for layout `L`. |
+| `bigfred:layout:<L>:defined_trains` | string + pub/sub | `loco-server` publishes | Full train roster for layout `L`. |
+| `bigfred:layout:<L>:emergency:<userId>` | pub/sub channel | `loco-server` publishes | Cross-process dead-man's switch fan-out (§7e.5, planned). |
 
-All keys live in the `--redis-db` index. TTL is `0` (forever) for
-state hashes; pub/sub channels are ephemeral by definition.
+All keys share the Redis instance configured by `--redis-addr` on
+`loco-server` and `dcc-bus`. Roster snapshot keys have no TTL;
+`loco:state` entries use a short TTL refreshed on each write.
+Pub/sub channels are ephemeral by definition.
 
 #### Snapshot on subscribe
 
@@ -198,17 +210,15 @@ same cs), they both poll the bus and they both write to
   rule 9) is the UI element that communicates "another daemon is
   also driving this cs".
 
-#### Memory caches inside the daemon
+#### In-memory state inside the daemon
 
-| Cache | Refresh trigger | Eviction policy |
+| Structure | Source | Notes |
 |---|---|---|
-| `Vehicle` by `(layoutId, addr)` | pub/sub: `vehicle:invalidated`; falls back to SQLite read on miss | LRU, 4096 entries |
-| `VehicleLease` (active) by `vehicleId` | pub/sub: `vehicle:lease`; falls back to SQLite read | LRU, 4096 |
-| `TakeoverRequest` (active) by `(vehicleId)` and `(trainId)` | pub/sub: `vehicle:takeover` | LRU, 4096 |
-| `VehicleFunction` definitions by `vehicleId` | pub/sub: `vehicle:functions` | LRU, 4096 |
-| `User` by `userId` | none — read fresh per WS upgrade, kept until WS closes | per-WS-session |
-| `Layout` row | none — read once at boot | per-daemon |
+| `allowed map[addr]` | `allowed_vehicles` snapshot | Gates `loco.subscribe` and estop-all scope. |
+| `byAddr map[addr] → AllowedVehicle` | same snapshot | `controllerUserIds` for drive commands. |
+| `trains []DefinedTrain` | `defined_trains` snapshot | Train fan-out / future `train.setSpeed` via server command channel. |
+| `fnCache` per `(addr, fn)` | local | Avoids duplicate DCC function packets. |
+| WS session | JWT at upgrade | `userId`, subscribed addresses, dead-man targets. |
 
-A cache miss reads SQLite; SQLite-WAL allows the read while
-`loco-server` writes. Refreshes are advisory only — the
-authorization re-check is always against the freshly resolved object.
+No SQLite connection. No per-row catalogue LRU — the roster maps are
+replaced wholesale on each snapshot message.

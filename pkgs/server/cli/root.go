@@ -237,14 +237,13 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		executable, _ := os.Executable()
 		dccBusSvc = service.NewDccBusService(service.DccBusConfig{
 			Executable:   executable,
-			DBPath:       f.DBPath,
 			RedisAddr:    redisAddr,
 			JWTSecret:    secret,
 			PortMin:      9200,
 			PortMax:      9209,
 			SpawnTimeout: 10 * time.Second,
 			ProxyEnabled: true,
-		}, supSvc, redisSvc, log)
+		}, supSvc, redisSvc, commandStations, log)
 		if err := dccBusSvc.HydratePorts(ctx); err != nil {
 			log.WithError(err).Warn("dcc-bus hydrate ports")
 		}

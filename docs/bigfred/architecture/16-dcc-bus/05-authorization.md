@@ -1,9 +1,11 @@
 ### §7e.5 Authorization & session awareness
 
-The daemon's policy stance is "**zero implicit trust**". Every WS
-frame is gated by the same `pkgs/server/security` policies that
-`loco-server` uses, evaluated against domain objects the daemon
-re-loads from SQLite (advisory cached, §7e.3).
+The daemon's policy stance is "**zero implicit trust**" on the data
+plane. WS upgrades are JWT-gated; drive commands are gated against the
+**Redis-published roster** (§7e.3). Full `pkgs/server/security`
+evaluation with leases and takeovers inside the daemon is the target
+architecture; the current cut implements roster membership plus
+`controllerUserIds` from `allowed_vehicles`.
 
 #### Authenticating the WS upgrade
 
@@ -17,8 +19,8 @@ re-loads from SQLite (advisory cached, §7e.3).
 3. The JWT carries `{ userId, layoutId }`. The daemon checks
    `layoutId == --layout-id`; mismatch closes the upgrade with HTTP
    403 and `WWW-Authenticate: dcc-bus realm="layout-mismatch"`.
-4. The daemon loads `domain.User` by `userId` (read-through SQLite).
-   The user is required to have a non-zero permanent / effective role
+4. The JWT `userId` is stored on the WS session. The daemon does not
+   load `domain.User` rows from SQLite. The user is required to have a non-zero permanent / effective role
    reachable from `domain.EffectiveRoles` (any of `driver`,
    `signalman`, `admin`). The daemon does **not** re-resolve sudo
    elevations (no `SudoService` in `dcc-bus`). Instead it consumes
@@ -40,8 +42,8 @@ authorize subsequent actions.
 
 | Action | Domain objects loaded | Policy method | Notes |
 |---|---|---|---|
-| `loco.subscribe { addr }` | `Vehicle` by `(layoutId, addr)`; *no* lease/takeover lookup | a) `vehicle != nil && vehicle.DCCAddress != nil` and `vehicle.IsOnLayout(L)` ⇒ allow read access; *no policy method* | Subscription is read-only; the policy is "anyone authenticated to the layout may *see* the address". |
-| `loco.setSpeed` / `loco.toggleFn` | `Vehicle`, active `VehicleLease`, active `TakeoverRequest` | `LocoSecurityContext.CanDriveLoco` (§7a.3.2) | Deny reasons surface in `loco.error.code` (the existing `Reason` string is used verbatim). |
+| `loco.subscribe { addr }` | `allowed_vehicles` snapshot | `addr` present in snapshot | Read-only telemetry; any authenticated layout user may subscribe. Rejects with `vehicle_not_on_layout`. |
+| `loco.setSpeed` / `loco.toggleFn` | `allowed_vehicles` snapshot | `userId ∈ controllerUserIds` for `addr` | Rejects with `not_authorized` or `vehicle_not_on_layout`. Target: full `CanDriveLoco` once leases are folded into `controllerUserIds`. |
 | `loco.toggleFn { fn }` | additionally `[]VehicleFunction` | `FunctionSecurityContext.CanInvokeFunction` | Refuses unregistered functions with `function_not_registered`. |
 | `system.estop` | the user's session-local `DriveTargets` | `LocoSecurityContext.CanDriveLoco` evaluated **per target** with the user as actor | Targets where the policy now denies are silently dropped (e.g. lease expired moments before estop). Audited via the event channel. |
 | `ping` | none | none | – |
@@ -72,10 +74,11 @@ interesting set. On a payload:
   authority).
 
 In the worst case the pub/sub round trip takes a handful of
-milliseconds. Even if pub/sub is unavailable, the next
-`loco.setSpeed` from the affected user re-evaluates the policy
-against the **fresh** SQLite row and is denied correctly. The
-push event is purely a UX nicety.
+milliseconds. When `loco-server` publishes an updated
+`allowed_vehicles` snapshot (including revised `controllerUserIds`),
+the daemon replaces its cache before the next command is processed.
+The push event is a UX nicety; the snapshot is authoritative for the
+daemon process.
 
 #### Session lifecycle & emergency plan
 
@@ -158,8 +161,9 @@ process** it runs in. Re-evaluating `CanDriveLoco` inside `dcc-bus`
 against `domain.User{ID:42}` produces the same Decision as
 re-evaluating it inside `loco-server`. The only thing the daemon
 must get right is the input — and the input is exclusively domain
-objects loaded from SQLite (the same DB row `loco-server` would
-read) plus the JWT-pinned `(userId, layoutId)`.
+roster data published by `loco-server` (built from the same SQLite
+rows the server would use for `CanDriveLoco`) plus the JWT-pinned
+`(userId, layoutId)`.
 
 Sudo elevation deserves a closer look. A sudo admin minted on
 `loco-server` should flip to `admin` everywhere within the 2-minute
@@ -176,7 +180,7 @@ expose admin operations).
 
 #### What the daemon does NOT do
 
-- It does not write to SQLite. Ever.
+- It does not open or write to SQLite. Ever.
 - It does not bump audit rows directly.
 - It does not run `SudoService` rate-limiters.
 - It does not own the WS for control-plane traffic.
@@ -185,4 +189,6 @@ expose admin operations).
 
 This minimal surface is what lets `dcc-bus` crash and restart
 without compromising the integrity of the rest of the system. The
-"single source of truth" stays `loco-server` + SQLite + Redis.
+"single source of truth" for catalogue data stays `loco-server` +
+SQLite; the daemon's operational view is Redis snapshots + CLI station
+config.

@@ -5,6 +5,8 @@ reused, not duplicated.
 
 ```
 pkgs/
+├── layoutroster/               # shared JSON types + Redis key names for
+│   └── snapshot.go             #   layout roster snapshots (server → dcc-bus)
 ├── loco/                       # existing – core domain
 │   ├── app/                    # LocoApp – controller layer
 │   ├── commandstation/         # Z21, LocoNet
@@ -137,31 +139,20 @@ pkgs/scripts-executor/          # NEW – sandbox process for user JS
 
 # Sibling process – same module, different main(). One process per
 # (layout × command_station) pair (§7e). Reuses pkgs/loco/commandstation
-# (DCC), pkgs/server/security (policies), pkgs/server/domain (entities),
-# pkgs/server/repo (read-only catalogue), pkgs/server/cache (Redis).
-# Does NOT import pkgs/server/http; exposes a single WebSocket on
-# the --port flag for throttle traffic.
-pkgs/dcc-bus/                   # NEW – throttle data-plane daemon
-├── main.go                     # cmd entrypoint for `loco-server dcc-bus`
-├── cli/
-│   └── root.go                 # cobra command + flags (--layout-id,
-│                               #   --command-station-id, --port, --db-path,
-│                               #   --jwt-secret, --redis-addr, --poll-interval,
-│                               #   --heartbeat-grace, --shutdown-timeout)
-├── daemon.go                   # bootstraps Station, Poller, Hub, Redis client
-├── poller.go                   # ticks Station.GetSpeed / ListFunctions for
-│                               #   subscribed addrs in the interesting set
-├── ws/
-│   ├── hub.go                  # per-daemon Hub: clients, addr subscriptions
-│   ├── client.go               # WS client (read/write loops, heartbeat)
-│   ├── auth.go                 # JWT verification, layoutId match
-│   ├── handlers.go             # loco.subscribe/.setSpeed/.toggleFn/system.estop/ping
-│   └── protocol.go             # envelope + Action/Event types (tygo source)
-├── roster.go                   # in-memory cache of LayoutVehicle for the layout
-├── cmdchan.go                  # consumes dcc-bus:cmd:<L>:<C> from Redis
-├── evtchan.go                  # publishes dcc-bus:evt:<L>:<C> to Redis
-├── deadman.go                  # per-daemon dead-man's switch (§7e.5)
-└── audit.go                    # outbound audit-event publisher (loco-server consumes)
+# (DCC), pkgs/server/domain (entities), pkgs/layoutroster (Redis JSON types),
+# pkgs/dcc-bus/state (Redis client). Does NOT import pkgs/server/repo or SQLite.
+# Exposes WebSocket on --port for throttle traffic.
+pkgs/dcc-bus/                   # throttle data-plane daemon
+├── daemon.go                   # assembly: Redis, Station, Router, WS server
+├── cli/cli.go                  # cobra subcommand + flags
+├── cliargs/station.go          # shared --station-* flag builders (server + daemon)
+├── cmd/router.go               # loco.* dispatch, roster cache, DCC I/O
+├── state/redis.go              # loco:state keys, cmd/evt pub/sub
+├── state/roster.go             # GET/SUBSCRIBE allowed_vehicles & defined_trains
+├── ws/                         # Hub, JWT upgrade, frame routing
+├── auth/jwt.go                 # JWT verification
+├── station/                    # commandstation driver wiring
+└── protocol/                   # WS envelope types
 
 web/                            # NEW – frontend
 ├── package.json

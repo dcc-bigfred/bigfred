@@ -1,7 +1,7 @@
 // Package dccbus is the entry point of the `dcc-bus` daemon. It
-// wires the SQLite read-only handle, Redis client, command-station
-// driver, command router and WebSocket server into a single
-// Daemon.Run loop that the cobra subcommand drives.
+// wires Redis, the command-station driver, command router and
+// WebSocket server into a single Daemon.Run loop that the cobra
+// subcommand drives.
 package dccbus
 
 import (
@@ -22,6 +22,7 @@ import (
 	"github.com/keskad/loco/pkgs/dcc-bus/station"
 	"github.com/keskad/loco/pkgs/dcc-bus/ws"
 	"github.com/keskad/loco/pkgs/layoutroster"
+	"github.com/keskad/loco/pkgs/server/domain"
 )
 
 // Config carries every runtime input the daemon needs. Populated
@@ -33,7 +34,9 @@ type Config struct {
 	BindAddr string
 	Port     uint16
 
-	DBPath    string
+	// CommandStation carries connection parameters passed from loco-server via CLI.
+	CommandStation domain.CommandStation
+
 	RedisAddr string
 
 	JWTSecret []byte
@@ -54,16 +57,15 @@ type Daemon struct {
 	cfg Config
 	log *logrus.Logger
 
-	sqlite *state.SQLite
-	redis  *state.Redis
+	redis *state.Redis
 	rds    *redis.Client
 	srv    *http.Server
 	router *cmd.Router
 }
 
-// New validates cfg, opens dependencies (SQLite + Redis + command
-// station) and returns a ready-to-Run daemon. The caller MUST call
-// Close to release resources.
+// New validates cfg, opens Redis + the command station driver and
+// returns a ready-to-Run daemon. The caller MUST call Close to
+// release resources.
 func New(ctx context.Context, log *logrus.Logger, cfg Config) (*Daemon, error) {
 	if log == nil {
 		log = logrus.New()
@@ -71,8 +73,14 @@ func New(ctx context.Context, log *logrus.Logger, cfg Config) (*Daemon, error) {
 	if cfg.LayoutID == 0 || cfg.CommandStationID == 0 {
 		return nil, errors.New("dcc-bus: --layout-id and --command-station-id are required")
 	}
-	if cfg.DBPath == "" {
-		return nil, errors.New("dcc-bus: --db-path is required")
+	if cfg.CommandStation.ID == 0 {
+		cfg.CommandStation.ID = cfg.CommandStationID
+	}
+	if cfg.CommandStation.ID != cfg.CommandStationID {
+		return nil, errors.New("dcc-bus: --command-station-id does not match station config")
+	}
+	if !cfg.CommandStation.Kind.IsValid() || cfg.CommandStation.ConnectionURI == "" {
+		return nil, errors.New("dcc-bus: station connection flags are required (--station-kind, --station-uri, …)")
 	}
 	if cfg.Port == 0 {
 		return nil, errors.New("dcc-bus: --port is required")
@@ -93,33 +101,10 @@ func New(ctx context.Context, log *logrus.Logger, cfg Config) (*Daemon, error) {
 		cfg.DeadmanSecs = 12
 	}
 
-	sqlite, err := state.OpenSQLite(cfg.DBPath)
-	if err != nil {
-		return nil, fmt.Errorf("open sqlite: %w", err)
-	}
-
-	cs, err := sqlite.CommandStation(ctx, cfg.CommandStationID)
-	if err != nil {
-		_ = sqlite.Close()
-		return nil, fmt.Errorf("load command station: %w", err)
-	}
-	if _, err := sqlite.Layout(ctx, cfg.LayoutID); err != nil {
-		_ = sqlite.Close()
-		return nil, fmt.Errorf("load layout: %w", err)
-	}
-	attached, err := sqlite.LayoutAttached(ctx, cfg.LayoutID, cfg.CommandStationID)
-	if err != nil {
-		_ = sqlite.Close()
-		return nil, fmt.Errorf("check layout attachment: %w", err)
-	}
-	if !attached {
-		_ = sqlite.Close()
-		return nil, fmt.Errorf("dcc-bus: command station %d is not attached to layout %d", cfg.CommandStationID, cfg.LayoutID)
-	}
+	cs := cfg.CommandStation
 
 	rds := redis.NewClient(&redis.Options{Addr: cfg.RedisAddr})
 	if err := rds.Ping(ctx).Err(); err != nil {
-		_ = sqlite.Close()
 		_ = rds.Close()
 		return nil, fmt.Errorf("redis ping: %w", err)
 	}
@@ -127,7 +112,6 @@ func New(ctx context.Context, log *logrus.Logger, cfg Config) (*Daemon, error) {
 
 	allowedSnap := layoutroster.AllowedVehicles{LayoutID: cfg.LayoutID}
 	if snap, ok, err := red.LoadAllowedVehicles(ctx); err != nil {
-		_ = sqlite.Close()
 		_ = rds.Close()
 		return nil, fmt.Errorf("load allowed vehicles: %w", err)
 	} else if ok {
@@ -135,7 +119,6 @@ func New(ctx context.Context, log *logrus.Logger, cfg Config) (*Daemon, error) {
 	}
 	trainSnap := layoutroster.DefinedTrains{LayoutID: cfg.LayoutID}
 	if snap, ok, err := red.LoadDefinedTrains(ctx); err != nil {
-		_ = sqlite.Close()
 		_ = rds.Close()
 		return nil, fmt.Errorf("load defined trains: %w", err)
 	} else if ok {
@@ -156,7 +139,6 @@ func New(ctx context.Context, log *logrus.Logger, cfg Config) (*Daemon, error) {
 			"commandStationId": cs.ID,
 			"connection":       station.Describe(cs),
 		}).Error("dcc-bus command station driver open failed")
-		_ = sqlite.Close()
 		_ = rds.Close()
 		return nil, fmt.Errorf("open command station: %w", err)
 	}
@@ -183,7 +165,6 @@ func New(ctx context.Context, log *logrus.Logger, cfg Config) (*Daemon, error) {
 	})
 	if err != nil {
 		_ = st.CleanUp()
-		_ = sqlite.Close()
 		_ = rds.Close()
 		return nil, fmt.Errorf("build router: %w", err)
 	}
@@ -211,7 +192,6 @@ func New(ctx context.Context, log *logrus.Logger, cfg Config) (*Daemon, error) {
 	return &Daemon{
 		cfg:    cfg,
 		log:    log,
-		sqlite: sqlite,
 		redis:  red,
 		rds:    rds,
 		srv:    srv,
@@ -341,9 +321,6 @@ func (d *Daemon) runDefinedTrainsConsumer(ctx context.Context, sub *redis.PubSub
 func (d *Daemon) Close() error {
 	if d.srv != nil {
 		_ = d.srv.Close()
-	}
-	if d.sqlite != nil {
-		_ = d.sqlite.Close()
 	}
 	if d.rds != nil {
 		_ = d.rds.Close()

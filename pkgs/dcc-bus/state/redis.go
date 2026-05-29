@@ -1,3 +1,5 @@
+// Package state is the dcc-bus Redis client: loco state cache,
+// pub/sub command and roster snapshot channels.
 package state
 
 import (

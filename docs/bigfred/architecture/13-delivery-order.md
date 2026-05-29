@@ -149,12 +149,14 @@ sibling daemon supervised by §7d (`SupervisordService`).
 
 16a. Add `pkgs/dcc-bus/` (cobra subcommand on the same `loco-server`
     binary) with `--layout-id`, `--command-station-id`, `--port`,
-    `--bind`, `--db-path`, `--jwt-secret`, `--redis-addr`,
-    `--poll-interval`, `--heartbeat-grace`, `--shutdown-timeout`
-    flags. The daemon opens SQLite read-only, dials Redis, dials the
-    command station via `pkgs/loco/commandstation`, starts an HTTP
-    server on `--port` that upgrades to WebSocket, and exits
-    non-zero on any boot-time validation failure (§7e.2).
+    `--bind`, `--station-name`, `--station-kind`, `--station-uri`,
+    `--speed-steps`, `--jwt-secret`, `--redis-addr`, `--heartbeat-secs`,
+    `--deadman-secs` flags. `loco-server` passes station parameters from
+    its `command_stations` table when registering supervisord programs.
+    The daemon dials Redis, loads roster snapshots, opens the command
+    station via `pkgs/loco/commandstation`, listens for WebSocket on
+    `--port`, and exits non-zero on boot failure (§7e.2). **No SQLite
+    in the daemon process.**
 16b. Build the WebSocket handlers inside `dcc-bus`:
     `loco.subscribe`, `loco.unsubscribe`, `loco.setSpeed`,
     `loco.toggleFn`, `system.estop`, `ping`. JWT auth (`?token=`)

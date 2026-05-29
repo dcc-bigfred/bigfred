@@ -2,8 +2,8 @@
 // but without pulling in the full AuthService dependency chain
 // (users repo, layouts repo, sudo elevations). The daemon only needs
 // the (userID, login, layoutID) triplet at the trust boundary; richer
-// authorization decisions are re-evaluated against domain objects
-// loaded from read-only SQLite by `pkgs/dcc-bus/state`.
+// authorization decisions use the layout roster snapshots delivered
+// over Redis (see `pkgs/layoutroster`).
 package auth
 
 import (

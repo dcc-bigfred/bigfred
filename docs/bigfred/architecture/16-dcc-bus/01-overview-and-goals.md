@@ -75,9 +75,10 @@ risk surfaces and deserve **process isolation**.
 - HTTP/REST surface on `dcc-bus`. The daemon speaks WebSocket only;
   any control / introspection happens via Redis pub/sub or supervisord
   status (§7d.3).
-- Writing to SQLite from `dcc-bus`. The daemon performs **read-only**
-  DB queries against the same SQLite file. All catalogue mutations
-  stay in `loco-server`.
+- **Any SQLite access from `dcc-bus`.** The daemon does not open the
+  database. Layout roster and command-station connection parameters
+  reach the process via Redis snapshots and CLI flags respectively;
+  all catalogue mutations stay in `loco-server`.
 - Multi-instance arbitration. Exactly one `dcc-bus` per
   `(layoutId, commandStationId)` is enforced by supervisord's program
   uniqueness (each program name is globally unique, §7d.2).
@@ -137,9 +138,9 @@ risk surfaces and deserve **process isolation**.
        │  · poll subscribed vehicles      │  │  · poll subscribed vehicles    │
        │  · DCC I/O via                   │  │  · DCC I/O via                 │
        │    commandstation.Station        │  │    commandstation.Station      │
-       │  · enforce CanDriveLoco /        │  │  · enforce CanDriveLoco /      │
-       │    CanInvokeFunction on every WS │  │    CanInvokeFunction on every  │
-       │    action via shared SQLite      │  │    WS action                   │
+       │  · enforce drive policy on       │  │  · enforce drive policy on     │
+       │    every WS action via Redis     │  │    every WS action via Redis   │
+       │    roster snapshots              │  │    roster snapshots            │
        │  · write loco:state:cs:2 Redis   │  │  · write loco:state:cs:3 Redis │
        │  · per-daemon dead-man's switch  │  │  · per-daemon dead-man's switch│
        └────────────┬─────────────────────┘  └────────────┬───────────────────┘
@@ -150,8 +151,8 @@ risk surfaces and deserve **process isolation**.
         │  (cs id 2)             │            │  (cs id 3)             │
         └────────────────────────┘            └────────────────────────┘
 
-        Shared SQLite file ─── read by everybody, written by loco-server only
-        Shared Redis        ─── state cache + pub/sub command channel
+        SQLite (loco-server only) ─── catalogue source of truth
+        Shared Redis             ─── state cache, roster snapshots, pub/sub
 ```
 
 The lozenge `dcc-bus-<layoutId>-<commandStationId>` follows the
@@ -177,10 +178,10 @@ delegate the **mechanism** to supervisord.
 
 #### What `dcc-bus` is NOT
 
-- It is **not a database service.** Writes go through `loco-server`'s
-  REL repositories. The daemon opens SQLite read-only (`?mode=ro`) and
-  reads catalogue rows on demand. SQLite's single-writer rule is
-  preserved by construction.
+- It is **not a database service.** Catalogue writes go through
+  `loco-server`'s REL repositories. The daemon never opens SQLite;
+  it consumes pre-built JSON snapshots published by the server on
+  Redis (`pkgs/layoutroster`).
 - It is **not an authorization authority.** It enforces the same
   `pkgs/server/security` policies as the server but it does not mint
   JWTs, does not extend sudo elevations, does not write audit rows.

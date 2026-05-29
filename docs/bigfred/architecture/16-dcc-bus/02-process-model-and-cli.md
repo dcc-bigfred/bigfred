@@ -21,34 +21,33 @@ deployment ships one binary.
 
 | Flag | Type | Required | Default | Purpose |
 |---|---|---|---|---|
-| `--layout-id` | uint | yes | – | `LayoutID` the daemon is bound to. Validates against the JWT on every WS upgrade. |
-| `--command-station-id` | uint | yes | – | `CommandStationID` the daemon owns. Resolved against `command_stations` at boot; absence → fatal startup error. |
+| `--layout-id` | uint | yes | – | `LayoutID` the daemon is bound to. Validated against the JWT on every WS upgrade. |
+| `--command-station-id` | uint | yes | – | `CommandStationID` the daemon owns (identity + Redis key suffix). |
 | `--port` | uint16 | yes | – | TCP port the WebSocket listener binds to. **Allocated by `loco-server`**, never hard-coded. |
-| `--bind` | string | no | `127.0.0.1` | Interface to bind on. **Always loopback by default** because the frontend reaches the daemon through `loco-server`'s reverse proxy (§7e.6); the operator only widens this when running `dcc-bus` on a separate host. |
-| `--db-path` | string | yes | – | SQLite file shared with `loco-server`. Opened read-only (`?mode=ro&_journal=WAL`). |
-| `--jwt-secret` | string | no | `$BIGFRED_JWT_SECRET` | HMAC secret used by `AuthService`. Identical to `loco-server` so JWTs validate. Missing secret → fatal startup error (no per-process random fallback like `loco-server` has in dev mode). |
-| `--redis-addr` | string | no | `127.0.0.1:6379` | Redis used for state cache + pub/sub. The daemon refuses to start if Redis is unreachable for 10 s. |
-| `--redis-db` | int | no | `0` | Redis logical DB index. |
-| `--poll-interval` | duration | no | `200ms` | Cadence for `Station.GetSpeed` / `ListFunctions` polling per subscribed address. The poller batches stride-fairly across vehicles. |
-| `--heartbeat-grace` | duration | no | `5s` | Default per-session dead-man's switch grace; can be overridden by the user via `session.setEmergencyPlan` (§4.5.3). Hard-capped at 30 s like `loco-server`. |
-| `--shutdown-timeout` | duration | no | `5s` | Time given to drain in-flight commands and emit `loco.state` at speed 0 (per emergency plan) before exit. |
-| `--log-level` | string | no | `info` | logrus level. |
+| `--bind` | string | no | `127.0.0.1` | Interface to bind on. **Loopback by default** because the frontend reaches the daemon through `loco-server`'s reverse proxy (§7e.6). |
+| `--station-name` | string | yes | – | Display name of the command station (for logs). Set by `loco-server` from the `command_stations` row when the program is registered. |
+| `--station-kind` | string | yes | – | Driver kind: `z21` \| `loconet_serial` \| `loconet_tcp`. |
+| `--station-uri` | string | yes | – | Connection URI passed to `pkgs/loco/commandstation` (e.g. `udp://192.168.0.111:21105`, `serial:///dev/ttyUSB0:57600`). |
+| `--speed-steps` | uint | no | `128` | DCC speed steps (14, 28, or 128). |
+| `--jwt-secret` | string | no | `$BIGFRED_JWT_SECRET` | HMAC secret shared with `loco-server`. Missing secret → fatal startup error. |
+| `--redis-addr` | string | no | `127.0.0.1:6380` | Redis for state cache, roster snapshots, and pub/sub. Boot fails if `PING` does not succeed. |
+| `--heartbeat-secs` | float | no | `5` | WS keepalive interval advertised to clients. |
+| `--deadman-secs` | float | no | `12` | Idle window after which the daemon applies emergency stop to the client's subscribed addresses. |
+| `--allowed-origin` | string[] | no | – | Optional WS `Origin` allow-list (repeatable). Empty → permissive; production usually proxies through `loco-server`. |
 
-Validation rules applied at boot (before opening the DCC bus):
+Flag names are defined once in `pkgs/dcc-bus/cliargs` so `loco-server` and the daemon stay in sync.
 
-1. `layout_id` resolves to a `Layout` row.
-2. `command_station_id` resolves to a `CommandStation` row.
-3. The `(layout_id, command_station_id)` pair is **attached** (either
-   via a `LayoutCommandStation` row for non-system layouts, or by the
-   "system layout sees every cs" rule for `IsSystem = true`). A
-   mismatch is a fatal startup error (`command_station_not_attached_to_layout`).
-4. `--jwt-secret` is non-empty.
-5. `--port` is in the unprivileged range (`>1024`).
-6. Redis `PING` succeeds within 10 s.
-7. The DCC bus is dial-able: `commandstation.New…()` succeeds against
-   the `CommandStation.Connection` values (§3a.1) within
-   `--shutdown-timeout`. Failure → daemon exits non-zero;
-   supervisord's `autorestart=true` retries with exponential backoff.
+Validation rules applied at boot (before accepting WS clients):
+
+1. `--layout-id` and `--command-station-id` are non-zero; `--command-station-id` matches the station config baked into the CLI flags.
+2. `--station-kind` is a known `CommandStationKind`; `--station-uri` is non-empty.
+3. `--jwt-secret` (or `BIGFRED_JWT_SECRET`) is non-empty.
+4. `--port` is non-zero.
+5. Redis `PING` succeeds.
+6. Optional `GET` of `bigfred:layout:<L>:allowed_vehicles` and `defined_trains` seeds the in-memory roster (empty until the server publishes).
+7. `commandstation` driver opens successfully against `--station-uri`. Failure → exit non-zero; supervisord `autorestart` retries.
+
+**Layout ↔ command-station attachment** is enforced by `loco-server` before it registers the supervisord program; the daemon does not re-check SQLite.
 
 #### Program registration
 
@@ -64,9 +63,12 @@ Validation rules applied at boot (before opening the DCC bus):
   --command-station-id 2 \
   --port 9201 \
   --bind 127.0.0.1 \
-  --db-path /home/loco/.local/share/loco/bigfred.db \
+  --station-name "Main Z21" \
+  --station-kind z21 \
+  --station-uri "udp://192.168.0.111:21105" \
+  --speed-steps 128 \
   --jwt-secret "$BIGFRED_JWT_SECRET" \
-  --redis-addr 127.0.0.1:6379
+  --redis-addr 127.0.0.1:6380
 ```
 
 The `--jwt-secret` value is rendered inline by `loco-server` from
@@ -214,5 +216,6 @@ the live command station within one poll cycle.
 | `dcc-bus` cannot dial the command station at boot | Exit non-zero; supervisord's BACKOFF state holds it (and surfaces in `system.status`); throttles see `loco.error { code:"command_station_unreachable" }`. |
 | `--port` already in use on the host | Daemon exits with `port_in_use`; supervisord backoff; `loco-server` allocates the next port from the pool on the next restart. |
 | `loco-server` SIGTERM | `SupervisordService.Stop` (§7d.3) sends `supervisorctl shutdown`, which drains every `dcc-bus-*` program with their own SIGTERM + drain logic. No orphaned daemons (`ps` assertion in §7e.8 #6). |
-| `dcc-bus` cannot reach Redis | Daemon stays up but logs warning; subscribers receive cache misses (state empty until next poll cycle); pub/sub-driven catalogue invalidations are lost — the daemon falls back to per-request SQLite lookups. |
-| SQLite locked by writer | Daemon retries with exponential backoff (max 100 ms); since SQLite WAL allows readers concurrent with one writer, contention is rare. |
+| `dcc-bus` cannot reach Redis | Boot fails (`PING` required). If Redis drops at runtime, roster updates and `loco:state` reads fail; the daemon keeps running but subscribe/drive gates may be stale until Redis returns. |
+| Stale roster snapshot | Daemon serves the last `allowed_vehicles` / `defined_trains` payload received. `loco-server` republishes on every roster mutation and at bootstrap. |
+| Command-station URI changed in admin | Supervisord program must be re-rendered (`DccBusService` sync) so the new `--station-uri` reaches the child; a running daemon is not hot-reloaded. |

@@ -26,6 +26,19 @@ move out and the file becomes a publish-to-Redis-command-channel
 helper used by `TrainService`, `ScriptService`, the takeover state
 machine and the dead-man's switch. See `LocoServiceDriver` below.
 
+#### Roster snapshots and supervisord command line
+
+`DccBusService.buildProgramSpec` loads the `CommandStation` row from
+SQLite (`CommandStationsRepo.FindByID`) and appends the shared CLI
+flags via `pkgs/dcc-bus/cliargs.AppendStationFlags` (`--station-name`,
+`--station-kind`, `--station-uri`, `--speed-steps`). The daemon never
+opens the database.
+
+`LayoutVehicleService.SyncLayoutRosterToRedis` publishes
+`bigfred:layout:<L>:allowed_vehicles` and `defined_trains` after roster
+and catalogue mutations (and once per layout at server bootstrap). See
+§7e.3.
+
 #### `DccBusService` — desired-state and lifecycle
 
 ```go

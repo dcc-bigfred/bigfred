@@ -14,6 +14,7 @@ import (
 	"github.com/spf13/cobra"
 
 	dccbus "github.com/keskad/loco/pkgs/dcc-bus"
+	"github.com/keskad/loco/pkgs/dcc-bus/cliargs"
 )
 
 // Flags collects every command-line knob the dcc-bus daemon exposes.
@@ -24,8 +25,12 @@ type Flags struct {
 	BindAddr string
 	Port     uint16
 
-	DBPath    string
 	RedisAddr string
+
+	StationName      string
+	StationKind      string
+	StationURI       string
+	StationSpeedSteps uint
 
 	JWTSecret    string
 	JWTSecretEnv string
@@ -57,12 +62,18 @@ should rarely be invoked manually.`,
 			if err != nil {
 				return err
 			}
+			cs, err := cliargs.CommandStationFromFlags(
+				f.CommandStationID, f.StationName, f.StationKind, f.StationURI, f.StationSpeedSteps,
+			)
+			if err != nil {
+				return fmt.Errorf("dcc-bus station config: %w", err)
+			}
 			cfg := dccbus.Config{
 				LayoutID:         f.LayoutID,
 				CommandStationID: f.CommandStationID,
 				BindAddr:         f.BindAddr,
 				Port:             f.Port,
-				DBPath:           f.DBPath,
+				CommandStation:   cs,
 				RedisAddr:        f.RedisAddr,
 				JWTSecret:        secret,
 				AllowedOrigins:   f.AllowedOrigins,
@@ -82,8 +93,11 @@ should rarely be invoked manually.`,
 	cmd.Flags().UintVar(&f.CommandStationID, "command-station-id", 0, "command station id this daemon talks to (required)")
 	cmd.Flags().StringVar(&f.BindAddr, "bind", "127.0.0.1", "interface to bind the WebSocket listener on")
 	cmd.Flags().Uint16Var(&f.Port, "port", 0, "TCP port to expose the WebSocket on (required; allocated by loco-server)")
-	cmd.Flags().StringVar(&f.DBPath, "db-path", "", "path to the shared SQLite database (required, opened read-only)")
 	cmd.Flags().StringVar(&f.RedisAddr, "redis-addr", "127.0.0.1:6380", "redis host:port used for state cache and pub/sub")
+	cmd.Flags().StringVar(&f.StationName, cliargs.FlagStationName, "", "command station display name (required; set by loco-server)")
+	cmd.Flags().StringVar(&f.StationKind, cliargs.FlagStationKind, "", "driver kind: z21 | loconet_serial | loconet_tcp (required)")
+	cmd.Flags().StringVar(&f.StationURI, cliargs.FlagStationURI, "", "connection URI for the command station (required)")
+	cmd.Flags().UintVar(&f.StationSpeedSteps, cliargs.FlagSpeedSteps, 128, "DCC speed steps (14 or 28 or 128)")
 	cmd.Flags().StringVar(&f.JWTSecret, "jwt-secret", "", "JWT signing secret (use --jwt-secret-env to read from an env var instead)")
 	cmd.Flags().StringVar(&f.JWTSecretEnv, "jwt-secret-env", "BIGFRED_JWT_SECRET", "env var name to read the JWT secret from when --jwt-secret is empty")
 	cmd.Flags().Float64Var(&f.HeartbeatSecs, "heartbeat-secs", 5, "WS keepalive interval the daemon advertises to clients")

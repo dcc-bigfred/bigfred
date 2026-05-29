@@ -60,7 +60,7 @@ default (group `infra`, program `redis`). Rationale:
   the very class of "is everything running?" foot-gun that supervisord
   exists to eliminate.
 - The bundled instance binds to `127.0.0.1` only, runs with `--save ""`
-  and `--appendonly no` (state is trivially rebuildable from SQLite +
+  and `--appendonly no` (state is trivially rebuildable from loco-server +
   re-poll on next boot, so persisting it adds latency for no gain),
   and listens on **port 6380 by default** to avoid colliding with a
   pre-existing system Redis on `:6379`.
@@ -92,7 +92,7 @@ Rows added by M4.5 (§7e DCC bus daemon):
 
 | Group | Program | Autostart | Autorestart | Notes |
 |---|---|---|---|---|
-| `dcc-bus` | `dcc-bus-<layoutId>-<commandStationId>` | true | true | one daemon per `(LayoutCommandStation OR system-layout × cs)` selected by at least one drive session; spawned lazily by `DccBusService.EnsureRunning` (§7e.6) via `SupervisordService.UpsertProgram`. Program name follows the `^[a-z][a-z0-9_-]*$` rule. Command-line includes `--layout-id`, `--command-station-id`, `--port`, `--jwt-secret` (§7e.2). |
+| `dcc-bus` | `dcc-bus-<layoutId>-<commandStationId>` | true | true | one daemon per attached `(layout, commandStation)` pair synced by `DccBusService`; spawned lazily via `EnsureRunning` or bulk `SyncProgramsForLayouts`. Command-line includes `--layout-id`, `--command-station-id`, `--port`, `--station-name`, `--station-kind`, `--station-uri`, `--speed-steps`, `--jwt-secret`, `--redis-addr` (§7e.2). |
 
 Future rows (post-M4.5):
 

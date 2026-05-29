@@ -51,11 +51,11 @@ domain model, REST surface and security policies (§7a.3) are unchanged
 |---|---|
 | Process cardinality | **One `dcc-bus` per `(layoutId, commandStationId)` pair** that has at least one active drive session pinned to it. Lazy-started by `loco-server`; long-lived until shutdown. |
 | Binary | The `loco-server` Go binary exposes a `dcc-bus` cobra subcommand (single binary, multiple `main` entry points — same pattern as `scripts-executor` §7d). |
-| Imports | `pkgs/loco/commandstation` (DCC), `pkgs/server/security` (policies), `pkgs/server/domain` (entities), `pkgs/server/repo` (read-only DB access), `pkgs/server/cache` (Redis). Does **not** import `pkgs/server/http`. |
+| Imports | `pkgs/loco/commandstation` (DCC), `pkgs/server/domain` (entities), `pkgs/layoutroster` (Redis snapshot types), `pkgs/dcc-bus/state` (Redis client). Does **not** import `pkgs/server/repo`, `pkgs/server/http`, or open SQLite. |
 | Listener | Plain `http.Server` upgraded with `coder/websocket` on the CLI-supplied port. Binds to `127.0.0.1` by default; `loco-server` may reverse-proxy it. |
 | Authentication | JWT issued by `loco-server` (shared secret); `?token=` query parameter on the WS upgrade, identical to §7a.1. Verifies that the JWT's `layoutId` matches the daemon's `--layout-id`. |
-| Authorization | `pkgs/server/security` is consulted on every command. Takeover / lease state is reloaded from SQLite on demand and refreshed by Redis pub/sub invalidations from `loco-server`. |
-| Coordination with `loco-server` | Shared **SQLite** file (read-only from `dcc-bus`), shared **Redis** for state cache, pub/sub for catalogue invalidations and server-initiated DCC commands. No direct HTTP RPC. |
+| Authorization | Drive commands are gated by in-memory roster snapshots from Redis (`allowed_vehicles` → `controllerUserIds` per DCC address). Lease / takeover expansion of `controllerUserIds` is planned; today the server publishes the vehicle owner. |
+| Coordination with `loco-server` | **Redis only** between processes: `loco:state` cache, roster snapshots (`bigfred:layout:<L>:allowed_vehicles`, `defined_trains`), command/event pub/sub. Command-station connection parameters are passed on the supervisord command line (`--station-*`). Catalogue truth stays in `loco-server`'s SQLite. |
 | Throttle WS actions | `loco.subscribe`, `loco.unsubscribe`, `loco.setSpeed`, `loco.toggleFn`, `system.estop`, `ping`. All other WS actions stay on `loco-server`'s `/api/v1/ws`. |
 | Dead-man's switch | Per-daemon: each `dcc-bus` runs the heartbeat for its own WS clients and executes the user's `EmergencyPlan` against drive targets on **its own command station** only (§4.5 still applies for cross-cutting concerns like scripts). |
 | Supervisord group | `dcc-bus` (alongside `loco` for `scripts-executor`); programs named `dcc-bus-<layoutId>-<commandStationId>`. |

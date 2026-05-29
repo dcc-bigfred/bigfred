@@ -44,8 +44,8 @@ scheduled.
    daemon. The owner revokes the lease via REST. The next
    `loco.setSpeed` from the lessee returns `loco.error { code:"not_authorized_to_drive" }`;
    the lessee's slider freezes. Verifiable because the daemon does
-   not store its own lease state — it re-reads SQLite on every
-   command.
+   receives an updated `allowed_vehicles` snapshot with the owner back
+   in `controllerUserIds` and denies the lessee with `not_authorized`.
 9. **Takeover propagation.** A signalman issues
    `takeover.request` on `loco-server`'s WS; after the 15 s window
    the granted takeover causes the affected driver's WS

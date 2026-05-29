@@ -14,7 +14,9 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/keskad/loco/pkgs/dcc-bus/cliargs"
 	"github.com/keskad/loco/pkgs/dcc-bus/protocol"
+	"github.com/keskad/loco/pkgs/server/repo"
 	"github.com/keskad/loco/pkgs/server/supervisord"
 )
 
@@ -36,8 +38,6 @@ type DccBusConfig struct {
 	// Executable is the absolute path of the loco-server binary used
 	// to launch `<executable> dcc-bus …`. Defaults to os.Args[0].
 	Executable string
-	// DBPath is forwarded as the daemon's --db-path flag.
-	DBPath string
 	// RedisAddr is forwarded as the daemon's --redis-addr flag.
 	RedisAddr string
 	// JWTSecret is forwarded verbatim via --jwt-secret. The
@@ -69,6 +69,7 @@ type DccBusService struct {
 	cfg    DccBusConfig
 	sup    *SupervisordService
 	redis  *RedisService
+	cs     *repo.CommandStations
 	log    *logrus.Logger
 
 	mu    sync.Mutex
@@ -88,7 +89,7 @@ const portsRedisKey = "dcc-bus:ports"
 // caller MUST run SupervisordService.Start before any EnsureRunning
 // call. `redis` may be nil in tests that don't need the persistent
 // port assignment; production wires it.
-func NewDccBusService(cfg DccBusConfig, sup *SupervisordService, redis *RedisService, log *logrus.Logger) *DccBusService {
+func NewDccBusService(cfg DccBusConfig, sup *SupervisordService, redis *RedisService, cs *repo.CommandStations, log *logrus.Logger) *DccBusService {
 	if log == nil {
 		log = logrus.New()
 	}
@@ -108,6 +109,7 @@ func NewDccBusService(cfg DccBusConfig, sup *SupervisordService, redis *RedisSer
 		cfg:   cfg,
 		sup:   sup,
 		redis: redis,
+		cs:    cs,
 		log:   log,
 		ports: make(map[portKey]uint16, 8),
 	}
@@ -203,7 +205,10 @@ func (d *DccBusService) EnsureRunning(ctx context.Context, layoutID, commandStat
 		}).Info("dcc-bus ensure running: allocated port")
 	}
 
-	spec := d.buildProgramSpec(name, layoutID, commandStationID, port)
+	spec, err := d.buildProgramSpec(ctx, name, layoutID, commandStationID, port)
+	if err != nil {
+		return 0, name, err
+	}
 	d.log.WithFields(logrus.Fields{"program": name, "port": port}).Info("dcc-bus ensure running: upserting supervisord program")
 	if err := d.sup.UpsertProgram(ctx, DccBusGroupName, spec); err != nil {
 		return 0, name, fmt.Errorf("upsert dcc-bus program: %w", err)
@@ -339,17 +344,24 @@ func (d *DccBusService) waitDialable(ctx context.Context, port uint16) error {
 // buildProgramSpec assembles the supervisord program spec used to
 // spawn the daemon. The command line is rendered with shell escaping
 // applied at supervisord's template level.
-func (d *DccBusService) buildProgramSpec(name string, layoutID, commandStationID uint, port uint16) supervisord.ProgramSpec {
+func (d *DccBusService) buildProgramSpec(ctx context.Context, name string, layoutID, commandStationID uint, port uint16) (supervisord.ProgramSpec, error) {
+	if d.cs == nil {
+		return supervisord.ProgramSpec{}, errors.New("dcc-bus: command station repository is not wired")
+	}
+	cs, err := d.cs.FindByID(ctx, commandStationID)
+	if err != nil {
+		return supervisord.ProgramSpec{}, fmt.Errorf("load command station %d: %w", commandStationID, err)
+	}
 	args := []string{
 		d.cfg.Executable, "dcc-bus",
 		"--layout-id", strconv.FormatUint(uint64(layoutID), 10),
 		"--command-station-id", strconv.FormatUint(uint64(commandStationID), 10),
 		"--port", strconv.Itoa(int(port)),
 		"--bind", "127.0.0.1",
-		"--db-path", d.cfg.DBPath,
 		"--redis-addr", d.cfg.RedisAddr,
 		"--jwt-secret", string(d.cfg.JWTSecret),
 	}
+	args = cliargs.AppendStationFlags(args, cs)
 	for _, origin := range d.cfg.AllowedOrigins {
 		args = append(args, "--allowed-origin", origin)
 	}
@@ -360,5 +372,5 @@ func (d *DccBusService) buildProgramSpec(name string, layoutID, commandStationID
 		Autorestart:  true,
 		StartSecs:    1,
 		StopWaitSecs: 5,
-	}
+	}, nil
 }

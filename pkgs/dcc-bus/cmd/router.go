@@ -300,9 +300,8 @@ func (r *Router) HandleSetSpeed(ctx context.Context, sess *ws.Session, p protoco
 	}
 }
 
-// HandleSetFunction toggles a single function bit on the loco. The
-// function bit is mirrored into the Redis cache so a re-connecting
-// client sees the right state immediately.
+// HandleSetFunction sets a single function on or off. The desired
+// state is sent to the command station and mirrored in Redis.
 func (r *Router) HandleSetFunction(ctx context.Context, sess *ws.Session, p protocol.LocoSetFunctionPayload, requestID string) {
 	if reason := r.denyDriveCommand(sess.UserID, p.Address); reason != "" {
 		_ = sess.SendAck(ctx, requestID, false, reason)
@@ -311,11 +310,21 @@ func (r *Router) HandleSetFunction(ctx context.Context, sess *ws.Session, p prot
 	key := fnKey{Addr: p.Address, Fn: p.Function}
 	r.fnCacheMu.Lock()
 	previous, hadPrev := r.fnCache[key]
-	r.fnCache[key] = p.On
+	unchanged := hadPrev && previous == p.On
+	if !unchanged {
+		r.fnCache[key] = p.On
+	}
 	r.fnCacheMu.Unlock()
 
-	toggle := !hadPrev || previous != p.On
-	if err := r.station.SendFn(commandstation.MainTrackMode, commandstation.LocoAddr(p.Address), commandstation.FuncNum(p.Function), toggle); err != nil {
+	// Station.SendFn takes the desired on/off state (Z21 LAN_X_SET_LOCO_FUNCTION
+	// type bits), not a DCC toggle edge.
+	if unchanged {
+		if requestID != "" {
+			_ = sess.SendAck(ctx, requestID, true, "")
+		}
+		return
+	}
+	if err := r.station.SendFn(commandstation.MainTrackMode, commandstation.LocoAddr(p.Address), commandstation.FuncNum(p.Function), p.On); err != nil {
 		fields := r.stationLogFields()
 		fields["addr"] = p.Address
 		fields["function"] = p.Function
@@ -327,6 +336,13 @@ func (r *Router) HandleSetFunction(ctx context.Context, sess *ws.Session, p prot
 			Detail:  err.Error(),
 		})
 		_ = sess.SendAck(ctx, requestID, false, "command_station_error")
+		r.fnCacheMu.Lock()
+		if hadPrev {
+			r.fnCache[key] = previous
+		} else {
+			delete(r.fnCache, key)
+		}
+		r.fnCacheMu.Unlock()
 		return
 	}
 
@@ -485,10 +501,14 @@ func (r *Router) applyControlSetFunction(ctx context.Context, p protocol.LocoSet
 	if !r.isLocoAllowedOnLayout(p.Address) {
 		return
 	}
-	if err := r.station.SendFn(commandstation.MainTrackMode, commandstation.LocoAddr(p.Address), commandstation.FuncNum(p.Function), true); err != nil {
+	if err := r.station.SendFn(commandstation.MainTrackMode, commandstation.LocoAddr(p.Address), commandstation.FuncNum(p.Function), p.On); err != nil {
 		r.log.WithError(err).WithField("addr", p.Address).Warn("dcc-bus control setFn failed")
 		return
 	}
+	key := fnKey{Addr: p.Address, Fn: p.Function}
+	r.fnCacheMu.Lock()
+	r.fnCache[key] = p.On
+	r.fnCacheMu.Unlock()
 	snap := protocol.LocoStatePayload{Address: p.Address, Source: "server", At: time.Now().UTC().UnixMilli()}
 	if cached, ok, err := r.redis.LoadState(ctx, p.Address); err == nil && ok {
 		snap.Speed = cached.Speed

@@ -162,6 +162,21 @@ func (z *Z21Roco) ObserveStates() <-chan LocoObservation {
 	return z.obsCh
 }
 
+// SubscribeLocoInfo implements LocoInfoSubscriber. It sends
+// LAN_X_GET_LOCO_INFO (§4.1) which subscribes addr for unsolicited
+// LAN_X_LOCO_INFO under broadcast flag 0x00000001 — the mechanism that
+// works on every Z21 firmware, unlike the "all locos" flag 0x00010000
+// (FW ≥ 1.24 only). It is fire-and-forget: the read loop turns the
+// reply into a normal observation, so we do not open a sync window here.
+func (z *Z21Roco) SubscribeLocoInfo(addr LocoAddr) error {
+	z.ioMu.Lock()
+	defer z.ioMu.Unlock()
+	req := z.buildGetLocoInfo(addr)
+	logrus.Debugf("req(LAN_X_GET_LOCO_INFO subscribe addr=%d): % X", addr, req)
+	_, err := z.write(req)
+	return err
+}
+
 // enableLocoInfoBroadcast sets LAN_SET_BROADCASTFLAGS so the Z21 pushes
 // LAN_X_LOCO_INFO for every modified loco (§2.16 flags 0x1 | 0x10000).
 func (z *Z21Roco) enableLocoInfoBroadcast() error {

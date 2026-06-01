@@ -107,6 +107,22 @@ same shape as LocoNet:
 - **`ObserveStates`** lazily enables the broadcast (`LAN_SET_BROADCASTFLAGS`,
   flags `0x00000001 | 0x00010000`) on first call, so push is off until a
   consumer actually wants it (the standalone CLI never enables it).
+- **`SubscribeLocoInfo`** (the optional `LocoInfoSubscriber` capability)
+  sends `LAN_X_GET_LOCO_INFO` (§4.1) for a given address. This is the
+  crucial part for **older firmware**: flag `0x00010000` ("push for *all*
+  modified locos", §2.16) only exists from **FW ≥ 1.24**, and even the
+  base flag `0x00000001` delivers `LAN_X_LOCO_INFO` **only for addresses
+  the client subscribed to**. So on a pre-1.24 Z21 an external handset
+  moving a loco the daemon never queried is invisible unless the daemon
+  first subscribes it. `SubscribeLocoInfo` is fire-and-forget — the read
+  loop turns the reply into a normal observation.
+
+> **Symptom this fixes.** Drive a loco to speed 18 in BigFred, then stop
+> it from an external Z21 app (e.g. `loco speed set -l 4 0` or a phone
+> app). The loco stops on the track but BigFred's slider stayed at 18,
+> while the external app correctly showed 0 — because that app had
+> *subscribed* to the loco and `dcc-bus` had not. Explicit subscription
+> makes `dcc-bus` receive the same `LAN_X_LOCO_INFO` and drop to 0.
 
 Two robustness details carried over from the earlier polling work:
 
@@ -188,12 +204,24 @@ implement `StateObserver`, so the polling branch only runs for a future
 driver that cannot push. The fallback cadence is set with
 `--poll-interval-ms` (0 → `750ms` default).
 
+When the driver also implements `LocoInfoSubscriber` (Z21), the push path
+starts a **subscription refresh** goroutine (`runSubscriptionRefresh`)
+that every `5s` re-subscribes the command station to each address with at
+least one live WS subscriber (`Hub.SubscribedAddrs`, filtered by layout
+authorization). Re-subscribing is cheap and idempotent; the interval
+keeps the subscription alive across the Z21's per-client 16-address FIFO
+and client time-out. LocoNet does not implement the capability (the
+shared bus shows every packet) so no refresh runs for it.
+
 #### Limitations / future work
 
-- **Z21 firmware.** Push relies on broadcast flag `0x00010000` ("all
-  modified locos"), available from Z21 FW ≥ 1.20. On older firmware the
-  daemon still works for in-app driving but will not see external changes
-  for locos it never queried.
+- **Z21 firmware.** The "all modified locos" broadcast flag `0x00010000`
+  is FW ≥ 1.24 only. To stay firmware-independent the daemon also
+  explicitly subscribes each watched loco via `LAN_X_GET_LOCO_INFO`
+  (`SubscribeLocoInfo`, refreshed every `5s`), which works under the base
+  flag `0x00000001` on all firmware. Locos with no live WS subscriber are
+  not subscribed, so a change there is only picked up once someone starts
+  watching (or, on FW ≥ 1.24, immediately via the all-locos flag).
 - **Z21 broadcast persistence.** Broadcast flags are per-client and lost
   if the Z21 reboots; the daemon sets them once at feed startup. A
   periodic refresh is a possible future hardening.

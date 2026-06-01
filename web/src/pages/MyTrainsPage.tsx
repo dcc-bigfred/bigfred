@@ -17,6 +17,9 @@ export default function MyTrainsPage() {
       <Typography variant="h5" gutterBottom>
         {t("vehicle:trainList.title")}
       </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2, maxWidth: 720 }}>
+        {t("vehicle:trainList.intro")}
+      </Typography>
       <Box sx={{ mt: 2 }}>
         <MyTrainsCatalogue layoutId={me.layoutId} />
       </Box>

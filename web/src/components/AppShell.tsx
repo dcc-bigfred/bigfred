@@ -1,5 +1,19 @@
-import { useMemo } from "react";
-import { AppBar, Box, Chip, Stack, Toolbar, Tooltip, Typography } from "@mui/material";
+import { useEffect, useMemo, useState } from "react";
+import {
+  AppBar,
+  Box,
+  Button,
+  Chip,
+  IconButton,
+  Stack,
+  Toolbar,
+  Tooltip,
+  Typography,
+  useMediaQuery,
+  useTheme,
+} from "@mui/material";
+import SpeedIcon from "@mui/icons-material/Speed";
+import MenuIcon from "@mui/icons-material/Menu";
 import PeopleIcon from "@mui/icons-material/People";
 import MapIcon from "@mui/icons-material/Map";
 import EventIcon from "@mui/icons-material/Event";
@@ -12,24 +26,24 @@ import TrainIcon from "@mui/icons-material/Train";
 import VpnKeyIcon from "@mui/icons-material/VpnKey";
 import LockResetIcon from "@mui/icons-material/LockReset";
 import LogoutIcon from "@mui/icons-material/Logout";
-import { Link, Outlet, useNavigate } from "react-router-dom";
+import { Link, Outlet, useMatch, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
 import { useLogout, useMe } from "../api/auth";
 import { SocketProvider } from "../context/SocketContext";
 import LanguageMenu from "./LanguageMenu";
 import SudoIndicators from "./SudoIndicator";
+import MobileNavDrawer, { type MobileNavSection } from "./MobileNavDrawer";
 import TopBarMenu, { type TopBarMenuItem } from "./TopBarMenu";
 
 // AppShell renders the top app bar shared by every authenticated
 // screen. The post-login pages render inside its <Outlet/>.
 //
 // Layout, left → right inside the AppBar:
-//   [BigFred title]   ……spacer……   [Administration ▾] [Account ▾] [🌐]
+//   [☰] [BigFred] ……spacer…… [Sterowanie] [layout chip] [sudo] [menus] [🌐]
 //
-// The dropdowns use the reusable TopBarMenu component so adding a new
-// top-level menu (e.g. "Operations" once the throttle screens land)
-// is a single `<TopBarMenu/>` call with a declarative items array.
+// Throttle is a persistent top-bar link (not inside the My dropdown).
+// The dropdowns use TopBarMenu for account-level / admin-level actions.
 //
 // Per §6 of the spec this will eventually grow into AppBar + Drawer +
 // Container for per-page navigation; the dropdowns here are
@@ -39,6 +53,14 @@ export default function AppShell() {
   const me = useMe().data;
   const logout = useLogout();
   const navigate = useNavigate();
+  const theme = useTheme();
+  const isCompactNav = useMediaQuery(theme.breakpoints.down("md"));
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const onThrottlePage = Boolean(useMatch("/throttle"));
+
+  useEffect(() => {
+    if (!isCompactNav) setMobileNavOpen(false);
+  }, [isCompactNav]);
 
   // Namespaces:
   //   common — appName, nav.*, comingSoon
@@ -119,12 +141,6 @@ export default function AppShell() {
         icon: <DirectionsRailwayIcon fontSize="small" />,
         onClick: () => navigate("/my/trains"),
       },
-      {
-        id: "throttle",
-        label: t("nav.my.throttle"),
-        icon: <TrainIcon fontSize="small" />,
-        onClick: () => navigate("/throttle"),
-      },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [t],
@@ -170,11 +186,56 @@ export default function AppShell() {
 
   const isAdmin = me?.effectiveRole === "admin";
 
+  const mobileNavSections: MobileNavSection[] = useMemo(() => {
+    if (!me) return [];
+    const sections: MobileNavSection[] = [
+      { id: "my", label: t("nav.my.menuLabel"), items: myItems },
+    ];
+    if (isAdmin) {
+      sections.push({
+        id: "administration",
+        label: t("nav.administration.menuLabel"),
+        items: administrationItems,
+      });
+    }
+    sections.push({
+      id: "account",
+      label: t("nav.account.menuLabel"),
+      items: accountItems,
+    });
+    return sections;
+  }, [
+    me,
+    isAdmin,
+    myItems,
+    administrationItems,
+    accountItems,
+    t,
+  ]);
+
+  const accountCaption =
+    me &&
+    `${me.login} · ${t(`role:${me.effectiveRole}` as const, {
+      defaultValue: me.effectiveRole,
+    })}`;
+
   return (
     <SocketProvider enabled={!!me}>
     <Box sx={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
       <AppBar position="sticky">
         <Toolbar>
+          {isCompactNav && me && (
+            <IconButton
+              color="inherit"
+              edge="start"
+              aria-label={t("nav.openMenu")}
+              onClick={() => setMobileNavOpen(true)}
+              sx={{ mr: 1 }}
+            >
+              <MenuIcon />
+            </IconButton>
+          )}
+
           <Typography
             variant="h6"
             component={Link}
@@ -184,12 +245,19 @@ export default function AppShell() {
               color: "inherit",
               textDecoration: "none",
               "&:hover": { opacity: 0.9 },
+              minWidth: 0,
             }}
+            noWrap
           >
             {t("appName")}
           </Typography>
 
-          <Stack direction="row" spacing={1} alignItems="center">
+          <Stack
+            direction="row"
+            spacing={1}
+            alignItems="center"
+            sx={{ flexShrink: 0 }}
+          >
             {/* Active layout indicator. The session is pinned to a
                 single layout for its entire lifetime (§7a.1), so the
                 user must be able to see at a glance which one they
@@ -223,27 +291,37 @@ export default function AppShell() {
             {me && <SudoIndicators />}
 
             {me && (
+              <Button
+                color="inherit"
+                component={Link}
+                to="/throttle"
+                startIcon={<SpeedIcon />}
+                aria-current={onThrottlePage ? "page" : undefined}
+                sx={{
+                  textTransform: "none",
+                  fontWeight: onThrottlePage ? 700 : 500,
+                  flexShrink: 0,
+                }}
+              >
+                {t("nav.my.throttle")}
+              </Button>
+            )}
+
+            {me && !isCompactNav && (
               <TopBarMenu label={t("nav.my.menuLabel")} items={myItems} />
             )}
 
-            {me && isAdmin && (
+            {me && isAdmin && !isCompactNav && (
               <TopBarMenu
                 label={t("nav.administration.menuLabel")}
                 items={administrationItems}
               />
             )}
 
-            {me && (
+            {me && !isCompactNav && (
               <TopBarMenu
                 label={t("nav.account.menuLabel")}
-                // Caption surfaces the active identity next to the
-                // menu name, so the user always knows "who am I"
-                // without opening the dropdown. Role goes through
-                // the `role` namespace (graceful fallback to the
-                // raw code if the catalogue is behind the backend).
-                caption={`${me.login} · ${t(`role:${me.effectiveRole}` as const, {
-                  defaultValue: me.effectiveRole,
-                })}`}
+                caption={accountCaption ?? undefined}
                 items={accountItems}
               />
             )}
@@ -252,6 +330,18 @@ export default function AppShell() {
           </Stack>
         </Toolbar>
       </AppBar>
+
+      {me && isCompactNav && (
+        <MobileNavDrawer
+          open={mobileNavOpen}
+          onClose={() => setMobileNavOpen(false)}
+          title={t("nav.drawerTitle")}
+          closeLabel={t("nav.closeMenu")}
+          sections={mobileNavSections}
+          identityLine={accountCaption ?? undefined}
+        />
+      )}
+
       <Box component="main" sx={{ flexGrow: 1 }}>
         <Outlet />
       </Box>

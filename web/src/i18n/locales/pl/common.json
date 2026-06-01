@@ -22,6 +22,9 @@
     }
   },
   "nav": {
+    "openMenu": "Otwórz menu",
+    "closeMenu": "Zamknij menu",
+    "drawerTitle": "Menu",
     "administration": {
       "menuLabel": "Administracja",
       "users": "Użytkownicy",

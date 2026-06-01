@@ -60,6 +60,7 @@
   "roster": {
     "vehicles": {
       "title": "Pojazdy na makiecie",
+      "manageButton": "Zarządzaj moimi pojazdami",
       "empty": "Żaden pojazd nie został jeszcze dodany do makiety.",
       "columns": {
         "name": "Nazwa",
@@ -72,6 +73,7 @@
     },
     "trains": {
       "title": "Składy na makiecie",
+      "manageButton": "Zarządzaj moimi składami",
       "empty": "Żaden skład nie został jeszcze dodany do makiety.",
       "columns": {
         "name": "Nazwa",

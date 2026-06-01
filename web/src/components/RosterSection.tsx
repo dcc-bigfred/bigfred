@@ -1,6 +1,7 @@
 import {
   Alert,
   Box,
+  Button,
   Chip,
   IconButton,
   Paper,
@@ -16,6 +17,7 @@ import {
 } from "@mui/material";
 import RemoveCircleOutlineIcon from "@mui/icons-material/RemoveCircleOutline";
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
 
 import { ApiError } from "../api/client";
 import { useMe } from "../api/auth";
@@ -36,6 +38,7 @@ interface Props {
 // dashboard. Catalogue CRUD lives on /my/vehicles and /my/trains.
 export default function RosterSection({ layoutId }: Props) {
   const { t } = useTranslation(["vehicle", "errors", "common"]);
+  const navigate = useNavigate();
   const me = useMe().data;
 
   const layoutVehicles = useLayoutVehicles(layoutId);
@@ -89,6 +92,13 @@ export default function RosterSection({ layoutId }: Props) {
           <Typography variant="h6" sx={{ flexGrow: 1 }}>
             {t("vehicle:roster.trains.title")}
           </Typography>
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={() => navigate("/my/trains")}
+          >
+            {t("vehicle:roster.trains.manageButton")}
+          </Button>
         </Box>
         <TableContainer>
           <Table size="small">
@@ -166,6 +176,13 @@ export default function RosterSection({ layoutId }: Props) {
           <Typography variant="h6" sx={{ flexGrow: 1 }}>
             {t("vehicle:roster.vehicles.title")}
           </Typography>
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={() => navigate("/my/vehicles")}
+          >
+            {t("vehicle:roster.vehicles.manageButton")}
+          </Button>
         </Box>
         <TableContainer>
           <Table size="small">

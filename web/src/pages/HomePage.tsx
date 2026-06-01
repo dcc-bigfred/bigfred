@@ -60,17 +60,6 @@ export default function HomePage() {
               })}
             </Typography>
           )}
-          {me?.effectiveRole === "admin" && layoutId != null && layoutId > 0 && (
-            <Button
-              variant="outlined"
-              size="small"
-              startIcon={<SettingsIcon />}
-              onClick={() => navigate(`/admin/layouts?edit=${layoutId}`)}
-              sx={{ mt: 1.5 }}
-            >
-              {t("home:editLayoutSettings")}
-            </Button>
-          )}
         </Box>
 
         {error && (
@@ -137,8 +126,32 @@ export default function HomePage() {
             </Paper>
 
             <Paper variant="outlined">
-              <Box sx={{ px: 2, py: 1.5, borderBottom: 1, borderColor: "divider" }}>
-                <Typography variant="h6">{t("home:interlockings.title")}</Typography>
+              <Box
+                sx={{
+                  px: 2,
+                  py: 1.5,
+                  borderBottom: 1,
+                  borderColor: "divider",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 1,
+                }}
+              >
+                <Typography variant="h6" sx={{ flexGrow: 1 }}>
+                  {t("home:interlockings.title")}
+                </Typography>
+                {me?.effectiveRole === "admin" &&
+                  layoutId != null &&
+                  layoutId > 0 && (
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<SettingsIcon />}
+                      onClick={() => navigate(`/admin/layouts?edit=${layoutId}`)}
+                    >
+                      {t("home:editLayoutSettings")}
+                    </Button>
+                  )}
               </Box>
               <TableContainer>
                 <Table size="small">

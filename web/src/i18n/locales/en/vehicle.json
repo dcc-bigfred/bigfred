@@ -58,6 +58,7 @@
   "roster": {
     "vehicles": {
       "title": "Vehicles on layout",
+      "manageButton": "Manage my vehicles",
       "empty": "No vehicles have been added to this layout yet.",
       "columns": {
         "name": "Name",
@@ -70,6 +71,7 @@
     },
     "trains": {
       "title": "Trains on layout",
+      "manageButton": "Manage my trains",
       "empty": "No trains have been added to this layout yet.",
       "columns": {
         "name": "Name",

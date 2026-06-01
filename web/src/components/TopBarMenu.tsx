@@ -92,9 +92,7 @@ export default function TopBarMenu({
   const close = () => setAnchor(null);
 
   // Drop falsy entries (lets the caller write `isAdmin && {...}`).
-  const visible = items.filter(
-    (it): it is TopBarMenuItem => it !== false && it != null,
-  );
+  const visible = filterTopBarMenuItems(items);
 
   return (
     <>
@@ -136,49 +134,71 @@ export default function TopBarMenu({
         transformOrigin={{ vertical: "top", horizontal: "right" }}
         slotProps={{ list: { dense: false } }}
       >
-        {visible.map((item) => {
-          if (item.divider) {
-            return <Divider key={item.id} component="li" />;
-          }
-
-          const handleClick = () => {
-            close();
-            item.onClick?.();
-          };
-
-          const menuItem = (
-            <MenuItem
-              key={item.id}
-              onClick={item.onClick ? handleClick : undefined}
-              disabled={item.disabled}
-              sx={{ minWidth: 200 }}
-            >
-              {item.icon !== undefined && (
-                <ListItemIcon>{item.icon}</ListItemIcon>
-              )}
-              <ListItemText primary={item.label} />
-            </MenuItem>
-          );
-
-          // MUI Tooltip drops pointer events on disabled descendants,
-          // so disabled items need a wrapping element for the
-          // hover-target. The <span> keeps focus order intact.
-          if (item.tooltip) {
-            return (
-              <Tooltip
-                key={item.id}
-                title={item.tooltip}
-                placement="left"
-                disableInteractive
-              >
-                <span>{menuItem}</span>
-              </Tooltip>
-            );
-          }
-
-          return menuItem;
-        })}
+        <TopBarMenuListContent items={visible} onItemActivate={close} />
       </Menu>
+    </>
+  );
+}
+
+/** Drop falsy entries (lets the caller write `isAdmin && {...}`). */
+export function filterTopBarMenuItems(
+  items: (TopBarMenuItem | false | null | undefined)[],
+): TopBarMenuItem[] {
+  return items.filter((it): it is TopBarMenuItem => it !== false && it != null);
+}
+
+interface TopBarMenuListContentProps {
+  items: TopBarMenuItem[];
+  /** Called before each item's onClick (e.g. close menu or drawer). */
+  onItemActivate?: () => void;
+}
+
+// Shared list body for TopBarMenu dropdowns and the mobile nav drawer.
+export function TopBarMenuListContent({
+  items,
+  onItemActivate,
+}: TopBarMenuListContentProps) {
+  return (
+    <>
+      {items.map((item) => {
+        if (item.divider) {
+          return <Divider key={item.id} component="li" />;
+        }
+
+        const handleClick = () => {
+          onItemActivate?.();
+          item.onClick?.();
+        };
+
+        const menuItem = (
+          <MenuItem
+            key={item.id}
+            onClick={item.onClick ? handleClick : undefined}
+            disabled={item.disabled}
+            sx={{ minWidth: 200 }}
+          >
+            {item.icon !== undefined && (
+              <ListItemIcon>{item.icon}</ListItemIcon>
+            )}
+            <ListItemText primary={item.label} />
+          </MenuItem>
+        );
+
+        if (item.tooltip) {
+          return (
+            <Tooltip
+              key={item.id}
+              title={item.tooltip}
+              placement="left"
+              disableInteractive
+            >
+              <span>{menuItem}</span>
+            </Tooltip>
+          );
+        }
+
+        return menuItem;
+      })}
     </>
   );
 }

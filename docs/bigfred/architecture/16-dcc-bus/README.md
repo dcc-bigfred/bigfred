@@ -46,8 +46,9 @@ domain model, REST surface and security policies (§7a.3) are unchanged
    observable behaviour the milestone must demonstrate.
 9. [External state observation](./09-external-state-observation.md) —
    reflecting speed/direction/function changes made by external physical
-   throttles; driver subscription-vs-polling research and the
-   `commandstation.StateObserver` capability.
+   throttles; driver subscription-vs-polling research, the
+   `commandstation.StateObserver` capability, and Z21 drive encoding
+   (direction-at-stop, SET **S=3** vs. INFO **KKK=4**).
 
 ## Quick reference
 

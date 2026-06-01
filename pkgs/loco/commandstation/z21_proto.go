@@ -106,6 +106,17 @@ func (z *Z21Roco) buildTrackPowerOn() []byte {
 	return append(buf, x...)
 }
 
+// buildSetBroadcastFlags builds LAN_SET_BROADCASTFLAGS (§2.16). This is
+// a LAN-level command (header 0x0050), not an X-Bus frame, so it has no
+// XOR byte: DataLen(2) + Header(2) + 4-byte little-endian flags.
+func buildSetBroadcastFlags(flags uint32) []byte {
+	buf := make([]byte, 8)
+	binary.LittleEndian.PutUint16(buf[0:2], 0x0008)
+	binary.LittleEndian.PutUint16(buf[2:4], 0x0050)
+	binary.LittleEndian.PutUint32(buf[4:8], flags)
+	return buf
+}
+
 // buildGetLocoInfo builds LAN_X_GET_LOCO_INFO command (0xE3 0xF0)
 func (z *Z21Roco) buildGetLocoInfo(addr LocoAddr) []byte {
 	const dataLen, header = 0x0009, 0x0040
@@ -175,41 +186,10 @@ func (z *Z21Roco) buildSetLocoSpeed(addr LocoAddr, speed uint8, forward bool, sp
 	// DB0: 0x1S where S = speed steps (0=14, 2=28, 4=128)
 	db0 := byte(0x10 | (speedSteps & 0x0F))
 
-	// DB3: RVVVVVVV where R = direction (1=forward) and V = speed
-	var db3 byte
-	if forward {
-		db3 = 0x80 // Set direction bit
-	}
-
-	// Speed encoding depends on speed steps
-	switch speedSteps {
-	case 0: // 14 speed steps
-		// For DCC 14: speed 0=stop, 1=e-stop, 2-15 are steps 1-14
-		if speed > 15 {
-			speed = 15
-		}
-		db3 |= (speed & 0x0F)
-	case 2: // 28 speed steps
-		// For DCC 28: more complex encoding with bit 5
-		if speed > 28 {
-			speed = 28
-		}
-		if speed > 0 {
-			// Map 1-28 to the encoding shown in the spec
-			speedBits := byte((speed + 3) / 2) // bits 0-3
-			speedBit5 := byte((speed + 3) % 2) // bit 5
-			db3 |= (speedBit5 << 4) | (speedBits & 0x0F)
-		}
-	case 4: // 128 speed steps (default)
-		// For DCC 128: speed 0=stop, 1=e-stop, 2-127 are steps 1-126
-		if speed > 127 {
-			speed = 127
-		}
-		db3 |= (speed & 0x7F)
-	default:
-		// Default to 128 speed steps
-		db3 |= (speed & 0x7F)
-	}
+	// DB3: RVVVVVVV — see §4.2 / §4.4. Stop and E-Stop are always
+	// R000… with V=0/1; the direction bit must NOT be set for stop or the
+	// Z21 sends a non-stop pattern (e.g. 0x80 was misread as speed 128).
+	db3 := encodeLocoDriveDB3(speed, forward, speedSteps)
 
 	x := []byte{0xE4, db0, adrMSB, adrLSB, db3}
 	x = append(x, xorSum(x))

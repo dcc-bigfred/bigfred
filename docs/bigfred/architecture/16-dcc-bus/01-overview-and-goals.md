@@ -62,8 +62,9 @@ risk surfaces and deserve **process isolation**.
    controller: physical throttles plugged directly into it can change a
    loco without BigFred's involvement. The daemon watches the bus and
    mirrors those external speed / direction / function changes back into
-   the UI — by *subscription* where the driver supports it (LocoNet), by
-   *polling* otherwise (Z21). See §7e.9.
+   the UI — by *subscription/push* (LocoNet shared bus, Z21
+   `LAN_SET_BROADCASTFLAGS`), with a *polling* fallback for any future
+   driver that cannot push. See §7e.9.
 7. **Hot-managed by `loco-server`.** The daemon is spawned, watched
    and restarted by `SupervisordService` (§7d). `loco-server` adds /
    removes `[program:dcc-bus-…]` entries via `UpsertProgram` /

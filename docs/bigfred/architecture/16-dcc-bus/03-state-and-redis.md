@@ -84,19 +84,22 @@ The feed (`Router.RunStateFeed`) picks one of two strategies at startup
 depending on whether the driver implements the optional
 `commandstation.StateObserver` capability:
 
-- **Push** (LocoNet serial / TCP). The bus is shared, so every
+- **Push** (LocoNet serial / TCP **and** Z21). The driver demultiplexes
+  its receive stream and emits a `LocoObservation` per change; the feed
+  consumes that channel in real time. LocoNet is a shared bus, so every
   `OPC_LOCO_SPD` / `OPC_LOCO_DIRF` / `OPC_LOCO_SND` / `OPC_SL_RD_DATA`
-  packet — including those an external throttle authored — is visible to
-  the driver. The driver demultiplexes its receive stream and emits a
-  `LocoObservation` per change; the feed consumes that channel in real
-  time.
-- **Polling fallback** (Z21). The driver cannot (yet) push, so the feed
-  ticks at `--poll-interval-ms` (default `750ms`) and, for every address
-  with **at least one live WS subscriber**, issues `Station.GetSpeed` +
+  packet is visible; the Z21 pushes `LAN_X_LOCO_INFO` after the driver
+  enables `LAN_SET_BROADCASTFLAGS` (see §7e.9). Both surface changes
+  authored by external handsets.
+- **Polling fallback** (any future driver without push). The feed ticks
+  at `--poll-interval-ms` (default `750ms`) and, for every address with
+  **at least one live WS subscriber**, issues `Station.GetSpeed` +
   `Station.ListFunctions`. Addresses nobody is watching are skipped to
   avoid useless DCC traffic.
 
-Both strategies funnel into the same reconciler (`applyObservation`):
+Both strategies funnel into the same reconciler (`applyObservation`).
+For Z21, speed/direction on the wire and the SET-vs-INFO step-mode
+asymmetry are documented in §7e.9 ("Z21 drive encoding").
 
 1. Merge the (possibly partial) observation onto the last cached
    snapshot.

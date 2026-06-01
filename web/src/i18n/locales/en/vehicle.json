@@ -17,6 +17,7 @@
   "dccNone": "—",
   "list": {
     "title": "My vehicles",
+    "intro": "Manage your vehicles. Vehicles can be combined into <trainsLink>trains</trainsLink>. For a vehicle to run on the layout, add it with the <addBtn>“Add to layout”</addBtn> button here as a standalone vehicle, or on the <trainsLink>trains page</trainsLink> as part of a train that has been added to the layout as a whole.",
     "empty": "You don't have any vehicles yet.",
     "addButton": "Add vehicle",
     "columns": {
@@ -37,6 +38,7 @@
   },
   "trainList": {
     "title": "My trains",
+    "intro": "Manage your trains. A train is a consist of multiple vehicles that move together and are identified as one train. A train added to the layout can be controlled as a whole — then all vehicles move together, even when there are several powered vehicles. Trains can be programmed — for example, to turn wagon lights on in sequence or play sounds in different vehicles beyond the locomotive pulling the consist.",
     "empty": "You don't have any trains yet.",
     "addButton": "Add train",
     "membersCount_one": "{{count}} vehicle",

@@ -17,6 +17,7 @@
   "dccNone": "—",
   "list": {
     "title": "Moje pojazdy",
+    "intro": "Zarządzaj swoimi pojazdami. Pojazdy mogą się łączyć w <trainsLink>składy</trainsLink>. Aby pojazd mógł jeździć na makiecie, musi zostać do niej dodany przyciskiem <addBtn>„Dodaj do makiety”</addBtn> tutaj jako samodzielny pojazd lub na <trainsLink>stronie składów</trainsLink> jako uczestnik składu, który został dodany do makiety jako skład.",
     "empty": "Nie masz jeszcze żadnych pojazdów.",
     "addButton": "Dodaj pojazd",
     "columns": {
@@ -37,6 +38,7 @@
   },
   "trainList": {
     "title": "Moje składy",
+    "intro": "Zarządzaj swoimi składami. Skład to pociąg złożony z wielu pojazdów, które jadą wspólnie i identyfikują się jako jeden pociąg. Skład dodany do makiety można sterować jako całością — wtedy wszystkie pojazdy poruszają się wspólnie, nawet jeśli jest to wiele pojazdów silnikowych. Składy można programować — na przykład włączać sekwencyjnie światła w wagonach czy odtwarzać dźwięki w różnych pojazdach poza samą lokomotywą ciągnącą skład.",
     "empty": "Nie masz jeszcze żadnych składów.",
     "addButton": "Dodaj skład",
     "membersCount_one": "{{count}} pojazd",

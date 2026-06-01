@@ -20,6 +20,12 @@ const (
 	// an explicit on/off vector over this range so an external throttle
 	// turning a function OFF is detected, not just ON.
 	pollFnRange = 28
+
+	// subRefreshInterval is how often the push path re-subscribes the
+	// command station to the locos that currently have live WS
+	// subscribers. Re-subscribing is cheap and survives the Z21's
+	// per-client subscription FIFO / client time-out.
+	subRefreshInterval = 5 * time.Second
 )
 
 // RunStateFeed keeps Redis and connected WS clients in sync with state
@@ -54,6 +60,14 @@ func (r *Router) statePollInterval() time.Duration {
 }
 
 func (r *Router) runObserverFeed(ctx context.Context, obs commandstation.StateObserver) {
+	// Some push drivers (Z21) only emit unsolicited state for locos they
+	// were explicitly subscribed to; without this, an external handset
+	// moving a loco the daemon never queried stays invisible. Drivers on
+	// a shared bus (LocoNet) don't implement this and need no refresh.
+	if sub, ok := r.station.(commandstation.LocoInfoSubscriber); ok {
+		go r.runSubscriptionRefresh(ctx, sub)
+	}
+
 	ch := obs.ObserveStates()
 	for {
 		select {
@@ -64,6 +78,36 @@ func (r *Router) runObserverFeed(ctx context.Context, obs commandstation.StateOb
 				return
 			}
 			r.applyObservation(ctx, o, "external")
+		}
+	}
+}
+
+// runSubscriptionRefresh keeps the command station's per-loco
+// subscriptions aligned with the locos that currently have a live WS
+// subscriber, so external-throttle changes are pushed back even on Z21
+// firmware without the FW≥1.24 "all locos" broadcast flag.
+func (r *Router) runSubscriptionRefresh(ctx context.Context, sub commandstation.LocoInfoSubscriber) {
+	ticker := time.NewTicker(subRefreshInterval)
+	defer ticker.Stop()
+	r.refreshSubscriptions(sub)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			r.refreshSubscriptions(sub)
+		}
+	}
+}
+
+func (r *Router) refreshSubscriptions(sub commandstation.LocoInfoSubscriber) {
+	for _, addr := range r.hub.SubscribedAddrs() {
+		if !r.isLocoAllowedOnLayout(addr) {
+			continue
+		}
+		if err := sub.SubscribeLocoInfo(commandstation.LocoAddr(addr)); err != nil {
+			r.log.WithError(err).WithField("addr", addr).
+				Debug("dcc-bus state feed: subscribe loco-info failed")
 		}
 	}
 }

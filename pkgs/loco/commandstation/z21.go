@@ -6,9 +6,24 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/sirupsen/logrus"
+)
+
+// z21 broadcast flags (LAN_SET_BROADCASTFLAGS, §2.16).
+const (
+	// z21BcDrivingSwitching delivers LAN_X_LOCO_INFO for *subscribed*
+	// locos (those queried via LAN_X_GET_LOCO_INFO) plus track power /
+	// stop broadcasts.
+	z21BcDrivingSwitching uint32 = 0x00000001
+	// z21BcAllLocos extends the flag above so the Z21 pushes
+	// LAN_X_LOCO_INFO for *every* modified loco without per-address
+	// subscription (FW ≥ 1.20). This is the flag intended for "PC
+	// railroad automation software" — exactly dcc-bus's role — so it can
+	// mirror changes made by external handsets it never subscribed to.
+	z21BcAllLocos uint32 = 0x00010000
 )
 
 // NewZ21Roco constructor
@@ -17,6 +32,9 @@ func NewZ21Roco(netAddr string, netPort uint16) (*Z21Roco, error) {
 		Timeout:         time.Second * 10,
 		ReadInfoTimeout: 1500 * time.Millisecond,
 		wasPowerCutOff:  false,
+		syncCh:          make(chan []byte, 64),
+		obsCh:           make(chan LocoObservation, 64),
+		stop:            make(chan struct{}),
 	}
 	return &roco, roco.connect(fmt.Sprintf("%s:%d", netAddr, netPort))
 }
@@ -27,16 +45,31 @@ type Z21Roco struct {
 	// be slow on some decoders.
 	Timeout time.Duration
 	// ReadInfoTimeout bounds the much faster LAN_X_GET_LOCO_INFO reads
-	// (GetSpeed / ListFunctions). It is kept short so the dcc-bus
-	// polling fallback never stalls the shared UDP socket — and with it
-	// every other throttle write — for seconds on an unresponsive loco.
+	// (GetSpeed / ListFunctions). It is kept short so a query never
+	// stalls the shared UDP socket — and with it every other throttle
+	// write — for seconds on an unresponsive loco.
 	ReadInfoTimeout time.Duration
 	wasPowerCutOff  bool
 	// ioMu serializes request/response sequences. The Z21 is a single
-	// UDP socket, so concurrent readers would split datagrams between
-	// goroutines and corrupt each other's responses. Every public
-	// entry point that talks to the socket takes it.
+	// UDP socket; only the read loop ever calls conn.Read, but ioMu
+	// still serializes the request/await pairs so two callers cannot
+	// interleave their sync windows.
 	ioMu sync.Mutex
+
+	// A single read-loop goroutine owns conn.Read and demultiplexes
+	// every datagram: observations always flow to obsCh, while
+	// request/response packets are forwarded to syncCh only while a
+	// synchronous sequence is in flight (syncActive), mirroring the
+	// LocoNet driver.
+	syncCh     chan []byte
+	syncActive atomic.Bool
+	obsCh      chan LocoObservation
+	stop       chan struct{}
+
+	// enableBroadcastsOnce lazily turns on LAN_X_LOCO_INFO push the
+	// first time a consumer asks for observations.
+	enableBroadcastsOnce sync.Once
+
 	// fnStateCache keeps the last known function state bytes per locomotive.
 	// Keyed by address; value is 5 bytes covering F0..F31 as in LAN_X_LOCO_INFO (DB4..DB8).
 	fnStateCache map[LocoAddr]fnState
@@ -75,28 +108,246 @@ func (z *Z21Roco) connect(netAddr string) error {
 		return fmt.Errorf("UDP dial error while connecting to Roco Z21: %s", err)
 	}
 	z.conn = conn
-	// initialize cache
+	// initialize cache + channels (defensive: in case the struct was
+	// assembled without NewZ21Roco)
 	z.fnStateMu.Lock()
 	if z.fnStateCache == nil {
 		z.fnStateCache = make(map[LocoAddr]fnState)
 	}
 	z.fnStateMu.Unlock()
+	if z.syncCh == nil {
+		z.syncCh = make(chan []byte, 64)
+	}
+	if z.obsCh == nil {
+		z.obsCh = make(chan LocoObservation, 64)
+	}
+	if z.stop == nil {
+		z.stop = make(chan struct{})
+	}
 	logrus.WithField("remote", netAddr).Info("z21 command station: UDP socket open")
+	go z.readLoop()
 	return nil
 }
 
-func (Z *Z21Roco) CleanUp() error {
-	if Z.wasPowerCutOff {
+func (z *Z21Roco) CleanUp() error {
+	if z.wasPowerCutOff {
 		logrus.Debug("Restoring power on programming track")
-		Z.buildTrackPowerOn()
+		z.buildTrackPowerOn()
+	}
+	select {
+	case <-z.stop:
+	default:
+		close(z.stop)
 	}
 	logrus.Info("z21 command station: closing UDP socket")
-	return Z.conn.Close()
+	return z.conn.Close()
 }
 
 func (Z *Z21Roco) markBuildTrackPowerOff() {
 	logrus.Debug("Marking programmng track as to be powered off")
 	Z.wasPowerCutOff = true
+}
+
+// ObserveStates implements StateObserver: on first call it enables the
+// Z21 LAN_X_LOCO_INFO broadcast so the station pushes state changes —
+// including those made by external handsets — to this client.
+func (z *Z21Roco) ObserveStates() <-chan LocoObservation {
+	z.enableBroadcastsOnce.Do(func() {
+		if err := z.enableLocoInfoBroadcast(); err != nil {
+			logrus.WithError(err).Warn("z21: enabling loco-info broadcast failed; push may not work")
+		} else {
+			logrus.Info("z21 command station: LAN_X_LOCO_INFO broadcast enabled (push)")
+		}
+	})
+	return z.obsCh
+}
+
+// enableLocoInfoBroadcast sets LAN_SET_BROADCASTFLAGS so the Z21 pushes
+// LAN_X_LOCO_INFO for every modified loco (§2.16 flags 0x1 | 0x10000).
+func (z *Z21Roco) enableLocoInfoBroadcast() error {
+	z.ioMu.Lock()
+	defer z.ioMu.Unlock()
+	req := buildSetBroadcastFlags(z21BcDrivingSwitching | z21BcAllLocos)
+	logrus.Debugf("req(LAN_SET_BROADCASTFLAGS): % X", req)
+	_, err := z.write(req)
+	return err
+}
+
+// readLoop is the single owner of conn.Read. It splits each UDP
+// datagram into the concatenated Z21 packets it may carry, feeds the
+// observation pipeline, and forwards packets to the sync waiter while a
+// request/response sequence is in flight.
+func (z *Z21Roco) readLoop() {
+	buf := make([]byte, 1500)
+	for {
+		select {
+		case <-z.stop:
+			return
+		default:
+		}
+
+		_ = z.conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+		n, err := z.conn.Read(buf)
+		if err != nil {
+			if ne, ok := err.(net.Error); ok && ne.Timeout() {
+				continue
+			}
+			select {
+			case <-z.stop:
+				return
+			default:
+				logrus.Debugf("z21 read error: %v", err)
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
+		}
+		for _, pkt := range splitZ21Datagram(buf[:n]) {
+			z.handlePacket(pkt)
+		}
+	}
+}
+
+func (z *Z21Roco) handlePacket(pkt []byte) {
+	logrus.Debugf("z21 RX: % X", pkt)
+	z.observe(pkt)
+	if z.syncActive.Load() {
+		// Copy: buf is reused by the read loop on the next datagram.
+		cp := append([]byte(nil), pkt...)
+		select {
+		case z.syncCh <- cp:
+		default:
+		}
+	}
+}
+
+// observe parses a LAN_X_LOCO_INFO packet, refreshes the function-state
+// cache and emits a LocoObservation. Non-LOCO_INFO packets are ignored.
+func (z *Z21Roco) observe(pkt []byte) {
+	addr, state, speed, forward, ok := parseLocoInfoPacket(pkt)
+	if !ok {
+		return
+	}
+	z.fnStateMu.Lock()
+	z.fnStateCache[addr] = state
+	z.fnStateMu.Unlock()
+
+	fns := make(map[int]bool, 32)
+	for fn := 0; fn <= 31; fn++ {
+		fns[fn] = z.extractFunctionBit(&state, fn)
+	}
+	z.emit(LocoObservation{
+		Addr:       addr,
+		HasSpeed:   true,
+		Speed:      speed,
+		HasForward: true,
+		Forward:    forward,
+		Functions:  fns,
+	})
+}
+
+func (z *Z21Roco) emit(obs LocoObservation) {
+	select {
+	case z.obsCh <- obs:
+	default:
+		logrus.Debug("z21: observation channel full, dropping update")
+	}
+}
+
+// beginSync routes subsequent packets to the request/response waiter.
+// Callers hold ioMu, so only one sequence runs at a time.
+func (z *Z21Roco) beginSync() {
+	z.drainSync()
+	z.syncActive.Store(true)
+}
+
+func (z *Z21Roco) endSync() {
+	z.syncActive.Store(false)
+	z.drainSync()
+}
+
+func (z *Z21Roco) drainSync() {
+	for {
+		select {
+		case <-z.syncCh:
+		default:
+			return
+		}
+	}
+}
+
+// awaitMatching waits up to timeout for a forwarded packet that matches.
+func (z *Z21Roco) awaitMatching(timeout time.Duration, match func(pkt []byte) bool) ([]byte, error) {
+	deadline := time.After(timeout)
+	for {
+		select {
+		case <-z.stop:
+			return nil, errors.New("command station closed")
+		case pkt := <-z.syncCh:
+			if match(pkt) {
+				return pkt, nil
+			}
+		case <-deadline:
+			return nil, errors.New("response timeout")
+		}
+	}
+}
+
+// splitZ21Datagram splits a UDP datagram into the individual Z21 packets
+// it carries. Each packet is length-prefixed by its little-endian
+// DataLen, and the Z21 may batch several into one datagram.
+func splitZ21Datagram(b []byte) [][]byte {
+	var out [][]byte
+	for len(b) >= 4 {
+		l := int(binary.LittleEndian.Uint16(b[0:2]))
+		if l < 4 || l > len(b) {
+			break
+		}
+		out = append(out, b[:l])
+		b = b[l:]
+	}
+	return out
+}
+
+// parseLocoInfoPacket decodes a complete LAN_X_LOCO_INFO packet (0xEF)
+// into address, function bits and speed/direction. ok is false for any
+// other packet.
+func parseLocoInfoPacket(pkt []byte) (addr LocoAddr, state fnState, speed uint8, forward bool, ok bool) {
+	if len(pkt) < 10 {
+		return 0, fnState{}, 0, false, false
+	}
+	dataLen := binary.LittleEndian.Uint16(pkt[0:2])
+	header := binary.LittleEndian.Uint16(pkt[2:4])
+	if header != 0x0040 || int(dataLen) != len(pkt) {
+		return 0, fnState{}, 0, false, false
+	}
+	if pkt[4] != 0xEF {
+		return 0, fnState{}, 0, false, false
+	}
+	addr = LocoAddr(uint16(pkt[5]&0x3F)<<8 | uint16(pkt[6]))
+	speed, forward = decodeLocoDriveFromLocoInfo(pkt[7], pkt[8])
+
+	if len(pkt) > 9 {
+		state.B0_4 = pkt[9]
+	}
+	if len(pkt) > 10 {
+		state.B5_12 = pkt[10]
+	}
+	if len(pkt) > 11 {
+		state.B13_20 = pkt[11]
+	}
+	if len(pkt) > 12 {
+		state.B21_28 = pkt[12]
+	}
+	if len(pkt) > 13 {
+		state.B29_31 = pkt[13]
+	}
+	return addr, state, speed, forward, true
+}
+
+// locoInfoForAddr reports whether pkt is a LAN_X_LOCO_INFO for addr.
+func locoInfoForAddr(pkt []byte, addr LocoAddr) bool {
+	a, _, _, _, ok := parseLocoInfoPacket(pkt)
+	return ok && a == addr
 }
 
 func (z *Z21Roco) buildCVRequest(mode Mode, lcv LocoCV, isWriteRequest bool) ([]byte, error) {
@@ -212,6 +463,9 @@ func (z *Z21Roco) ListFunctions(addr LocoAddr) ([]int, error) {
 	z.ioMu.Lock()
 	defer z.ioMu.Unlock()
 
+	z.beginSync()
+	defer z.endSync()
+
 	// Query the command station using LAN_X_GET_LOCO_INFO
 	req := z.buildGetLocoInfo(addr)
 	logrus.Debugf("req(LAN_X_GET_LOCO_INFO): %v", req)
@@ -219,20 +473,15 @@ func (z *Z21Roco) ListFunctions(addr LocoAddr) ([]int, error) {
 		return nil, fmt.Errorf("failed to send LAN_X_GET_LOCO_INFO: %w", err)
 	}
 
-	// Wait for response (LAN_X_LOCO_INFO)
-	_ = z.conn.SetReadDeadline(time.Now().Add(z.infoTimeout()))
-	buf := make([]byte, 1500)
-	n, err := z.conn.Read(buf)
+	pkt, err := z.awaitMatching(z.infoTimeout(), func(p []byte) bool {
+		return locoInfoForAddr(p, addr)
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to read LAN_X_LOCO_INFO response: %w", err)
 	}
-	logrus.Debugf("resp(LAN_X_LOCO_INFO): % X", buf[:n])
+	logrus.Debugf("resp(LAN_X_LOCO_INFO): % X", pkt)
 
-	// Parse the response
-	state, err := z.parseLocoInfo(buf[:n])
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse LAN_X_LOCO_INFO: %w", err)
-	}
+	_, state, _, _, _ := parseLocoInfoPacket(pkt)
 
 	// Cache the state for future reference
 	z.fnStateMu.Lock()
@@ -298,28 +547,29 @@ func (z *Z21Roco) parseCVResponse(pkt []byte) (cvResult, bool) {
 	return cvResult{}, false
 }
 
-// Sends and waits for LAN_X_CV_* (read or write-result)
+// Sends and waits for LAN_X_CV_* (read or write-result). The reply is
+// delivered by the read loop via syncCh; we filter for a CV packet.
 func (z *Z21Roco) sendAndAwait(req []byte, timeout time.Duration) (cvResult, error) {
+	z.beginSync()
+	defer z.endSync()
+
 	logrus.Debugf("z21.sendAndAwait: % X", req)
 	if _, err := z.write(req); err != nil {
 		return cvResult{}, err
 	}
-	_ = z.conn.SetReadDeadline(time.Now().Add(timeout))
-	buf := make([]byte, 1500)
-	end := time.Now().Add(timeout)
-	for time.Now().Before(end) {
-		n, err := z.conn.Read(buf)
-		if err != nil {
-			if ne, ok := err.(net.Error); ok && ne.Timeout() {
-				return cvResult{}, errors.New("response timeout")
-			}
-			return cvResult{}, err
+	var res cvResult
+	pkt, err := z.awaitMatching(timeout, func(p []byte) bool {
+		r, ok := z.parseCVResponse(p)
+		if ok {
+			res = r
 		}
-		if res, ok := z.parseCVResponse(buf[:n]); ok {
-			return res, nil
-		}
+		return ok
+	})
+	if err != nil {
+		return cvResult{}, err
 	}
-	return cvResult{}, errors.New("no response or unrecognized response")
+	_ = pkt
+	return res, nil
 }
 
 // readCVValue is reading the POM/PROG CV response
@@ -346,68 +596,6 @@ func (z *Z21Roco) readCVValue(mode Mode, lcv LocoCV, timeout time.Duration, retr
 		time.Sleep(200 * time.Millisecond)
 	}
 	return cvResult{}, lastErr
-}
-
-// parseLocoInfo parses LAN_X_LOCO_INFO response (0xEF)
-func (z *Z21Roco) parseLocoInfo(pkt []byte) (fnState, error) {
-	if len(pkt) < 7 {
-		return fnState{}, fmt.Errorf("packet too short: %d bytes", len(pkt))
-	}
-
-	dataLen := binary.LittleEndian.Uint16(pkt[0:2])
-	header := binary.LittleEndian.Uint16(pkt[2:4])
-
-	if header != 0x0040 || int(dataLen) != len(pkt) {
-		return fnState{}, fmt.Errorf("invalid header or length")
-	}
-
-	if pkt[4] != 0xEF {
-		return fnState{}, fmt.Errorf("not a LAN_X_LOCO_INFO packet (X-Header: 0x%02X)", pkt[4])
-	}
-
-	// LAN_X_LOCO_INFO structure:
-	// Byte 0-1: DataLen (little endian)
-	// Byte 2-3: Header 0x0040 (little endian)
-	// Byte 4: X-Header 0xEF
-	// Byte 5: DB0 (address MSB)
-	// Byte 6: DB1 (address LSB)
-	// Byte 7: DB2 (0000BKKK — speed-step mode in low 3 bits)
-	// Byte 8: DB3 (RVVVVVVV — direction in bit 7, speed in V)
-	// Byte 9: DB4 (F0-F4 with direction)
-	// Byte 10: DB5 (F5-F12)
-	// Byte 11: DB6 (F13-F20) [optional]
-	// Byte 12: DB7 (F21-F28) [optional]
-	// Byte 13: DB8 (F29-F31) [optional, from FW 1.42+]
-	// Last byte: XOR
-
-	var state fnState
-
-	// DB4 (F0-F4) is at byte 9
-	if len(pkt) > 9 {
-		state.B0_4 = pkt[9]
-	}
-
-	// DB5 (F5-F12) is at byte 10
-	if len(pkt) > 10 {
-		state.B5_12 = pkt[10]
-	}
-
-	// DB6 (F13-F20) is at byte 11
-	if len(pkt) > 11 {
-		state.B13_20 = pkt[11]
-	}
-
-	// DB7 (F21-F28) is at byte 12
-	if len(pkt) > 12 {
-		state.B21_28 = pkt[12]
-	}
-
-	// DB8 (F29-F31) is at byte 13
-	if len(pkt) > 13 {
-		state.B29_31 = pkt[13]
-	}
-
-	return state, nil
 }
 
 // extractFunctionBit extracts the state of a specific function from fnState
@@ -498,12 +686,15 @@ func (z *Z21Roco) updateFunctionStateCache(addr LocoAddr, fnNum int, on bool) {
 // SetSpeed sets the speed and direction of a locomotive
 // speed: 0=stop, 1=emergency stop, 2+ for actual speed (max depends on speedSteps)
 // forward: true for forward, false for reverse
-// speedSteps: 14, 28, or 128 (will be converted to 0, 2, or 4 for the protocol)
+// speedSteps: 14, 28, or 128
 func (z *Z21Roco) SetSpeed(addr LocoAddr, speed uint8, forward bool, speedSteps uint8) error {
 	z.ioMu.Lock()
 	defer z.ioMu.Unlock()
 
-	// Convert speedSteps to protocol value
+	// Convert speedSteps to the DB0 "S" nibble. NOTE the asymmetry vs.
+	// LAN_X_LOCO_INFO: the SET command (§4.2) uses S=3 for DCC 128, while
+	// the INFO reply (§4.4) reports KKK=4 for the same mode. Sending S=4
+	// here (the INFO value) is undefined and the Z21 mis-drives the loco.
 	var speedStepsProto uint8
 	switch speedSteps {
 	case 14:
@@ -511,7 +702,7 @@ func (z *Z21Roco) SetSpeed(addr LocoAddr, speed uint8, forward bool, speedSteps 
 	case 28:
 		speedStepsProto = 2
 	case 128:
-		speedStepsProto = 4
+		speedStepsProto = 3
 	default:
 		return fmt.Errorf("invalid speed steps: %d (must be 14, 28, or 128)", speedSteps)
 	}
@@ -531,6 +722,8 @@ func (z *Z21Roco) SetSpeed(addr LocoAddr, speed uint8, forward bool, speedSteps 
 func (z *Z21Roco) GetSpeed(addr LocoAddr) (uint8, bool, error) {
 	z.ioMu.Lock()
 	defer z.ioMu.Unlock()
+	z.beginSync()
+	defer z.endSync()
 
 	// Query the command station using LAN_X_GET_LOCO_INFO
 	req := z.buildGetLocoInfo(addr)
@@ -539,32 +732,60 @@ func (z *Z21Roco) GetSpeed(addr LocoAddr) (uint8, bool, error) {
 		return 0, false, fmt.Errorf("failed to send LAN_X_GET_LOCO_INFO: %w", err)
 	}
 
-	// Wait for response (LAN_X_LOCO_INFO)
-	_ = z.conn.SetReadDeadline(time.Now().Add(z.infoTimeout()))
-	buf := make([]byte, 1500)
-	n, err := z.conn.Read(buf)
+	pkt, err := z.awaitMatching(z.infoTimeout(), func(p []byte) bool {
+		return locoInfoForAddr(p, addr)
+	})
 	if err != nil {
 		return 0, false, fmt.Errorf("failed to read LAN_X_LOCO_INFO response: %w", err)
 	}
-	logrus.Debugf("resp(LAN_X_LOCO_INFO): % X", buf[:n])
+	logrus.Debugf("resp(LAN_X_LOCO_INFO): % X", pkt)
 
-	if len(buf) < 10 {
-		return 0, false, fmt.Errorf("response too short")
-	}
-
-	dataLen := binary.LittleEndian.Uint16(buf[0:2])
-	header := binary.LittleEndian.Uint16(buf[2:4])
-
-	if header != 0x0040 || int(dataLen) != n {
-		return 0, false, fmt.Errorf("invalid header or length in response")
-	}
-
-	if buf[4] != 0xEF {
-		return 0, false, fmt.Errorf("not a LAN_X_LOCO_INFO packet (X-Header: 0x%02X)", buf[4])
-	}
-
-	speed, forward := decodeLocoDriveFromLocoInfo(buf[7], buf[8])
+	_, _, speed, forward, _ := parseLocoInfoPacket(pkt)
 	return speed, forward, nil
+}
+
+// encodeLocoDriveDB3 builds DB3 (RVVVVVVV) for LAN_X_SET_LOCO_DRIVE (§4.2).
+// UI/API speed semantics: 0=stop, 1=e-stop, 2+ = drive steps (max depends
+// on speedSteps).
+//
+// The R bit (bit 7) is the *direction* and MUST always reflect the
+// desired direction — including at Stop and E-Stop. Zeroing it at stop
+// (e.g. 0x00 for "stop") commands reverse, which flips the loco's
+// direction every time it stops. Stop is therefore R + V=0, E-Stop is
+// R + V=1.
+func encodeLocoDriveDB3(speed uint8, forward bool, speedSteps uint8) byte {
+	var db3 byte
+	if forward {
+		db3 = 0x80
+	}
+
+	switch speed {
+	case 0:
+		return db3 // Stop: R + V=0
+	case 1:
+		return db3 | 0x01 // E-Stop: R + V=1
+	}
+
+	switch speedSteps {
+	case 0: // DCC 14
+		if speed > 15 {
+			speed = 15
+		}
+		db3 |= speed & 0x0F
+	case 2: // DCC 28
+		if speed > 28 {
+			speed = 28
+		}
+		speedBits := byte((speed + 3) / 2)
+		speedBit5 := byte((speed + 3) % 2)
+		db3 |= (speedBit5 << 4) | (speedBits & 0x0F)
+	default: // DCC 128 (speedSteps proto 3, or any unknown mode)
+		if speed > 127 {
+			speed = 127
+		}
+		db3 |= speed & 0x7F
+	}
+	return db3
 }
 
 // decodeLocoDriveFromLocoInfo decodes DB2/DB3 from LAN_X_LOCO_INFO (§4.4).
@@ -578,14 +799,21 @@ func decodeLocoDriveFromLocoInfo(db2, db3 byte) (speed uint8, forward bool) {
 	case 0: // DCC 14
 		return v & 0x0F, forward
 	case 2: // DCC 28
+		// V uses the interleaved V5 bit. Stop / Stop1 (raw 0/1) and
+		// E-Stop / E-Stop1 (raw 2/3) map to speed 0 / 1; direction stays
+		// in the R bit regardless.
 		speedBits := v & 0x0F
 		speedBit5 := (v >> 4) & 0x01
-		encoded := int(speedBits)*2 + int(speedBit5)
-		if encoded < 3 {
-			return uint8(encoded), forward
+		raw := int(speedBits)*2 + int(speedBit5)
+		switch {
+		case raw <= 1:
+			return 0, forward
+		case raw <= 3:
+			return 1, forward
+		default:
+			return uint8(raw - 3), forward
 		}
-		return uint8(encoded - 3), forward
-	default: // 4 = DCC 128 (also default when KKK unknown)
+	default: // DCC 128 (KKK=4)
 		return v, forward
 	}
 }

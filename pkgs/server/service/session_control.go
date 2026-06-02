@@ -198,6 +198,34 @@ func (s *SessionControlService) handleSetCS(ctx context.Context, c *ws.Client, p
 	})
 }
 
+type commandStationCatalogChangedPayload struct {
+	CommandStationID uint                      `json:"commandStationId"`
+	Name             string                    `json:"name"`
+	Kind             domain.CommandStationKind `json:"kind"`
+	SpeedSteps       uint                      `json:"speedSteps"`
+}
+
+// BroadcastCommandStationCatalogChanged notifies every live control-
+// plane session whose layout exposes the updated command station.
+func (s *SessionControlService) BroadcastCommandStationCatalogChanged(ctx context.Context, cs domain.CommandStation) {
+	if s.layoutCS == nil || s.layoutRows == nil || s.cs == nil {
+		return
+	}
+	payload := commandStationCatalogChangedPayload{
+		CommandStationID: cs.ID,
+		Name:             cs.Name,
+		Kind:             cs.Kind,
+		SpeedSteps:       cs.SpeedSteps,
+	}
+	for _, c := range s.Sessions() {
+		sess := c.Session()
+		if !s.commandStationAttached(ctx, sess.LayoutID, cs.ID) {
+			continue
+		}
+		c.SendTyped("session.commandStationCatalogChanged", payload)
+	}
+}
+
 // broadcastChangeForUser fans the change event out to every session
 // of the user inside the layout. Other users see a separate event
 // from the dcc-bus consumer (presence-style).

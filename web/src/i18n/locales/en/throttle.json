@@ -26,13 +26,15 @@
   },
   "controlPlane": {
     "online": "Control: online",
-    "offline": "Control: offline"
+    "offline": "Control: offline",
+    "reconnecting": "Lost connection to BigFred, retrying every 2s…"
   },
   "dataPlane": {
     "online": "DCC bus: online",
     "offline": "DCC bus: offline",
     "connecting": "DCC bus: connecting…"
   },
+  "reconnecting": "Lost connection to the command station, retrying every 2s…",
   "errors": {
     "command_station_disconnected": "Lost connection to the command station",
     "vehicle_not_on_layout": "This vehicle is not on the active layout",

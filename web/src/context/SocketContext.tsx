@@ -11,6 +11,26 @@ import {
 
 type EventHandler = (payload: unknown) => void;
 
+export const CommandStationStatus = {
+  Running: "running",
+  Starting: "starting",
+  Stopped: "stopped",
+  Draining: "draining",
+  Degraded: "degraded",
+} as const;
+
+export type CommandStationStatus =
+  (typeof CommandStationStatus)[keyof typeof CommandStationStatus];
+
+const WsMessageType = {
+  Ack: "ack",
+  Ping: "ping",
+  SessionOpened: "session.opened",
+  SessionCommandStationChanged: "session.commandStationChanged",
+  SessionCommandStationCatalogChanged: "session.commandStationCatalogChanged",
+  SessionSetCommandStation: "session.setCommandStation",
+} as const;
+
 // Available command station entry shipped on `session.opened`. The
 // `wsUrl` field is either the reverse-proxy path (e.g.
 // "/api/v1/dcc-bus/2/ws") or a fully-qualified ws:// URL when the
@@ -37,13 +57,23 @@ export interface SessionOpenedPayload {
 export interface CommandStationChangedPayload {
   commandStationId: number;
   wsUrl: string | null;
-  status: "running" | "starting" | "stopped" | "draining" | "degraded";
+  status: CommandStationStatus;
   reason?: string;
+}
+
+export interface CommandStationCatalogChangedPayload {
+  commandStationId: number;
+  name: string;
+  kind: string;
+  speedSteps: number;
 }
 
 // Pending request → ack resolver. Used by `sendAction` so the caller
 // can `await sendAction(...)` and react to ack.ok / ack.error.
 type PendingResolver = (ack: { ok: boolean; error?: string }) => void;
+
+const RECONNECT_INTERVAL_MS = 2_000;
+const CONNECT_TIMEOUT_MS = 1_000;
 
 interface SocketContextValue {
   subscribe: (eventType: string, handler: EventHandler) => () => void;
@@ -52,6 +82,7 @@ interface SocketContextValue {
     payload: unknown,
   ) => Promise<{ ok: boolean; error?: string }>;
   connected: boolean;
+  reconnecting: boolean;
   session: SessionOpenedPayload | null;
   setCommandStation: (csID: number) => Promise<{ ok: boolean; error?: string }>;
 }
@@ -73,6 +104,13 @@ function wsURL(): string {
 
 function nextRequestID(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function rejectPending(pending: Map<string, PendingResolver>) {
+  for (const resolver of pending.values()) {
+    resolver({ ok: false, error: "control_offline" });
+  }
+  pending.clear();
 }
 
 // waitForControlSocket resolves once the active control-plane socket
@@ -115,7 +153,11 @@ export function SocketProvider({
   const handlers = useRef(new Map<string, Set<EventHandler>>());
   const pending = useRef(new Map<string, PendingResolver>());
   const socketRef = useRef<WebSocket | null>(null);
+  const connectGenRef = useRef(0);
+  const hadOpenedRef = useRef(false);
+  const reconnectTimerRef = useRef<number | null>(null);
   const [connected, setConnected] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
   const [session, setSession] = useState<SessionOpenedPayload | null>(null);
 
   const subscribe = useCallback((eventType: string, handler: EventHandler) => {
@@ -164,7 +206,7 @@ export function SocketProvider({
   const setCommandStation = useCallback(
     (csID: number) =>
       sendOnControlSocket(
-        "session.setCommandStation",
+        WsMessageType.SessionSetCommandStation,
         { commandStationId: csID },
         setCommandStationAckTimeoutMs,
       ),
@@ -174,105 +216,218 @@ export function SocketProvider({
   useEffect(() => {
     if (!enabled) {
       setConnected(false);
+      setReconnecting(false);
       setSession(null);
+      hadOpenedRef.current = false;
       return;
     }
 
-    const socket = new WebSocket(wsURL());
-    socketRef.current = socket;
+    let disposed = false;
+    const url = wsURL();
 
-    socket.onopen = () => setConnected(true);
-    socket.onerror = () => setConnected(false);
-    socket.onclose = () => {
-      setConnected(false);
-      setSession(null);
-      if (socketRef.current === socket) {
-        socketRef.current = null;
+    const clearReconnect = () => {
+      if (reconnectTimerRef.current != null) {
+        window.clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
       }
     };
 
-    socket.onmessage = (ev) => {
-      try {
-        const msg = JSON.parse(String(ev.data)) as {
-          type?: string;
-          id?: string;
-          payload?: unknown;
-        };
-        if (!msg.type) return;
-        if (msg.type === "ack" && msg.id) {
-          const resolver = pending.current.get(msg.id);
-          if (resolver) {
-            pending.current.delete(msg.id);
-            const ack = (msg.payload as { ok?: boolean; error?: string }) ?? {};
-            resolver({ ok: Boolean(ack.ok), error: ack.error });
-          }
+    let activeCleanup: (() => void) | undefined;
+
+    const connect = () => {
+      if (disposed) {
+        return;
+      }
+      clearReconnect();
+      activeCleanup?.();
+
+      const gen = ++connectGenRef.current;
+      setConnected(false);
+      if (hadOpenedRef.current) {
+        setReconnecting(true);
+      }
+
+      const socket = new WebSocket(url);
+      socketRef.current = socket;
+
+      const connectTimeout = window.setTimeout(() => {
+        if (disposed || gen !== connectGenRef.current) {
           return;
         }
-        if (msg.type === "session.opened") {
-          setSession((msg.payload as SessionOpenedPayload) ?? null);
+        if (socket.readyState === WebSocket.CONNECTING) {
+          socket.close();
         }
-        if (msg.type === "session.commandStationChanged") {
-          const p = msg.payload as CommandStationChangedPayload;
-          setSession((prev) => {
-            if (!prev) return prev;
-            const next: SessionOpenedPayload = { ...prev };
-            const idx = next.availableCommandStations.findIndex(
-              (cs) => cs.id === p.commandStationId,
-            );
-            if (idx >= 0) {
-              next.availableCommandStations = [
-                ...next.availableCommandStations,
-              ];
-              const entry = { ...next.availableCommandStations[idx] };
-              // Lazy-spawn sends wsUrl=null while starting. Keep the
-              // previous URL so DccBusProvider is not torn down mid-
-              // CONNECTING (that surfaces as "closed before established").
-              if (p.wsUrl) {
-                entry.wsUrl = p.wsUrl;
+      }, CONNECT_TIMEOUT_MS);
+
+      const scheduleReconnect = () => {
+        if (disposed) {
+          return;
+        }
+        if (hadOpenedRef.current) {
+          setReconnecting(true);
+        }
+        reconnectTimerRef.current = window.setTimeout(
+          connect,
+          RECONNECT_INTERVAL_MS,
+        );
+      };
+
+      socket.onopen = () => {
+        window.clearTimeout(connectTimeout);
+        if (disposed || gen !== connectGenRef.current) {
+          return;
+        }
+        hadOpenedRef.current = true;
+        setReconnecting(false);
+        setConnected(true);
+      };
+      socket.onerror = () => {
+        window.clearTimeout(connectTimeout);
+        if (disposed || gen !== connectGenRef.current) {
+          return;
+        }
+        setConnected(false);
+      };
+      socket.onclose = () => {
+        window.clearTimeout(connectTimeout);
+        if (disposed || gen !== connectGenRef.current) {
+          return;
+        }
+        setConnected(false);
+        rejectPending(pending.current);
+        if (socketRef.current === socket) {
+          socketRef.current = null;
+        }
+        scheduleReconnect();
+      };
+
+      socket.onmessage = (ev) => {
+        try {
+          const msg = JSON.parse(String(ev.data)) as {
+            type?: string;
+            id?: string;
+            payload?: unknown;
+          };
+          if (!msg.type) return;
+          if (msg.type === WsMessageType.Ack && msg.id) {
+            const resolver = pending.current.get(msg.id);
+            if (resolver) {
+              pending.current.delete(msg.id);
+              const ack =
+                (msg.payload as { ok?: boolean; error?: string }) ?? {};
+              resolver({ ok: Boolean(ack.ok), error: ack.error });
+            }
+            return;
+          }
+          if (msg.type === WsMessageType.SessionOpened) {
+            setSession((msg.payload as SessionOpenedPayload) ?? null);
+          }
+          if (msg.type === WsMessageType.SessionCommandStationChanged) {
+            const p = msg.payload as CommandStationChangedPayload;
+            setSession((prev) => {
+              if (!prev) return prev;
+              const next: SessionOpenedPayload = { ...prev };
+              const idx = next.availableCommandStations.findIndex(
+                (cs) => cs.id === p.commandStationId,
+              );
+              if (idx >= 0) {
+                next.availableCommandStations = [
+                  ...next.availableCommandStations,
+                ];
+                const entry = { ...next.availableCommandStations[idx] };
+                // Lazy-spawn sends wsUrl=null while starting. Keep the
+                // previous URL so DccBusProvider is not torn down mid-
+                // CONNECTING (that surfaces as "closed before established").
+                if (p.wsUrl) {
+                  entry.wsUrl = p.wsUrl;
+                } else if (
+                  p.status === CommandStationStatus.Stopped ||
+                  p.status === CommandStationStatus.Degraded ||
+                  p.commandStationId === 0
+                ) {
+                  entry.wsUrl = null;
+                }
+                next.availableCommandStations[idx] = entry;
+              }
+              if (
+                p.commandStationId > 0 &&
+                (p.status === CommandStationStatus.Running ||
+                  p.status === CommandStationStatus.Starting)
+              ) {
+                next.currentSession = { commandStationId: p.commandStationId };
               } else if (
-                p.status === "stopped" ||
-                p.status === "degraded" ||
+                p.status === CommandStationStatus.Stopped ||
+                p.status === CommandStationStatus.Degraded ||
                 p.commandStationId === 0
               ) {
-                entry.wsUrl = null;
+                next.currentSession = undefined;
               }
-              next.availableCommandStations[idx] = entry;
-            }
-            if (
-              p.commandStationId > 0 &&
-              (p.status === "running" || p.status === "starting")
-            ) {
-              next.currentSession = { commandStationId: p.commandStationId };
-            } else if (
-              p.status === "stopped" ||
-              p.status === "degraded" ||
-              p.commandStationId === 0
-            ) {
-              next.currentSession = undefined;
-            }
-            return next;
-          });
+              return next;
+            });
+          }
+          if (msg.type === WsMessageType.SessionCommandStationCatalogChanged) {
+            const p = msg.payload as CommandStationCatalogChangedPayload;
+            setSession((prev) => {
+              if (!prev) return prev;
+              const idx = prev.availableCommandStations.findIndex(
+                (cs) => cs.id === p.commandStationId,
+              );
+              if (idx < 0) return prev;
+              const next: SessionOpenedPayload = { ...prev };
+              next.availableCommandStations = [
+                ...prev.availableCommandStations,
+              ];
+              next.availableCommandStations[idx] = {
+                ...next.availableCommandStations[idx],
+                name: p.name,
+                kind: p.kind,
+                speedSteps: p.speedSteps,
+              };
+              return next;
+            });
+          }
+          handlers.current.get(msg.type)?.forEach((fn) => fn(msg.payload));
+        } catch {
+          // malformed frame — ignore
         }
-        handlers.current.get(msg.type)?.forEach((fn) => fn(msg.payload));
-      } catch {
-        // malformed frame — ignore
-      }
+      };
+
+      const ping = window.setInterval(() => {
+        if (socket.readyState === WebSocket.OPEN) {
+          socket.send(JSON.stringify({ type: WsMessageType.Ping }));
+        }
+      }, 30_000);
+
+      activeCleanup = () => {
+        window.clearTimeout(connectTimeout);
+        window.clearInterval(ping);
+        socket.onopen = null;
+        socket.onerror = null;
+        socket.onclose = null;
+        socket.onmessage = null;
+        if (socketRef.current === socket) {
+          socketRef.current = null;
+        }
+        if (
+          socket.readyState === WebSocket.CONNECTING ||
+          socket.readyState === WebSocket.OPEN
+        ) {
+          socket.close();
+        }
+      };
     };
 
-    const ping = window.setInterval(() => {
-      if (socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({ type: "ping" }));
-      }
-    }, 30_000);
+    connect();
 
     return () => {
-      window.clearInterval(ping);
+      disposed = true;
+      clearReconnect();
+      activeCleanup?.();
+      rejectPending(pending.current);
+      hadOpenedRef.current = false;
       setConnected(false);
+      setReconnecting(false);
       setSession(null);
-      if (socketRef.current === socket) {
-        socketRef.current = null;
-      }
-      socket.close();
     };
   }, [enabled]);
 
@@ -281,10 +436,11 @@ export function SocketProvider({
       subscribe,
       sendAction,
       connected,
+      reconnecting,
       session,
       setCommandStation,
     }),
-    [subscribe, sendAction, connected, session, setCommandStation],
+    [subscribe, sendAction, connected, reconnecting, session, setCommandStation],
   );
 
   return (

@@ -42,12 +42,26 @@ function translateErrorCode(
   return resolved && resolved !== key ? resolved : fallback;
 }
 
+// maxSpeedValue maps the catalogue speedSteps (14 / 28 / 128) to the
+// highest throttle value the dcc-bus wire protocol accepts for that mode.
+function maxSpeedValue(speedSteps: number): number {
+  switch (speedSteps) {
+    case 14:
+      return 15;
+    case 28:
+      return 28;
+    default:
+      return 127;
+  }
+}
+
 // ThrottlePage is the throttle UI specified in §6.3b / §7e.7. It
 // renders inside the existing AppShell <Outlet/> rather than as a
 // full-screen overlay (the M4.5 milestone introduces the page; the
 // overlay variant lands later when the AppShell drawer arrives).
 export default function ThrottlePage() {
-  const { session, setCommandStation, connected, subscribe } = useSocket();
+  const { session, setCommandStation, connected, reconnecting, subscribe } =
+    useSocket();
   const me = useMe().data;
   const { t } = useTranslation(["throttle", "common", "errors"]);
 
@@ -173,6 +187,12 @@ export default function ThrottlePage() {
         />
       </Stack>
 
+      {reconnecting && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          {t("throttle:controlPlane.reconnecting")}
+        </Alert>
+      )}
+
       <CommandStationPicker
         stations={stations}
         currentID={selectedCS}
@@ -222,13 +242,30 @@ export default function ThrottlePage() {
 
       {selectedCS !== 0 && activeWsUrl && layoutID && (
         <DccBusProvider wsUrl={activeWsUrl}>
+          <ReconnectingAlert />
           <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
             <DataPlaneStatusChip />
           </Stack>
-          <ThrottleSurface layoutID={layoutID} />
+          <ThrottleSurface
+            layoutID={layoutID}
+            speedSteps={activeStation?.speedSteps ?? 128}
+          />
         </DccBusProvider>
       )}
     </Container>
+  );
+}
+
+function ReconnectingAlert() {
+  const { reconnecting } = useDccBus();
+  const { t } = useTranslation("throttle");
+  if (!reconnecting) {
+    return null;
+  }
+  return (
+    <Alert severity="warning" sx={{ mt: 2 }}>
+      {t("reconnecting")}
+    </Alert>
   );
 }
 
@@ -290,13 +327,28 @@ function CommandStationPicker({
   );
 }
 
-function ThrottleSurface({ layoutID }: { layoutID: number }) {
+function ThrottleSurface({
+  layoutID,
+  speedSteps: sessionSpeedSteps,
+}: {
+  layoutID: number;
+  speedSteps: number;
+}) {
   const roster = useLayoutVehicles(layoutID).data ?? [];
   const drivable = roster.filter((v) => v.dccAddress != null);
   const [selectedAddr, setSelectedAddr] = useState<number | null>(null);
-  const { subscribe, status, states, lastError, setSpeed, setFunction } =
-    useDccBus();
+  const {
+    subscribe,
+    status,
+    states,
+    lastError,
+    setSpeed,
+    setFunction,
+    speedSteps: busSpeedSteps,
+  } = useDccBus();
   const { t } = useTranslation(["throttle", "errors"]);
+  const speedSteps = busSpeedSteps ?? sessionSpeedSteps;
+  const maxSpeed = maxSpeedValue(speedSteps);
 
   // Subscribe once per (vehicle, roster, WS open) — not on every
   // loco.state push (the whole context used to change each tick).
@@ -368,9 +420,9 @@ function ThrottleSurface({ layoutID }: { layoutID: number }) {
             {t("throttle:speed")}: {speed}
           </Typography>
           <Slider
-            value={speed}
+            value={Math.min(speed, maxSpeed)}
             min={0}
-            max={127}
+            max={maxSpeed}
             step={1}
             onChange={(_, v) => handleSpeed(Array.isArray(v) ? v[0] : v)}
             disabled={selectedAddr == null}

@@ -54,6 +54,14 @@ export default function ThrottlePage() {
   const me = useMe().data;
   const { t } = useTranslation(["throttle", "common", "errors"]);
 
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+
   const layoutID = me?.layoutId ?? null;
   const stations = session?.availableCommandStations ?? [];
   const [selectedCS, setSelectedCS] = useState(0);
@@ -227,6 +235,7 @@ export default function ThrottlePage() {
     display: "flex",
     flexDirection: "column" as const,
     minHeight: 0,
+    maxHeight: "100%",
     minWidth: 0,
     width: "100%",
     overflow: "hidden",

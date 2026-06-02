@@ -54,6 +54,7 @@ export default function AppShell() {
   const logout = useLogout();
   const navigate = useNavigate();
   const theme = useTheme();
+  const isThrottlePage = Boolean(useMatch("/throttle"));
   const isCompactNav = useMediaQuery(theme.breakpoints.down("md"));
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const onThrottlePage = Boolean(useMatch("/throttle"));
@@ -221,7 +222,15 @@ export default function AppShell() {
 
   return (
     <SocketProvider enabled={!!me}>
-    <Box sx={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+    <Box
+      sx={{
+        display: "flex",
+        flexDirection: "column",
+        ...(isThrottlePage
+          ? { height: "100dvh", maxHeight: "100dvh", overflow: "hidden" }
+          : { minHeight: "100dvh" }),
+      }}
+    >
       <AppBar position="sticky">
         <Toolbar>
           {isCompactNav && me && (

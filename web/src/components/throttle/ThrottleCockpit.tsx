@@ -100,6 +100,7 @@ export default function ThrottleCockpit({
           gap: 1,
           px: 1.5,
           py: 1,
+          flexShrink: 0,
           bgcolor: cockpit.header,
           borderBottom: `1px solid ${cockpit.border}`,
           minHeight: 48,
@@ -167,7 +168,10 @@ export default function ThrottleCockpit({
             flex: "1 1 0",
             minWidth: 0,
             minHeight: 0,
-            overflow: "auto",
+            overflowY: "auto",
+            overflowX: "hidden",
+            overscrollBehavior: "contain",
+            WebkitOverflowScrolling: "touch",
             p: 1.25,
             bgcolor: cockpit.bgPanel,
           }}
@@ -202,7 +206,10 @@ export default function ThrottleCockpit({
             display: "flex",
             flexDirection: "column",
             minHeight: 0,
+            maxHeight: "100%",
             flexShrink: 0,
+            overflow: "hidden",
+            alignSelf: "stretch",
             borderLeft: `1px solid ${cockpit.border}`,
             bgcolor: cockpit.bg,
           }}
@@ -210,13 +217,13 @@ export default function ThrottleCockpit({
           <Box
             sx={{
               flex: 1,
+              minHeight: 0,
               width: "100%",
               position: "relative",
               display: "flex",
               flexDirection: "column",
-              pt: 2,
-              pb: 1,
-              minHeight: 0,
+              pt: 1.5,
+              px: 0.5,
             }}
           >
             <VerticalThrottle
@@ -229,9 +236,9 @@ export default function ThrottleCockpit({
               aria-hidden
               sx={{
                 position: "absolute",
-                top: 16,
+                top: 12,
                 right: 0,
-                bottom: 8,
+                bottom: 4,
                 width: 14,
                 borderRadius: 1,
                 background: cockpit.speedGradient,
@@ -242,7 +249,7 @@ export default function ThrottleCockpit({
             />
           </Box>
 
-          <Box sx={{ px: 1.5, pb: 1 }}>
+          <Box sx={{ flexShrink: 0, px: 1.5, pb: 1, mt: "20px" }}>
             <Box
               component="button"
               type="button"
@@ -276,6 +283,7 @@ export default function ThrottleCockpit({
 
           <Box
             sx={{
+              flexShrink: 0,
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",

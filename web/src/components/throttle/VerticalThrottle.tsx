@@ -65,9 +65,9 @@ export default function VerticalThrottle({
       }}
       sx={{
         position: "relative",
+        flex: 1,
         width: "100%",
-        height: "100%",
-        minHeight: 180,
+        minHeight: 0,
         borderRadius: 2,
         bgcolor: cockpit.track,
         boxShadow: `inset 3px 0 0 ${cockpit.trackHighlight}, inset 0 2px 8px rgba(0,0,0,0.6)`,

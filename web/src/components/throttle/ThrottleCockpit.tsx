@@ -253,7 +253,7 @@ export default function ThrottleCockpit({
             />
           </Box>
 
-          <Box sx={{ flexShrink: 0, px: 1.5, pb: 1.5, mt: "20px" }}>
+          <Box sx={{ flexShrink: 0, px: 1.5, pb: 1.5, mt: "45px" }}>
             <Box
               component="button"
               type="button"

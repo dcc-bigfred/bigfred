@@ -11,6 +11,7 @@
   },
   "functions": "Funkcje",
   "fnLabel": "F{{n}}",
+  "stop": "Stop",
   "emergencyStop": "Stop awaryjny",
   "deadman": {
     "warning": "Brak aktywności — automatyczny stop za {{seconds}} s",

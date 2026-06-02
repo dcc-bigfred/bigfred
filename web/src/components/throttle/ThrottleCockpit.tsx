@@ -18,6 +18,7 @@ import {
   FUNCTION_BUTTON_SIZE_PX,
   THROTTLE_PANEL_WIDTH_PX,
 } from "./throttleCockpitTheme";
+import FullscreenToggleButton from "./FullscreenToggleButton";
 import FunctionGridButton from "./FunctionGridButton";
 import VerticalThrottle from "./VerticalThrottle";
 
@@ -107,6 +108,8 @@ export default function ThrottleCockpit({
           minHeight: 48,
         }}
       >
+        <FullscreenToggleButton />
+
         <FormControl
           size="small"
           disabled={disabled || vehicles.length === 0}

@@ -8,15 +8,10 @@ import {
   FormControl,
   InputLabel,
   MenuItem,
-  Paper,
   Select,
-  Slider,
   Stack,
-  ToggleButton,
-  ToggleButtonGroup,
   Typography,
 } from "@mui/material";
-import EmergencyIcon from "@mui/icons-material/EmergencyShare";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -26,6 +21,7 @@ import {
 import { DccBusProvider, useDccBus } from "../context/DccBusContext";
 import { useMe } from "../api/auth";
 import { useLayoutVehicles } from "../api/vehicles";
+import ThrottleCockpit from "../components/throttle/ThrottleCockpit";
 
 // translateErrorCode looks the daemon's machine-readable error up in
 // the throttle:errors namespace. The cast goes through `unknown`
@@ -172,11 +168,11 @@ export default function ThrottlePage() {
   //   2. Command-station picker.
   //   3. The actual throttle area (only when a station is selected).
   return (
-    <Container maxWidth="md" sx={{ py: 3 }}>
-      <Typography variant="h4" gutterBottom>
+    <Container maxWidth="lg" disableGutters sx={{ py: { xs: 1, sm: 2 }, px: { xs: 0, sm: 2 } }}>
+      <Typography variant="h4" gutterBottom sx={{ px: { xs: 2, sm: 0 } }}>
         {t("throttle:title")}
       </Typography>
-      <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
+      <Stack direction="row" spacing={1} sx={{ mb: 2, px: { xs: 2, sm: 0 } }}>
         <Chip
           color={connected ? "success" : "default"}
           label={t(
@@ -188,17 +184,19 @@ export default function ThrottlePage() {
       </Stack>
 
       {reconnecting && (
-        <Alert severity="warning" sx={{ mb: 2 }}>
+        <Alert severity="warning" sx={{ mb: 2, mx: { xs: 2, sm: 0 } }}>
           {t("throttle:controlPlane.reconnecting")}
         </Alert>
       )}
 
-      <CommandStationPicker
-        stations={stations}
-        currentID={selectedCS}
-        disabled={selecting}
-        onChange={handlePickerChange}
-      />
+      <Box sx={{ px: { xs: 2, sm: 0 } }}>
+        <CommandStationPicker
+          stations={stations}
+          currentID={selectedCS}
+          disabled={selecting}
+          onChange={handlePickerChange}
+        />
+      </Box>
 
       {spawnError && (
         <Alert
@@ -243,7 +241,7 @@ export default function ThrottlePage() {
       {selectedCS !== 0 && activeWsUrl && layoutID && (
         <DccBusProvider wsUrl={activeWsUrl}>
           <ReconnectingAlert />
-          <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
+          <Stack direction="row" spacing={1} sx={{ mb: 2, px: { xs: 2, sm: 0 } }}>
             <DataPlaneStatusChip />
           </Stack>
           <ThrottleSurface
@@ -389,101 +387,48 @@ function ThrottleSurface({
     if (selectedAddr == null) return;
     void setFunction(selectedAddr, n, !(functions[n] ?? false));
   };
-  const handleEStop = () => {
+  const handleStop = () => {
     if (selectedAddr == null) return;
-    void setSpeed(selectedAddr, 0, forward, true);
+    void setSpeed(selectedAddr, 0, forward);
   };
 
+  const cockpitVehicles = drivable
+    .filter((v): v is typeof v & { dccAddress: number } => v.dccAddress != null)
+    .map((v) => ({
+      id: v.id,
+      name: v.name,
+      dccAddress: v.dccAddress,
+    }));
+
   return (
-    <Paper sx={{ mt: 2, p: 3 }} variant="outlined">
-      <Stack spacing={3}>
-        <FormControl fullWidth>
-          <InputLabel>{t("throttle:vehicle")}</InputLabel>
-          <Select
-            value={selectedAddr != null ? String(selectedAddr) : ""}
-            label={t("throttle:vehicle")}
-            onChange={(ev) => setSelectedAddr(Number(ev.target.value))}
-          >
-            {drivable.map((v) => (
-              <MenuItem
-                key={v.id}
-                value={v.dccAddress != null ? String(v.dccAddress) : ""}
-              >
-                {v.name} ({v.dccAddress})
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
+    <Box sx={{ mt: { xs: 0, sm: 2 } }}>
+      <ThrottleCockpit
+        vehicles={cockpitVehicles}
+        selectedAddress={selectedAddr}
+        onSelectAddress={setSelectedAddr}
+        speed={Math.min(speed, maxSpeed)}
+        maxSpeed={maxSpeed}
+        forward={forward}
+        functions={functions}
+        disabled={selectedAddr == null}
+        onSpeedChange={handleSpeed}
+        onDirectionChange={(fwd) => handleDir(fwd ? "fwd" : "rev")}
+        onFunctionToggle={handleFn}
+        onStop={handleStop}
+      />
 
-        <Box>
-          <Typography gutterBottom>
-            {t("throttle:speed")}: {speed}
-          </Typography>
-          <Slider
-            value={Math.min(speed, maxSpeed)}
-            min={0}
-            max={maxSpeed}
-            step={1}
-            onChange={(_, v) => handleSpeed(Array.isArray(v) ? v[0] : v)}
-            disabled={selectedAddr == null}
-          />
-        </Box>
-
-        <ToggleButtonGroup
-          exclusive
-          value={forward ? "fwd" : "rev"}
-          onChange={(_, v) => v && handleDir(v as "fwd" | "rev")}
-          disabled={selectedAddr == null}
-        >
-          <ToggleButton value="fwd">{t("throttle:direction.forward")}</ToggleButton>
-          <ToggleButton value="rev">{t("throttle:direction.reverse")}</ToggleButton>
-        </ToggleButtonGroup>
-
-        <Box>
-          <Typography gutterBottom>{t("throttle:functions")}</Typography>
-          <Stack direction="row" flexWrap="wrap" gap={1}>
-            {Array.from({ length: 13 }).map((_, n) => {
-              const on = Boolean(functions[n]);
-              return (
-                <ToggleButton
-                  key={n}
-                  value={n}
-                  selected={on}
-                  onChange={() => handleFn(n)}
-                  size="small"
-                  disabled={selectedAddr == null}
-                >
-                  {t("throttle:fnLabel", { n })}
-                </ToggleButton>
-              );
-            })}
-          </Stack>
-        </Box>
-
-        <Button
-          color="error"
-          variant="contained"
-          startIcon={<EmergencyIcon />}
-          onClick={handleEStop}
-          disabled={selectedAddr == null}
-          size="large"
-        >
-          {t("throttle:emergencyStop")}
-        </Button>
-
-        {lastError && (
-          <Alert severity="warning">
-            {translateErrorCode(
-              t as unknown as (
-                k: string,
-                opts?: { defaultValue?: string },
-              ) => string,
-              lastError,
-              t("throttle:errors.command_station_disconnected"),
-            )}
-          </Alert>
-        )}
-      </Stack>
-    </Paper>
+      {lastError && (
+        <Alert severity="warning" sx={{ mt: 2, mx: { xs: 2, sm: 0 } }}>
+          {translateErrorCode(
+            t as unknown as (
+              k: string,
+              opts?: { defaultValue?: string },
+            ) => string,
+            lastError,
+            t("throttle:errors.command_station_disconnected"),
+          )}
+        </Alert>
+      )}
+    </Box>
   );
 }

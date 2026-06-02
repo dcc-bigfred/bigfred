@@ -233,6 +233,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	// off-line because both are hard dependencies.
 	var dccBusSvc *service.DccBusService
 	var dccLayoutSync *service.DccBusLayoutSync
+	var sessionCtl *service.SessionControlService
 	if supSvc != nil && redisReady {
 		executable, _ := os.Executable()
 		dccBusSvc = service.NewDccBusService(service.DccBusConfig{
@@ -251,7 +252,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	}
 
 	if dccBusSvc != nil {
-		sessionCtl := service.NewSessionControlService(service.SessionControlConfig{
+		sessionCtl = service.NewSessionControlService(service.SessionControlConfig{
 			Log:         log,
 			DccBus:      dccBusSvc,
 			CommandStns: commandStations,
@@ -259,6 +260,10 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 			Layouts:     layouts,
 		})
 		hub.SetControlHandler(sessionCtl)
+		commandStationSvc.SetRuntime(service.CommandStationRuntime{
+			DccSync:    dccLayoutSync,
+			SessionCtl: sessionCtl,
+		})
 
 		// Fan dcc-bus daemon events back onto the control plane so
 		// the dashboard / sudo UI reacts to estop audits, daemon
@@ -319,24 +324,24 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	}
 
 	router := httpapi.NewRouter(httpapi.RouterConfig{
-		Auth:           authSvc,
-		Users:          userSvc,
-		Layouts:        layoutSvc,
-		Interlockings:  interlockingSvc,
-		Occupancy:      occupancySvc,
+		Auth:             authSvc,
+		Users:            userSvc,
+		Layouts:          layoutSvc,
+		Interlockings:    interlockingSvc,
+		Occupancy:        occupancySvc,
 		Presence:         presenceSvc,
 		DccBusLayoutSync: dccLayoutSync,
-		Vehicles:       vehicleSvc,
-		Trains:         trainSvc,
-		LayoutVehicles: layoutVehicleSvc,
-		DCCPool:        dccPoolSvc,
-		Sudo:            sudoSvc,
-		CommandStations: commandStationSvc,
-		Diagnostics:     diagSvc,
-		Hub:             hub,
-		DccBus:          dccBusSvc,
-		AllowedOrigins: f.AllowedOrigins,
-		SecureCookie:   f.SecureCookie,
+		Vehicles:         vehicleSvc,
+		Trains:           trainSvc,
+		LayoutVehicles:   layoutVehicleSvc,
+		DCCPool:          dccPoolSvc,
+		Sudo:             sudoSvc,
+		CommandStations:  commandStationSvc,
+		Diagnostics:      diagSvc,
+		Hub:              hub,
+		DccBus:           dccBusSvc,
+		AllowedOrigins:   f.AllowedOrigins,
+		SecureCookie:     f.SecureCookie,
 	})
 
 	srv := &http.Server{

@@ -26,13 +26,15 @@
   },
   "controlPlane": {
     "online": "Sterowanie: online",
-    "offline": "Sterowanie: offline"
+    "offline": "Sterowanie: offline",
+    "reconnecting": "Utracono połączenie z BigFred, ponawiam próbę połączenia co 2s…"
   },
   "dataPlane": {
     "online": "Centralka: online",
     "offline": "Centralka: offline",
     "connecting": "Centralka: łączenie…"
   },
+  "reconnecting": "Utracono połączenie z centralką, ponawiam próbę połączenia co 2s…",
   "errors": {
     "command_station_disconnected": "Utracono połączenie z centralką",
     "vehicle_not_on_layout": "Ten pojazd nie znajduje się na obecnej makiecie",

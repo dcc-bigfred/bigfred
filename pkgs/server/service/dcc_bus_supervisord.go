@@ -221,6 +221,24 @@ func commandStationIDsFingerprint(ids []uint) string {
 	return strings.Join(parts, ",")
 }
 
+// ObserveCommandStationCatalog refreshes supervisord when a command-
+// station catalogue row changes (speed steps, URI, kind, name). Any
+// layout that currently has online users or a running dcc-bus daemon
+// for the station is included in the rebuild.
+func (s *DccBusLayoutSync) ObserveCommandStationCatalog(ctx context.Context, commandStationID uint) error {
+	if s == nil || s.dcc == nil || commandStationID == 0 {
+		return nil
+	}
+	extras := s.dcc.LayoutIDsWithProgramForCS(commandStationID)
+	if s.dcc.log != nil {
+		s.dcc.log.WithFields(map[string]any{
+			"commandStationId": commandStationID,
+			"layoutIds":        extras,
+		}).Info("dcc-bus catalog sync: command station changed, refreshing supervisord")
+	}
+	return s.dcc.SyncProgramsForOnlineLayouts(ctx, s.hub, s.layouts, extras...)
+}
+
 // ObserveLayout compares the layout's current command-station id set
 // with the last seen value. When it changed, supervisord is
 // regenerated for every layout that currently has online users.

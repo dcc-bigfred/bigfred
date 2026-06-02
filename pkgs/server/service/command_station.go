@@ -37,6 +37,14 @@ var validSpeedSteps = map[uint]struct{}{
 	14: {}, 28: {}, 128: {},
 }
 
+// CommandStationRuntime wires optional side-effect handlers for catalogue
+// mutations (supervisord refresh, control-plane broadcast). Nil fields
+// are skipped (--no-supervisor, unit tests).
+type CommandStationRuntime struct {
+	DccSync    *DccBusLayoutSync
+	SessionCtl *SessionControlService
+}
+
 // CommandStationService implements CRUD over the command-station
 // catalogue.
 type CommandStationService struct {
@@ -44,6 +52,7 @@ type CommandStationService struct {
 	layoutStations *repo.LayoutCommandStations
 	layouts        *repo.Layouts
 	sec            security.CommandStationSecurityContext
+	runtime        CommandStationRuntime
 }
 
 // NewCommandStationService constructs a CommandStationService.
@@ -57,6 +66,12 @@ func NewCommandStationService(
 		layoutStations: layoutStations,
 		layouts:        layouts,
 	}
+}
+
+// SetRuntime attaches optional handlers invoked after catalogue rows
+// change. Call once during server bootstrap after dcc-bus wiring.
+func (s *CommandStationService) SetRuntime(r CommandStationRuntime) {
+	s.runtime = r
 }
 
 // ListAll returns every command station in the catalogue (admin view).
@@ -168,6 +183,7 @@ func (s *CommandStationService) Update(ctx context.Context, eff domain.Effective
 	if err := s.stations.Update(ctx, &row); err != nil {
 		return domain.CommandStation{}, err
 	}
+	s.afterCatalogMutation(ctx, row)
 	return row, nil
 }
 
@@ -192,6 +208,15 @@ func (s *CommandStationService) Delete(ctx context.Context, eff domain.Effective
 		return err
 	}
 	return s.stations.Delete(ctx, &row)
+}
+
+func (s *CommandStationService) afterCatalogMutation(ctx context.Context, row domain.CommandStation) {
+	if s.runtime.DccSync != nil {
+		_ = s.runtime.DccSync.ObserveCommandStationCatalog(ctx, row.ID)
+	}
+	if s.runtime.SessionCtl != nil {
+		s.runtime.SessionCtl.BroadcastCommandStationCatalogChanged(ctx, row)
+	}
 }
 
 func (s *CommandStationService) validateCatalogInput(name string, kind domain.CommandStationKind, uri string, speedSteps uint) (string, domain.CommandStationKind, string, uint, error) {

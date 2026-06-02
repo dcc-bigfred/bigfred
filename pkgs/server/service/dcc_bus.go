@@ -143,6 +143,28 @@ func (d *DccBusService) HydratePorts(ctx context.Context) error {
 	return nil
 }
 
+// LayoutIDsWithProgramForCS returns layout ids that currently have a
+// port assignment for commandStationID. Used when catalogue rows change
+// so supervisord can restart daemons that are still running after the
+// operator disconnects from the control plane.
+func (d *DccBusService) LayoutIDsWithProgramForCS(commandStationID uint) []uint {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	seen := make(map[uint]struct{})
+	out := make([]uint, 0)
+	for k := range d.ports {
+		if k.CommandStationID != commandStationID {
+			continue
+		}
+		if _, ok := seen[k.LayoutID]; ok {
+			continue
+		}
+		seen[k.LayoutID] = struct{}{}
+		out = append(out, k.LayoutID)
+	}
+	return out
+}
+
 // PortFor returns the TCP port assigned to (layoutID, commandStationID)
 // or 0 when none has been allocated yet. Used by the reverse proxy
 // to resolve `csId → port` without serializing on the daemon's mutex.

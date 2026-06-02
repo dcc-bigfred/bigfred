@@ -13,7 +13,11 @@ import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import SettingsIcon from "@mui/icons-material/Settings";
 import { useTranslation } from "react-i18next";
 
-import { cockpit, FUNCTION_BUTTON_SIZE_PX } from "./throttleCockpitTheme";
+import {
+  cockpit,
+  FUNCTION_BUTTON_SIZE_PX,
+  THROTTLE_PANEL_WIDTH_PX,
+} from "./throttleCockpitTheme";
 import FunctionGridButton from "./FunctionGridButton";
 import VerticalThrottle from "./VerticalThrottle";
 
@@ -82,6 +86,7 @@ export default function ThrottleCockpit({
         overflow: "hidden",
         display: "flex",
         flexDirection: "column",
+        width: "100%",
         minHeight: { xs: "calc(100dvh - 220px)", md: 520 },
         maxHeight: { md: 720 },
       }}
@@ -159,13 +164,16 @@ export default function ThrottleCockpit({
         sx={{
           display: "flex",
           flex: 1,
+          flexDirection: "row",
           minHeight: 0,
-          flexDirection: { xs: "column", sm: "row" },
+          minWidth: 0,
+          overflow: "hidden",
         }}
       >
         <Box
           sx={{
-            flex: { xs: "1 1 auto", sm: "1 1 68%" },
+            flex: "1 1 0",
+            minWidth: 0,
             minHeight: 0,
             overflow: "auto",
             p: 1.25,
@@ -175,6 +183,7 @@ export default function ThrottleCockpit({
           <Box
             sx={{
               display: "grid",
+              width: "100%",
               gridTemplateColumns: `repeat(auto-fill, ${FUNCTION_BUTTON_SIZE_PX}px)`,
               gap: 1,
               justifyContent: "start",
@@ -194,16 +203,15 @@ export default function ThrottleCockpit({
 
         <Box
           sx={{
-            flex: { xs: "0 0 auto", sm: "0 0 32%" },
-            minWidth: { sm: 120 },
+            flex: `0 0 ${THROTTLE_PANEL_WIDTH_PX}px`,
+            width: THROTTLE_PANEL_WIDTH_PX,
+            minWidth: THROTTLE_PANEL_WIDTH_PX,
+            maxWidth: THROTTLE_PANEL_WIDTH_PX,
             display: "flex",
             flexDirection: "column",
-            width: { xs: "100%", sm: "auto" },
-            borderLeft: { sm: `1px solid ${cockpit.border}` },
-            borderTop: {
-              xs: `1px solid ${cockpit.border}`,
-              sm: "none",
-            },
+            minHeight: 0,
+            flexShrink: 0,
+            borderLeft: `1px solid ${cockpit.border}`,
             bgcolor: cockpit.bg,
           }}
         >
@@ -216,7 +224,7 @@ export default function ThrottleCockpit({
               flexDirection: "column",
               pt: 2,
               pb: 1,
-              minHeight: { xs: 200, sm: 0 },
+              minHeight: 0,
             }}
           >
             <VerticalThrottle

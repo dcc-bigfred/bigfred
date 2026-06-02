@@ -1,5 +1,7 @@
 // Shared palette for the skeuomorphic throttle cockpit (§6.3b).
 export const FUNCTION_BUTTON_SIZE_PX = 64;
+/** Fixed width of the speed / throttle column (always on the right). */
+export const THROTTLE_PANEL_WIDTH_PX = 128;
 
 export const cockpit = {
   bg: "#0f1e33",

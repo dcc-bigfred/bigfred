@@ -26,6 +26,7 @@ import { useMe } from "../api/auth";
 import { useLayoutVehicles } from "../api/vehicles";
 import ThrottleCockpit from "../components/throttle/ThrottleCockpit";
 import ThrottleSetupDialog from "../components/throttle/ThrottleSetupDialog";
+import { useThrottleVehicleSelection } from "../hooks/useThrottleVehicleSelection";
 
 function translateErrorCode(
   t: (k: string, opts?: { defaultValue?: string }) => string,
@@ -378,13 +379,10 @@ function IdleThrottle({
   onOpenSetup: () => void;
 }) {
   const vehicles = useCockpitVehicles(layoutID);
-  const [selectedAddr, setSelectedAddr] = useState<number | null>(null);
-
-  useEffect(() => {
-    if (selectedAddr == null && vehicles.length > 0) {
-      setSelectedAddr(vehicles[0].dccAddress);
-    }
-  }, [vehicles, selectedAddr]);
+  const { selectedAddr, selectAddress } = useThrottleVehicleSelection(
+    layoutID,
+    vehicles,
+  );
 
   return (
     <Box sx={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
@@ -392,7 +390,7 @@ function IdleThrottle({
         onOpenSetup={onOpenSetup}
         vehicles={vehicles}
         selectedAddress={selectedAddr}
-        onSelectAddress={setSelectedAddr}
+        onSelectAddress={selectAddress}
         speed={0}
         maxSpeed={127}
         forward
@@ -417,7 +415,10 @@ function ConnectedThrottle({
   onOpenSetup: () => void;
 }) {
   const vehicles = useCockpitVehicles(layoutID);
-  const [selectedAddr, setSelectedAddr] = useState<number | null>(null);
+  const { selectedAddr, selectAddress } = useThrottleVehicleSelection(
+    layoutID,
+    vehicles,
+  );
   const {
     subscribe,
     status,
@@ -438,12 +439,6 @@ function ConnectedThrottle({
     }
     void subscribe([selectedAddr]);
   }, [selectedAddr, subscribe, rosterAddrKey, status]);
-
-  useEffect(() => {
-    if (selectedAddr == null && vehicles.length > 0) {
-      setSelectedAddr(vehicles[0].dccAddress);
-    }
-  }, [vehicles, selectedAddr]);
 
   const state =
     selectedAddr != null ? states.get(selectedAddr) : undefined;
@@ -482,7 +477,7 @@ function ConnectedThrottle({
         onOpenSetup={onOpenSetup}
         vehicles={vehicles}
         selectedAddress={selectedAddr}
-        onSelectAddress={setSelectedAddr}
+        onSelectAddress={selectAddress}
         speed={Math.min(speed, maxSpeed)}
         maxSpeed={maxSpeed}
         forward={forward}

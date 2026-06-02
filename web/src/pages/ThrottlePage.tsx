@@ -24,6 +24,7 @@ import {
 } from "../context/DccBusContext";
 import { useMe } from "../api/auth";
 import { useLayoutVehicles } from "../api/vehicles";
+import AutoDismissAlert from "../components/AutoDismissAlert";
 import ThrottleCockpit from "../components/throttle/ThrottleCockpit";
 import ThrottleSetupDialog from "../components/throttle/ThrottleSetupDialog";
 import { useThrottleVehicleSelection } from "../hooks/useThrottleVehicleSelection";
@@ -171,9 +172,9 @@ export default function ThrottlePage() {
       </Stack>
 
       {reconnecting && (
-        <Alert severity="warning">
+        <AutoDismissAlert severity="warning" resetKey="control-reconnecting">
           {t("throttle:controlPlane.reconnecting")}
-        </Alert>
+        </AutoDismissAlert>
       )}
 
       <CommandStationPicker
@@ -206,20 +207,23 @@ export default function ThrottlePage() {
       )}
 
       {selectedCS === 0 && (
-        <Alert severity="info">
+        <AutoDismissAlert
+          severity="info"
+          resetKey={`select-cs-${stations.length}`}
+        >
           {stations.length === 0
             ? t("throttle:noCommandStations")
             : t("throttle:selectCommandStation")}
-        </Alert>
+        </AutoDismissAlert>
       )}
 
       {selectedCS !== 0 &&
         activeWsUrl == null &&
         !spawnError &&
         (selecting || spawnAcked) && (
-          <Alert severity="info" icon={false}>
+          <AutoDismissAlert severity="info" icon={false} resetKey="spawning">
             {t("throttle:csStatus.spawning")}
-          </Alert>
+          </AutoDismissAlert>
         )}
     </>
   );
@@ -284,7 +288,9 @@ function SetupDataPlaneSection() {
         <DataPlaneStatusChip status={dcc?.status ?? "idle"} />
       </Stack>
       {dcc?.reconnecting && (
-        <Alert severity="warning">{t("reconnecting")}</Alert>
+        <AutoDismissAlert severity="warning" resetKey="dcc-reconnecting">
+          {t("reconnecting")}
+        </AutoDismissAlert>
       )}
     </>
   );
@@ -296,7 +302,11 @@ function ReconnectingAlert() {
   if (!reconnecting) {
     return null;
   }
-  return <Alert severity="warning">{t("reconnecting")}</Alert>;
+  return (
+    <AutoDismissAlert severity="warning" resetKey="cockpit-reconnecting">
+      {t("reconnecting")}
+    </AutoDismissAlert>
+  );
 }
 
 function DataPlaneStatusChip({ status }: { status: DataPlaneStatus }) {
@@ -504,7 +514,7 @@ function ConnectedThrottle({
       >
         <ReconnectingAlert />
         {lastError && (
-          <Alert severity="warning">
+          <AutoDismissAlert severity="warning" resetKey={lastError}>
             {translateErrorCode(
               t as unknown as (
                 k: string,
@@ -513,7 +523,7 @@ function ConnectedThrottle({
               lastError,
               t("throttle:errors.command_station_disconnected"),
             )}
-          </Alert>
+          </AutoDismissAlert>
         )}
       </Box>
     </Box>

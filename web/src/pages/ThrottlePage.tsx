@@ -499,7 +499,7 @@ function ConnectedThrottle({
           position: "absolute",
           left: 8,
           right: 8,
-          bottom: 8,
+          bottom: 64,
           display: "flex",
           flexDirection: "column",
           gap: 1,

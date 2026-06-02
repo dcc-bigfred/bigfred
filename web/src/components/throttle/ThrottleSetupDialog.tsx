@@ -26,7 +26,15 @@ export default function ThrottleSetupDialog({
   const { t } = useTranslation("throttle");
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="sm"
+      fullWidth
+      slotProps={{
+        paper: { sx: { userSelect: "none", WebkitUserSelect: "none" } },
+      }}
+    >
       <DialogTitle
         sx={{
           display: "flex",

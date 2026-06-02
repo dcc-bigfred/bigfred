@@ -27,6 +27,7 @@ import { useLayoutVehicles } from "../api/vehicles";
 import AutoDismissAlert from "../components/AutoDismissAlert";
 import ThrottleCockpit from "../components/throttle/ThrottleCockpit";
 import ThrottleSetupDialog from "../components/throttle/ThrottleSetupDialog";
+import { useThrottleSpeedOverride } from "../hooks/useThrottleSpeedOverride";
 import { useThrottleVehicleSelection } from "../hooks/useThrottleVehicleSelection";
 
 function translateErrorCode(
@@ -244,6 +245,8 @@ export default function ThrottlePage() {
     minWidth: 0,
     width: "100%",
     overflow: "hidden",
+    userSelect: "none",
+    WebkitUserSelect: "none",
   };
 
   const cockpitAreaSx = {
@@ -452,17 +455,24 @@ function ConnectedThrottle({
 
   const state =
     selectedAddr != null ? states.get(selectedAddr) : undefined;
-  const speed = state?.speed ?? 0;
+  const serverSpeed = state?.speed ?? 0;
   const forward = state?.forward ?? true;
   const functions = state?.functions ?? [];
 
+  const { displaySpeed, noteUserSpeed } = useThrottleSpeedOverride(
+    serverSpeed,
+    selectedAddr,
+  );
+  const cockpitSpeed = Math.min(displaySpeed, maxSpeed);
+
   const handleSpeed = (next: number) => {
     if (selectedAddr == null) return;
+    noteUserSpeed(next);
     void setSpeed(selectedAddr, next, forward);
   };
   const handleDir = (fwd: boolean) => {
     if (selectedAddr == null) return;
-    void setSpeed(selectedAddr, speed, fwd);
+    void setSpeed(selectedAddr, cockpitSpeed, fwd);
   };
   const handleFn = (n: number) => {
     if (selectedAddr == null) return;
@@ -470,6 +480,7 @@ function ConnectedThrottle({
   };
   const handleStop = () => {
     if (selectedAddr == null) return;
+    noteUserSpeed(0);
     void setSpeed(selectedAddr, 0, forward);
   };
 
@@ -488,7 +499,7 @@ function ConnectedThrottle({
         vehicles={vehicles}
         selectedAddress={selectedAddr}
         onSelectAddress={selectAddress}
-        speed={Math.min(speed, maxSpeed)}
+        speed={cockpitSpeed}
         maxSpeed={maxSpeed}
         forward={forward}
         functions={functions}

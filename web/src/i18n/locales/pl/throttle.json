@@ -4,6 +4,11 @@
     "open": "Ustawienia sterowania",
     "close": "Zamknij"
   },
+  "fullscreen": {
+    "label": "Pełny ekran",
+    "enter": "Włącz pełny ekran",
+    "exit": "Wyłącz pełny ekran"
+  },
   "commandStation": "Centralka",
   "selectCommandStation": "Wybierz centralkę",
   "noCommandStations": "Do tej makiety nie podpięto żadnej centralki.",

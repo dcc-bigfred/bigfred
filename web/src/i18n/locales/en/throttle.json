@@ -4,6 +4,11 @@
     "open": "Throttle settings",
     "close": "Close"
   },
+  "fullscreen": {
+    "label": "Full screen",
+    "enter": "Enter full screen",
+    "exit": "Exit full screen"
+  },
   "commandStation": "Command station",
   "selectCommandStation": "Select a command station",
   "noCommandStations": "No command station is attached to this layout.",

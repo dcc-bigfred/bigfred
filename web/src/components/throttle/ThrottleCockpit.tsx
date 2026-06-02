@@ -46,7 +46,8 @@ export interface ThrottleCockpitProps {
 }
 
 // ThrottleCockpit is the locomotive-control surface: function grid on
-// the left, vertical throttle + stop + direction on the right.
+// the left, vertical throttle + stop on the right, direction bar full
+// width at the bottom.
 export default function ThrottleCockpit({
   onOpenSetup,
   vehicles,
@@ -249,7 +250,7 @@ export default function ThrottleCockpit({
             />
           </Box>
 
-          <Box sx={{ flexShrink: 0, px: 1.5, pb: 1, mt: "20px" }}>
+          <Box sx={{ flexShrink: 0, px: 1.5, pb: 1.5, mt: "20px" }}>
             <Box
               component="button"
               type="button"
@@ -280,63 +281,70 @@ export default function ThrottleCockpit({
               {t("stop")}
             </Box>
           </Box>
+        </Box>
+      </Box>
 
-          <Box
+      <Box
+        component="footer"
+        sx={{
+          flexShrink: 0,
+          display: "flex",
+          alignItems: "center",
+          width: "100%",
+          minHeight: 56,
+          px: 2,
+          py: 1,
+          gap: 2,
+          borderTop: `1px solid ${cockpit.border}`,
+          bgcolor: cockpit.header,
+        }}
+      >
+        <Box sx={{ flex: 1, display: "flex", justifyContent: "flex-start" }}>
+          <IconButton
+            disabled={disabled || selectedAddress == null}
+            onClick={() => onDirectionChange(false)}
+            aria-label={t("direction.reverse")}
             sx={{
-              flexShrink: 0,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              px: 1,
-              pb: 1.5,
-              gap: 0.5,
+              color: !forward ? cockpit.accent : cockpit.textMuted,
+              border: `1px solid ${!forward ? cockpit.accent : cockpit.border}`,
+              borderRadius: 1,
+              px: 2,
             }}
           >
-            <IconButton
-              size="small"
-              disabled={disabled || selectedAddress == null}
-              onClick={() => onDirectionChange(false)}
-              aria-label={t("direction.reverse")}
-              sx={{
-                color: !forward ? cockpit.accent : cockpit.textMuted,
-                border: `1px solid ${!forward ? cockpit.accent : cockpit.border}`,
-                borderRadius: 1,
-                fontWeight: 700,
-              }}
-            >
-              <ChevronLeftIcon />
-              <ChevronLeftIcon sx={{ ml: -1.25 }} />
-            </IconButton>
+            <ChevronLeftIcon />
+            <ChevronLeftIcon sx={{ ml: -1.25 }} />
+          </IconButton>
+        </Box>
 
-            <Typography
-              variant="h6"
-              component="span"
-              sx={{
-                color: cockpit.text,
-                fontWeight: 700,
-                fontVariantNumeric: "tabular-nums",
-                minWidth: 48,
-                textAlign: "center",
-              }}
-            >
-              {speedPercent}%
-            </Typography>
+        <Typography
+          variant="h6"
+          component="span"
+          sx={{
+            color: cockpit.text,
+            fontWeight: 700,
+            fontVariantNumeric: "tabular-nums",
+            flexShrink: 0,
+            textAlign: "center",
+          }}
+        >
+          {speedPercent}%
+        </Typography>
 
-            <IconButton
-              size="small"
-              disabled={disabled || selectedAddress == null}
-              onClick={() => onDirectionChange(true)}
-              aria-label={t("direction.forward")}
-              sx={{
-                color: forward ? cockpit.accent : cockpit.textMuted,
-                border: `1px solid ${forward ? cockpit.accent : cockpit.border}`,
-                borderRadius: 1,
-              }}
-            >
-              <ChevronRightIcon />
-              <ChevronRightIcon sx={{ ml: -1.25 }} />
-            </IconButton>
-          </Box>
+        <Box sx={{ flex: 1, display: "flex", justifyContent: "flex-end" }}>
+          <IconButton
+            disabled={disabled || selectedAddress == null}
+            onClick={() => onDirectionChange(true)}
+            aria-label={t("direction.forward")}
+            sx={{
+              color: forward ? cockpit.accent : cockpit.textMuted,
+              border: `1px solid ${forward ? cockpit.accent : cockpit.border}`,
+              borderRadius: 1,
+              px: 2,
+            }}
+          >
+            <ChevronRightIcon />
+            <ChevronRightIcon sx={{ ml: -1.25 }} />
+          </IconButton>
         </Box>
       </Box>
     </Box>

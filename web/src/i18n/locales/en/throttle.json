@@ -1,5 +1,9 @@
 {
   "title": "Throttle",
+  "setup": {
+    "open": "Throttle settings",
+    "close": "Close"
+  },
   "commandStation": "Command station",
   "selectCommandStation": "Select a command station",
   "noCommandStations": "No command station is attached to this layout.",

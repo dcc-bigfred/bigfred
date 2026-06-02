@@ -342,7 +342,16 @@ export default function AppShell() {
         />
       )}
 
-      <Box component="main" sx={{ flexGrow: 1 }}>
+      <Box
+        component="main"
+        sx={{
+          flexGrow: 1,
+          display: "flex",
+          flexDirection: "column",
+          minHeight: 0,
+          minWidth: 0,
+        }}
+      >
         <Outlet />
       </Box>
     </Box>

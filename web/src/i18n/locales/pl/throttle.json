@@ -1,5 +1,9 @@
 {
   "title": "Sterowanie",
+  "setup": {
+    "open": "Ustawienia sterowania",
+    "close": "Zamknij"
+  },
   "commandStation": "Centralka",
   "selectCommandStation": "Wybierz centralkę",
   "noCommandStations": "Do tej makiety nie podpięto żadnej centralki.",

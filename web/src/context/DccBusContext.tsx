@@ -363,3 +363,7 @@ export function useDccBus(): DccBusContextValue {
   }
   return ctx;
 }
+
+export function useDccBusOptional(): DccBusContextValue | null {
+  return useContext(DccBusContext);
+}

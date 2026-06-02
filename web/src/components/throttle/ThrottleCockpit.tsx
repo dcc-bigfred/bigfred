@@ -30,6 +30,7 @@ export interface ThrottleCockpitVehicle {
 }
 
 export interface ThrottleCockpitProps {
+  onOpenSetup: () => void;
   vehicles: ThrottleCockpitVehicle[];
   selectedAddress: number | null;
   onSelectAddress: (address: number) => void;
@@ -47,6 +48,7 @@ export interface ThrottleCockpitProps {
 // ThrottleCockpit is the locomotive-control surface: function grid on
 // the left, vertical throttle + stop + direction on the right.
 export default function ThrottleCockpit({
+  onOpenSetup,
   vehicles,
   selectedAddress,
   onSelectAddress,
@@ -81,14 +83,13 @@ export default function ThrottleCockpit({
     <Box
       sx={{
         bgcolor: cockpit.bg,
-        borderRadius: { xs: 0, sm: 2 },
-        border: { sm: `1px solid ${cockpit.border}` },
         overflow: "hidden",
         display: "flex",
         flexDirection: "column",
+        flex: 1,
         width: "100%",
-        minHeight: { xs: "calc(100dvh - 220px)", md: 520 },
-        maxHeight: { md: 720 },
+        height: "100%",
+        minHeight: 0,
       }}
     >
       <Box
@@ -104,15 +105,6 @@ export default function ThrottleCockpit({
           minHeight: 48,
         }}
       >
-        <IconButton
-          size="small"
-          disabled
-          aria-hidden
-          sx={{ color: cockpit.textMuted, visibility: "hidden" }}
-        >
-          <SettingsIcon fontSize="small" />
-        </IconButton>
-
         <FormControl
           size="small"
           disabled={disabled || vehicles.length === 0}
@@ -152,9 +144,9 @@ export default function ThrottleCockpit({
 
         <IconButton
           size="small"
-          disabled
-          aria-hidden
-          sx={{ color: cockpit.textMuted, visibility: "hidden" }}
+          onClick={onOpenSetup}
+          aria-label={t("setup.open")}
+          sx={{ color: cockpit.text }}
         >
           <SettingsIcon fontSize="small" />
         </IconButton>

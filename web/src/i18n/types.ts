@@ -32,6 +32,7 @@ import type plSudo from "./locales/pl/sudo.json";
 import type plThrottle from "./locales/pl/throttle.json";
 import type plCommandStation from "./locales/pl/commandStation.json";
 import type plDiagnostics from "./locales/pl/diagnostics.json";
+import type plFunction from "./locales/pl/function.json";
 
 declare module "i18next" {
   interface CustomTypeOptions {
@@ -50,6 +51,7 @@ declare module "i18next" {
       throttle: typeof plThrottle;
       commandStation: typeof plCommandStation;
       diagnostics: typeof plDiagnostics;
+      function: typeof plFunction;
     };
     // returnNull is false in index.ts; mirror that here so the t()
     // return type is `string` (not `string | null`).

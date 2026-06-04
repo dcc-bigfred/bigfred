@@ -70,5 +70,16 @@
   "sudo_locked": "Too many failed attempts — try again in a moment.",
   "diagnostics_forbidden": "That file is not on the diagnostics whitelist.",
   "diagnostics_not_found": "The log file does not exist yet.",
-  "diagnostics_unavailable": "Diagnostics are not available on this server."
+  "diagnostics_unavailable": "Diagnostics are not available on this server.",
+  "only_owner_can_edit": "Only the vehicle owner can edit functions.",
+  "template_not_owned": "You cannot edit this template.",
+  "function_not_found": "Function not found.",
+  "function_num_taken": "This function number is already in use.",
+  "function_num_invalid": "Function number must be in range F0–F31.",
+  "function_icon_invalid": "Pick an icon from the catalogue.",
+  "function_kind_invalid": "Pick function kind (latched or momentary).",
+  "function_name_required": "Enter a function title.",
+  "vehicle_template_not_found": "Template not found.",
+  "vehicle_template_name_required": "Enter a template name.",
+  "vehicle_template_name_taken": "A template with this name already exists."
 }

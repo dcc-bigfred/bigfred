@@ -49,10 +49,23 @@ type FunctionReorderEntry struct {
 }
 
 // FunctionService manages dcc_functions for vehicles and templates.
+// VehicleFunctionCatalogueEntry is one row in the cross-user
+// function catalogue (read-only browse).
+type VehicleFunctionCatalogueEntry struct {
+	VehicleID   uint
+	VehicleName string
+	OwnerID     uint
+	OwnerLogin  string
+	DCCAddress  *uint16
+	Kind        domain.VehicleKind
+	Functions   []ResolvedFunction
+}
+
 type FunctionService struct {
 	functions *repo.DccFunctions
 	vehicles  *repo.Vehicles
 	templates *repo.VehicleTemplates
+	users     *repo.Users
 	sec       security.FunctionSecurityContext
 }
 
@@ -61,8 +74,9 @@ func NewFunctionService(
 	f *repo.DccFunctions,
 	v *repo.Vehicles,
 	t *repo.VehicleTemplates,
+	u *repo.Users,
 ) *FunctionService {
-	return &FunctionService{functions: f, vehicles: v, templates: t}
+	return &FunctionService{functions: f, vehicles: v, templates: t, users: u}
 }
 
 // ListIcons returns the closed icon catalogue.
@@ -88,6 +102,46 @@ func (s *FunctionService) ListForVehicle(ctx context.Context, vehicleID uint) ([
 		return nil, err
 	}
 	return toResolved(rows, "vehicle"), nil
+}
+
+// ListFunctionCatalogue returns every vehicle with its resolved
+// function list and owner login (for the template editor browse UI).
+func (s *FunctionService) ListFunctionCatalogue(ctx context.Context) ([]VehicleFunctionCatalogueEntry, error) {
+	vehicles, err := s.vehicles.ListAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+	logins := make(map[uint]string)
+	out := make([]VehicleFunctionCatalogueEntry, 0, len(vehicles))
+	for _, v := range vehicles {
+		fns, err := s.ListForVehicle(ctx, v.ID)
+		if err != nil {
+			return nil, err
+		}
+		if len(fns) == 0 {
+			continue
+		}
+		login, ok := logins[v.OwnerUserID]
+		if !ok {
+			u, err := s.users.FindByID(ctx, v.OwnerUserID)
+			if err != nil {
+				login = "?"
+			} else {
+				login = u.Login
+			}
+			logins[v.OwnerUserID] = login
+		}
+		out = append(out, VehicleFunctionCatalogueEntry{
+			VehicleID:   v.ID,
+			VehicleName: v.Name,
+			OwnerID:     v.OwnerUserID,
+			OwnerLogin:  login,
+			DCCAddress:  v.DCCAddress,
+			Kind:        v.Kind,
+			Functions:   fns,
+		})
+	}
+	return out, nil
 }
 
 // ListForTemplate returns function rows owned by a template.

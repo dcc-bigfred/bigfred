@@ -23,6 +23,7 @@ import HistoryIcon from "@mui/icons-material/History";
 import BugReportIcon from "@mui/icons-material/BugReport";
 import PersonIcon from "@mui/icons-material/Person";
 import TrainIcon from "@mui/icons-material/Train";
+import TuneIcon from "@mui/icons-material/Tune";
 import VpnKeyIcon from "@mui/icons-material/VpnKey";
 import LockResetIcon from "@mui/icons-material/LockReset";
 import LogoutIcon from "@mui/icons-material/Logout";
@@ -141,6 +142,12 @@ export default function AppShell() {
         label: t("nav.my.trains"),
         icon: <DirectionsRailwayIcon fontSize="small" />,
         onClick: () => navigate("/my/trains"),
+      },
+      {
+        id: "templates",
+        label: t("nav.my.templates"),
+        icon: <TuneIcon fontSize="small" />,
+        onClick: () => navigate("/my/vehicle-templates"),
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps

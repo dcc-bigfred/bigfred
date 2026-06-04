@@ -25,6 +25,7 @@ import {
   Typography,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
+import EditIcon from "@mui/icons-material/Edit";
 import TuneIcon from "@mui/icons-material/Tune";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -34,6 +35,7 @@ import { ApiError } from "../api/client";
 import {
   useCreateVehicleTemplate,
   useFunctionCatalogue,
+  useUpdateVehicleTemplate,
   useVehicleTemplates,
   type DccFunction,
 } from "../api/functions";
@@ -43,6 +45,7 @@ type TemplateTableRow = {
   rowKey: string;
   rowType: "template";
   id: number;
+  ownerId: number;
   name: string;
   ownerLogin: string;
   description: string;
@@ -61,17 +64,25 @@ type LocomotiveTableRow = {
 
 type TableRow = TemplateTableRow | LocomotiveTableRow;
 
+type DialogMode = "create" | "edit" | null;
+
 export default function VehicleTemplatesPage() {
   const { t } = useTranslation(["function", "errors", "common"]);
   const navigate = useNavigate();
   const me = useMe().data;
+  const isAdmin = me?.effectiveRole === "admin";
   const templates = useVehicleTemplates();
   const [showLocomotives, setShowLocomotives] = useState(false);
   const catalogue = useFunctionCatalogue(showLocomotives);
   const create = useCreateVehicleTemplate();
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const update = useUpdateVehicleTemplate();
+  const [dialogMode, setDialogMode] = useState<DialogMode>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+
+  const canEditTemplate = (ownerId: number) =>
+    me != null && (me.id === ownerId || isAdmin);
 
   const tableRows = useMemo((): TableRow[] => {
     const templateRows: TemplateTableRow[] = (templates.data ?? []).map(
@@ -79,6 +90,7 @@ export default function VehicleTemplatesPage() {
         rowKey: `template-${row.id}`,
         rowType: "template",
         id: row.id,
+        ownerId: row.ownerId,
         name: row.name,
         ownerLogin: row.ownerLogin,
         description: row.description,
@@ -105,8 +117,10 @@ export default function VehicleTemplatesPage() {
   const isLoading =
     templates.isLoading || (showLocomotives && catalogue.isLoading);
 
+  const activeMutation = dialogMode === "edit" ? update : create;
+
   const mutationError = (() => {
-    const err = create.error;
+    const err = activeMutation.error;
     if (!err) return null;
     if (err instanceof ApiError) {
       const key = `errors:${err.code}` as const;
@@ -117,17 +131,48 @@ export default function VehicleTemplatesPage() {
     return t("errors:network");
   })();
 
+  const closeDialog = () => {
+    setDialogMode(null);
+    setEditingId(null);
+    setName("");
+    setDescription("");
+  };
+
+  const openCreate = () => {
+    setName("");
+    setDescription("");
+    setEditingId(null);
+    setDialogMode("create");
+  };
+
+  const openEdit = (row: TemplateTableRow) => {
+    setName(row.name);
+    setDescription(row.description);
+    setEditingId(row.id);
+    setDialogMode("edit");
+  };
+
   const submitCreate = () => {
     create.mutate(
       { name: name.trim(), description: description.trim() },
       {
         onSuccess: (row) => {
-          setDialogOpen(false);
-          setName("");
-          setDescription("");
+          closeDialog();
           navigate(`/vehicle-templates/${row.id}/functions`);
         },
       },
+    );
+  };
+
+  const submitEdit = () => {
+    if (editingId == null) return;
+    update.mutate(
+      {
+        id: editingId,
+        name: name.trim(),
+        description: description.trim(),
+      },
+      { onSuccess: () => closeDialog() },
     );
   };
 
@@ -171,7 +216,7 @@ export default function VehicleTemplatesPage() {
             <Button
               variant="contained"
               startIcon={<AddIcon />}
-              onClick={() => setDialogOpen(true)}
+              onClick={openCreate}
             >
               {t("function:templates.add")}
             </Button>
@@ -244,17 +289,30 @@ export default function VehicleTemplatesPage() {
                       </TableCell>
                       <TableCell align="right">
                         {row.rowType === "template" ? (
-                          <Tooltip title={t("function:templates.editFunctions")}>
-                            <IconButton
-                              size="small"
-                              onClick={() =>
-                                navigate(`/vehicle-templates/${row.id}/functions`)
-                              }
-                              aria-label={t("function:templates.editFunctions")}
-                            >
-                              <TuneIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
+                          <>
+                            {canEditTemplate(row.ownerId) && (
+                              <Tooltip title={t("function:templates.editTemplate")}>
+                                <IconButton
+                                  size="small"
+                                  onClick={() => openEdit(row)}
+                                  aria-label={t("function:templates.editTemplate")}
+                                >
+                                  <EditIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                            )}
+                            <Tooltip title={t("function:templates.editFunctions")}>
+                              <IconButton
+                                size="small"
+                                onClick={() =>
+                                  navigate(`/vehicle-templates/${row.id}/functions`)
+                                }
+                                aria-label={t("function:templates.editFunctions")}
+                              >
+                                <TuneIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </>
                         ) : me?.id === row.ownerId ? (
                           <Tooltip title={t("function:templates.editFunctions")}>
                             <IconButton
@@ -278,8 +336,17 @@ export default function VehicleTemplatesPage() {
         </Paper>
       </Stack>
 
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>{t("function:templates.createTitle")}</DialogTitle>
+      <Dialog
+        open={dialogMode != null}
+        onClose={closeDialog}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          {dialogMode === "edit"
+            ? t("function:templates.editTitle")
+            : t("function:templates.createTitle")}
+        </DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
             <TextField
@@ -300,15 +367,15 @@ export default function VehicleTemplatesPage() {
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDialogOpen(false)}>
-            {t("function:editor.cancel")}
-          </Button>
+          <Button onClick={closeDialog}>{t("function:editor.cancel")}</Button>
           <Button
             variant="contained"
-            onClick={submitCreate}
-            disabled={!name.trim() || create.isPending}
+            onClick={dialogMode === "edit" ? submitEdit : submitCreate}
+            disabled={!name.trim() || activeMutation.isPending}
           >
-            {t("function:templates.createSubmit")}
+            {dialogMode === "edit"
+              ? t("function:templates.editSubmit")
+              : t("function:templates.createSubmit")}
           </Button>
         </DialogActions>
       </Dialog>

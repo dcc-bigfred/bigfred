@@ -51,10 +51,13 @@
       "actions": "Actions"
     },
     "editFunctions": "Edit functions",
+    "editTemplate": "Edit template",
     "createTitle": "New template",
+    "editTitle": "Edit template",
     "fieldName": "Name",
     "fieldDescription": "Description",
-    "createSubmit": "Create and edit functions"
+    "createSubmit": "Create and edit functions",
+    "editSubmit": "Save"
   },
   "icon": {
     "unspecified": "Unspecified",

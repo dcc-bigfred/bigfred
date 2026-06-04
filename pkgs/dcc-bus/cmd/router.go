@@ -460,15 +460,25 @@ func (r *Router) applyEmergencyForSession(ctx context.Context, sess *ws.Session,
 // applyEmergencyStop issues EMG-stop for each address and publishes
 // the audit frame. Shared by per-session and per-user last-session
 // paths.
+//
+// Locos already at normal stop (speed 0 in the cache) are skipped:
+// re-issuing DCC e-stop (wire speed 1) would make the state feed
+// report speed 1 when the user returns to throttle after a benign
+// page navigation.
 func (r *Router) applyEmergencyStop(ctx context.Context, userID uint, sessionID string, addrs []uint16, reason string) {
+	affected := make([]uint16, 0, len(addrs))
 	for _, addr := range addrs {
+		if cached, ok, err := r.redis.LoadState(ctx, addr); err == nil && ok && cached.Speed == 0 {
+			continue
+		}
 		if err := r.station.SetSpeed(commandstation.LocoAddr(addr), 1, true, uint8(r.speedSteps)); err != nil {
 			r.log.WithError(err).WithField("addr", addr).Warn("dcc-bus estop failed")
 			continue
 		}
+		affected = append(affected, addr)
 		snap := protocol.LocoStatePayload{
 			Address:            addr,
-			Speed:              0,
+			Speed:              1,
 			Forward:            true,
 			ControlledByUserID: userID,
 			Source:             "estop",
@@ -476,18 +486,22 @@ func (r *Router) applyEmergencyStop(ctx context.Context, userID uint, sessionID 
 		}
 		if cached, ok, err := r.redis.LoadState(ctx, addr); err == nil && ok {
 			snap.Functions = cached.Functions
+			snap.Forward = cached.Forward
 		}
 		if err := r.redis.StoreState(ctx, snap, stateTTL); err != nil {
 			r.log.WithError(err).Debug("dcc-bus estop redis store")
 		}
 		r.fanState(ctx, snap)
 	}
+	if len(affected) == 0 {
+		return
+	}
 
 	if err := r.redis.Publish(ctx, "system.estop.audit", map[string]any{
 		"reason":    reason,
 		"userId":    userID,
 		"sessionId": sessionID,
-		"addrs":     addrs,
+		"addrs":     affected,
 		"at":        time.Now().UTC().UnixMilli(),
 	}); err != nil {
 		r.log.WithError(err).Debug("dcc-bus estop publish")

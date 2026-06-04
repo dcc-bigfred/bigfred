@@ -533,14 +533,6 @@ const (
   // …remaining members mirror §3a.8 exactly…
 )
 
-// FunctionKind distinguishes a press-and-hold horn from a latched light.
-type FunctionKind string
-
-const (
-    FunctionLatched   FunctionKind = "latched"   // UI label: "Stała" – toggle on/off
-    FunctionMomentary FunctionKind = "momentary" // UI label: "Chwilowa" – active while pressed
-)
-
 // DccFunction is one F0–F31 slot stored in the unified `dcc_functions`
 // table. Exactly one of VehicleID or TemplateID is non-nil on every row
 // (enforced by DB CHECK). Num is constrained 0..31.
@@ -558,7 +550,6 @@ type DccFunction struct {
     Num        uint8       // 0..31 inclusive
     Name       string
     Icon       FunctionIcon
-    Kind       FunctionKind
     Position   int         // ordering inside the throttle UI grid
     CreatedAt  time.Time
     UpdatedAt  time.Time

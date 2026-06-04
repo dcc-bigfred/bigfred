@@ -28,7 +28,6 @@ type functionResponse struct {
 	Num      uint8              `json:"num"`
 	Name     string             `json:"name"`
 	Icon     domain.FunctionIcon `json:"icon"`
-	Kind     domain.FunctionKind `json:"kind"`
 	Position int                `json:"position"`
 	Source   string             `json:"source,omitempty"`
 }
@@ -36,7 +35,6 @@ type functionResponse struct {
 type functionUpsertRequest struct {
 	Name     string              `json:"name"`
 	Icon     domain.FunctionIcon `json:"icon"`
-	Kind     domain.FunctionKind `json:"kind"`
 	Position int                 `json:"position"`
 }
 
@@ -60,46 +58,11 @@ func toFunctionResponses(rows []service.ResolvedFunction) []functionResponse {
 			Num:      r.Num,
 			Name:     r.Name,
 			Icon:     r.Icon,
-			Kind:     r.Kind,
 			Position: r.Position,
 			Source:   r.Source,
 		})
 	}
 	return out
-}
-
-type functionCatalogueEntryResponse struct {
-	VehicleID   uint                `json:"vehicleId"`
-	VehicleName string              `json:"vehicleName"`
-	OwnerID     uint                `json:"ownerId"`
-	OwnerLogin  string              `json:"ownerLogin"`
-	DCCAddress  *uint16             `json:"dccAddress"`
-	Kind        domain.VehicleKind  `json:"kind"`
-	Functions   []functionResponse  `json:"functions"`
-}
-
-// ListCatalogue handles GET /api/v1/vehicles/function-catalogue — all
-// vehicles that have at least one function, with owner login.
-func (h *FunctionHandler) ListCatalogue(w http.ResponseWriter, r *http.Request) {
-	rows, err := h.functions.ListFunctionCatalogue(r.Context())
-	if err != nil {
-		writeFunctionError(w, err)
-		return
-	}
-	out := make([]functionCatalogueEntryResponse, 0, len(rows))
-	for _, row := range rows {
-		out = append(out, functionCatalogueEntryResponse{
-			VehicleID:   row.VehicleID,
-			VehicleName: row.VehicleName,
-			OwnerID:     row.OwnerID,
-			OwnerLogin:  row.OwnerLogin,
-			DCCAddress:  row.DCCAddress,
-			Kind:        row.Kind,
-			Functions:   toFunctionResponses(row.Functions),
-		})
-	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(out)
 }
 
 // ListIcons handles GET /api/v1/function-icons.
@@ -337,7 +300,6 @@ func toUpsertInput(req functionUpsertRequest) service.FunctionUpsertInput {
 	return service.FunctionUpsertInput{
 		Name:     req.Name,
 		Icon:     req.Icon,
-		Kind:     req.Kind,
 		Position: req.Position,
 	}
 }
@@ -347,7 +309,6 @@ func toDccFunctionResponse(row domain.DccFunction, source string) functionRespon
 		Num:      row.Num,
 		Name:     row.Name,
 		Icon:     row.Icon,
-		Kind:     row.Kind,
 		Position: row.Position,
 		Source:   source,
 	}
@@ -366,7 +327,6 @@ func writeFunctionError(w http.ResponseWriter, err error) {
 		writeJSONError(w, http.StatusForbidden, "template_not_owned")
 	case errors.Is(err, service.ErrFunctionNumInvalid),
 		errors.Is(err, service.ErrFunctionIconInvalid),
-		errors.Is(err, service.ErrFunctionKindInvalid),
 		errors.Is(err, service.ErrFunctionNameRequired):
 		writeJSONError(w, http.StatusUnprocessableEntity, err.Error())
 	case errors.Is(err, service.ErrFunctionNumTaken):

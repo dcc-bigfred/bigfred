@@ -5,14 +5,6 @@ import "time"
 // FunctionIcon is a closed catalogue (§3a.8). Wire values are slug strings.
 type FunctionIcon string
 
-// FunctionKind distinguishes latched (Stała) vs momentary (Chwilowa).
-type FunctionKind string
-
-const (
-	FunctionKindLatched   FunctionKind = "latched"
-	FunctionKindMomentary FunctionKind = "momentary"
-)
-
 // DccFunction is one F0–F31 slot in the unified dcc_functions table.
 // Exactly one of VehicleID or TemplateID is non-nil per row.
 type DccFunction struct {
@@ -22,7 +14,6 @@ type DccFunction struct {
 	Num        uint8
 	Name       string
 	Icon       FunctionIcon
-	Kind       FunctionKind
 	Position   int
 	CreatedAt  time.Time `db:"created_at"`
 	UpdatedAt  time.Time `db:"updated_at"`
@@ -71,11 +62,6 @@ func FunctionIcons() []FunctionIcon {
 func (i FunctionIcon) IsValid() bool {
 	_, ok := validFunctionIcons[i]
 	return ok
-}
-
-// IsValid reports whether kind is latched or momentary.
-func (k FunctionKind) IsValid() bool {
-	return k == FunctionKindLatched || k == FunctionKindMomentary
 }
 
 // ValidFunctionNum reports whether n is in F0–F31.

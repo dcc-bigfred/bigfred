@@ -40,7 +40,6 @@ import {
   type FunctionUpsertBody,
 } from "../../api/functions";
 import { FunctionIconVisual } from "./functionIconMap";
-import LocomotiveCatalogueDialog from "./LocomotiveCatalogueDialog";
 
 export type FunctionEditorMode = "vehicle" | "template";
 
@@ -70,7 +69,6 @@ interface Props {
   functions: DccFunction[] | undefined;
   isLoading: boolean;
   mutations: MutationHooks;
-  showLocomotivesButton?: boolean;
   inheritedBanner?: boolean;
 }
 
@@ -89,13 +87,11 @@ export default function FunctionListEditor({
   functions,
   isLoading,
   mutations,
-  showLocomotivesButton = false,
   inheritedBanner = false,
 }: Props) {
   const { t } = useTranslation(["function", "errors", "common", "vehicle"]);
   const icons = useFunctionIcons();
   const [edit, setEdit] = useState<EditState>(null);
-  const [locomotivesOpen, setLocomotivesOpen] = useState(false);
   const [name, setName] = useState("");
   const [icon, setIcon] = useState("unspecified");
 
@@ -156,7 +152,7 @@ export default function FunctionListEditor({
         : sorted.length;
     mutations.upsert.mutate({
       num,
-      body: { name: name.trim(), icon, kind: "latched", position },
+      body: { name: name.trim(), icon, position },
     });
     closeEdit();
   };
@@ -193,11 +189,6 @@ export default function FunctionListEditor({
               </Typography>
             )}
           </Box>
-          {showLocomotivesButton && (
-            <Button variant="outlined" onClick={() => setLocomotivesOpen(true)}>
-              {t("function:editor.showLocomotives")}
-            </Button>
-          )}
           <Button
             variant="contained"
             startIcon={<AddIcon />}
@@ -399,11 +390,6 @@ export default function FunctionListEditor({
           </Button>
         </DialogActions>
       </Dialog>
-
-      <LocomotiveCatalogueDialog
-        open={locomotivesOpen}
-        onClose={() => setLocomotivesOpen(false)}
-      />
     </>
   );
 }

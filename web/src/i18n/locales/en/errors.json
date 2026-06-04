@@ -77,7 +77,6 @@
   "function_num_taken": "This function number is already in use.",
   "function_num_invalid": "Function number must be in range F0–F31.",
   "function_icon_invalid": "Pick an icon from the catalogue.",
-  "function_kind_invalid": "Pick function kind (latched or momentary).",
   "function_name_required": "Enter a function title.",
   "vehicle_template_not_found": "Template not found.",
   "vehicle_template_name_required": "Enter a template name.",

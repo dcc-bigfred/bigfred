@@ -119,7 +119,6 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			r.Delete("/vehicles/{id}", vehicleH.Delete)
 
 			r.Get("/function-icons", functionH.ListIcons)
-			r.Get("/vehicles/function-catalogue", functionH.ListCatalogue)
 			r.Get("/vehicles/{id}/functions", functionH.ListVehicle)
 			r.Post("/vehicles/{id}/functions/reorder", functionH.ReorderVehicle)
 			r.Put("/vehicles/{id}/functions/{num}", functionH.UpsertVehicle)

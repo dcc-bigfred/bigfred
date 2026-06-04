@@ -2,7 +2,6 @@
   "editor": {
     "back": "Back",
     "add": "Add function",
-    "showLocomotives": "Show locomotives",
     "inheritedFromTemplate": "Functions are inherited from a template. The first edit copies them to this vehicle.",
     "empty": "No functions defined.",
     "vehicleTitle": "Functions: {{name}}",
@@ -47,17 +46,6 @@
     "fieldName": "Name",
     "fieldDescription": "Description",
     "createSubmit": "Create and edit functions"
-  },
-  "catalogue": {
-    "title": "All users' locomotives",
-    "intro": "Vehicles with at least one defined function (own or inherited from a template).",
-    "empty": "No user has defined functions yet.",
-    "columns": {
-      "vehicle": "Vehicle",
-      "owner": "Owner",
-      "dcc": "DCC",
-      "functions": "Functions"
-    }
   },
   "icon": {
     "unspecified": "Unspecified",

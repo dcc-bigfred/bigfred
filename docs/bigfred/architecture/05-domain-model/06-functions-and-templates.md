@@ -15,7 +15,6 @@ CREATE TABLE dcc_functions (
     num          INTEGER NOT NULL CHECK (num BETWEEN 0 AND 31),
     name         TEXT NOT NULL,
     icon         TEXT NOT NULL,
-    kind         TEXT NOT NULL CHECK (kind IN ('latched', 'momentary')),
     position     INTEGER NOT NULL,
     created_at   TEXT NOT NULL,
     updated_at   TEXT NOT NULL,
@@ -53,7 +52,6 @@ type ResolvedFunction struct {
     Num      uint8
     Name     string
     Icon     domain.FunctionIcon
-    Kind     domain.FunctionKind
     Position int
     Source   string // "template" | "vehicle"
 }

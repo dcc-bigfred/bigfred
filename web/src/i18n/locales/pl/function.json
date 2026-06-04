@@ -2,7 +2,6 @@
   "editor": {
     "back": "Wróć",
     "add": "Dodaj funkcję",
-    "showLocomotives": "Pokaż lokomotywy",
     "inheritedFromTemplate": "Lista funkcji jest dziedziczona ze szablonu. Pierwsza edycja skopiuje ją na tę lokomotywę.",
     "empty": "Brak zdefiniowanych funkcji.",
     "vehicleTitle": "Funkcje: {{name}}",
@@ -47,17 +46,6 @@
     "fieldName": "Nazwa",
     "fieldDescription": "Opis",
     "createSubmit": "Utwórz i edytuj funkcje"
-  },
-  "catalogue": {
-    "title": "Lokomotywy wszystkich użytkowników",
-    "intro": "Pojazdy z co najmniej jedną zdefiniowaną funkcją (własną lub dziedziczoną ze szablonu).",
-    "empty": "Żaden użytkownik nie zdefiniował jeszcze funkcji.",
-    "columns": {
-      "vehicle": "Pojazd",
-      "owner": "Właściciel",
-      "dcc": "DCC",
-      "functions": "Funkcje"
-    }
   },
   "icon": {
     "unspecified": "Funkcja nieokreślona",

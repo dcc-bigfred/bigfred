@@ -225,8 +225,7 @@ domain model and the API:
       exist on the decoder;
     - each registered function carries: the function number, a
       user-given **title** (*tytuł*), an **icon** from the closed
-      catalogue in §3a.8 (67 icons, Polish labels in the picker), a
-      **kind** (`latched` = *Stała* / `momentary` = *Chwilowa*) and a
+      catalogue in §3a.8 (67 icons, Polish labels in the picker) and a
       **position** that defines button order on the throttle;
     - the owner edits the list on a dedicated page reached from the
       vehicle catalogue (**Edytuj funkcje**, §6.3e); reordering there

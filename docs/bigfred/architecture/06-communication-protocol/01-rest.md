@@ -50,7 +50,7 @@ POST   /api/v1/vehicles/{addr}/cv      { entries:[{n,v},...] }    owner       # 
 
 # --- Vehicle functions (F0-F31; owner-only editing, lessee can only invoke) ---
 GET    /api/v1/vehicles/{addr}/functions                          *           # resolved list (template OR vehicle rows; carries `source`)
-PUT    /api/v1/vehicles/{addr}/functions/{num}  { name, icon, kind, position } owner   # upsert one slot; auto-detaches if linked
+PUT    /api/v1/vehicles/{addr}/functions/{num}  { name, icon, position } owner   # upsert one slot; auto-detaches if linked
 DELETE /api/v1/vehicles/{addr}/functions/{num}                    owner       # remove one slot; auto-detaches if linked
 POST   /api/v1/vehicles/{addr}/functions/reorder { positions:[{num,position},…] } owner # auto-detaches if linked
 POST   /api/v1/vehicles/{addr}/functions/detach                   owner       # explicit copy-on-write; idempotent

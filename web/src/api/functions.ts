@@ -1,16 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { apiFetch } from "./client";
-import type { VehicleKind } from "./vehicles";
 
-export type FunctionKind = "latched" | "momentary";
 export type FunctionSource = "template" | "vehicle";
 
 export interface DccFunction {
   num: number;
   name: string;
   icon: string;
-  kind: FunctionKind;
   position: number;
   source?: FunctionSource;
 }
@@ -23,19 +20,8 @@ export interface VehicleTemplate {
   version: number;
 }
 
-export interface FunctionCatalogueEntry {
-  vehicleId: number;
-  vehicleName: string;
-  ownerId: number;
-  ownerLogin: string;
-  dccAddress: number | null;
-  kind: VehicleKind;
-  functions: DccFunction[];
-}
-
 const iconsQueryKey = ["function-icons"] as const;
 const templatesQueryKey = ["vehicle-templates"] as const;
-const catalogueQueryKey = ["vehicles", "function-catalogue"] as const;
 
 export function vehicleFunctionsQueryKey(vehicleId: number) {
   return ["vehicles", vehicleId, "functions"] as const;
@@ -95,20 +81,9 @@ export function useTemplateFunctions(templateId: number) {
   });
 }
 
-export function useFunctionCatalogue(enabled: boolean) {
-  return useQuery({
-    queryKey: catalogueQueryKey,
-    queryFn: () =>
-      apiFetch<FunctionCatalogueEntry[]>("/api/v1/vehicles/function-catalogue"),
-    enabled,
-    staleTime: 30 * 1000,
-  });
-}
-
 export interface FunctionUpsertBody {
   name: string;
   icon: string;
-  kind: FunctionKind;
   position: number;
 }
 
@@ -125,7 +100,6 @@ export function useUpsertVehicleFunction(vehicleId: number) {
       ),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: vehicleFunctionsQueryKey(vehicleId) });
-      void qc.invalidateQueries({ queryKey: catalogueQueryKey });
     },
   });
 }
@@ -139,7 +113,6 @@ export function useDeleteVehicleFunction(vehicleId: number) {
       }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: vehicleFunctionsQueryKey(vehicleId) });
-      void qc.invalidateQueries({ queryKey: catalogueQueryKey });
     },
   });
 }
@@ -157,7 +130,6 @@ export function useReorderVehicleFunctions(vehicleId: number) {
       ),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: vehicleFunctionsQueryKey(vehicleId) });
-      void qc.invalidateQueries({ queryKey: catalogueQueryKey });
     },
   });
 }
@@ -177,7 +149,6 @@ export function useUpsertTemplateFunction(templateId: number) {
       void qc.invalidateQueries({
         queryKey: templateFunctionsQueryKey(templateId),
       });
-      void qc.invalidateQueries({ queryKey: catalogueQueryKey });
     },
   });
 }
@@ -194,7 +165,6 @@ export function useDeleteTemplateFunction(templateId: number) {
       void qc.invalidateQueries({
         queryKey: templateFunctionsQueryKey(templateId),
       });
-      void qc.invalidateQueries({ queryKey: catalogueQueryKey });
     },
   });
 }
@@ -214,7 +184,6 @@ export function useReorderTemplateFunctions(templateId: number) {
       void qc.invalidateQueries({
         queryKey: templateFunctionsQueryKey(templateId),
       });
-      void qc.invalidateQueries({ queryKey: catalogueQueryKey });
     },
   });
 }

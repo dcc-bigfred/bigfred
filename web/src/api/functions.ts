@@ -19,6 +19,7 @@ export interface VehicleTemplate {
   ownerId: number;
   ownerLogin: string;
   version: number;
+  functions: DccFunction[];
 }
 
 export interface FunctionCatalogueEntry {
@@ -174,6 +175,7 @@ export function useUpsertTemplateFunction(templateId: number) {
       void qc.invalidateQueries({
         queryKey: templateFunctionsQueryKey(templateId),
       });
+      void qc.invalidateQueries({ queryKey: templatesQueryKey });
       void qc.invalidateQueries({ queryKey: catalogueQueryKey });
     },
   });
@@ -191,6 +193,7 @@ export function useDeleteTemplateFunction(templateId: number) {
       void qc.invalidateQueries({
         queryKey: templateFunctionsQueryKey(templateId),
       });
+      void qc.invalidateQueries({ queryKey: templatesQueryKey });
       void qc.invalidateQueries({ queryKey: catalogueQueryKey });
     },
   });
@@ -211,6 +214,7 @@ export function useReorderTemplateFunctions(templateId: number) {
       void qc.invalidateQueries({
         queryKey: templateFunctionsQueryKey(templateId),
       });
+      void qc.invalidateQueries({ queryKey: templatesQueryKey });
       void qc.invalidateQueries({ queryKey: catalogueQueryKey });
     },
   });

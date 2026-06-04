@@ -46,6 +46,7 @@ type TemplateTableRow = {
   name: string;
   ownerLogin: string;
   description: string;
+  functions: DccFunction[];
 };
 
 type LocomotiveTableRow = {
@@ -81,6 +82,7 @@ export default function VehicleTemplatesPage() {
         name: row.name,
         ownerLogin: row.ownerLogin,
         description: row.description,
+        functions: row.functions ?? [],
       }),
     );
     if (!showLocomotives) {
@@ -225,9 +227,19 @@ export default function VehicleTemplatesPage() {
                       <TableCell>{row.ownerLogin}</TableCell>
                       <TableCell>
                         {row.rowType === "template" ? (
-                          row.description || "—"
-                        ) : (
+                          showLocomotives ? (
+                            row.functions.length > 0 ? (
+                              <FunctionSummaryChips functions={row.functions} />
+                            ) : (
+                              "—"
+                            )
+                          ) : (
+                            row.description || "—"
+                          )
+                        ) : row.functions.length > 0 ? (
                           <FunctionSummaryChips functions={row.functions} />
+                        ) : (
+                          "—"
                         )}
                       </TableCell>
                       <TableCell align="right">

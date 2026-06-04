@@ -39,7 +39,7 @@ permission checks via **`security`**; see
    **§3.1** documents how `http`, `service`, and `security` divide work.
 6. [Domain Model (REL — Data Mapper)](./architecture/05-domain-model/README.md)
    — entities, invariants, addressing rules, audit log, functions /
-   templates / scripts.
+   templates / scripts, [function icon catalogue](./architecture/05-domain-model/08-function-icon-catalogue.md).
 7. [Communication Protocol (REST + WebSocket)](./architecture/06-communication-protocol/README.md)
    — REST endpoints, WS actions / events, takeover state machine,
    radio delivery, drive session + dead-man's switch.
@@ -47,8 +47,8 @@ permission checks via **`security`**; see
    Client, dispatch, LocoService, poller, Redis roles, chi wiring.
 9. [Frontend Components](./architecture/08-frontend-components.md) —
    `useSocket`, Zustand store, `LocoControl`, `TrainControl`, throttle
-   mode overlay, layout dashboard, interlocking view, MUI setup, script
-   buttons & console.
+   mode overlay, vehicle catalogue & function editor (§6.3e), layout
+   dashboard, interlocking view, MUI setup, script buttons & console.
 10. [Cross-Cutting Concerns](./architecture/09-cross-cutting.md) —
     single binary, WS backpressure, reconnect, audit discipline,
     `scripts-executor` supervision.

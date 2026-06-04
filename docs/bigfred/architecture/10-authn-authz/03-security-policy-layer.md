@@ -265,7 +265,7 @@ func (AuditSecurityContext) CanReadAuditLog(actor domain.User) Decision  // admi
 type FunctionSecurityContext struct{}
 
 func (FunctionSecurityContext) CanEditFunctions(actor domain.User, vehicle domain.Vehicle) Decision
-func (FunctionSecurityContext) CanInvokeFunction(actor domain.User, vehicle domain.Vehicle, num uint8, registered []domain.VehicleFunction) Decision
+func (FunctionSecurityContext) CanInvokeFunction(actor domain.User, vehicle domain.Vehicle, num uint8, registered []domain.DccFunction) Decision
 
 // pkgs/server/security/template.go
 // Vehicle templates: anyone can create; owner or admin can edit/delete.

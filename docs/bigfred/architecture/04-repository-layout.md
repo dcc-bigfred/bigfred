@@ -53,7 +53,7 @@ pkgs/
     │   ├── command_station.go           # CommandStationService – CRUD over centralki (admin only)
     │   ├── layout.go            # LayoutService – CRUD, vehicle roster, presence,
     │   │                       #                signalmen list, interlocking whitelist
-    │   ├── function.go         # FunctionService – vehicle F0-F32 list,
+    │   ├── function.go         # FunctionService – dcc_functions CRUD, resolve, detach (§3a.6)
     │   │                       #                copy-on-write detach
     │   ├── template.go         # TemplateService – CRUD over vehicle templates
     │   ├── script.go           # ScriptService – CRUD over user JS scripts,
@@ -97,8 +97,8 @@ pkgs/
     │   ├── radio.go            # RadioMessage, RadioPhrase
     │   ├── command_station.go           # CommandStation, CommandStationConnection, CommandStationConnectionType
     │   ├── layout.go            # Layout, LayoutSignalman, LayoutInterlocking, LayoutVehicle
-    │   ├── function.go         # VehicleFunction, FunctionIcon, FunctionKind
-    │   ├── template.go         # VehicleTemplate, TemplateFunction
+    │   ├── function.go         # DccFunction, FunctionIcon, FunctionKind
+    │   ├── template.go         # VehicleTemplate
     │   └── audit.go            # AuditLogEntry, AuditAction
     ├── repo/                   # REL repositories (Data Mapper)
     │   ├── db.go               # *sql.DB + rel.Repository open
@@ -184,7 +184,8 @@ web/                            # NEW – frontend
     ├── components/             # MUI-based components
     │   ├── LocoCard.tsx        # MUI Card + CardContent + CardActions
     │   ├── ThrottleSlider.tsx  # MUI Slider
-    │   ├── FunctionButtons.tsx # MUI ToggleButton / IconButton grid
+    │   ├── FunctionButtons.tsx # MUI ToggleButton / IconButton grid; order = function.position
+    │   ├── FunctionList.tsx    # sortable list + icon picker used by VehicleFunctionsPage
     │   ├── ScriptButtons.tsx   # row of script buttons rendered alongside FunctionButtons;
     │   │                       # pressing one fires WS `script.run`, second press fires
     │   │                       # `script.stop`. No JS is ever executed in the browser.
@@ -203,7 +204,9 @@ web/                            # NEW – frontend
     ├── pages/
     │   ├── HomePage.tsx        # layout dashboard (§6.3c)
     │   ├── InterlockingPage.tsx # /interlockings/:id – occupation + radio (§6.3d)
-    │   ├── LocoListPage.tsx
+    │   ├── LocoListPage.tsx        # /vehicles – owner catalogue; row actions Edit + Edit functions (§6.3e)
+    │   ├── VehicleEditPage.tsx     # /vehicles/:addr/edit
+    │   ├── VehicleFunctionsPage.tsx # /vehicles/:addr/functions – F0–F31 editor, icon picker, reorder (§6.3e)
     │   ├── LocoControlPage.tsx
     │   ├── TrainControlPage.tsx # same ThrottleSlider as LocoControlPage; sends train.setSpeed
     │   └── ScriptsPage.tsx     # the "Scripts" tab: list, edit, attach

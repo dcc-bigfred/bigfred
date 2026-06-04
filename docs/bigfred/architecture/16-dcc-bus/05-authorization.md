@@ -44,7 +44,7 @@ authorize subsequent actions.
 |---|---|---|---|
 | `loco.subscribe { addr }` | `allowed_vehicles` snapshot | `addr` present in snapshot | Read-only telemetry; any authenticated layout user may subscribe. Rejects with `vehicle_not_on_layout`. |
 | `loco.setSpeed` / `loco.toggleFn` | `allowed_vehicles` snapshot | `userId ∈ controllerUserIds` for `addr` | Rejects with `not_authorized` or `vehicle_not_on_layout`. Target: full `CanDriveLoco` once leases are folded into `controllerUserIds`. |
-| `loco.toggleFn { fn }` | additionally `[]VehicleFunction` | `FunctionSecurityContext.CanInvokeFunction` | Refuses unregistered functions with `function_not_registered`. |
+| `loco.toggleFn { fn }` | additionally `[]DccFunction` (resolved list) | `FunctionSecurityContext.CanInvokeFunction` | Refuses unregistered functions with `function_not_registered`. |
 | `system.estop` | the user's session-local `DriveTargets` | `LocoSecurityContext.CanDriveLoco` evaluated **per target** with the user as actor | Targets where the policy now denies are silently dropped (e.g. lease expired moments before estop). Audited via the event channel. |
 | `ping` | none | none | – |
 

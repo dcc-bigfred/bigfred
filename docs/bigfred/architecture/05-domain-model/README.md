@@ -13,5 +13,6 @@ stays free of any ORM imports.
 3. [Invariants enforced by services + DB constraints](./03-invariants.md)
 4. [Layout-and-command station addressing rules](./04-layout-command-station-addressing.md)
 5. [Audit log](./05-audit-log.md)
-6. [Vehicle functions and template inheritance (copy-on-write)](./06-functions-and-templates.md)
+6. [Vehicle functions and template inheritance (copy-on-write)](./06-functions-and-templates.md) — unified `dcc_functions` table
 7. [Server-side scripts (Goja sandbox in a sibling executor process)](./07-scripts.md)
+8. [Function icon catalogue](./08-function-icon-catalogue.md) — closed `FunctionIcon` list with Polish labels

@@ -34,8 +34,8 @@ Implemented in milestones; each milestone is independently shippable.
    `TrainControlPage.tsx` that **reuses `ThrottleSlider.tsx`
    unchanged** and renders per-member function/script rows below the
    shared slider.
-8. Add `vehicle_functions`, `vehicle_templates` and
-   `template_functions` tables, `FunctionService` (with
+8. Add `vehicle_templates` and unified `dcc_functions` table
+   (`vehicle_id` XOR `template_id`), `FunctionService` (with
    `EnsureDetached` copy-on-write), `TemplateService`,
    `FunctionSecurityContext` and `TemplateSecurityContext`. Ship the
    closed `FunctionIcon` catalogue plus matching SVG assets in the
@@ -46,8 +46,10 @@ Implemented in milestones; each milestone is independently shippable.
    mutation listed in §3a.5. Janitor goroutine emits
    `vehicle.lease_expired` / `train.lease_expired`.
 10. Add the lease/train UI screens in React (MUI dialogs + tables),
-    the function-list editor with an icon picker, the template manager,
-    and an admin-only "Activity" screen reading `GET /api/v1/audit-log`.
+    the vehicle catalogue with **Edytuj funkcje** (§6.3e),
+    `VehicleFunctionsPage` (sortable list, icon picker from §3a.8),
+    the template manager, and an admin-only "Activity" screen reading
+    `GET /api/v1/audit-log`.
 
 **M4 – Command Stations and layouts.**
 
@@ -280,7 +282,7 @@ sibling daemon supervised by §7d (`SupervisordService`).
     attachment management, deadline slider. Add
     `ScriptButtons.tsx` and `ScriptConsole.tsx` to the vehicle and
     train control views so attached scripts render next to `F0`–
-    `F32` and per-run logs surface inline.
+    `F31` and per-run logs surface inline.
 26. Wire the new WS events (`script.run`, `script.stop`,
     `script.log`, `script.runStarted`, `script.runStopped`,
     `script.changed`) and the dead-man's switch integration

@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useRef, type PointerEvent as ReactPointerEvent } from "react";
 import { Box } from "@mui/material";
 
 import { cockpit } from "./throttleCockpitTheme";
@@ -56,13 +56,25 @@ export default function VerticalThrottle({
     [disabled, onChange, valueFromClientY],
   );
 
+  const handlePointerDown = (ev: ReactPointerEvent<HTMLDivElement>) => {
+    if (disabled) {
+      return;
+    }
+    // Avoid focus ring / selection flash on custom drag surface.
+    ev.preventDefault();
+    ev.currentTarget.setPointerCapture(ev.pointerId);
+    startDrag(ev.clientY);
+  };
+
   return (
     <Box
       ref={trackRef}
-      onPointerDown={(ev) => {
-        ev.currentTarget.setPointerCapture(ev.pointerId);
-        startDrag(ev.clientY);
-      }}
+      role="slider"
+      aria-valuemin={0}
+      aria-valuemax={max}
+      aria-valuenow={value}
+      tabIndex={-1}
+      onPointerDown={handlePointerDown}
       sx={{
         position: "relative",
         flex: 1,
@@ -74,6 +86,13 @@ export default function VerticalThrottle({
         cursor: disabled ? "not-allowed" : "pointer",
         opacity: disabled ? 0.45 : 1,
         touchAction: "none",
+        userSelect: "none",
+        WebkitUserSelect: "none",
+        WebkitTapHighlightColor: "transparent",
+        outline: "none",
+        "&:focus": { outline: "none" },
+        "&:focus-visible": { outline: "none" },
+        "&::selection": { background: "transparent" },
       }}
     >
       <Box

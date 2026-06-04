@@ -3,6 +3,18 @@
 The web layer is added next to the existing packages, the existing code is
 reused, not duplicated.
 
+### 3.1 Backend layer responsibilities
+
+Three packages under `pkgs/server/` form the main backend stack. Keep
+business rules out of `http` / `ws`; keep authorization policy out of
+`service` (delegate to `security` instead of inlining role checks).
+
+| Package | Role |
+|--------|------|
+| **`pkgs/server/http`** (and **`pkgs/server/ws`**) | Handle incoming HTTP / WebSocket traffic: routing (chi), middleware, session/JWT authentication, request/response mapping, status codes. Handlers are thin adapters — they parse input, read identity from context, call a `*Service`, and serialize the result or map sentinel errors to HTTP/WS codes. |
+| **`pkgs/server/service`** | Application / use-case layer: input validation, loading entities for authorization, calling `pkgs/server/security` to check permissions, business logic (conditionals, orchestration), `pkgs/server/repo` access, and calls to other services (`DCCPoolService`, `AuditService`, `DccBusService`, …). |
+| **`pkgs/server/security`** | Pure, stateless policy layer (§7a.3): given loaded `domain.*` values, answers whether an actor may perform an action. No SQL, no HTTP. Invoked from services; HTTP middleware may use it for coarse route guards (see §7a.4). |
+
 ```
 pkgs/
 ├── layoutroster/               # shared JSON types + Redis key names for
@@ -17,18 +29,18 @@ pkgs/
 ├── server/                     # NEW – web application
 │   ├── main.go                 # cmd entrypoint for `loco server`
 │   ├── cli/                    # cobra command: `loco server`
-    ├── http/
+    ├── http/                   # transport adapter — §3.1; delegates to service/
     │   ├── router.go           # chi router + middleware
     │   ├── locos.go            # REST handlers (GET/POST/PUT/DELETE)
     │   ├── cv.go
-    │   └── middleware.go       # logging, CORS, recovery
+    │   └── middleware.go       # authn, role gates, logging, CORS, recovery
     ├── ws/
     │   ├── hub.go              # central Hub
     │   ├── client.go           # per-connection reader/writer
     │   ├── protocol.go         # typed messages (Action/Event)
     │   └── handlers.go         # WS message dispatching
-    ├── service/
-    │   ├── loco.go             # LocoService – business layer; map[commandStationID]Station
+    ├── service/                # use cases — §3.1: validate, security, logic, repo, other services
+    │   ├── loco.go             # LocoService; map[commandStationID]Station
     │   ├── train.go            # TrainService – CRUD + SetSpeed fan-out
     │   │                       #                (lock-step, Reversed-flip, per-member ack)
     │   ├── auth.go             # AuthService – login + PIN, sessions/JWT

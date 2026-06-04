@@ -35,10 +35,19 @@
     "intro": "Templates define a shared function list for many vehicles. When linked, the list is inherited until the first edit.",
     "listTitle": "Templates",
     "add": "Add template",
+    "showLocomotives": "Show locomotives",
     "empty": "No templates yet.",
+    "emptyWithLocomotives": "No templates or locomotives with functions.",
+    "rowType": {
+      "template": "Template",
+      "locomotive": "Locomotive"
+    },
     "columns": {
+      "type": "Type",
       "name": "Name",
+      "owner": "Owner",
       "description": "Description",
+      "functions": "Functions",
       "actions": "Actions"
     },
     "editFunctions": "Edit functions",

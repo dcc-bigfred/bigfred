@@ -35,10 +35,19 @@
     "intro": "Szablony definiują listę funkcji współdzieloną przez wiele lokomotyw. Po podłączeniu szablonu do pojazdu lista jest dziedziczona do pierwszej edycji.",
     "listTitle": "Szablony",
     "add": "Dodaj szablon",
+    "showLocomotives": "Pokaż lokomotywy",
     "empty": "Brak szablonów.",
+    "emptyWithLocomotives": "Brak szablonów i lokomotyw z funkcjami.",
+    "rowType": {
+      "template": "Szablon",
+      "locomotive": "Lokomotywa"
+    },
     "columns": {
+      "type": "Typ",
       "name": "Nazwa",
+      "owner": "Właściciel",
       "description": "Opis",
+      "functions": "Funkcje",
       "actions": "Akcje"
     },
     "editFunctions": "Edytuj funkcje",

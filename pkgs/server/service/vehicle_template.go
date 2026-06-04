@@ -18,19 +18,48 @@ var (
 
 const maxVehicleTemplateNameLen = 64
 
+// VehicleTemplateListEntry is a template row with owner login for list UIs.
+type VehicleTemplateListEntry struct {
+	domain.VehicleTemplate
+	OwnerLogin string
+}
+
 // VehicleTemplateService manages the template catalogue.
 type VehicleTemplateService struct {
 	templates *repo.VehicleTemplates
+	users     *repo.Users
 }
 
 // NewVehicleTemplateService constructs a VehicleTemplateService.
-func NewVehicleTemplateService(t *repo.VehicleTemplates) *VehicleTemplateService {
-	return &VehicleTemplateService{templates: t}
+func NewVehicleTemplateService(t *repo.VehicleTemplates, u *repo.Users) *VehicleTemplateService {
+	return &VehicleTemplateService{templates: t, users: u}
 }
 
-// List returns every template.
-func (s *VehicleTemplateService) List(ctx context.Context) ([]domain.VehicleTemplate, error) {
-	return s.templates.List(ctx)
+// List returns every template with owner login.
+func (s *VehicleTemplateService) List(ctx context.Context) ([]VehicleTemplateListEntry, error) {
+	rows, err := s.templates.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	logins := make(map[uint]string)
+	out := make([]VehicleTemplateListEntry, 0, len(rows))
+	for _, row := range rows {
+		login, ok := logins[row.OwnerUserID]
+		if !ok {
+			u, err := s.users.FindByID(ctx, row.OwnerUserID)
+			if err != nil {
+				login = "?"
+			} else {
+				login = u.Login
+			}
+			logins[row.OwnerUserID] = login
+		}
+		out = append(out, VehicleTemplateListEntry{
+			VehicleTemplate: row,
+			OwnerLogin:      login,
+		})
+	}
+	return out, nil
 }
 
 // Get loads a template by id.

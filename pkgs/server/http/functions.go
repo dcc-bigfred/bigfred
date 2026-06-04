@@ -65,6 +65,39 @@ func toFunctionResponses(rows []service.ResolvedFunction) []functionResponse {
 	return out
 }
 
+type functionCatalogueEntryResponse struct {
+	VehicleID   uint               `json:"vehicleId"`
+	VehicleName string             `json:"vehicleName"`
+	OwnerID     uint               `json:"ownerId"`
+	OwnerLogin  string             `json:"ownerLogin"`
+	DCCAddress  *uint16            `json:"dccAddress"`
+	Kind        domain.VehicleKind `json:"kind"`
+	Functions   []functionResponse `json:"functions"`
+}
+
+// ListCatalogue handles GET /api/v1/vehicles/function-catalogue.
+func (h *FunctionHandler) ListCatalogue(w http.ResponseWriter, r *http.Request) {
+	rows, err := h.functions.ListFunctionCatalogue(r.Context())
+	if err != nil {
+		writeFunctionError(w, err)
+		return
+	}
+	out := make([]functionCatalogueEntryResponse, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, functionCatalogueEntryResponse{
+			VehicleID:   row.VehicleID,
+			VehicleName: row.VehicleName,
+			OwnerID:     row.OwnerID,
+			OwnerLogin:  row.OwnerLogin,
+			DCCAddress:  row.DCCAddress,
+			Kind:        row.Kind,
+			Functions:   toFunctionResponses(row.Functions),
+		})
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(out)
+}
+
 // ListIcons handles GET /api/v1/function-icons.
 func (h *FunctionHandler) ListIcons(w http.ResponseWriter, r *http.Request) {
 	icons := h.functions.ListIcons()

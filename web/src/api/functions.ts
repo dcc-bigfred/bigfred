@@ -17,11 +17,23 @@ export interface VehicleTemplate {
   name: string;
   description: string;
   ownerId: number;
+  ownerLogin: string;
   version: number;
+}
+
+export interface FunctionCatalogueEntry {
+  vehicleId: number;
+  vehicleName: string;
+  ownerId: number;
+  ownerLogin: string;
+  dccAddress: number | null;
+  kind: string;
+  functions: DccFunction[];
 }
 
 const iconsQueryKey = ["function-icons"] as const;
 const templatesQueryKey = ["vehicle-templates"] as const;
+const catalogueQueryKey = ["vehicles", "function-catalogue"] as const;
 
 export function vehicleFunctionsQueryKey(vehicleId: number) {
   return ["vehicles", vehicleId, "functions"] as const;
@@ -81,6 +93,16 @@ export function useTemplateFunctions(templateId: number) {
   });
 }
 
+export function useFunctionCatalogue(enabled: boolean) {
+  return useQuery({
+    queryKey: catalogueQueryKey,
+    queryFn: () =>
+      apiFetch<FunctionCatalogueEntry[]>("/api/v1/vehicles/function-catalogue"),
+    enabled,
+    staleTime: 30 * 1000,
+  });
+}
+
 export interface FunctionUpsertBody {
   name: string;
   icon: string;
@@ -100,6 +122,7 @@ export function useUpsertVehicleFunction(vehicleId: number) {
       ),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: vehicleFunctionsQueryKey(vehicleId) });
+      void qc.invalidateQueries({ queryKey: catalogueQueryKey });
     },
   });
 }
@@ -113,6 +136,7 @@ export function useDeleteVehicleFunction(vehicleId: number) {
       }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: vehicleFunctionsQueryKey(vehicleId) });
+      void qc.invalidateQueries({ queryKey: catalogueQueryKey });
     },
   });
 }
@@ -130,6 +154,7 @@ export function useReorderVehicleFunctions(vehicleId: number) {
       ),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: vehicleFunctionsQueryKey(vehicleId) });
+      void qc.invalidateQueries({ queryKey: catalogueQueryKey });
     },
   });
 }
@@ -149,6 +174,7 @@ export function useUpsertTemplateFunction(templateId: number) {
       void qc.invalidateQueries({
         queryKey: templateFunctionsQueryKey(templateId),
       });
+      void qc.invalidateQueries({ queryKey: catalogueQueryKey });
     },
   });
 }
@@ -165,6 +191,7 @@ export function useDeleteTemplateFunction(templateId: number) {
       void qc.invalidateQueries({
         queryKey: templateFunctionsQueryKey(templateId),
       });
+      void qc.invalidateQueries({ queryKey: catalogueQueryKey });
     },
   });
 }
@@ -184,6 +211,7 @@ export function useReorderTemplateFunctions(templateId: number) {
       void qc.invalidateQueries({
         queryKey: templateFunctionsQueryKey(templateId),
       });
+      void qc.invalidateQueries({ queryKey: catalogueQueryKey });
     },
   });
 }

@@ -24,15 +24,28 @@ type vehicleTemplateResponse struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	OwnerID     uint   `json:"ownerId"`
+	OwnerLogin  string `json:"ownerLogin"`
 	Version     int    `json:"version"`
 }
 
-func toVehicleTemplateResp(t domain.VehicleTemplate) vehicleTemplateResponse {
+func toVehicleTemplateResp(t service.VehicleTemplateListEntry) vehicleTemplateResponse {
 	return vehicleTemplateResponse{
 		ID:          t.ID,
 		Name:        t.Name,
 		Description: t.Description,
 		OwnerID:     t.OwnerUserID,
+		OwnerLogin:  t.OwnerLogin,
+		Version:     t.Version,
+	}
+}
+
+func toVehicleTemplateRespFromDomain(t domain.VehicleTemplate) vehicleTemplateResponse {
+	return vehicleTemplateResponse{
+		ID:          t.ID,
+		Name:        t.Name,
+		Description: t.Description,
+		OwnerID:     t.OwnerUserID,
+		OwnerLogin:  "",
 		Version:     t.Version,
 	}
 }
@@ -65,7 +78,7 @@ func (h *VehicleTemplateHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(toVehicleTemplateResp(row))
+	_ = json.NewEncoder(w).Encode(toVehicleTemplateRespFromDomain(row))
 }
 
 type vehicleTemplateCreateRequest struct {
@@ -94,9 +107,11 @@ func (h *VehicleTemplateHandler) Create(w http.ResponseWriter, r *http.Request) 
 		writeVehicleTemplateError(w, err)
 		return
 	}
+	resp := toVehicleTemplateRespFromDomain(row)
+	resp.OwnerLogin = actor.User.Login
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(toVehicleTemplateResp(row))
+	_ = json.NewEncoder(w).Encode(resp)
 }
 
 func writeVehicleTemplateError(w http.ResponseWriter, err error) {

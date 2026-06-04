@@ -25,7 +25,7 @@ export default function TemplateFunctionsPage() {
   const template = templates.data?.find((x) => x.id === templateId);
 
   if (!templateId || Number.isNaN(templateId)) {
-    navigate("/my/vehicle-templates");
+    navigate("/vehicle-templates");
     return null;
   }
 
@@ -36,7 +36,7 @@ export default function TemplateFunctionsPage() {
         title={t("function:editor.templateTitle", {
           name: template?.name ?? "…",
         })}
-        onBack={() => navigate("/my/vehicle-templates")}
+        onBack={() => navigate("/vehicle-templates")}
         functions={functions.data}
         isLoading={functions.isLoading}
         mutations={{

@@ -50,9 +50,9 @@ const router = createBrowserRouter(
           <Route path="/" element={<HomePage />} />
           <Route path="/my/vehicles" element={<MyVehiclesPage />} />
           <Route path="/my/vehicles/:vehicleId/functions" element={<VehicleFunctionsPage />} />
-          <Route path="/my/vehicle-templates" element={<VehicleTemplatesPage />} />
+          <Route path="/vehicle-templates" element={<VehicleTemplatesPage />} />
           <Route
-            path="/my/vehicle-templates/:templateId/functions"
+            path="/vehicle-templates/:templateId/functions"
             element={<TemplateFunctionsPage />}
           />
           <Route path="/my/trains" element={<MyTrainsPage />} />

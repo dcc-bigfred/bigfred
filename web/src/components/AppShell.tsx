@@ -147,7 +147,7 @@ export default function AppShell() {
         id: "templates",
         label: t("nav.my.templates"),
         icon: <TuneIcon fontSize="small" />,
-        onClick: () => navigate("/my/vehicle-templates"),
+        onClick: () => navigate("/vehicle-templates"),
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps

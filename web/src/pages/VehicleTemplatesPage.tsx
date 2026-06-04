@@ -1,16 +1,19 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Alert,
   Box,
   Button,
+  Chip,
   Container,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControlLabel,
   IconButton,
   Paper,
   Stack,
+  Switch,
   Table,
   TableBody,
   TableCell,
@@ -26,20 +29,79 @@ import TuneIcon from "@mui/icons-material/Tune";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
+import { useMe } from "../api/auth";
 import { ApiError } from "../api/client";
 import {
   useCreateVehicleTemplate,
+  useFunctionCatalogue,
   useVehicleTemplates,
+  type DccFunction,
 } from "../api/functions";
+import FunctionSummaryChips from "../components/functions/FunctionSummaryChips";
+
+type TemplateTableRow = {
+  rowKey: string;
+  rowType: "template";
+  id: number;
+  name: string;
+  ownerLogin: string;
+  description: string;
+};
+
+type LocomotiveTableRow = {
+  rowKey: string;
+  rowType: "locomotive";
+  vehicleId: number;
+  ownerId: number;
+  name: string;
+  ownerLogin: string;
+  functions: DccFunction[];
+};
+
+type TableRow = TemplateTableRow | LocomotiveTableRow;
 
 export default function VehicleTemplatesPage() {
   const { t } = useTranslation(["function", "errors", "common"]);
   const navigate = useNavigate();
+  const me = useMe().data;
   const templates = useVehicleTemplates();
+  const [showLocomotives, setShowLocomotives] = useState(false);
+  const catalogue = useFunctionCatalogue(showLocomotives);
   const create = useCreateVehicleTemplate();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+
+  const tableRows = useMemo((): TableRow[] => {
+    const templateRows: TemplateTableRow[] = (templates.data ?? []).map(
+      (row) => ({
+        rowKey: `template-${row.id}`,
+        rowType: "template",
+        id: row.id,
+        name: row.name,
+        ownerLogin: row.ownerLogin,
+        description: row.description,
+      }),
+    );
+    if (!showLocomotives) {
+      return templateRows;
+    }
+    const locoRows: LocomotiveTableRow[] = (catalogue.data ?? [])
+      .map((entry) => ({
+        rowKey: `vehicle-${entry.vehicleId}`,
+        rowType: "locomotive" as const,
+        vehicleId: entry.vehicleId,
+        ownerId: entry.ownerId,
+        name: entry.vehicleName,
+        ownerLogin: entry.ownerLogin,
+        functions: entry.functions,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+    return [...templateRows, ...locoRows];
+  }, [templates.data, catalogue.data, showLocomotives]);
+
+  const isLoading =
+    templates.isLoading || (showLocomotives && catalogue.isLoading);
 
   const mutationError = (() => {
     const err = create.error;
@@ -61,11 +123,13 @@ export default function VehicleTemplatesPage() {
           setDialogOpen(false);
           setName("");
           setDescription("");
-          navigate(`/my/vehicle-templates/${row.id}/functions`);
+          navigate(`/vehicle-templates/${row.id}/functions`);
         },
       },
     );
   };
+
+  const colCount = showLocomotives ? 5 : 4;
 
   return (
     <Container maxWidth="lg" sx={{ py: 3 }}>
@@ -86,11 +150,22 @@ export default function VehicleTemplatesPage() {
               borderColor: "divider",
               display: "flex",
               alignItems: "center",
+              flexWrap: "wrap",
+              gap: 1,
             }}
           >
             <Typography variant="h6" sx={{ flexGrow: 1 }}>
               {t("function:templates.listTitle")}
             </Typography>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={showLocomotives}
+                  onChange={(e) => setShowLocomotives(e.target.checked)}
+                />
+              }
+              label={t("function:templates.showLocomotives")}
+            />
             <Button
               variant="contained"
               startIcon={<AddIcon />}
@@ -103,43 +178,84 @@ export default function VehicleTemplatesPage() {
             <Table size="small">
               <TableHead>
                 <TableRow>
+                  <TableCell>{t("function:templates.columns.type")}</TableCell>
                   <TableCell>{t("function:templates.columns.name")}</TableCell>
-                  <TableCell>{t("function:templates.columns.description")}</TableCell>
+                  <TableCell>{t("function:templates.columns.owner")}</TableCell>
+                  {showLocomotives ? (
+                    <TableCell>{t("function:templates.columns.functions")}</TableCell>
+                  ) : (
+                    <TableCell>{t("function:templates.columns.description")}</TableCell>
+                  )}
                   <TableCell align="right">
                     {t("function:templates.columns.actions")}
                   </TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {templates.isLoading ? (
+                {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={3} align="center" sx={{ py: 3 }}>
+                    <TableCell colSpan={colCount} align="center" sx={{ py: 3 }}>
                       {t("common:loading")}
                     </TableCell>
                   </TableRow>
-                ) : (templates.data ?? []).length === 0 ? (
+                ) : tableRows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={3} align="center" sx={{ py: 3 }}>
-                      {t("function:templates.empty")}
+                    <TableCell colSpan={colCount} align="center" sx={{ py: 3 }}>
+                      {showLocomotives
+                        ? t("function:templates.emptyWithLocomotives")
+                        : t("function:templates.empty")}
                     </TableCell>
                   </TableRow>
                 ) : (
-                  (templates.data ?? []).map((row) => (
-                    <TableRow key={row.id}>
+                  tableRows.map((row) => (
+                    <TableRow key={row.rowKey}>
+                      <TableCell>
+                        <Chip
+                          size="small"
+                          label={
+                            row.rowType === "template"
+                              ? t("function:templates.rowType.template")
+                              : t("function:templates.rowType.locomotive")
+                          }
+                          color={row.rowType === "template" ? "primary" : "default"}
+                          variant="outlined"
+                        />
+                      </TableCell>
                       <TableCell>{row.name}</TableCell>
-                      <TableCell>{row.description || "—"}</TableCell>
+                      <TableCell>{row.ownerLogin}</TableCell>
+                      <TableCell>
+                        {row.rowType === "template" ? (
+                          row.description || "—"
+                        ) : (
+                          <FunctionSummaryChips functions={row.functions} />
+                        )}
+                      </TableCell>
                       <TableCell align="right">
-                        <Tooltip title={t("function:templates.editFunctions")}>
-                          <IconButton
-                            size="small"
-                            onClick={() =>
-                              navigate(`/my/vehicle-templates/${row.id}/functions`)
-                            }
-                            aria-label={t("function:templates.editFunctions")}
-                          >
-                            <TuneIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
+                        {row.rowType === "template" ? (
+                          <Tooltip title={t("function:templates.editFunctions")}>
+                            <IconButton
+                              size="small"
+                              onClick={() =>
+                                navigate(`/vehicle-templates/${row.id}/functions`)
+                              }
+                              aria-label={t("function:templates.editFunctions")}
+                            >
+                              <TuneIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        ) : me?.id === row.ownerId ? (
+                          <Tooltip title={t("function:templates.editFunctions")}>
+                            <IconButton
+                              size="small"
+                              onClick={() =>
+                                navigate(`/my/vehicles/${row.vehicleId}/functions`)
+                              }
+                              aria-label={t("function:templates.editFunctions")}
+                            >
+                              <TuneIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        ) : null}
                       </TableCell>
                     </TableRow>
                   ))

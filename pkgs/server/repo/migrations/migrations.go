@@ -41,6 +41,7 @@ func register(m *migrator.Migrator) {
 	m.Register(20260525_000012, dropSystemLayoutLockCheckUp, dropSystemLayoutLockCheckDown)
 	m.Register(20260526_000001, createCommandStationsUp, createCommandStationsDown)
 	m.Register(20260526_000002, createLayoutCommandStationsUp, createLayoutCommandStationsDown)
+	m.Register(20260604_000001, createVehicleTemplatesAndDccFunctionsUp, createVehicleTemplatesAndDccFunctionsDown)
 }
 
 // createCommandStationsUp installs the `command_stations` catalogue
@@ -441,4 +442,59 @@ func dropSystemLayoutLockCheckDown(s *rel.Schema) {
 	s.Exec(rel.Raw(`DROP TABLE "layouts"`))
 	s.Exec(rel.Raw(`ALTER TABLE "layouts__migration" RENAME TO "layouts"`))
 	s.Exec(rel.Raw(`CREATE UNIQUE INDEX layouts_unique_system ON layouts(is_system) WHERE is_system = 1`))
+}
+
+// createVehicleTemplatesAndDccFunctionsUp installs vehicle templates and
+// the unified dcc_functions table (§3a.6.0).
+func createVehicleTemplatesAndDccFunctionsUp(s *rel.Schema) {
+	s.CreateTable("vehicle_templates", func(t *rel.Table) {
+		t.ID("id")
+		t.String("name")
+		t.Text("description", rel.Default(""))
+		t.Int("owner_user_id", rel.Unsigned(true))
+		t.Int("version", rel.Default(1))
+		t.DateTime("created_at")
+		t.DateTime("updated_at")
+
+		t.Unique([]string{"name"})
+	})
+	s.Exec(rel.Raw(`CREATE INDEX vehicle_templates_owner_user_id ON vehicle_templates(owner_user_id)`))
+
+	s.AlterTable("vehicles", func(t *rel.AlterTable) {
+		t.Int("template_id", rel.Unsigned(true), rel.Required(false))
+		t.DateTime("functions_detached_at", rel.Required(false))
+	})
+
+	s.CreateTable("dcc_functions", func(t *rel.Table) {
+		t.ID("id")
+		t.Int("vehicle_id", rel.Unsigned(true), rel.Required(false))
+		t.Int("template_id", rel.Unsigned(true), rel.Required(false))
+		t.Int("num", rel.Unsigned(true))
+		t.String("name")
+		t.String("icon")
+		t.String("kind")
+		t.Int("position")
+		t.DateTime("created_at")
+		t.DateTime("updated_at")
+
+		t.Fragment("CHECK (num BETWEEN 0 AND 31)")
+		t.Fragment("CHECK (kind IN ('latched','momentary'))")
+		t.Fragment(`CHECK (
+			(vehicle_id IS NOT NULL AND template_id IS NULL)
+			OR (vehicle_id IS NULL AND template_id IS NOT NULL)
+		)`)
+	})
+	s.Exec(rel.Raw(`CREATE UNIQUE INDEX dcc_functions_vehicle_num
+		ON dcc_functions(vehicle_id, num) WHERE vehicle_id IS NOT NULL`))
+	s.Exec(rel.Raw(`CREATE UNIQUE INDEX dcc_functions_template_num
+		ON dcc_functions(template_id, num) WHERE template_id IS NOT NULL`))
+}
+
+func createVehicleTemplatesAndDccFunctionsDown(s *rel.Schema) {
+	s.DropTable("dcc_functions")
+	s.AlterTable("vehicles", func(t *rel.AlterTable) {
+		t.DropColumn("template_id")
+		t.DropColumn("functions_detached_at")
+	})
+	s.DropTable("vehicle_templates")
 }

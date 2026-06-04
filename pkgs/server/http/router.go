@@ -24,6 +24,8 @@ type RouterConfig struct {
 	Presence         *service.PresenceService
 	DccBusLayoutSync *service.DccBusLayoutSync
 	Vehicles         *service.VehicleService
+	Functions        *service.FunctionService
+	VehicleTemplates *service.VehicleTemplateService
 	Trains           *service.TrainService
 	LayoutVehicles   *service.LayoutVehicleService
 	DCCPool          *service.DCCPoolService
@@ -69,6 +71,8 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	interlockingH := NewInterlockingHandler(cfg.Interlockings, cfg.Occupancy, cfg.Auth)
 	presenceH := NewPresenceHandler(cfg.Presence, cfg.DccBusLayoutSync)
 	vehicleH := NewVehicleHandler(cfg.Vehicles, cfg.LayoutVehicles, cfg.DCCPool, cfg.Auth)
+	functionH := NewFunctionHandler(cfg.Functions, cfg.Auth)
+	templateH := NewVehicleTemplateHandler(cfg.VehicleTemplates)
 	trainH := NewTrainHandler(cfg.Trains, cfg.LayoutVehicles, cfg.Auth)
 	rosterH := NewLayoutRosterHandler(cfg.LayoutVehicles, cfg.Auth)
 	userH := NewUserHandler(cfg.Users, cfg.Auth)
@@ -113,6 +117,20 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			r.Post("/vehicles", vehicleH.Create)
 			r.Put("/vehicles/{id}", vehicleH.Update)
 			r.Delete("/vehicles/{id}", vehicleH.Delete)
+
+			r.Get("/function-icons", functionH.ListIcons)
+			r.Get("/vehicles/{id}/functions", functionH.ListVehicle)
+			r.Post("/vehicles/{id}/functions/reorder", functionH.ReorderVehicle)
+			r.Put("/vehicles/{id}/functions/{num}", functionH.UpsertVehicle)
+			r.Delete("/vehicles/{id}/functions/{num}", functionH.DeleteVehicle)
+
+			r.Get("/vehicle-templates", templateH.List)
+			r.Post("/vehicle-templates", templateH.Create)
+			r.Get("/vehicle-templates/{id}", templateH.Get)
+			r.Get("/vehicle-templates/{id}/functions", functionH.ListTemplate)
+			r.Post("/vehicle-templates/{id}/functions/reorder", functionH.ReorderTemplate)
+			r.Put("/vehicle-templates/{id}/functions/{num}", functionH.UpsertTemplate)
+			r.Delete("/vehicle-templates/{id}/functions/{num}", functionH.DeleteTemplate)
 
 			// Train catalogue.
 			r.Get("/trains", trainH.List)

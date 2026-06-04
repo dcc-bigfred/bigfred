@@ -363,19 +363,18 @@ export default function FunctionListEditor({
                 fullWidth
               />
             )}
-            <TextField
-              label={t("function:editor.fieldTitle")}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              fullWidth
-              required
-            />
             <FormControl fullWidth>
               <InputLabel>{t("function:editor.fieldIcon")}</InputLabel>
               <Select
                 label={t("function:editor.fieldIcon")}
                 value={icon}
-                onChange={(e) => setIcon(e.target.value)}
+                onChange={(e) => {
+                  const nextIcon = e.target.value;
+                  setIcon(nextIcon);
+                  if (!name.trim()) {
+                    setName(iconLabel(nextIcon));
+                  }
+                }}
                 renderValue={(v) => (
                   <Stack direction="row" spacing={1} alignItems="center">
                     <FunctionIconVisual icon={v} />
@@ -393,6 +392,13 @@ export default function FunctionListEditor({
                 ))}
               </Select>
             </FormControl>
+            <TextField
+              label={t("function:editor.fieldTitle")}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              fullWidth
+              required
+            />
             <FormControl>
               <Typography variant="subtitle2" gutterBottom>
                 {t("function:editor.fieldKind")}

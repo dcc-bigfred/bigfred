@@ -4,6 +4,7 @@
     "open": "Throttle settings",
     "close": "Close"
   },
+  "editFunctions": "Edit functions",
   "fullscreen": {
     "label": "Full screen",
     "enter": "Enter full screen",

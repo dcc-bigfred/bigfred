@@ -1,18 +1,23 @@
 import { Box, Typography } from "@mui/material";
-import FunctionsIcon from "@mui/icons-material/Functions";
 
+import {
+  COCKPIT_FUNCTION_ICON_PX,
+  FunctionIconGlyph,
+} from "../functions/FunctionIconGlyph";
 import { cockpit, FUNCTION_BUTTON_SIZE_PX } from "./throttleCockpitTheme";
 
 interface FunctionGridButtonProps {
   label: string;
+  icon: string;
   active: boolean;
   disabled?: boolean;
   onClick: () => void;
 }
 
-// FunctionGridButton is one cell in the F0–F32 grid (generic icon for now).
+// FunctionGridButton is one DCC function cell in the throttle cockpit.
 export default function FunctionGridButton({
   label,
+  icon,
   active,
   disabled,
   onClick,
@@ -27,6 +32,7 @@ export default function FunctionGridButton({
       disabled={disabled}
       onClick={onClick}
       aria-pressed={active}
+      title={label}
       sx={{
         position: "relative",
         width: FUNCTION_BUTTON_SIZE_PX,
@@ -54,16 +60,27 @@ export default function FunctionGridButton({
         },
       }}
     >
-      <FunctionsIcon
+      <Box
         sx={{
           position: "absolute",
-          top: "18%",
+          top: "14%",
           left: "50%",
           transform: "translateX(-50%)",
-          fontSize: "1.75rem",
-          color: "rgba(255,255,255,0.22)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          filter: active
+            ? "drop-shadow(0 0 6px rgba(232, 240, 252, 0.45))"
+            : "none",
         }}
-      />
+      >
+        <FunctionIconGlyph
+          slug={icon}
+          size={COCKPIT_FUNCTION_ICON_PX}
+          variant="cockpit"
+          active={active}
+        />
+      </Box>
       <Typography
         variant="caption"
         component="span"
@@ -72,8 +89,14 @@ export default function FunctionGridButton({
           zIndex: 1,
           color: cockpit.text,
           fontWeight: 600,
-          fontSize: "0.7rem",
-          lineHeight: 1.2,
+          fontSize: "0.65rem",
+          lineHeight: 1.15,
+          textAlign: "center",
+          maxWidth: "100%",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+          px: 0.25,
           textShadow: "0 1px 2px rgba(0,0,0,0.6)",
         }}
       >

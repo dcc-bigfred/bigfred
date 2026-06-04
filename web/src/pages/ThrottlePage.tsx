@@ -23,7 +23,9 @@ import {
   type DataPlaneStatus,
 } from "../context/DccBusContext";
 import { useMe } from "../api/auth";
+import { useVehicleFunctions } from "../api/functions";
 import { useLayoutVehicles } from "../api/vehicles";
+import type { ThrottleCockpitFunction } from "../components/throttle/ThrottleCockpit";
 import AutoDismissAlert from "../components/AutoDismissAlert";
 import ThrottleCockpit from "../components/throttle/ThrottleCockpit";
 import ThrottleSetupDialog from "../components/throttle/ThrottleSetupDialog";
@@ -385,6 +387,28 @@ function useCockpitVehicles(layoutID: number) {
   );
 }
 
+function useCockpitConfiguredFunctions(
+  vehicles: { id: number; dccAddress: number }[],
+  selectedAddr: number | null,
+): ThrottleCockpitFunction[] {
+  const vehicleId =
+    selectedAddr != null
+      ? vehicles.find((v) => v.dccAddress === selectedAddr)?.id
+      : undefined;
+  const fnList = useVehicleFunctions(vehicleId ?? 0).data ?? [];
+  return useMemo(
+    () =>
+      [...fnList]
+        .sort((a, b) => a.position - b.position)
+        .map((f) => ({
+          num: f.num,
+          label: f.name,
+          icon: f.icon,
+        })),
+    [fnList],
+  );
+}
+
 function IdleThrottle({
   layoutID,
   onOpenSetup,
@@ -396,6 +420,10 @@ function IdleThrottle({
   const { selectedAddr, selectAddress } = useThrottleVehicleSelection(
     layoutID,
     vehicles,
+  );
+  const configuredFunctions = useCockpitConfiguredFunctions(
+    vehicles,
+    selectedAddr,
   );
 
   return (
@@ -409,6 +437,7 @@ function IdleThrottle({
         maxSpeed={127}
         forward
         functions={[]}
+        configuredFunctions={configuredFunctions}
         disabled
         onSpeedChange={() => {}}
         onDirectionChange={() => {}}
@@ -432,6 +461,10 @@ function ConnectedThrottle({
   const { selectedAddr, selectAddress } = useThrottleVehicleSelection(
     layoutID,
     vehicles,
+  );
+  const configuredFunctions = useCockpitConfiguredFunctions(
+    vehicles,
+    selectedAddr,
   );
   const {
     subscribe,
@@ -505,6 +538,7 @@ function ConnectedThrottle({
         maxSpeed={maxSpeed}
         forward={forward}
         functions={functions}
+        configuredFunctions={configuredFunctions}
         disabled={selectedAddr == null}
         onSpeedChange={handleSpeed}
         onDirectionChange={handleDir}

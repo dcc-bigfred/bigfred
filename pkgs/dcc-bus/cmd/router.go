@@ -387,18 +387,80 @@ func (r *Router) HandleEStop(ctx context.Context, sess *ws.Session, p protocol.S
 }
 
 // HandleSessionClose runs the dead-man's plan and fires audit. Called
-// exactly once per session by the WS server.
+// from the WS server when a browser session goes away (any reason).
 func (r *Router) HandleSessionClose(ctx context.Context, sess *ws.Session, reason string) {
-	if reason == "deadman" {
-		r.applyEmergencyForSession(ctx, sess, "deadman")
+	if r.isLastSessionForUser(sess) {
+		addrs := r.collectDriveTargetsForUser(ctx, sess.UserID)
+		r.log.WithFields(logrus.Fields{
+			"sessionId": sess.ID,
+			"userId":    sess.UserID,
+			"reason":    reason,
+			"addrs":     addrs,
+		}).Info("dcc-bus last user session closed — emergency stop on drive targets")
+		r.applyEmergencyStop(ctx, sess.UserID, sess.ID, addrs, reason)
+		return
 	}
+	if reason == "deadman" {
+		r.applyEmergencyForSession(ctx, sess, reason)
+	}
+}
+
+// isLastSessionForUser reports whether sess is the only live WS
+// session for its user on this daemon (§7e.5 per-daemon rule).
+func (r *Router) isLastSessionForUser(sess *ws.Session) bool {
+	for _, s := range r.hub.SessionsForUser(sess.UserID) {
+		if s.ID != sess.ID {
+			return false
+		}
+	}
+	return true
+}
+
+// collectDriveTargetsForUser returns every locomotive address the
+// user is actively associated with on this command station: union of
+// all tab subscriptions plus Redis snapshots they still control.
+func (r *Router) collectDriveTargetsForUser(ctx context.Context, userID uint) []uint16 {
+	seen := make(map[uint16]struct{}, 8)
+	add := func(out *[]uint16, addr uint16) {
+		if _, ok := seen[addr]; ok {
+			return
+		}
+		seen[addr] = struct{}{}
+		*out = append(*out, addr)
+	}
+	var addrs []uint16
+	for _, s := range r.hub.SessionsForUser(userID) {
+		for _, addr := range s.SubscribedAddrs() {
+			add(&addrs, addr)
+		}
+	}
+	r.allowedMu.RLock()
+	allowed := make([]uint16, 0, len(r.allowed))
+	for addr := range r.allowed {
+		allowed = append(allowed, addr)
+	}
+	r.allowedMu.RUnlock()
+	for _, addr := range allowed {
+		snap, ok, err := r.redis.LoadState(ctx, addr)
+		if err != nil || !ok || snap.ControlledByUserID != userID {
+			continue
+		}
+		add(&addrs, addr)
+	}
+	return addrs
 }
 
 // applyEmergencyForSession brakes every loco the session subscribed
 // to. We emit one EMG-stop per address so a partial failure (the
 // command station rejected one address) doesn't abort the rest.
 func (r *Router) applyEmergencyForSession(ctx context.Context, sess *ws.Session, reason string) {
-	addrs := sess.SubscribedAddrs()
+	r.applyEmergencyStop(ctx, sess.UserID, sess.ID, sess.SubscribedAddrs(), reason)
+}
+
+// applyEmergencyStop issues EMG-stop for each address and publishes
+// the audit frame. Shared by per-session and per-user last-session
+// paths.
+func (r *Router) applyEmergencyStop(ctx context.Context, userID uint, sessionID string, addrs []uint16, reason string) {
 	for _, addr := range addrs {
 		if err := r.station.SetSpeed(commandstation.LocoAddr(addr), 1, true, uint8(r.speedSteps)); err != nil {
 			r.log.WithError(err).WithField("addr", addr).Warn("dcc-bus estop failed")
@@ -408,7 +470,7 @@ func (r *Router) applyEmergencyForSession(ctx context.Context, sess *ws.Session,
 			Address:            addr,
 			Speed:              0,
 			Forward:            true,
-			ControlledByUserID: sess.UserID,
+			ControlledByUserID: userID,
 			Source:             "estop",
 			At:                 time.Now().UTC().UnixMilli(),
 		}
@@ -423,8 +485,8 @@ func (r *Router) applyEmergencyForSession(ctx context.Context, sess *ws.Session,
 
 	if err := r.redis.Publish(ctx, "system.estop.audit", map[string]any{
 		"reason":    reason,
-		"userId":    sess.UserID,
-		"sessionId": sess.ID,
+		"userId":    userID,
+		"sessionId": sessionID,
 		"addrs":     addrs,
 		"at":        time.Now().UTC().UnixMilli(),
 	}); err != nil {

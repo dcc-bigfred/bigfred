@@ -189,7 +189,11 @@ func (s *Server) readLoop(ctx context.Context, sess *Session) {
 		s.router.HandleSessionClose(context.Background(), sess, "ws_closed")
 		s.hub.Unregister(sess)
 		sess.Close("read_loop_done")
-		s.log.WithField("sessionId", sess.ID).Info("dcc-bus session closed")
+		s.log.WithFields(logrus.Fields{
+			"sessionId":              sess.ID,
+			"userId":                 sess.UserID,
+			"userSessionsRemaining": len(s.hub.SessionsForUser(sess.UserID)),
+		}).Info("dcc-bus session closed")
 	}()
 
 	for {

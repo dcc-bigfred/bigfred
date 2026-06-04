@@ -2,8 +2,8 @@
 
 - The owner of a vehicle can register **between 0 and 32 functions**
   on it, each with a function number in `F0`–`F31`, a title (*tytuł*,
-  field `name`), an icon from the catalogue (§3a.8) and a
-  `latched` (*Stała*) / `momentary` (*Chwilowa*) kind. A request with
+  field `name`), an icon from the catalogue (§3a.8) and a display
+  `position`. A request with
   `num=32` or `num=-1` is rejected with `422`.
 - The same `num` cannot be registered twice on one vehicle (`409`
   conflict on the unique index).

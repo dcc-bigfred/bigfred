@@ -77,7 +77,6 @@
   "function_num_taken": "Ten numer funkcji jest już zajęty.",
   "function_num_invalid": "Numer funkcji musi być w zakresie F0–F31.",
   "function_icon_invalid": "Wybierz ikonę z katalogu.",
-  "function_kind_invalid": "Wybierz rodzaj funkcji (stała lub chwilowa).",
   "function_name_required": "Wpisz tytuł funkcji.",
   "vehicle_template_not_found": "Szablon nie istnieje.",
   "vehicle_template_name_required": "Wpisz nazwę szablonu.",

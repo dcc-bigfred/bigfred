@@ -472,13 +472,11 @@ func createVehicleTemplatesAndDccFunctionsUp(s *rel.Schema) {
 		t.Int("num", rel.Unsigned(true))
 		t.String("name")
 		t.String("icon")
-		t.String("kind")
 		t.Int("position")
 		t.DateTime("created_at")
 		t.DateTime("updated_at")
 
 		t.Fragment("CHECK (num BETWEEN 0 AND 31)")
-		t.Fragment("CHECK (kind IN ('latched','momentary'))")
 		t.Fragment(`CHECK (
 			(vehicle_id IS NOT NULL AND template_id IS NULL)
 			OR (vehicle_id IS NULL AND template_id IS NOT NULL)

@@ -14,7 +14,6 @@ import (
 var (
 	ErrFunctionNumInvalid      = errors.New("function_num_invalid")
 	ErrFunctionIconInvalid     = errors.New("function_icon_invalid")
-	ErrFunctionKindInvalid     = errors.New("function_kind_invalid")
 	ErrFunctionNameRequired    = errors.New("function_name_required")
 	ErrFunctionNumTaken        = errors.New("function_num_taken")
 	ErrFunctionNotFound        = errors.New("function_not_found")
@@ -29,7 +28,6 @@ type ResolvedFunction struct {
 	Num      uint8
 	Name     string
 	Icon     domain.FunctionIcon
-	Kind     domain.FunctionKind
 	Position int
 	Source   string // "template" | "vehicle"
 }
@@ -38,7 +36,6 @@ type ResolvedFunction struct {
 type FunctionUpsertInput struct {
 	Name     string
 	Icon     domain.FunctionIcon
-	Kind     domain.FunctionKind
 	Position int
 }
 
@@ -49,23 +46,10 @@ type FunctionReorderEntry struct {
 }
 
 // FunctionService manages dcc_functions for vehicles and templates.
-// VehicleFunctionCatalogueEntry is one row in the cross-user
-// function catalogue (read-only browse).
-type VehicleFunctionCatalogueEntry struct {
-	VehicleID   uint
-	VehicleName string
-	OwnerID     uint
-	OwnerLogin  string
-	DCCAddress  *uint16
-	Kind        domain.VehicleKind
-	Functions   []ResolvedFunction
-}
-
 type FunctionService struct {
 	functions *repo.DccFunctions
 	vehicles  *repo.Vehicles
 	templates *repo.VehicleTemplates
-	users     *repo.Users
 	sec       security.FunctionSecurityContext
 }
 
@@ -74,9 +58,8 @@ func NewFunctionService(
 	f *repo.DccFunctions,
 	v *repo.Vehicles,
 	t *repo.VehicleTemplates,
-	u *repo.Users,
 ) *FunctionService {
-	return &FunctionService{functions: f, vehicles: v, templates: t, users: u}
+	return &FunctionService{functions: f, vehicles: v, templates: t}
 }
 
 // ListIcons returns the closed icon catalogue.
@@ -102,46 +85,6 @@ func (s *FunctionService) ListForVehicle(ctx context.Context, vehicleID uint) ([
 		return nil, err
 	}
 	return toResolved(rows, "vehicle"), nil
-}
-
-// ListFunctionCatalogue returns every vehicle with its resolved
-// function list and owner login (for the template editor browse UI).
-func (s *FunctionService) ListFunctionCatalogue(ctx context.Context) ([]VehicleFunctionCatalogueEntry, error) {
-	vehicles, err := s.vehicles.ListAll(ctx)
-	if err != nil {
-		return nil, err
-	}
-	logins := make(map[uint]string)
-	out := make([]VehicleFunctionCatalogueEntry, 0, len(vehicles))
-	for _, v := range vehicles {
-		fns, err := s.ListForVehicle(ctx, v.ID)
-		if err != nil {
-			return nil, err
-		}
-		if len(fns) == 0 {
-			continue
-		}
-		login, ok := logins[v.OwnerUserID]
-		if !ok {
-			u, err := s.users.FindByID(ctx, v.OwnerUserID)
-			if err != nil {
-				login = "?"
-			} else {
-				login = u.Login
-			}
-			logins[v.OwnerUserID] = login
-		}
-		out = append(out, VehicleFunctionCatalogueEntry{
-			VehicleID:   v.ID,
-			VehicleName: v.Name,
-			OwnerID:     v.OwnerUserID,
-			OwnerLogin:  login,
-			DCCAddress:  v.DCCAddress,
-			Kind:        v.Kind,
-			Functions:   fns,
-		})
-	}
-	return out, nil
 }
 
 // ListForTemplate returns function rows owned by a template.
@@ -361,7 +304,6 @@ func (s *FunctionService) ensureDetached(ctx context.Context, v *domain.Vehicle)
 			Num:        tf.Num,
 			Name:       tf.Name,
 			Icon:       tf.Icon,
-			Kind:       tf.Kind,
 			Position:   tf.Position,
 			CreatedAt:  now,
 			UpdatedAt:  now,
@@ -379,7 +321,6 @@ func (s *FunctionService) ensureDetached(ctx context.Context, v *domain.Vehicle)
 type validatedFunction struct {
 	name     string
 	icon     domain.FunctionIcon
-	kind     domain.FunctionKind
 	position int
 }
 
@@ -394,13 +335,9 @@ func validateFunctionInput(in FunctionUpsertInput) (validatedFunction, error) {
 	if !in.Icon.IsValid() {
 		return validatedFunction{}, ErrFunctionIconInvalid
 	}
-	if !in.Kind.IsValid() {
-		return validatedFunction{}, ErrFunctionKindInvalid
-	}
 	return validatedFunction{
 		name:     name,
 		icon:     in.Icon,
-		kind:     in.Kind,
 		position: in.Position,
 	}, nil
 }
@@ -416,7 +353,6 @@ func (s *FunctionService) upsertVehicleRow(
 	if findErr == nil {
 		existing.Name = in.name
 		existing.Icon = in.icon
-		existing.Kind = in.kind
 		existing.Position = in.position
 		existing.UpdatedAt = now
 		if err := s.functions.Update(ctx, &existing); err != nil {
@@ -434,7 +370,6 @@ func (s *FunctionService) upsertVehicleRow(
 		Num:        num,
 		Name:       in.name,
 		Icon:       in.icon,
-		Kind:       in.kind,
 		Position:   in.position,
 		CreatedAt:  now,
 		UpdatedAt:  now,
@@ -459,7 +394,6 @@ func (s *FunctionService) upsertTemplateRow(
 	if findErr == nil {
 		existing.Name = in.name
 		existing.Icon = in.icon
-		existing.Kind = in.kind
 		existing.Position = in.position
 		existing.UpdatedAt = now
 		if err := s.functions.Update(ctx, &existing); err != nil {
@@ -477,7 +411,6 @@ func (s *FunctionService) upsertTemplateRow(
 		Num:        num,
 		Name:       in.name,
 		Icon:       in.icon,
-		Kind:       in.kind,
 		Position:   in.position,
 		CreatedAt:  now,
 		UpdatedAt:  now,
@@ -526,7 +459,6 @@ func toResolved(rows []domain.DccFunction, source string) []ResolvedFunction {
 			Num:      r.Num,
 			Name:     r.Name,
 			Icon:     r.Icon,
-			Kind:     r.Kind,
 			Position: r.Position,
 			Source:   source,
 		})

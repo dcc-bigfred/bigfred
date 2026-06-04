@@ -63,7 +63,7 @@ func (s *AuditService) List(ctx context.Context, q AuditQuery) ([]domain.AuditLo
 | `auth.sudo_expired`                  | Janitor goroutine when `SudoElevation.ExpiresAt <= now()`. The actor is the **system user** (id `0`, login `"system"`). `Metadata = { grantedAt }`. |
 | `auth.sudo_locked`                   | `SudoService.Sudo` / `GrantSignalman` after the rate-limit threshold has been crossed and the (userId, layoutId) tuple is soft-locked. `Metadata = { attempts, lockedUntil }`. |
 | `layout_signalman.granted / revoked` | `SudoService.GrantSignalman / RevokeSignalman` (the engineer's-cap icon, §7a.7) AND `LayoutService.AddSignalman / RemoveSignalman` (the admin-side endpoint). `Metadata = { source: "self"\|"admin" }` distinguishes the two paths. |
-| `vehicle.functions_updated`      | `FunctionService.Upsert / Remove / Reorder` (after `EnsureDetached`). `ObjectID = vehicle.id`, `Metadata = {num, name, icon, kind, position, prev?}` |
+| `vehicle.functions_updated`      | `FunctionService.Upsert / Remove / Reorder` (after `EnsureDetached`). `ObjectID = vehicle.id`, `Metadata = {num, name, icon, position, prev?}` |
 | `vehicle.functions_detached`     | `FunctionService.EnsureDetached` when the copy fires. `Metadata = {templateId, copied_rows}` |
 | `vehicle.functions_attached`     | `FunctionService.Attach` on explicit re-link. `Metadata = {templateId}` |
 | `template.created/updated/deleted` | `TemplateService.Create/Update/Delete` |

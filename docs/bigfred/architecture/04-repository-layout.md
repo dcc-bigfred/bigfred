@@ -97,7 +97,7 @@ pkgs/
     │   ├── radio.go            # RadioMessage, RadioPhrase
     │   ├── command_station.go           # CommandStation, CommandStationConnection, CommandStationConnectionType
     │   ├── layout.go            # Layout, LayoutSignalman, LayoutInterlocking, LayoutVehicle
-    │   ├── function.go         # DccFunction, FunctionIcon, FunctionKind
+    │   ├── function.go         # DccFunction, FunctionIcon
     │   ├── template.go         # VehicleTemplate
     │   └── audit.go            # AuditLogEntry, AuditAction
     ├── repo/                   # REL repositories (Data Mapper)

@@ -156,7 +156,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	authSvc := service.NewAuthService(users, layoutSvc, layoutSignalmen, sudoElevations, service.AuthConfig{JWTSecret: secret})
 	dccPoolSvc := service.NewDCCPoolService(dccPools)
 	vehicleSvc := service.NewVehicleService(vehicles, dccPoolSvc, trainMembers)
-	functionSvc := service.NewFunctionService(dccFunctions, vehicles, vehicleTemplates, users)
+	functionSvc := service.NewFunctionService(dccFunctions, vehicles, vehicleTemplates)
 	vehicleTemplateSvc := service.NewVehicleTemplateService(vehicleTemplates)
 	trainSvc := service.NewTrainService(trains, trainMembers, vehicles)
 	userSvc := service.NewUserService(users, vehicles, trains, dccPoolSvc)

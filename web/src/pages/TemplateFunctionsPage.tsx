@@ -39,7 +39,6 @@ export default function TemplateFunctionsPage() {
         onBack={() => navigate("/my/vehicle-templates")}
         functions={functions.data}
         isLoading={functions.isLoading}
-        showLocomotivesButton
         mutations={{
           upsert,
           remove,

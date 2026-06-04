@@ -394,14 +394,12 @@ first mutation, which triggers server-side copy-on-write (§3a.6).
   (`name` field on the wire).
 - **Ikona** — visual picker grid populated from
   `GET /api/v1/function-icons` (closed catalogue in
-  [§3a.8](./05-domain-model/08-function-icon-catalogue.md)).
-- **Rodzaj** — radio group:
-  - **Stała** → `kind: "latched"` (toggle on / off),
-  - **Chwilowa** → `kind: "momentary"` (active only while pressed).
+  [§3a.8](./05-domain-model/08-function-icon-catalogue.md)); choosing an
+  icon while **Tytuł** is empty copies the icon label into the title field.
 
 Confirming calls `PUT …/functions/{num}`.
 
-**Editing** — each list row is inline-editable for title, icon and kind;
+**Editing** — each list row is editable for title and icon;
 changes debounce to the same `PUT` endpoint.
 
 **Removing** — row action **Usuń** → `DELETE …/functions/{num}`.

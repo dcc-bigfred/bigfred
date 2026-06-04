@@ -62,8 +62,14 @@ type Vehicle struct {
 	Name        string
 	Kind        VehicleKind
 	Number      string
-	CreatedAt   time.Time `db:"created_at"`
-	UpdatedAt   time.Time `db:"updated_at"`
+
+	// Function inheritance (§3a.6). TemplateID links to a template;
+	// FunctionsDetachedAt is set after copy-on-write detach.
+	TemplateID          *uint      `db:"template_id"`
+	FunctionsDetachedAt *time.Time `db:"functions_detached_at"`
+
+	CreatedAt time.Time `db:"created_at"`
+	UpdatedAt time.Time `db:"updated_at"`
 }
 
 // Table tells REL which physical table backs this struct.

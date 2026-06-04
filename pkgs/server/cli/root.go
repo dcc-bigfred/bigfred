@@ -140,6 +140,8 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	interlockingSessions := repo.NewInterlockingSessions(repository)
 	dccPools := repo.NewDCCAddressRanges(repository)
 	vehicles := repo.NewVehicles(repository)
+	dccFunctions := repo.NewDccFunctions(repository)
+	vehicleTemplates := repo.NewVehicleTemplates(repository)
 	trains := repo.NewTrains(repository)
 	trainMembers := repo.NewTrainMembers(repository)
 	layoutVehicles := repo.NewLayoutVehicles(repository)
@@ -154,6 +156,8 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	authSvc := service.NewAuthService(users, layoutSvc, layoutSignalmen, sudoElevations, service.AuthConfig{JWTSecret: secret})
 	dccPoolSvc := service.NewDCCPoolService(dccPools)
 	vehicleSvc := service.NewVehicleService(vehicles, dccPoolSvc, trainMembers)
+	functionSvc := service.NewFunctionService(dccFunctions, vehicles, vehicleTemplates)
+	vehicleTemplateSvc := service.NewVehicleTemplateService(vehicleTemplates)
 	trainSvc := service.NewTrainService(trains, trainMembers, vehicles)
 	userSvc := service.NewUserService(users, vehicles, trains, dccPoolSvc)
 
@@ -332,6 +336,8 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		Presence:         presenceSvc,
 		DccBusLayoutSync: dccLayoutSync,
 		Vehicles:         vehicleSvc,
+		Functions:        functionSvc,
+		VehicleTemplates: vehicleTemplateSvc,
 		Trains:           trainSvc,
 		LayoutVehicles:   layoutVehicleSvc,
 		DCCPool:          dccPoolSvc,

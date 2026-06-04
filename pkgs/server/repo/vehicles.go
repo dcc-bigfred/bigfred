@@ -56,6 +56,16 @@ func (v *Vehicles) CountByOwner(ctx context.Context, ownerID uint) (int, error) 
 	return v.repo.Count(ctx, "vehicles", where.Eq("owner_user_id", ownerID))
 }
 
+// ListAll returns every vehicle in the catalogue (all owners).
+func (v *Vehicles) ListAll(ctx context.Context) ([]domain.Vehicle, error) {
+	var rows []domain.Vehicle
+	err := v.repo.FindAll(ctx, &rows, sort.Asc("name"))
+	if err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
 // ListByOwner returns every vehicle owned by the user.
 func (v *Vehicles) ListByOwner(ctx context.Context, ownerID uint) ([]domain.Vehicle, error) {
 	var rows []domain.Vehicle

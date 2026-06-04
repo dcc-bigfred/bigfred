@@ -18,7 +18,9 @@ import {
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
+import TuneIcon from "@mui/icons-material/Tune";
 import DeleteIcon from "@mui/icons-material/Delete";
+import { useNavigate } from "react-router-dom";
 import PlaylistAddIcon from "@mui/icons-material/PlaylistAdd";
 import RemoveCircleOutlineIcon from "@mui/icons-material/RemoveCircleOutline";
 import { useTranslation } from "react-i18next";
@@ -43,6 +45,7 @@ interface Props {
 // stays in RosterSection.
 export default function MyVehiclesCatalogue({ layoutId }: Props) {
   const { t } = useTranslation(["vehicle", "errors", "common"]);
+  const navigate = useNavigate();
   const vehicles = useMyVehicles();
   const layoutVehicles = useLayoutVehicles(layoutId);
   const addVehicleToRoster = useAddVehicleToRoster();
@@ -190,6 +193,15 @@ export default function MyVehiclesCatalogue({ layoutId }: Props) {
                               </IconButton>
                             </Tooltip>
                           )}
+                          <Tooltip title={t("vehicle:list.actions.editFunctions")}>
+                            <IconButton
+                              size="small"
+                              onClick={() => navigate(`/my/vehicles/${v.id}/functions`)}
+                              aria-label={t("vehicle:list.actions.editFunctions")}
+                            >
+                              <TuneIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
                           <Tooltip title={t("vehicle:list.actions.edit")}>
                             <IconButton
                               size="small"

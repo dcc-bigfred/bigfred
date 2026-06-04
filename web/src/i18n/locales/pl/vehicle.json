@@ -29,6 +29,7 @@
     },
     "actions": {
       "edit": "Edytuj",
+      "editFunctions": "Edytuj funkcje",
       "delete": "Usuń",
       "addToLayout": "Dodaj do makiety",
       "alreadyOnLayout": "Już w makiecie"

@@ -14,6 +14,9 @@ import InterlockingPage from "./pages/InterlockingPage";
 import LoginPage from "./pages/LoginPage";
 import MyTrainsPage from "./pages/MyTrainsPage";
 import MyVehiclesPage from "./pages/MyVehiclesPage";
+import VehicleFunctionsPage from "./pages/VehicleFunctionsPage";
+import VehicleTemplatesPage from "./pages/VehicleTemplatesPage";
+import TemplateFunctionsPage from "./pages/TemplateFunctionsPage";
 import ThrottlePage from "./pages/ThrottlePage";
 import LayoutsAdminPage from "./pages/admin/LayoutsPage";
 import InterlockingsAdminPage from "./pages/admin/InterlockingsPage";
@@ -46,6 +49,12 @@ const router = createBrowserRouter(
         <Route element={<AppShell />}>
           <Route path="/" element={<HomePage />} />
           <Route path="/my/vehicles" element={<MyVehiclesPage />} />
+          <Route path="/my/vehicles/:vehicleId/functions" element={<VehicleFunctionsPage />} />
+          <Route path="/my/vehicle-templates" element={<VehicleTemplatesPage />} />
+          <Route
+            path="/my/vehicle-templates/:templateId/functions"
+            element={<TemplateFunctionsPage />}
+          />
           <Route path="/my/trains" element={<MyTrainsPage />} />
           <Route path="/throttle" element={<ThrottlePage />} />
           <Route path="/interlockings/:id" element={<InterlockingPage />} />

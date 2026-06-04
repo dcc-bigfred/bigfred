@@ -29,6 +29,7 @@
     },
     "actions": {
       "edit": "Edit",
+      "editFunctions": "Edit functions",
       "delete": "Delete",
       "addToLayout": "Add to layout",
       "alreadyOnLayout": "Already on layout"

@@ -23,6 +23,12 @@
   "fnLabel": "F{{n}}",
   "stop": "Stop",
   "emergencyStop": "Emergency stop",
+  "leaveGuard": {
+    "title": "Locomotive in motion",
+    "message": "Leaving this page will emergency-stop the locomotive. Do you want to continue?",
+    "cancel": "No, stay",
+    "confirm": "Yes"
+  },
   "deadman": {
     "warning": "Idle — auto stop in {{seconds}} s",
     "executed": "Emergency plan applied ({{action}})"

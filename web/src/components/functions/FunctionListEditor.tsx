@@ -9,13 +9,10 @@ import {
   DialogContent,
   DialogTitle,
   FormControl,
-  FormControlLabel,
   IconButton,
   InputLabel,
   MenuItem,
   Paper,
-  Radio,
-  RadioGroup,
   Select,
   Stack,
   Table,
@@ -40,7 +37,6 @@ import { ApiError } from "../../api/client";
 import {
   useFunctionIcons,
   type DccFunction,
-  type FunctionKind,
   type FunctionUpsertBody,
 } from "../../api/functions";
 import { FunctionIconVisual } from "./functionIconMap";
@@ -102,7 +98,6 @@ export default function FunctionListEditor({
   const [locomotivesOpen, setLocomotivesOpen] = useState(false);
   const [name, setName] = useState("");
   const [icon, setIcon] = useState("unspecified");
-  const [kind, setKind] = useState<FunctionKind>("latched");
 
   const sorted = useMemo(
     () => [...(functions ?? [])].sort((a, b) => a.position - b.position),
@@ -142,14 +137,12 @@ export default function FunctionListEditor({
     setEdit({ kind: "add", num: freeNums[0] });
     setName("");
     setIcon("unspecified");
-    setKind("latched");
   };
 
   const openEditRow = (row: DccFunction) => {
     setEdit({ kind: "edit", row });
     setName(row.name);
     setIcon(row.icon);
-    setKind(row.kind);
   };
 
   const closeEdit = () => setEdit(null);
@@ -163,7 +156,7 @@ export default function FunctionListEditor({
         : sorted.length;
     mutations.upsert.mutate({
       num,
-      body: { name: name.trim(), icon, kind, position },
+      body: { name: name.trim(), icon, kind: "latched", position },
     });
     closeEdit();
   };
@@ -230,7 +223,6 @@ export default function FunctionListEditor({
                   <TableCell width={72}>{t("function:editor.columns.num")}</TableCell>
                   <TableCell>{t("function:editor.columns.title")}</TableCell>
                   <TableCell>{t("function:editor.columns.icon")}</TableCell>
-                  <TableCell>{t("function:editor.columns.kind")}</TableCell>
                   {mode === "vehicle" && (
                     <TableCell>{t("function:editor.columns.source")}</TableCell>
                   )}
@@ -240,13 +232,13 @@ export default function FunctionListEditor({
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={mode === "vehicle" ? 7 : 6} align="center" sx={{ py: 3 }}>
+                    <TableCell colSpan={mode === "vehicle" ? 6 : 5} align="center" sx={{ py: 3 }}>
                       {t("common:loading")}
                     </TableCell>
                   </TableRow>
                 ) : sorted.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={mode === "vehicle" ? 7 : 6} align="center" sx={{ py: 3 }}>
+                    <TableCell colSpan={mode === "vehicle" ? 6 : 5} align="center" sx={{ py: 3 }}>
                       {t("function:editor.empty")}
                     </TableCell>
                   </TableRow>
@@ -282,11 +274,6 @@ export default function FunctionListEditor({
                           <FunctionIconVisual icon={row.icon} />
                           <Typography variant="body2">{iconLabel(row.icon)}</Typography>
                         </Stack>
-                      </TableCell>
-                      <TableCell>
-                        {row.kind === "latched"
-                          ? t("function:kind.latched")
-                          : t("function:kind.momentary")}
                       </TableCell>
                       {mode === "vehicle" && (
                         <TableCell>
@@ -399,26 +386,6 @@ export default function FunctionListEditor({
               fullWidth
               required
             />
-            <FormControl>
-              <Typography variant="subtitle2" gutterBottom>
-                {t("function:editor.fieldKind")}
-              </Typography>
-              <RadioGroup
-                value={kind}
-                onChange={(e) => setKind(e.target.value as FunctionKind)}
-              >
-                <FormControlLabel
-                  value="latched"
-                  control={<Radio />}
-                  label={t("function:kind.latched")}
-                />
-                <FormControlLabel
-                  value="momentary"
-                  control={<Radio />}
-                  label={t("function:kind.momentary")}
-                />
-              </RadioGroup>
-            </FormControl>
           </Stack>
         </DialogContent>
         <DialogActions>

@@ -1,5 +1,11 @@
 ## 5. Backend Components
 
+Layering under `pkgs/server/` is defined in
+[§3.1 Backend layer responsibilities](./04-repository-layout.md#31-backend-layer-responsibilities):
+`http` / `ws` terminate transport and authentication; `service` owns
+validation, permission checks via `security`, orchestration, and
+repositories.
+
 > §7e supersedes the DCC dispatch parts of this section. The
 > `LocoService.SetSpeed` and background poller described in §5.4 and
 > §5.5 still describe the **M1 baseline**, but in the §7e milestone

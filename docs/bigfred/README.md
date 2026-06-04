@@ -15,6 +15,12 @@ Section numbering used in the prose (`§3a.4`, `§4.5`, `§7b.1`, …) is
 preserved verbatim in the headings of the split files, so existing
 cross-references inside the text still work via `Ctrl+F`.
 
+On the Go server, responsibilities are split across three packages under
+`pkgs/server/`: **`http`** (and **`ws`**) terminate transport and
+authentication; **`service`** owns validation, orchestration, and
+permission checks via **`security`**; see
+[§3.1 Backend layer responsibilities](./architecture/04-repository-layout.md#31-backend-layer-responsibilities).
+
 ## Table of contents
 
 1. [Terminology](./architecture/00-terminology.md) — authoritative
@@ -29,7 +35,8 @@ cross-references inside the text still work via `Ctrl+F`.
 4. [High-Level Architecture](./architecture/03-high-level-architecture.md)
    — the diagram with both `server` and `scripts-executor` processes.
 5. [Repository Layout](./architecture/04-repository-layout.md) — every
-   directory under `pkgs/server/`, `pkgs/scripts-executor/` and `web/`.
+   directory under `pkgs/server/`, `pkgs/scripts-executor/` and `web/`;
+   **§3.1** documents how `http`, `service`, and `security` divide work.
 6. [Domain Model (REL — Data Mapper)](./architecture/05-domain-model/README.md)
    — entities, invariants, addressing rules, audit log, functions /
    templates / scripts.

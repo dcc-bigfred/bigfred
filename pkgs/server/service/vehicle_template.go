@@ -8,6 +8,7 @@ import (
 
 	"github.com/keskad/loco/pkgs/server/domain"
 	"github.com/keskad/loco/pkgs/server/repo"
+	"github.com/keskad/loco/pkgs/server/security"
 )
 
 var (
@@ -68,24 +69,11 @@ func (s *VehicleTemplateService) List(ctx context.Context) ([]VehicleTemplateLis
 			}
 			logins[row.OwnerUserID] = login
 		}
-		fns, err := s.functions.ListByTemplateID(ctx, row.ID)
+		entry, err := s.entryFor(ctx, row, login)
 		if err != nil {
 			return nil, err
 		}
-		slots := make([]VehicleTemplateFunctionSlot, 0, len(fns))
-		for _, fn := range fns {
-			slots = append(slots, VehicleTemplateFunctionSlot{
-				Num:      fn.Num,
-				Name:     fn.Name,
-				Icon:     fn.Icon,
-				Position: fn.Position,
-			})
-		}
-		out = append(out, VehicleTemplateListEntry{
-			VehicleTemplate: row,
-			OwnerLogin:      login,
-			Functions:       slots,
-		})
+		out = append(out, entry)
 	}
 	return out, nil
 }
@@ -131,6 +119,78 @@ func (s *VehicleTemplateService) Create(ctx context.Context, in VehicleTemplateC
 		return domain.VehicleTemplate{}, err
 	}
 	return row, nil
+}
+
+// VehicleTemplateUpdateInput is the payload for Update.
+type VehicleTemplateUpdateInput struct {
+	Name        string
+	Description string
+}
+
+// Update changes template name and description (owner or admin).
+func (s *VehicleTemplateService) Update(
+	ctx context.Context,
+	actorID uint,
+	eff domain.EffectiveRoles,
+	id uint,
+	in VehicleTemplateUpdateInput,
+) (VehicleTemplateListEntry, error) {
+	row, err := s.Get(ctx, id)
+	if err != nil {
+		return VehicleTemplateListEntry{}, err
+	}
+	sec := security.FunctionSecurityContext{}
+	if d := sec.CanEditTemplateFunctions(eff, actorID, row.OwnerUserID); !d.Allowed {
+		return VehicleTemplateListEntry{}, ErrTemplateNotOwned
+	}
+	name, err := sanitiseTemplateName(in.Name)
+	if err != nil {
+		return VehicleTemplateListEntry{}, err
+	}
+	row.Name = name
+	row.Description = strings.TrimSpace(in.Description)
+	row.Version++
+	row.UpdatedAt = time.Now().UTC()
+	if err := s.templates.Update(ctx, &row); err != nil {
+		if isUniqueViolation(err) {
+			return VehicleTemplateListEntry{}, ErrVehicleTemplateNameTaken
+		}
+		return VehicleTemplateListEntry{}, err
+	}
+	return s.entryFor(ctx, row, "")
+}
+
+func (s *VehicleTemplateService) entryFor(
+	ctx context.Context,
+	row domain.VehicleTemplate,
+	ownerLogin string,
+) (VehicleTemplateListEntry, error) {
+	if ownerLogin == "" {
+		u, err := s.users.FindByID(ctx, row.OwnerUserID)
+		if err != nil {
+			ownerLogin = "?"
+		} else {
+			ownerLogin = u.Login
+		}
+	}
+	fns, err := s.functions.ListByTemplateID(ctx, row.ID)
+	if err != nil {
+		return VehicleTemplateListEntry{}, err
+	}
+	slots := make([]VehicleTemplateFunctionSlot, 0, len(fns))
+	for _, fn := range fns {
+		slots = append(slots, VehicleTemplateFunctionSlot{
+			Num:      fn.Num,
+			Name:     fn.Name,
+			Icon:     fn.Icon,
+			Position: fn.Position,
+		})
+	}
+	return VehicleTemplateListEntry{
+		VehicleTemplate: row,
+		OwnerLogin:      ownerLogin,
+		Functions:       slots,
+	}, nil
 }
 
 func sanitiseTemplateName(raw string) (string, error) {

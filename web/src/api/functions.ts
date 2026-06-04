@@ -74,6 +74,27 @@ export function useCreateVehicleTemplate() {
   });
 }
 
+export function useUpdateVehicleTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: {
+      id: number;
+      name: string;
+      description?: string;
+    }) =>
+      apiFetch<VehicleTemplate>(`/api/v1/vehicle-templates/${args.id}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          name: args.name,
+          description: args.description ?? "",
+        }),
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: templatesQueryKey });
+    },
+  });
+}
+
 export function useVehicleFunctions(vehicleId: number) {
   return useQuery({
     queryKey: vehicleFunctionsQueryKey(vehicleId),

@@ -51,10 +51,13 @@
       "actions": "Akcje"
     },
     "editFunctions": "Edytuj funkcje",
+    "editTemplate": "Edytuj szablon",
     "createTitle": "Nowy szablon",
+    "editTitle": "Edytuj szablon",
     "fieldName": "Nazwa",
     "fieldDescription": "Opis",
-    "createSubmit": "Utwórz i edytuj funkcje"
+    "createSubmit": "Utwórz i edytuj funkcje",
+    "editSubmit": "Zapisz"
   },
   "icon": {
     "unspecified": "Funkcja nieokreślona",

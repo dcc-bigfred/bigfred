@@ -12,11 +12,15 @@ import (
 // VehicleTemplateHandler serves the template catalogue (§4.1).
 type VehicleTemplateHandler struct {
 	templates *service.VehicleTemplateService
+	auth      *service.AuthService
 }
 
 // NewVehicleTemplateHandler returns a VehicleTemplateHandler.
-func NewVehicleTemplateHandler(templates *service.VehicleTemplateService) *VehicleTemplateHandler {
-	return &VehicleTemplateHandler{templates: templates}
+func NewVehicleTemplateHandler(
+	templates *service.VehicleTemplateService,
+	auth *service.AuthService,
+) *VehicleTemplateHandler {
+	return &VehicleTemplateHandler{templates: templates, auth: auth}
 }
 
 type vehicleTemplateFunctionResponse struct {
@@ -133,6 +137,45 @@ func (h *VehicleTemplateHandler) Create(w http.ResponseWriter, r *http.Request) 
 	_ = json.NewEncoder(w).Encode(resp)
 }
 
+type vehicleTemplateUpdateRequest struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+}
+
+// Update handles PUT /api/v1/vehicle-templates/{id}.
+func (h *VehicleTemplateHandler) Update(w http.ResponseWriter, r *http.Request) {
+	actor, ok := IdentityFromContext(r.Context())
+	if !ok {
+		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	eff, err := h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	id, ok := parseUintParam(r, "id")
+	if !ok {
+		writeJSONError(w, http.StatusBadRequest, "invalid_id")
+		return
+	}
+	var req vehicleTemplateUpdateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid_body")
+		return
+	}
+	row, err := h.templates.Update(r.Context(), actor.User.ID, eff, id, service.VehicleTemplateUpdateInput{
+		Name:        req.Name,
+		Description: req.Description,
+	})
+	if err != nil {
+		writeVehicleTemplateError(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(toVehicleTemplateResp(row))
+}
+
 func writeVehicleTemplateError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, service.ErrVehicleTemplateNotFound):
@@ -141,6 +184,8 @@ func writeVehicleTemplateError(w http.ResponseWriter, err error) {
 		writeJSONError(w, http.StatusUnprocessableEntity, "vehicle_template_name_required")
 	case errors.Is(err, service.ErrVehicleTemplateNameTaken):
 		writeJSONError(w, http.StatusConflict, "vehicle_template_name_taken")
+	case errors.Is(err, service.ErrTemplateNotOwned):
+		writeJSONError(w, http.StatusForbidden, "template_not_owned")
 	default:
 		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 	}

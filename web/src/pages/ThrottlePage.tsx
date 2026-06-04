@@ -27,6 +27,7 @@ import { useLayoutVehicles } from "../api/vehicles";
 import AutoDismissAlert from "../components/AutoDismissAlert";
 import ThrottleCockpit from "../components/throttle/ThrottleCockpit";
 import ThrottleSetupDialog from "../components/throttle/ThrottleSetupDialog";
+import { useDebouncedSpeedSend } from "../hooks/useDebouncedSpeedSend";
 import { useThrottleSpeedOverride } from "../hooks/useThrottleSpeedOverride";
 import { useThrottleVehicleSelection } from "../hooks/useThrottleVehicleSelection";
 
@@ -464,15 +465,16 @@ function ConnectedThrottle({
     selectedAddr,
   );
   const cockpitSpeed = Math.min(displaySpeed, maxSpeed);
+  const { queueSpeed, sendSpeedNow } = useDebouncedSpeedSend(setSpeed);
 
   const handleSpeed = (next: number) => {
     if (selectedAddr == null) return;
     noteUserSpeed(next);
-    void setSpeed(selectedAddr, next, forward);
+    queueSpeed(selectedAddr, next, forward);
   };
   const handleDir = (fwd: boolean) => {
     if (selectedAddr == null) return;
-    void setSpeed(selectedAddr, cockpitSpeed, fwd);
+    sendSpeedNow(selectedAddr, cockpitSpeed, fwd);
   };
   const handleFn = (n: number) => {
     if (selectedAddr == null) return;
@@ -481,7 +483,7 @@ function ConnectedThrottle({
   const handleStop = () => {
     if (selectedAddr == null) return;
     noteUserSpeed(0);
-    void setSpeed(selectedAddr, 0, forward);
+    sendSpeedNow(selectedAddr, 0, forward);
   };
 
   return (

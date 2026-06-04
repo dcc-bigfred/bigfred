@@ -18,21 +18,35 @@ var (
 
 const maxVehicleTemplateNameLen = 64
 
+// VehicleTemplateFunctionSlot is one function on a template (list summary).
+type VehicleTemplateFunctionSlot struct {
+	Num      uint8
+	Name     string
+	Icon     domain.FunctionIcon
+	Position int
+}
+
 // VehicleTemplateListEntry is a template row with owner login for list UIs.
 type VehicleTemplateListEntry struct {
 	domain.VehicleTemplate
 	OwnerLogin string
+	Functions  []VehicleTemplateFunctionSlot
 }
 
 // VehicleTemplateService manages the template catalogue.
 type VehicleTemplateService struct {
 	templates *repo.VehicleTemplates
 	users     *repo.Users
+	functions *repo.DccFunctions
 }
 
 // NewVehicleTemplateService constructs a VehicleTemplateService.
-func NewVehicleTemplateService(t *repo.VehicleTemplates, u *repo.Users) *VehicleTemplateService {
-	return &VehicleTemplateService{templates: t, users: u}
+func NewVehicleTemplateService(
+	t *repo.VehicleTemplates,
+	u *repo.Users,
+	f *repo.DccFunctions,
+) *VehicleTemplateService {
+	return &VehicleTemplateService{templates: t, users: u, functions: f}
 }
 
 // List returns every template with owner login.
@@ -54,9 +68,23 @@ func (s *VehicleTemplateService) List(ctx context.Context) ([]VehicleTemplateLis
 			}
 			logins[row.OwnerUserID] = login
 		}
+		fns, err := s.functions.ListByTemplateID(ctx, row.ID)
+		if err != nil {
+			return nil, err
+		}
+		slots := make([]VehicleTemplateFunctionSlot, 0, len(fns))
+		for _, fn := range fns {
+			slots = append(slots, VehicleTemplateFunctionSlot{
+				Num:      fn.Num,
+				Name:     fn.Name,
+				Icon:     fn.Icon,
+				Position: fn.Position,
+			})
+		}
 		out = append(out, VehicleTemplateListEntry{
 			VehicleTemplate: row,
 			OwnerLogin:      login,
+			Functions:       slots,
 		})
 	}
 	return out, nil

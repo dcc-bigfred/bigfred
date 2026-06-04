@@ -19,16 +19,33 @@ func NewVehicleTemplateHandler(templates *service.VehicleTemplateService) *Vehic
 	return &VehicleTemplateHandler{templates: templates}
 }
 
+type vehicleTemplateFunctionResponse struct {
+	Num      uint8              `json:"num"`
+	Name     string             `json:"name"`
+	Icon     domain.FunctionIcon `json:"icon"`
+	Position int                `json:"position"`
+}
+
 type vehicleTemplateResponse struct {
-	ID          uint   `json:"id"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	OwnerID     uint   `json:"ownerId"`
-	OwnerLogin  string `json:"ownerLogin"`
-	Version     int    `json:"version"`
+	ID          uint                            `json:"id"`
+	Name        string                          `json:"name"`
+	Description string                          `json:"description"`
+	OwnerID     uint                            `json:"ownerId"`
+	OwnerLogin  string                          `json:"ownerLogin"`
+	Version     int                             `json:"version"`
+	Functions   []vehicleTemplateFunctionResponse `json:"functions"`
 }
 
 func toVehicleTemplateResp(t service.VehicleTemplateListEntry) vehicleTemplateResponse {
+	fns := make([]vehicleTemplateFunctionResponse, 0, len(t.Functions))
+	for _, fn := range t.Functions {
+		fns = append(fns, vehicleTemplateFunctionResponse{
+			Num:      fn.Num,
+			Name:     fn.Name,
+			Icon:     fn.Icon,
+			Position: fn.Position,
+		})
+	}
 	return vehicleTemplateResponse{
 		ID:          t.ID,
 		Name:        t.Name,
@@ -36,6 +53,7 @@ func toVehicleTemplateResp(t service.VehicleTemplateListEntry) vehicleTemplateRe
 		OwnerID:     t.OwnerUserID,
 		OwnerLogin:  t.OwnerLogin,
 		Version:     t.Version,
+		Functions:   fns,
 	}
 }
 
@@ -47,6 +65,7 @@ func toVehicleTemplateRespFromDomain(t domain.VehicleTemplate) vehicleTemplateRe
 		OwnerID:     t.OwnerUserID,
 		OwnerLogin:  "",
 		Version:     t.Version,
+		Functions:   nil,
 	}
 }
 

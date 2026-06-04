@@ -91,9 +91,9 @@ type Vehicle struct {
     Number      string      // optional free-text inventory / road number (e.g. "ET22-123", "92510")
 
     // Function inheritance (§3a.6, goal 16). Three states:
-    //   (nil, nil)   – stand-alone, vehicle owns its VehicleFunction rows
-    //   (T,   nil)   – LINKED to template T; function list is virtual (read from TemplateFunction)
-    //   (T,   ts)    – DETACHED, copy-on-write applied at `ts`; vehicle owns its rows; T kept for lineage
+    //   (nil, nil)   – stand-alone, vehicle owns rows in `dcc_functions` (vehicle_id set)
+    //   (T,   nil)   – LINKED to template T; list is virtual (read `dcc_functions` WHERE template_id = T)
+    //   (T,   ts)    – DETACHED, copy-on-write at `ts`; vehicle owns its rows; T kept for lineage
     TemplateID          *uint
     FunctionsDetachedAt *time.Time
 
@@ -521,55 +521,47 @@ type AuditLogEntry struct {
 
 ```go
 // pkgs/server/domain/function.go
-// FunctionIcon is a CLOSED catalogue. The frontend ships matching SVG
-// assets; adding a new icon requires changing this enum AND adding the
-// asset. Tygo (§ Tech stack) re-generates the TypeScript union.
+// FunctionIcon is a CLOSED catalogue (67 values). The authoritative slug
+// list with Polish labels lives in §3a.8 (08-function-icon-catalogue.md).
+// The frontend ships one SVG per slug; Tygo re-generates the TS union.
 type FunctionIcon string
 
 const (
-    IconHighHorn    FunctionIcon = "high_horn"
-    IconLowHorn     FunctionIcon = "low_horn"
-    IconHeadlight   FunctionIcon = "headlight"
-    IconTaillight   FunctionIcon = "taillight"
-    IconShunting    FunctionIcon = "shunting_mode"
-    IconEngineStart FunctionIcon = "engine_start"
-    IconBell        FunctionIcon = "bell"
-    IconCabLight    FunctionIcon = "cab_light"
-    IconCoupler     FunctionIcon = "coupler"
-    IconSmoke       FunctionIcon = "smoke"
-    IconDoorOpen    FunctionIcon = "door_open"
-    IconBrake       FunctionIcon = "brake"
-    IconSander      FunctionIcon = "sander"
-    IconCompressor  FunctionIcon = "compressor"
-    IconAnnounce    FunctionIcon = "announce"
-    IconWhistle     FunctionIcon = "whistle"
-    // ...catalogue is extended by editing this file + adding an SVG asset.
+    IconUnspecified FunctionIcon = "unspecified"
+    IconLight       FunctionIcon = "light"
+    IconEngine      FunctionIcon = "engine"
+  // …remaining members mirror §3a.8 exactly…
 )
 
 // FunctionKind distinguishes a press-and-hold horn from a latched light.
 type FunctionKind string
 
 const (
-    FunctionLatched   FunctionKind = "latched"   // F0 lights stay on until toggled off
-    FunctionMomentary FunctionKind = "momentary" // F2 horn active only while pressed
+    FunctionLatched   FunctionKind = "latched"   // UI label: "Stała" – toggle on/off
+    FunctionMomentary FunctionKind = "momentary" // UI label: "Chwilowa" – active while pressed
 )
 
-// VehicleFunction is one F0–F32 slot REGISTERED on a vehicle. The
-// triplet (VehicleID, Num) is UNIQUE; Num is constrained 0..32.
+// DccFunction is one F0–F31 slot stored in the unified `dcc_functions`
+// table. Exactly one of VehicleID or TemplateID is non-nil on every row
+// (enforced by DB CHECK). Num is constrained 0..31.
 //
-// Rows exist only when the vehicle is STAND-ALONE or has been
-// DETACHED from a template (§3a.6). For LINKED vehicles, the function
-// list is read live from TemplateFunction.
-type VehicleFunction struct {
-    ID        uint
-    VehicleID uint
-    Num       uint8       // 0..32 inclusive
-    Name      string
-    Icon      FunctionIcon
-    Kind      FunctionKind
-    Position  int         // ordering inside the throttle UI grid
-    CreatedAt time.Time
-    UpdatedAt time.Time
+// Template rows:  TemplateID != nil, VehicleID == nil
+// Vehicle rows:   VehicleID != nil, TemplateID == nil
+//
+// For a LINKED vehicle (§3a.6) there are no vehicle rows yet; the
+// effective list is read from rows WHERE template_id = vehicle.TemplateID.
+// After detach, vehicle rows exist and template rows are unchanged.
+type DccFunction struct {
+    ID         uint
+    VehicleID  *uint       // set on vehicle-owned rows; NULL on template rows
+    TemplateID *uint       // set on template-owned rows; NULL on vehicle rows
+    Num        uint8       // 0..31 inclusive
+    Name       string
+    Icon       FunctionIcon
+    Kind       FunctionKind
+    Position   int         // ordering inside the throttle UI grid
+    CreatedAt  time.Time
+    UpdatedAt  time.Time
 }
 ```
 
@@ -584,24 +576,13 @@ type VehicleTemplate struct {
     Description string
     OwnerUserID uint
     Version     int       // monotonic; bumped on every mutation of either
-                          // the template itself or any TemplateFunction it owns.
-                          // Snapshots stored on Vehicle for diff detection.
+                          // the template itself or any DccFunction row with
+                          // template_id = this template. Snapshots stored on
+                          // Vehicle for diff detection.
     CreatedAt   time.Time
     UpdatedAt   time.Time
 
-    Functions []TemplateFunction `ref:"id" fk:"template_id"`
-}
-
-// TemplateFunction mirrors VehicleFunction but at the template level.
-// Tuple (TemplateID, Num) is UNIQUE; Num is constrained 0..32.
-type TemplateFunction struct {
-    ID         uint
-    TemplateID uint
-    Num        uint8
-    Name       string
-    Icon       FunctionIcon
-    Kind       FunctionKind
-    Position   int
+    Functions []DccFunction `ref:"template_id" fk:"template_id"` // rows WHERE template_id = id
 }
 ```
 
@@ -630,7 +611,7 @@ const ScriptRuntimeGoja ScriptRuntime = "goja" // github.com/dop251/goja
 //     script but cannot view or modify its source.
 //   - Icon is reused from the function-icon catalogue (FunctionIcon)
 //     so the throttle UI can render scripts as additional buttons
-//     alongside F0..F32 without a second icon set.
+//     alongside F0..F31 without a second icon set.
 type Script struct {
     ID          uint
     OwnerUserID uint
@@ -638,7 +619,7 @@ type Script struct {
     Description string
     Source      string        // JavaScript source code; size capped (64 KiB)
     Runtime     ScriptRuntime // ScriptRuntimeGoja
-    Icon        FunctionIcon  // same closed catalogue as VehicleFunction.Icon
+    Icon        FunctionIcon  // same closed catalogue as DccFunction.Icon
     Version     int           // monotonic; bumped on every Source/metadata edit.
                               // Currently only used to invalidate the editor's
                               // optimistic cache; server-side execution always

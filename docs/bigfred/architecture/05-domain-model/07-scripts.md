@@ -158,8 +158,8 @@ Examples below use the canonical scenario from goal 18.
 | `members()`                        | attached scope             | `() -> Vehicle[]`                | none |
 | `Vehicle.setSpeed(step)`           | one vehicle                | `(0..126) -> undefined`          | `LocoService.SetSpeed` (re-checks `LocoSecurityContext.CanDriveLoco`) |
 | `Vehicle.setDirection(dir)`        | one vehicle                | `('fwd'\|'rev') -> undefined`    | `LocoService.SetDirection` |
-| `Vehicle.funcOn(num)`              | one vehicle, num ∈ 0..32   | `(number) -> undefined`          | `LocoService.SetFunction(..., true)` |
-| `Vehicle.funcOff(num)`             | one vehicle, num ∈ 0..32   | `(number) -> undefined`          | `LocoService.SetFunction(..., false)` |
+| `Vehicle.funcOn(num)`              | one vehicle, num ∈ 0..31   | `(number) -> undefined`          | `LocoService.SetFunction(..., true)` |
+| `Vehicle.funcOff(num)`             | one vehicle, num ∈ 0..31   | `(number) -> undefined`          | `LocoService.SetFunction(..., false)` |
 | `Vehicle.func(num, on)`            | one vehicle                | `(number, boolean) -> undefined` | `LocoService.SetFunction` (combined form) |
 | `Vehicle.dccAddr`                  | one vehicle                | `number`                         | – |
 | `Vehicle.isLoco`                   | one vehicle                | `boolean`                        | – |

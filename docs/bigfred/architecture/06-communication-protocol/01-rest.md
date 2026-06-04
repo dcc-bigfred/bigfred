@@ -48,7 +48,7 @@ DELETE /api/v1/vehicles/{addr}                                    owner
 GET    /api/v1/vehicles/{addr}/cv/{n}                             owner       # CV read (lessee cannot)
 POST   /api/v1/vehicles/{addr}/cv      { entries:[{n,v},...] }    owner       # CV write
 
-# --- Vehicle functions (F0-F32; owner-only editing, lessee can only invoke) ---
+# --- Vehicle functions (F0-F31; owner-only editing, lessee can only invoke) ---
 GET    /api/v1/vehicles/{addr}/functions                          *           # resolved list (template OR vehicle rows; carries `source`)
 PUT    /api/v1/vehicles/{addr}/functions/{num}  { name, icon, kind, position } owner   # upsert one slot; auto-detaches if linked
 DELETE /api/v1/vehicles/{addr}/functions/{num}                    owner       # remove one slot; auto-detaches if linked
@@ -81,7 +81,7 @@ GET    /api/v1/scripts/{id}/attachments                           *           # 
 POST   /api/v1/scripts/{id}/attachments { vehicleAddr? , trainId? , position? } owner            # exactly one of vehicleAddr / trainId required; 422 otherwise
 DELETE /api/v1/scripts/{id}/attachments/{attachmentId}            owner
 
-# Reverse listing: scripts visible on a given throttle (used by the UI to populate the script-button row alongside F0..F32)
+# Reverse listing: scripts visible on a given throttle (used by the UI to populate the script-button row alongside F0..F31)
 GET    /api/v1/vehicles/{addr}/scripts                            * (driving authority)
 GET    /api/v1/trains/{id}/scripts                                * (driving authority)
 

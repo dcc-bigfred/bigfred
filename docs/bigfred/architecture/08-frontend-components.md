@@ -358,6 +358,109 @@ triggers daemon spawn). The `<SharedBusChip>` lights up when
 `dcc-bus.opened.sharedBus === true` to surface §3a.4 rule 9 to the
 driver.
 
+### 6.3e Vehicle catalogue and function editor
+
+Route for the owner's **vehicle catalogue** (*lista pojazdów / lokomotyw*):
+`/vehicles` (`LocoListPage.tsx`). The page lists every vehicle the caller
+owns (`GET /api/v1/vehicles`, filtered to `ownerUserId == me`), with columns
+for kind, DCC address, name and number. Each row exposes two owner-only
+actions in the trailing action column:
+
+| Control | Icon (MUI) | Behaviour |
+|---------|------------|-----------|
+| **Edytuj** | `Edit` | Navigates to `/vehicles/{addr}/edit` — metadata form (name, kind, number, template pick, …) as today. |
+| **Edytuj funkcje** | `Tune` (or `Functions`) | Navigates to `/vehicles/{addr}/functions` — the function-definition editor described below. Tooltip and `aria-label` come from `vehicle.json` (`vehicle.functions.edit`). |
+
+Lessees and non-owners never see either action. Vehicles without a DCC
+address (*dummy*) may still open the function editor (definitions are stored
+for when an address is added later), but the throttle will not emit DCC for
+them until `dccAddress` is set.
+
+#### Function editor page (`VehicleFunctionsPage.tsx`)
+
+Route: `/vehicles/{addr}/functions`. Header shows vehicle name and DCC
+address; a back link returns to `/vehicles`.
+
+The page edits the **resolved** function list for that vehicle
+(`GET /api/v1/vehicles/{addr}/functions`). When `source: "template"` the UI
+shows a read-only banner (“Lista dziedziczona ze szablonu …”) until the
+first mutation, which triggers server-side copy-on-write (§3a.6).
+
+**Adding a slot** — toolbar button **Dodaj funkcję** opens a dialog:
+
+- **Numer** — pick an unused DCC slot from `F0`–`F31` (dropdown of free
+  numbers only).
+- **Tytuł** — free-text label shown on the throttle button and in tooltips
+  (`name` field on the wire).
+- **Ikona** — visual picker grid populated from
+  `GET /api/v1/function-icons` (closed catalogue in
+  [§3a.8](./05-domain-model/08-function-icon-catalogue.md)).
+- **Rodzaj** — radio group:
+  - **Stała** → `kind: "latched"` (toggle on / off),
+  - **Chwilowa** → `kind: "momentary"` (active only while pressed).
+
+Confirming calls `PUT …/functions/{num}`.
+
+**Editing** — each list row is inline-editable for title, icon and kind;
+changes debounce to the same `PUT` endpoint.
+
+**Removing** — row action **Usuń** → `DELETE …/functions/{num}`.
+
+**Reordering** — the list is a drag-and-drop sortable (`@dnd-kit` or
+equivalent). On drop the client posts
+`POST …/functions/reorder { positions: [{ num, position }, …] }`.
+`position` is dense `0..n-1` in display order.
+
+The list is sorted by `position` ascending at all times. **The same order
+is used in throttle mode**: `<FunctionButtons>` renders one button per
+registered function, left-to-right / top-to-bottom in `position` order.
+Reordering on this page therefore immediately changes how the driver sees
+functions in the **Throttle** overlay (after refetch or
+`vehicle.functionsChanged`).
+
+**Throttle visibility** — every function row the owner registered for this
+vehicle appears in `<FunctionButtons>` for that vehicle inside throttle mode
+(§6.3b). There is no separate “favourites” subset: the catalogue on this page
+*is* the throttle button row (scripts from §6.7 still append after the
+function buttons). Lessees and signalmen with driving authority see the same
+buttons but cannot open this editor.
+
+```tsx
+// VehicleFunctionsPage.tsx (structure sketch)
+function VehicleFunctionsPage() {
+  const { addr } = useParams();
+  const { data: fns = [], refetch } = useQuery({
+    queryKey: ["vehicle-functions", addr],
+    queryFn: () => fetch(`/api/v1/vehicles/${addr}/functions`).then((r) => r.json()),
+  });
+  const icons = useFunctionIcons(); // GET /api/v1/function-icons, cached
+
+  const onReorder = (ordered: ResolvedFunction[]) =>
+    fetch(`/api/v1/vehicles/${addr}/functions/reorder`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        positions: ordered.map((f, i) => ({ num: f.num, position: i })),
+      }),
+    }).then(() => refetch());
+
+  return (
+    <Container>
+      <FunctionList
+        items={fns.sort((a, b) => a.position - b.position)}
+        icons={icons}
+        onReorder={onReorder}
+        onSave={(f) => putFunction(addr, f)}
+        onDelete={(num) => deleteFunction(addr, num)}
+      />
+    </Container>
+  );
+}
+```
+
+`FunctionButtons.tsx` already sorts by `position` when rendering; no
+second sort key is applied in the throttle.
+
 ### 6.3c Layout dashboard (`HomePage`)
 
 After login the default route is `/` (`HomePage.tsx`). This **dashboard**

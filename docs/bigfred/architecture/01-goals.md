@@ -56,7 +56,7 @@ domain model and the API:
    speed of **every member vehicle in lock-step**, with members whose
    `Reversed` flag is `true` driven in the opposite direction so the
    whole consist moves as a rigid unit. Function buttons and scripts
-   remain per-vehicle (each member keeps its own F0–F32 row); only
+   remain per-vehicle (each member keeps its own F0–F31 row); only
    the throttle is consolidated.
 9. **Interlockings / Signal boxes** – the system models physical
    `interlockings` (`nastawnie`). At any moment **at most one signalman
@@ -215,20 +215,22 @@ domain model and the API:
     history**. The audit log is read-only for everyone (no DELETE/UPDATE
     endpoints) and visible only to `admin`. See §3a.5 for the entity,
     §4.1 for the REST surface and §10.6 for the acceptance criteria.
-16. **Vehicle functions (`F0`–`F32`)** – every vehicle exposes a
+16. **Vehicle functions (`F0`–`F31`)** – every vehicle exposes a
     user-curated list of DCC functions that drivers can toggle from
     the throttle UI:
-    - the underlying DCC function range is **`F0`–`F32`** (33
-      possible slots); a given vehicle may register **any number** of
-      slots from that range (zero, several, or all of them) – the
-      owner registers only those that physically exist on the
-      decoder;
+    - the underlying DCC function range is **`F0`–`F31`** (32
+      possible slots, aligned with Z21 FW ≥1.42); a given vehicle may
+      register **any number** of slots from that range (zero, several,
+      or all of them) – the owner registers only those that physically
+      exist on the decoder;
     - each registered function carries: the function number, a
-      user-given **name**, an **icon** picked from a closed catalogue
-      shipped with the frontend (e.g. *high horn*, *low horn*,
-      *headlight*, *taillight*, *shunting mode*, *engine start*,
-      *bell*, *cab light*, *coupler*, *smoke*, …), and a **kind**
-      (`latched` = toggle / `momentary` = press-and-hold);
+      user-given **title** (*tytuł*), an **icon** from the closed
+      catalogue in §3a.8 (67 icons, Polish labels in the picker), a
+      **kind** (`latched` = *Stała* / `momentary` = *Chwilowa*) and a
+      **position** that defines button order on the throttle;
+    - the owner edits the list on a dedicated page reached from the
+      vehicle catalogue (**Edytuj funkcje**, §6.3e); reordering there
+      changes the throttle button row immediately;
     - **only the vehicle's owner** may edit the function definitions;
       lessees and signalmen who took the vehicle over may **invoke**
       functions while they have driving authority, but never edit the
@@ -307,7 +309,7 @@ domain model and the API:
       train**, the same way functions are attached to vehicles, and
       gets its own **icon picked from the function-icon catalogue**
       so it can be invoked from the throttle UI just like an `F0`–
-      `F32` button;
+      `F31` button;
     - the executor exposes a small, **deliberately limited DSL** that
       operates **only within the attached scope** – the canonical
       example:

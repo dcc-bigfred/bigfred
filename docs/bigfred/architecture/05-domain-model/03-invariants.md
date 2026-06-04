@@ -30,8 +30,9 @@
 | Signalman role is layout-scoped                                      | `AuthService.Effective(user, layoutID)` unions `LayoutSignalman` rows for that layout only |
 | Interlocking visibility filtered by layout                           | `InterlockingService.List(layoutID)` returns only `LayoutInterlocking` whitelisted rows |
 | Command station edits are admin-only                                         | `CommandStationSecurityContext.CanEditCommandStation` (§7a.3) returns `Deny` for non-admin |
-| Vehicle function number ∈ [0, 32]                                   | DB `CHECK (num BETWEEN 0 AND 32)` + service-side validation       |
-| `(VehicleID, Num)` / `(TemplateID, Num)` are unique                 | DB `UNIQUE` indexes; service catches collisions before insert     |
+| Vehicle function number ∈ [0, 31]                                   | DB `CHECK (num BETWEEN 0 AND 31)` on `dcc_functions` + service validation |
+| Each `dcc_functions` row owned by template XOR vehicle              | DB `CHECK` exactly one of `vehicle_id`, `template_id` is non-NULL |
+| `(vehicle_id, num)` / `(template_id, num)` are unique per owner     | Partial `UNIQUE` indexes on `dcc_functions`; service catches collisions |
 | Only the vehicle's owner may edit its function definitions          | `FunctionSecurityContext.CanEditFunctions` (lessees and signalmen are denied even with active driving authority) |
 | Editing a linked vehicle detaches it via copy-on-write              | `FunctionService.EnsureDetached` runs as the first step of every mutation, in the same transaction |
 | Deleting a referenced template requires explicit cascade            | `TemplateService.Delete` returns `409` unless `cascade=true`; with cascade, every linked vehicle is detached first |

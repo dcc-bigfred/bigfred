@@ -15,7 +15,7 @@
   within 2 s of boot. `ps -ef` shows both processes; killing
   `scripts-executor` is observable as a respawn within ≤ 1 s.
 - The attached script appears as an **additional icon button on the
-  throttle view**, rendered in the same row as `F0`–`F32`. Pressing
+  throttle view**, rendered in the same row as `F0`–`F31`. Pressing
   it emits WS `script.run`; the **server's** logs show the dispatch
   to the executor, and the **executor's** logs show
   `goja.New() + RunString(<source>)`. No JavaScript ever runs in

@@ -28,6 +28,7 @@ import { useLayoutVehicles } from "../api/vehicles";
 import type { ThrottleCockpitFunction } from "../components/throttle/ThrottleCockpit";
 import AutoDismissAlert from "../components/AutoDismissAlert";
 import ThrottleCockpit from "../components/throttle/ThrottleCockpit";
+import ThrottleNavigationGuard from "../components/throttle/ThrottleNavigationGuard";
 import ThrottleSetupDialog from "../components/throttle/ThrottleSetupDialog";
 import { useDebouncedSpeedSend } from "../hooks/useDebouncedSpeedSend";
 import { useThrottleSpeedOverride } from "../hooks/useThrottleSpeedOverride";
@@ -495,7 +496,8 @@ function ConnectedThrottle({
     selectedAddr,
   );
   const cockpitSpeed = Math.min(displaySpeed, maxSpeed);
-  const { queueSpeed, sendSpeedNow } = useDebouncedSpeedSend(setSpeed);
+  const { queueSpeed, sendSpeedNow, flush } = useDebouncedSpeedSend(setSpeed);
+  const isMoving = cockpitSpeed > 0 && selectedAddr != null;
 
   const handleSpeed = (next: number) => {
     if (selectedAddr == null) return;
@@ -516,6 +518,15 @@ function ConnectedThrottle({
     sendSpeedNow(selectedAddr, 0, forward);
   };
 
+  const handleLeaveConfirm = useCallback(async () => {
+    if (selectedAddr == null) {
+      return;
+    }
+    flush();
+    noteUserSpeed(0);
+    await setSpeed(selectedAddr, 0, forward, true);
+  }, [selectedAddr, flush, noteUserSpeed, setSpeed, forward]);
+
   return (
     <Box
       sx={{
@@ -526,6 +537,10 @@ function ConnectedThrottle({
         position: "relative",
       }}
     >
+      <ThrottleNavigationGuard
+        active={isMoving}
+        onLeaveConfirm={handleLeaveConfirm}
+      />
       <ThrottleCockpit
         onOpenSetup={onOpenSetup}
         vehicles={vehicles}

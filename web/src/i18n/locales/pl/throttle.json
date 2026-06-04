@@ -23,6 +23,12 @@
   "fnLabel": "F{{n}}",
   "stop": "Stop",
   "emergencyStop": "Stop awaryjny",
+  "leaveGuard": {
+    "title": "Lokomotywa w ruchu",
+    "message": "Przejście na inną podstronę zatrzyma lokomotywę awaryjnie. Czy chcesz kontynuować?",
+    "cancel": "Nie, wróć",
+    "confirm": "Tak"
+  },
   "deadman": {
     "warning": "Brak aktywności — automatyczny stop za {{seconds}} s",
     "executed": "Wykonano plan awaryjny ({{action}})"

@@ -28,7 +28,12 @@
     "fieldTitle": "Tytuł",
     "fieldIcon": "Ikona",
     "cancel": "Anuluj",
-    "save": "Zapisz"
+    "save": "Zapisz",
+    "copyFromTemplate": "Skopiuj z szablonu",
+    "copyFromTemplateTitle": "Skopiuj funkcje",
+    "copyFromTemplateSelect": "Źródło",
+    "copyFromTemplateWarning": "Ta operacja usunie wszystkie istniejące funkcje lokomotywy i zastąpi je funkcjami wybranego szablonu lub lokomotywy.",
+    "copyFromTemplateConfirm": "Skopiuj"
   },
   "templates": {
     "title": "Szablony pojazdów",

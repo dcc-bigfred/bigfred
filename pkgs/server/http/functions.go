@@ -160,6 +160,57 @@ func (h *FunctionHandler) DeleteVehicle(w http.ResponseWriter, r *http.Request) 
 	w.WriteHeader(http.StatusNoContent)
 }
 
+type functionReplaceFromRequest struct {
+	TemplateID      uint `json:"templateId"`
+	SourceVehicleID uint `json:"sourceVehicleId"`
+}
+
+// AttachVehicle handles POST /api/v1/vehicles/{id}/functions/attach.
+// Body must set exactly one of templateId (re-link to template) or
+// sourceVehicleId (copy snapshot from another vehicle).
+func (h *FunctionHandler) AttachVehicle(w http.ResponseWriter, r *http.Request) {
+	vehicleID, ok := parseUintParam(r, "id")
+	if !ok {
+		writeJSONError(w, http.StatusBadRequest, "invalid_id")
+		return
+	}
+	actor, ok := IdentityFromContext(r.Context())
+	if !ok {
+		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	var req functionReplaceFromRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid_body")
+		return
+	}
+	fromTemplate := req.TemplateID != 0
+	fromVehicle := req.SourceVehicleID != 0
+	if fromTemplate == fromVehicle {
+		writeJSONError(w, http.StatusBadRequest, "invalid_body")
+		return
+	}
+	var (
+		rows []service.ResolvedFunction
+		err  error
+	)
+	if fromTemplate {
+		rows, err = h.functions.AttachVehicleToTemplate(
+			r.Context(), actor.User.ID, vehicleID, req.TemplateID,
+		)
+	} else {
+		rows, err = h.functions.CopyVehicleFunctionsFromVehicle(
+			r.Context(), actor.User.ID, vehicleID, req.SourceVehicleID,
+		)
+	}
+	if err != nil {
+		writeFunctionError(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(toFunctionResponses(rows))
+}
+
 // ReorderVehicle handles POST /api/v1/vehicles/{id}/functions/reorder.
 func (h *FunctionHandler) ReorderVehicle(w http.ResponseWriter, r *http.Request) {
 	vehicleID, ok := parseUintParam(r, "id")
@@ -358,6 +409,8 @@ func writeFunctionError(w http.ResponseWriter, err error) {
 		writeJSONError(w, http.StatusForbidden, "only_owner_can_edit")
 	case errors.Is(err, service.ErrTemplateNotOwned):
 		writeJSONError(w, http.StatusForbidden, "template_not_owned")
+	case errors.Is(err, service.ErrFunctionReplaceSourceInvalid):
+		writeJSONError(w, http.StatusUnprocessableEntity, "function_replace_source_invalid")
 	case errors.Is(err, service.ErrFunctionNumInvalid),
 		errors.Is(err, service.ErrFunctionIconInvalid),
 		errors.Is(err, service.ErrFunctionNameRequired):

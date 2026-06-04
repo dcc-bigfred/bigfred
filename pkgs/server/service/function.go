@@ -17,8 +17,9 @@ var (
 	ErrFunctionNameRequired    = errors.New("function_name_required")
 	ErrFunctionNumTaken        = errors.New("function_num_taken")
 	ErrFunctionNotFound        = errors.New("function_not_found")
-	ErrOnlyOwnerCanEdit        = errors.New("only_owner_can_edit")
-	ErrTemplateNotOwned        = errors.New("template_not_owned")
+	ErrOnlyOwnerCanEdit            = errors.New("only_owner_can_edit")
+	ErrTemplateNotOwned            = errors.New("template_not_owned")
+	ErrFunctionReplaceSourceInvalid = errors.New("function_replace_source_invalid")
 )
 
 const maxFunctionNameLen = 64
@@ -241,6 +242,96 @@ func (s *FunctionService) ReorderVehicleSlots(
 			return s.functions.FindByVehicleAndNum(ctx, v.ID, num)
 		}, positions)
 	})
+}
+
+// AttachVehicleToTemplate drops all vehicle-owned function rows and links the
+// vehicle to the template so its list is read live from the template (§3a.6).
+func (s *FunctionService) AttachVehicleToTemplate(
+	ctx context.Context,
+	actorID, vehicleID, templateID uint,
+) ([]ResolvedFunction, error) {
+	if templateID == 0 {
+		return nil, ErrVehicleTemplateNotFound
+	}
+	v, err := s.loadVehicle(ctx, vehicleID)
+	if err != nil {
+		return nil, err
+	}
+	if d := s.sec.CanEditVehicleFunctions(actorID, v.OwnerUserID); !d.Allowed {
+		return nil, ErrOnlyOwnerCanEdit
+	}
+	if _, err := s.loadTemplate(ctx, templateID); err != nil {
+		return nil, err
+	}
+	err = s.functions.Transaction(ctx, func(ctx context.Context) error {
+		if err := s.functions.DeleteAllByVehicleID(ctx, v.ID); err != nil {
+			return err
+		}
+		tid := templateID
+		v.TemplateID = &tid
+		v.FunctionsDetachedAt = nil
+		v.UpdatedAt = time.Now().UTC()
+		return s.vehicles.Update(ctx, &v)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return s.ListForVehicle(ctx, vehicleID)
+}
+
+// CopyVehicleFunctionsFromVehicle replaces the target's function list with a
+// snapshot of the source vehicle's effective list (owned rows, no template link).
+func (s *FunctionService) CopyVehicleFunctionsFromVehicle(
+	ctx context.Context,
+	actorID, targetVehicleID, sourceVehicleID uint,
+) ([]ResolvedFunction, error) {
+	if sourceVehicleID == 0 || sourceVehicleID == targetVehicleID {
+		return nil, ErrFunctionReplaceSourceInvalid
+	}
+	v, err := s.loadVehicle(ctx, targetVehicleID)
+	if err != nil {
+		return nil, err
+	}
+	if d := s.sec.CanEditVehicleFunctions(actorID, v.OwnerUserID); !d.Allowed {
+		return nil, ErrOnlyOwnerCanEdit
+	}
+	if _, err := s.loadVehicle(ctx, sourceVehicleID); err != nil {
+		return nil, err
+	}
+	srcFns, err := s.ListForVehicle(ctx, sourceVehicleID)
+	if err != nil {
+		return nil, err
+	}
+	err = s.functions.Transaction(ctx, func(ctx context.Context) error {
+		if err := s.functions.DeleteAllByVehicleID(ctx, v.ID); err != nil {
+			return err
+		}
+		now := time.Now().UTC()
+		for _, f := range srcFns {
+			vid := v.ID
+			row := domain.DccFunction{
+				VehicleID:  &vid,
+				TemplateID: nil,
+				Num:        f.Num,
+				Name:       f.Name,
+				Icon:       f.Icon,
+				Position:   f.Position,
+				CreatedAt:  now,
+				UpdatedAt:  now,
+			}
+			if err := s.functions.Insert(ctx, &row); err != nil {
+				return err
+			}
+		}
+		v.TemplateID = nil
+		v.FunctionsDetachedAt = nil
+		v.UpdatedAt = now
+		return s.vehicles.Update(ctx, &v)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return s.ListForVehicle(ctx, targetVehicleID)
 }
 
 // UpsertTemplateSlot adds or updates one function on a template.

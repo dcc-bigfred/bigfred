@@ -28,7 +28,12 @@
     "fieldTitle": "Title",
     "fieldIcon": "Icon",
     "cancel": "Cancel",
-    "save": "Save"
+    "save": "Save",
+    "copyFromTemplate": "Copy from template",
+    "copyFromTemplateTitle": "Copy functions",
+    "copyFromTemplateSelect": "Source",
+    "copyFromTemplateWarning": "This will remove all existing locomotive functions and replace them with the selected template's or locomotive's functions.",
+    "copyFromTemplateConfirm": "Copy"
   },
   "templates": {
     "title": "Vehicle templates",

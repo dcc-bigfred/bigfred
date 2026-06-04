@@ -31,6 +31,7 @@ import ThrottleCockpit from "../components/throttle/ThrottleCockpit";
 import ThrottleSetupDialog from "../components/throttle/ThrottleSetupDialog";
 import { useDebouncedSpeedSend } from "../hooks/useDebouncedSpeedSend";
 import { useThrottleSpeedOverride } from "../hooks/useThrottleSpeedOverride";
+import { useThrottleCommandStationSelection } from "../hooks/useThrottleCommandStationSelection";
 import { useThrottleVehicleSelection } from "../hooks/useThrottleVehicleSelection";
 
 function translateErrorCode(
@@ -70,7 +71,13 @@ export default function ThrottlePage() {
 
   const layoutID = me?.layoutId ?? null;
   const stations = session?.availableCommandStations ?? [];
-  const [selectedCS, setSelectedCS] = useState(0);
+  const sessionCommandStationId =
+    session?.currentSession?.commandStationId ?? 0;
+  const { selectedCS, selectCommandStation } = useThrottleCommandStationSelection(
+    layoutID ?? 0,
+    stations,
+    sessionCommandStationId,
+  );
   const [selecting, setSelecting] = useState(false);
   const [spawnAcked, setSpawnAcked] = useState(false);
   const [spawnError, setSpawnError] = useState<string | null>(null);
@@ -107,19 +114,6 @@ export default function ThrottlePage() {
   }, [subscribe, selectedCS]);
 
   useEffect(() => {
-    const fromSession = session?.currentSession?.commandStationId ?? 0;
-    if (fromSession > 0) {
-      setSelectedCS(fromSession);
-    }
-  }, [session?.sessionId]);
-
-  useEffect(() => {
-    if (stations.length === 1 && selectedCS === 0) {
-      setSelectedCS(stations[0].id);
-    }
-  }, [stations, selectedCS]);
-
-  useEffect(() => {
     if (!connected || !session?.sessionId || selectedCS <= 0) {
       return;
     }
@@ -147,10 +141,13 @@ export default function ThrottlePage() {
     setCommandStation,
   ]);
 
-  const handlePickerChange = useCallback((csID: number) => {
-    setSpawnError(null);
-    setSelectedCS(csID);
-  }, []);
+  const handlePickerChange = useCallback(
+    (csID: number) => {
+      setSpawnError(null);
+      selectCommandStation(csID);
+    },
+    [selectCommandStation],
+  );
 
   const handleRetrySpawn = useCallback(() => {
     if (!connected) {

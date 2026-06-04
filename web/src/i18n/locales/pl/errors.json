@@ -72,6 +72,7 @@
   "diagnostics_not_found": "Plik logu jeszcze nie istnieje.",
   "diagnostics_unavailable": "Diagnostyka jest niedostępna na tym serwerze.",
   "only_owner_can_edit": "Tylko właściciel pojazdu może edytować funkcje.",
+  "function_replace_source_invalid": "Wybierz szablon lub inną lokomotywę (nie tę samą).",
   "template_not_owned": "Brak uprawnień do edycji tego szablonu.",
   "function_not_found": "Funkcja nie istnieje.",
   "function_num_taken": "Ten numer funkcji jest już zajęty.",

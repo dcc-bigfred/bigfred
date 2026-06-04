@@ -72,6 +72,7 @@
   "diagnostics_not_found": "The log file does not exist yet.",
   "diagnostics_unavailable": "Diagnostics are not available on this server.",
   "only_owner_can_edit": "Only the vehicle owner can edit functions.",
+  "function_replace_source_invalid": "Choose a template or another locomotive (not the same one).",
   "template_not_owned": "You cannot edit this template.",
   "function_not_found": "Function not found.",
   "function_num_taken": "This function number is already in use.",

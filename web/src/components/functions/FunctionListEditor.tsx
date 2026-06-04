@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Chip,
@@ -37,6 +38,7 @@ import { ApiError } from "../../api/client";
 import {
   useFunctionIcons,
   type DccFunction,
+  type FunctionCopySource,
   type FunctionUpsertBody,
 } from "../../api/functions";
 import { FunctionIconVisual } from "./functionIconMap";
@@ -61,6 +63,19 @@ interface MutationHooks {
   };
 }
 
+interface CopyFunctionsFromProps {
+  sources: FunctionCopySource[];
+  isLoadingSources: boolean;
+  replace: {
+    mutate: (
+      body: { templateId: number } | { sourceVehicleId: number },
+      options?: { onSuccess?: () => void },
+    ) => void;
+    isPending: boolean;
+    error: Error | null;
+  };
+}
+
 interface Props {
   mode: FunctionEditorMode;
   title: string;
@@ -70,6 +85,7 @@ interface Props {
   isLoading: boolean;
   mutations: MutationHooks;
   inheritedBanner?: boolean;
+  copyFunctionsFrom?: CopyFunctionsFromProps;
 }
 
 type EditState =
@@ -88,10 +104,15 @@ export default function FunctionListEditor({
   isLoading,
   mutations,
   inheritedBanner = false,
+  copyFunctionsFrom,
 }: Props) {
   const { t } = useTranslation(["function", "errors", "common", "vehicle"]);
   const icons = useFunctionIcons();
   const [edit, setEdit] = useState<EditState>(null);
+  const [copyDialogOpen, setCopyDialogOpen] = useState(false);
+  const [selectedSource, setSelectedSource] = useState<FunctionCopySource | null>(
+    null,
+  );
   const [name, setName] = useState("");
   const [icon, setIcon] = useState("unspecified");
 
@@ -117,7 +138,8 @@ export default function FunctionListEditor({
     const err =
       mutations.upsert.error ??
       mutations.remove.error ??
-      mutations.reorder.error;
+      mutations.reorder.error ??
+      copyFunctionsFrom?.replace.error;
     if (!err) return null;
     if (err instanceof ApiError) {
       const key = `errors:${err.code}` as const;
@@ -174,6 +196,32 @@ export default function FunctionListEditor({
       defaultValue: slug,
     });
 
+  const sourceTypeLabel = (kind: FunctionCopySource["kind"]) =>
+    kind === "template"
+      ? t("function:templates.rowType.template")
+      : t("function:templates.rowType.locomotive");
+
+  const openCopyDialog = () => {
+    setSelectedSource(null);
+    setCopyDialogOpen(true);
+  };
+
+  const closeCopyDialog = () => {
+    setCopyDialogOpen(false);
+    setSelectedSource(null);
+  };
+
+  const submitCopyFromSource = () => {
+    if (!copyFunctionsFrom || selectedSource == null) return;
+    const body =
+      selectedSource.kind === "template"
+        ? { templateId: selectedSource.id }
+        : { sourceVehicleId: selectedSource.id };
+    copyFunctionsFrom.replace.mutate(body, {
+      onSuccess: () => closeCopyDialog(),
+    });
+  };
+
   return (
     <>
       <Stack spacing={2}>
@@ -189,6 +237,15 @@ export default function FunctionListEditor({
               </Typography>
             )}
           </Box>
+          {mode === "vehicle" && copyFunctionsFrom && (
+            <Button
+              variant="contained"
+              color="error"
+              onClick={openCopyDialog}
+            >
+              {t("function:editor.copyFromTemplate")}
+            </Button>
+          )}
           <Button
             variant="contained"
             startIcon={<AddIcon />}
@@ -390,6 +447,77 @@ export default function FunctionListEditor({
           </Button>
         </DialogActions>
       </Dialog>
+
+      {copyFunctionsFrom && (
+        <Dialog
+          open={copyDialogOpen}
+          onClose={closeCopyDialog}
+          maxWidth="sm"
+          fullWidth
+        >
+          <DialogTitle>{t("function:editor.copyFromTemplateTitle")}</DialogTitle>
+          <DialogContent>
+            <Stack spacing={2} sx={{ pt: 1 }}>
+              <Autocomplete
+                options={copyFunctionsFrom.sources}
+                groupBy={(option) => sourceTypeLabel(option.kind)}
+                getOptionLabel={(option) =>
+                  `${option.name} (${option.ownerLogin})`
+                }
+                value={selectedSource}
+                onChange={(_event, value) => setSelectedSource(value)}
+                isOptionEqualToValue={(a, b) => a.kind === b.kind && a.id === b.id}
+                loading={copyFunctionsFrom.isLoadingSources}
+                renderOption={({ key, ...optionProps }, option) => (
+                  <Box component="li" key={key} {...optionProps}>
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                      alignItems="center"
+                      sx={{ width: "100%" }}
+                    >
+                      <Chip
+                        size="small"
+                        label={sourceTypeLabel(option.kind)}
+                        color={option.kind === "template" ? "primary" : "default"}
+                        variant="outlined"
+                      />
+                      <Typography variant="body2" sx={{ flexGrow: 1 }}>
+                        {option.name}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {option.ownerLogin}
+                      </Typography>
+                    </Stack>
+                  </Box>
+                )}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label={t("function:editor.copyFromTemplateSelect")}
+                  />
+                )}
+              />
+              <Alert severity="warning">
+                {t("function:editor.copyFromTemplateWarning")}
+              </Alert>
+            </Stack>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={closeCopyDialog}>{t("function:editor.cancel")}</Button>
+            <Button
+              variant="contained"
+              color="error"
+              onClick={submitCopyFromSource}
+              disabled={
+                selectedSource == null || copyFunctionsFrom.replace.isPending
+              }
+            >
+              {t("function:editor.copyFromTemplateConfirm")}
+            </Button>
+          </DialogActions>
+        </Dialog>
+      )}
     </>
   );
 }

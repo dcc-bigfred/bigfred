@@ -163,6 +163,32 @@ export function useDeleteVehicleFunction(vehicleId: number) {
   });
 }
 
+export type FunctionCopySource =
+  | { kind: "template"; id: number; name: string; ownerLogin: string }
+  | { kind: "locomotive"; id: number; name: string; ownerLogin: string };
+
+export type FunctionReplaceFromBody =
+  | { templateId: number }
+  | { sourceVehicleId: number };
+
+export function useReplaceVehicleFunctionsFromSource(vehicleId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: FunctionReplaceFromBody) =>
+      apiFetch<DccFunction[]>(
+        `/api/v1/vehicles/${vehicleId}/functions/attach`,
+        {
+          method: "POST",
+          body: JSON.stringify(body),
+        },
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: vehicleFunctionsQueryKey(vehicleId) });
+      void qc.invalidateQueries({ queryKey: catalogueQueryKey });
+    },
+  });
+}
+
 export function useReorderVehicleFunctions(vehicleId: number) {
   const qc = useQueryClient();
   return useMutation({

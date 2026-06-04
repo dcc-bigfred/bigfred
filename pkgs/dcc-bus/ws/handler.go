@@ -73,7 +73,7 @@ type ServerConfig struct {
 }
 
 // NewServer returns a ready-to-mount Server. Heartbeat and dead-man
-// defaults match §7e.5 (5s / 12s).
+// defaults match §7e.5 (5s / 6s).
 func NewServer(cfg ServerConfig) *Server {
 	hb := cfg.HeartbeatSecs
 	if hb <= 0 {
@@ -81,7 +81,7 @@ func NewServer(cfg ServerConfig) *Server {
 	}
 	dms := cfg.DeadmanSecs
 	if dms <= 0 {
-		dms = 12
+		dms = 6
 	}
 	steps := cfg.SpeedSteps
 	if steps == 0 {

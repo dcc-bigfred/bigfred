@@ -98,7 +98,7 @@ func New(ctx context.Context, log *logrus.Logger, cfg Config) (*Daemon, error) {
 		cfg.HeartbeatSecs = 5
 	}
 	if cfg.DeadmanSecs <= 0 {
-		cfg.DeadmanSecs = 12
+		cfg.DeadmanSecs = 6
 	}
 
 	cs := cfg.CommandStation

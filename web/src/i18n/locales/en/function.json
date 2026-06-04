@@ -1,8 +1,4 @@
 {
-  "kind": {
-    "latched": "Latched",
-    "momentary": "Momentary"
-  },
   "editor": {
     "back": "Back",
     "add": "Add function",
@@ -17,7 +13,6 @@
       "num": "No.",
       "title": "Title",
       "icon": "Icon",
-      "kind": "Kind",
       "source": "Source",
       "actions": "Actions"
     },
@@ -33,7 +28,6 @@
     "fieldNum": "Function number",
     "fieldTitle": "Title",
     "fieldIcon": "Icon",
-    "fieldKind": "Kind",
     "cancel": "Cancel",
     "save": "Save"
   },

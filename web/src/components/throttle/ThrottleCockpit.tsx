@@ -11,7 +11,9 @@ import {
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import SettingsIcon from "@mui/icons-material/Settings";
+import TuneIcon from "@mui/icons-material/Tune";
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
 
 import {
   cockpit,
@@ -22,7 +24,11 @@ import FullscreenToggleButton from "./FullscreenToggleButton";
 import FunctionGridButton from "./FunctionGridButton";
 import VerticalThrottle from "./VerticalThrottle";
 
-const FUNCTION_COUNT = 33; // F0 … F32
+export interface ThrottleCockpitFunction {
+  num: number;
+  label: string;
+  icon: string;
+}
 
 export interface ThrottleCockpitVehicle {
   id: number;
@@ -39,6 +45,8 @@ export interface ThrottleCockpitProps {
   maxSpeed: number;
   forward: boolean;
   functions: boolean[];
+  /** Defined DCC functions for the selected vehicle (order = throttle grid). */
+  configuredFunctions: ThrottleCockpitFunction[];
   disabled?: boolean;
   onSpeedChange: (speed: number) => void;
   onDirectionChange: (forward: boolean) => void;
@@ -58,6 +66,7 @@ export default function ThrottleCockpit({
   maxSpeed,
   forward,
   functions,
+  configuredFunctions,
   disabled = false,
   onSpeedChange,
   onDirectionChange,
@@ -65,6 +74,7 @@ export default function ThrottleCockpit({
   onStop,
 }: ThrottleCockpitProps) {
   const { t } = useTranslation("throttle");
+  const navigate = useNavigate();
 
   const selectedVehicle = useMemo(
     () => vehicles.find((v) => v.dccAddress === selectedAddress),
@@ -149,6 +159,20 @@ export default function ThrottleCockpit({
 
         <IconButton
           size="small"
+          onClick={() => {
+            if (selectedVehicle) {
+              navigate(`/my/vehicles/${selectedVehicle.id}/functions`);
+            }
+          }}
+          disabled={disabled || selectedVehicle == null}
+          aria-label={t("editFunctions")}
+          sx={{ color: cockpit.text }}
+        >
+          <TuneIcon fontSize="small" />
+        </IconButton>
+
+        <IconButton
+          size="small"
           onClick={onOpenSetup}
           aria-label={t("setup.open")}
           sx={{ color: cockpit.text }}
@@ -189,13 +213,14 @@ export default function ThrottleCockpit({
               justifyContent: "start",
             }}
           >
-            {Array.from({ length: FUNCTION_COUNT }, (_, n) => (
+            {configuredFunctions.map((fn) => (
               <FunctionGridButton
-                key={n}
-                label={t("fnLabel", { n })}
-                active={Boolean(functions[n])}
+                key={fn.num}
+                label={fn.label}
+                icon={fn.icon}
+                active={Boolean(functions[fn.num])}
                 disabled={disabled || selectedAddress == null}
-                onClick={() => onFunctionToggle(n)}
+                onClick={() => onFunctionToggle(fn.num)}
               />
             ))}
           </Box>

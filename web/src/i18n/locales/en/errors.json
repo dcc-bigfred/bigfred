@@ -35,6 +35,8 @@
   "vehicle_kind_invalid": "Please pick a vehicle kind from the list.",
   "vehicle_not_owned": "You can only edit your own vehicles.",
   "vehicle_in_use": "This vehicle is part of a train — detach it first.",
+  "vehicle_dcc_function_invalid": "Pick a function in the F0–F31 range.",
+  "vehicle_deadman_switch_invalid": "Pick a valid Dead Man's Switch option.",
   "dcc_address_taken": "This DCC address is already taken.",
   "dcc_address_outside_pool": "The DCC address is outside your pool.",
   "dcc_pool_range_invalid": "Invalid DCC pool range (1–9999, “from” must not exceed “to”).",

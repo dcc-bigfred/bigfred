@@ -102,11 +102,20 @@
       "dccAddress": "Adres DCC (opcjonalnie)",
       "dccAddressHelp": "Pozostaw puste, aby utworzyć pojazd „dummy” – widoczny na makiecie, ale niesterowalny.",
       "poolHint": "Twoja pula adresów DCC: {{ranges}}",
-      "poolEmpty": "Nie masz przyznanej puli adresów DCC – możesz dodać tylko pojazdy „dummy”."
+      "poolEmpty": "Nie masz przyznanej puli adresów DCC – możesz dodać tylko pojazdy „dummy”.",
+      "rp1Function": "Funkcja Rp1",
+      "emergencyLightsFunction": "Funkcja świateł awaryjnych",
+      "deadManSwitchOption": "Dead Man's Switch",
+      "dccFunction": "F{{fn}}"
     },
     "submitCreate": "Dodaj",
     "submitEdit": "Zapisz",
     "cancel": "Anuluj"
+  },
+  "deadManSwitch": {
+    "stop": "Zatrzymaj",
+    "stop_horn": "Zatrzymaj i zatrąb",
+    "stop_horn_emergency_lights": "Zatrzymaj, zatrąb i uruchom światła awaryjne / Pc6"
   },
   "trainDialog": {
     "create": {

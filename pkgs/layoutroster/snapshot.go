@@ -36,6 +36,12 @@ type AllowedVehicle struct {
 	Addr              uint16 `json:"addr"`
 	OwnerUserID       uint   `json:"ownerUserId"`
 	ControllerUserIDs []uint `json:"controllerUserIds"`
+
+	// Per-vehicle dead-man's switch catalogue (§7e.5). Copied from the
+	// vehicle row so dcc-bus can act without SQLite.
+	Rp1Function             uint8  `json:"rp1Function"`
+	EmergencyLightsFunction uint8  `json:"emergencyLightsFunction"`
+	DeadManSwitchOption     string `json:"deadManSwitchOption"`
 }
 
 // DefinedTrains lists every train on the layout roster with members

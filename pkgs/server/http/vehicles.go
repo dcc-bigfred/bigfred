@@ -38,17 +38,24 @@ type vehicleResponse struct {
 	DCCAddress *uint16            `json:"dccAddress"`
 	IsDummy    bool               `json:"isDummy"`
 	OwnerID    uint               `json:"ownerId"`
+
+	Rp1Function             uint8                      `json:"rp1Function"`
+	EmergencyLightsFunction uint8                      `json:"emergencyLightsFunction"`
+	DeadManSwitchOption     domain.DeadManSwitchOption `json:"deadManSwitchOption"`
 }
 
 func toVehicleResponse(v domain.Vehicle) vehicleResponse {
 	return vehicleResponse{
-		ID:         v.ID,
-		Name:       v.Name,
-		Kind:       v.Kind,
-		Number:     v.Number,
-		DCCAddress: v.DCCAddress,
-		IsDummy:    v.IsDummy(),
-		OwnerID:    v.OwnerUserID,
+		ID:                      v.ID,
+		Name:                    v.Name,
+		Kind:                    v.Kind,
+		Number:                  v.Number,
+		DCCAddress:              v.DCCAddress,
+		IsDummy:                 v.IsDummy(),
+		OwnerID:                 v.OwnerUserID,
+		Rp1Function:             v.Rp1Function,
+		EmergencyLightsFunction: v.EmergencyLightsFunction,
+		DeadManSwitchOption:     v.DeadManSwitchOption,
 	}
 }
 
@@ -79,6 +86,10 @@ type vehicleCreateRequest struct {
 	Kind       domain.VehicleKind `json:"kind"`
 	Number     string             `json:"number"`
 	DCCAddress *uint16            `json:"dccAddress"`
+
+	Rp1Function             *uint8                      `json:"rp1Function"`
+	EmergencyLightsFunction *uint8                      `json:"emergencyLightsFunction"`
+	DeadManSwitchOption     *domain.DeadManSwitchOption `json:"deadManSwitchOption"`
 }
 
 // Create handles POST /api/v1/vehicles.
@@ -94,11 +105,14 @@ func (h *VehicleHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	row, err := h.svc.Create(r.Context(), service.VehicleCreateInput{
-		OwnerUserID: id.User.ID,
-		Name:        req.Name,
-		Kind:        req.Kind,
-		Number:      req.Number,
-		DCCAddress:  req.DCCAddress,
+		OwnerUserID:             id.User.ID,
+		Name:                    req.Name,
+		Kind:                    req.Kind,
+		Number:                  req.Number,
+		DCCAddress:              req.DCCAddress,
+		Rp1Function:             req.Rp1Function,
+		EmergencyLightsFunction: req.EmergencyLightsFunction,
+		DeadManSwitchOption:     req.DeadManSwitchOption,
 	})
 	if err != nil {
 		writeVehicleError(w, err)
@@ -118,6 +132,10 @@ type vehicleUpdateRequest struct {
 	Number        *string             `json:"number"`
 	DCCAddress    *uint16             `json:"dccAddress"`
 	DCCAddressSet bool                `json:"dccAddressSet"`
+
+	Rp1Function             *uint8                      `json:"rp1Function"`
+	EmergencyLightsFunction *uint8                      `json:"emergencyLightsFunction"`
+	DeadManSwitchOption     *domain.DeadManSwitchOption `json:"deadManSwitchOption"`
 }
 
 // Update handles PUT /api/v1/vehicles/{id}.
@@ -138,9 +156,12 @@ func (h *VehicleHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	in := service.VehicleUpdateInput{
-		Name:   req.Name,
-		Kind:   req.Kind,
-		Number: req.Number,
+		Name:                    req.Name,
+		Kind:                    req.Kind,
+		Number:                  req.Number,
+		Rp1Function:             req.Rp1Function,
+		EmergencyLightsFunction: req.EmergencyLightsFunction,
+		DeadManSwitchOption:     req.DeadManSwitchOption,
 	}
 	if req.DCCAddressSet {
 		in.DCCAddress = service.VehicleAddressPatch{IsSet: true, Value: req.DCCAddress}
@@ -235,6 +256,10 @@ func writeVehicleError(w http.ResponseWriter, err error) {
 		writeJSONError(w, http.StatusForbidden, "vehicle_not_owned")
 	case errors.Is(err, service.ErrVehicleInUse):
 		writeJSONError(w, http.StatusConflict, "vehicle_in_use")
+	case errors.Is(err, service.ErrVehicleDccFunctionInvalid):
+		writeJSONError(w, http.StatusUnprocessableEntity, "vehicle_dcc_function_invalid")
+	case errors.Is(err, service.ErrVehicleDeadManSwitchInvalid):
+		writeJSONError(w, http.StatusUnprocessableEntity, "vehicle_deadman_switch_invalid")
 	default:
 		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 	}

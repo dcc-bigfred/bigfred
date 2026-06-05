@@ -16,10 +16,16 @@ import { useTranslation } from "react-i18next";
 
 import { ApiError } from "../api/client";
 import {
+  DCC_FUNCTION_NUMBERS,
+  DEADMAN_SWITCH_OPTIONS,
+  DEFAULT_DEADMAN_SWITCH_OPTION,
+  DEFAULT_EMERGENCY_LIGHTS_FUNCTION,
+  DEFAULT_RP1_FUNCTION,
   useCreateVehicle,
   useMyDCCPool,
   useUpdateVehicle,
   VEHICLE_KINDS,
+  type DeadManSwitchOption,
   type Vehicle,
   type VehicleKind,
 } from "../api/vehicles";
@@ -44,6 +50,12 @@ export default function VehicleDialog({ open, vehicle, onClose }: Props) {
   const [number, setNumber] = useState("");
   const [dccEnabled, setDccEnabled] = useState(true);
   const [dccAddress, setDccAddress] = useState<string>("");
+  const [rp1Function, setRp1Function] = useState(DEFAULT_RP1_FUNCTION);
+  const [emergencyLightsFunction, setEmergencyLightsFunction] = useState(
+    DEFAULT_EMERGENCY_LIGHTS_FUNCTION,
+  );
+  const [deadManSwitchOption, setDeadManSwitchOption] =
+    useState<DeadManSwitchOption>(DEFAULT_DEADMAN_SWITCH_OPTION);
 
   const create = useCreateVehicle();
   const update = useUpdateVehicle();
@@ -57,12 +69,22 @@ export default function VehicleDialog({ open, vehicle, onClose }: Props) {
       setNumber(vehicle.number);
       setDccEnabled(vehicle.dccAddress != null);
       setDccAddress(vehicle.dccAddress != null ? String(vehicle.dccAddress) : "");
+      setRp1Function(vehicle.rp1Function ?? DEFAULT_RP1_FUNCTION);
+      setEmergencyLightsFunction(
+        vehicle.emergencyLightsFunction ?? DEFAULT_EMERGENCY_LIGHTS_FUNCTION,
+      );
+      setDeadManSwitchOption(
+        vehicle.deadManSwitchOption ?? DEFAULT_DEADMAN_SWITCH_OPTION,
+      );
     } else {
       setName("");
       setKind("loco");
       setNumber("");
       setDccEnabled(true);
       setDccAddress("");
+      setRp1Function(DEFAULT_RP1_FUNCTION);
+      setEmergencyLightsFunction(DEFAULT_EMERGENCY_LIGHTS_FUNCTION);
+      setDeadManSwitchOption(DEFAULT_DEADMAN_SWITCH_OPTION);
     }
     create.reset();
     update.reset();
@@ -92,6 +114,9 @@ export default function VehicleDialog({ open, vehicle, onClose }: Props) {
         kind,
         number,
         dccAddress: dccEnabled ? dccValue : null,
+        rp1Function,
+        emergencyLightsFunction,
+        deadManSwitchOption,
       });
     } else {
       create.mutate({
@@ -99,6 +124,9 @@ export default function VehicleDialog({ open, vehicle, onClose }: Props) {
         kind,
         number,
         dccAddress: dccEnabled ? dccValue : null,
+        rp1Function,
+        emergencyLightsFunction,
+        deadManSwitchOption,
       });
     }
   };
@@ -183,6 +211,47 @@ export default function VehicleDialog({ open, vehicle, onClose }: Props) {
             helperText={dccEnabled ? poolHint : t("vehicle:dialog.fields.dccAddressHelp")}
             fullWidth
           />
+          <TextField
+            select
+            label={t("vehicle:dialog.fields.rp1Function")}
+            value={rp1Function}
+            onChange={(e) => setRp1Function(Number(e.target.value))}
+            fullWidth
+          >
+            {DCC_FUNCTION_NUMBERS.map((fn) => (
+              <MenuItem key={fn} value={fn}>
+                {t("vehicle:dialog.fields.dccFunction", { fn })}
+              </MenuItem>
+            ))}
+          </TextField>
+          <TextField
+            select
+            label={t("vehicle:dialog.fields.emergencyLightsFunction")}
+            value={emergencyLightsFunction}
+            onChange={(e) => setEmergencyLightsFunction(Number(e.target.value))}
+            fullWidth
+          >
+            {DCC_FUNCTION_NUMBERS.map((fn) => (
+              <MenuItem key={fn} value={fn}>
+                {t("vehicle:dialog.fields.dccFunction", { fn })}
+              </MenuItem>
+            ))}
+          </TextField>
+          <TextField
+            select
+            label={t("vehicle:dialog.fields.deadManSwitchOption")}
+            value={deadManSwitchOption}
+            onChange={(e) =>
+              setDeadManSwitchOption(e.target.value as DeadManSwitchOption)
+            }
+            fullWidth
+          >
+            {DEADMAN_SWITCH_OPTIONS.map((opt) => (
+              <MenuItem key={opt} value={opt}>
+                {t(`vehicle:deadManSwitch.${opt}` as const)}
+              </MenuItem>
+            ))}
+          </TextField>
 
           {errorMessage && <Alert severity="error">{errorMessage}</Alert>}
         </Stack>

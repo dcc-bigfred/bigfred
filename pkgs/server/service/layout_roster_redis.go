@@ -102,10 +102,13 @@ func (s *LayoutVehicleService) buildAllowedVehiclesSnapshot(ctx context.Context,
 			continue
 		}
 		out.Vehicles = append(out.Vehicles, layoutroster.AllowedVehicle{
-			VehicleID:         e.Vehicle.ID,
-			Addr:              *e.Vehicle.DCCAddress,
-			OwnerUserID:       e.Vehicle.OwnerUserID,
-			ControllerUserIDs: []uint{e.Vehicle.OwnerUserID},
+			VehicleID:               e.Vehicle.ID,
+			Addr:                    *e.Vehicle.DCCAddress,
+			OwnerUserID:             e.Vehicle.OwnerUserID,
+			ControllerUserIDs:       []uint{e.Vehicle.OwnerUserID},
+			Rp1Function:             e.Vehicle.Rp1Function,
+			EmergencyLightsFunction: e.Vehicle.EmergencyLightsFunction,
+			DeadManSwitchOption:     string(e.Vehicle.DeadManSwitchOption),
 		})
 	}
 	return out, nil

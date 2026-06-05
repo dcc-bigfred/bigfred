@@ -22,6 +22,23 @@ export const VEHICLE_KINDS: VehicleKind[] = [
   "wagon",
 ];
 
+export type DeadManSwitchOption =
+  | "stop"
+  | "stop_horn"
+  | "stop_horn_emergency_lights";
+
+export const DEADMAN_SWITCH_OPTIONS: DeadManSwitchOption[] = [
+  "stop",
+  "stop_horn",
+  "stop_horn_emergency_lights",
+];
+
+export const DCC_FUNCTION_NUMBERS = Array.from({ length: 32 }, (_, i) => i);
+
+export const DEFAULT_RP1_FUNCTION = 2;
+export const DEFAULT_EMERGENCY_LIGHTS_FUNCTION = 0;
+export const DEFAULT_DEADMAN_SWITCH_OPTION: DeadManSwitchOption = "stop";
+
 // Vehicle is the JSON shape returned by `/api/v1/vehicles`. `dccAddress`
 // is nullable because dummy vehicles (unpowered wagons, visual
 // fillers) live in the catalogue without a DCC decoder.
@@ -33,6 +50,9 @@ export interface Vehicle {
   dccAddress: number | null;
   isDummy: boolean;
   ownerId: number;
+  rp1Function: number;
+  emergencyLightsFunction: number;
+  deadManSwitchOption: DeadManSwitchOption;
 }
 
 // DCCAddressRange mirrors the row shape of
@@ -73,6 +93,9 @@ export interface VehicleCreateBody {
   kind: VehicleKind;
   number: string;
   dccAddress: number | null;
+  rp1Function: number;
+  emergencyLightsFunction: number;
+  deadManSwitchOption: DeadManSwitchOption;
 }
 
 export function useCreateVehicle() {
@@ -86,6 +109,9 @@ export function useCreateVehicle() {
           kind: body.kind,
           number: body.number,
           dccAddress: body.dccAddress,
+          rp1Function: body.rp1Function,
+          emergencyLightsFunction: body.emergencyLightsFunction,
+          deadManSwitchOption: body.deadManSwitchOption,
         }),
       }),
     onSuccess: () => {
@@ -104,6 +130,9 @@ export interface VehicleUpdateBody {
   //   * null                — mark as dummy;
   //   * a number            — set / change the address.
   dccAddress?: number | null;
+  rp1Function?: number;
+  emergencyLightsFunction?: number;
+  deadManSwitchOption?: DeadManSwitchOption;
 }
 
 export function useUpdateVehicle() {
@@ -117,6 +146,15 @@ export function useUpdateVehicle() {
       if (body.dccAddress !== undefined) {
         payload.dccAddress = body.dccAddress;
         payload.dccAddressSet = true;
+      }
+      if (body.rp1Function !== undefined) {
+        payload.rp1Function = body.rp1Function;
+      }
+      if (body.emergencyLightsFunction !== undefined) {
+        payload.emergencyLightsFunction = body.emergencyLightsFunction;
+      }
+      if (body.deadManSwitchOption !== undefined) {
+        payload.deadManSwitchOption = body.deadManSwitchOption;
       }
       return apiFetch<Vehicle>(`/api/v1/vehicles/${body.id}`, {
         method: "PUT",

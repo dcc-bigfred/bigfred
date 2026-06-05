@@ -110,6 +110,21 @@ The dead-man's switch follows §4.5.5:
   `DriveTargets`. This is the **per-daemon** rule — a separate
   daemon (different cs) does not fire just because this one did.
 
+**Per-vehicle function plan (implemented).** After `SetSpeed(0)` /
+EMG-stop on a locomotive, `dcc-bus` reads the vehicle's
+`deadManSwitchOption` from the `allowed_vehicles` snapshot and may
+issue additional DCC function commands:
+
+| Option | Brake | Rp1 (`rp1Function`, default F2) | Emergency lights (`emergencyLightsFunction`, default F0) |
+|---|---|---|---|
+| `stop` | yes | — | — |
+| `stop_horn` | yes | ON for 1 s, then OFF | — |
+| `stop_horn_emergency_lights` | yes | ON for 1 s, then OFF | ON (left on) |
+
+The owner configures the three fields on the vehicle add/edit dialog;
+`loco-server` copies them into every `allowed_vehicles` publish so
+daemons act without SQLite.
+
 The cross-process aggregate "last session of the user anywhere" rule
 from §4.5.3 lives in `loco-server`. When the daemon executes its
 local plan, it publishes

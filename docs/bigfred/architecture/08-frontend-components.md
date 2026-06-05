@@ -368,7 +368,7 @@ actions in the trailing action column:
 
 | Control | Icon (MUI) | Behaviour |
 |---------|------------|-----------|
-| **Edytuj** | `Edit` | Navigates to `/vehicles/{addr}/edit` — metadata form (name, kind, number, template pick, …) as today. |
+| **Edytuj** | `Edit` | Opens `VehicleDialog` — metadata form (name, kind, number, optional DCC address, **Rp1 function** default F2, **emergency lights function** default F0, **Dead Man's Switch** option) persisted on `domain.Vehicle` and copied into the `allowed_vehicles` Redis snapshot for `dcc-bus` (§7e.5). |
 | **Edytuj funkcje** | `Tune` (or `Functions`) | Navigates to `/vehicles/{addr}/functions` — the function-definition editor described below. Tooltip and `aria-label` come from `vehicle.json` (`vehicle.functions.edit`). |
 
 Lessees and non-owners never see either action. Vehicles without a DCC

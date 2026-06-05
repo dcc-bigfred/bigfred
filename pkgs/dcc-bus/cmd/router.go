@@ -313,35 +313,41 @@ func (r *Router) HandleSetFunction(ctx context.Context, sess *ws.Session, p prot
 		_ = sess.SendAck(ctx, requestID, false, reason)
 		return
 	}
-	key := fnKey{Addr: p.Address, Fn: p.Function}
-	r.fnCacheMu.Lock()
-	previous, hadPrev := r.fnCache[key]
-	unchanged := hadPrev && previous == p.On
-	if !unchanged {
-		r.fnCache[key] = p.On
-	}
-	r.fnCacheMu.Unlock()
-
-	// Station.SendFn takes the desired on/off state (Z21 LAN_X_SET_LOCO_FUNCTION
-	// type bits), not a DCC toggle edge.
-	if unchanged {
-		if requestID != "" {
-			_ = sess.SendAck(ctx, requestID, true, "")
-		}
-		return
-	}
-	if err := r.station.SendFn(commandstation.MainTrackMode, commandstation.LocoAddr(p.Address), commandstation.FuncNum(p.Function), p.On); err != nil {
-		fields := r.stationLogFields()
-		fields["addr"] = p.Address
-		fields["function"] = p.Function
-		fields["on"] = p.On
-		r.log.WithError(err).WithFields(fields).Warn("dcc-bus command station SendFn failed")
+	if err := r.setLocoFunction(ctx, p.Address, sess.UserID, p.Function, p.On, "throttle"); err != nil {
 		_ = sess.SendTyped(ctx, protocol.TypeLocoError, protocol.LocoErrorPayload{
 			Address: p.Address,
 			Code:    "command_station_error",
 			Detail:  err.Error(),
 		})
 		_ = sess.SendAck(ctx, requestID, false, "command_station_error")
+		return
+	}
+	if requestID != "" {
+		_ = sess.SendAck(ctx, requestID, true, "")
+	}
+}
+
+// setLocoFunction issues one DCC function command and mirrors the
+// result in Redis. Used by the throttle and the dead-man's switch.
+func (r *Router) setLocoFunction(ctx context.Context, addr uint16, userID uint, fn uint8, on bool, source string) error {
+	key := fnKey{Addr: addr, Fn: fn}
+	r.fnCacheMu.Lock()
+	previous, hadPrev := r.fnCache[key]
+	unchanged := hadPrev && previous == on
+	if !unchanged {
+		r.fnCache[key] = on
+	}
+	r.fnCacheMu.Unlock()
+
+	if unchanged {
+		return nil
+	}
+	if err := r.station.SendFn(commandstation.MainTrackMode, commandstation.LocoAddr(addr), commandstation.FuncNum(fn), on); err != nil {
+		fields := r.stationLogFields()
+		fields["addr"] = addr
+		fields["function"] = fn
+		fields["on"] = on
+		r.log.WithError(err).WithFields(fields).Warn("dcc-bus command station SendFn failed")
 		r.fnCacheMu.Lock()
 		if hadPrev {
 			r.fnCache[key] = previous
@@ -349,31 +355,29 @@ func (r *Router) HandleSetFunction(ctx context.Context, sess *ws.Session, p prot
 			delete(r.fnCache, key)
 		}
 		r.fnCacheMu.Unlock()
-		return
+		return err
 	}
 
 	snap := protocol.LocoStatePayload{
-		Address:            p.Address,
-		ControlledByUserID: sess.UserID,
-		Source:             "throttle",
+		Address:            addr,
+		ControlledByUserID: userID,
+		Source:             source,
 		At:                 time.Now().UTC().UnixMilli(),
 	}
-	if env, ok, err := r.redis.LoadState(ctx, p.Address); err == nil && ok {
+	if env, ok, err := r.redis.LoadState(ctx, addr); err == nil && ok {
 		snap.Speed = env.Speed
 		snap.Forward = env.Forward
-		snap.Functions = make([]bool, max(len(env.Functions), int(p.Function)+1))
+		snap.Functions = make([]bool, max(len(env.Functions), int(fn)+1))
 		copy(snap.Functions, env.Functions)
 	} else {
-		snap.Functions = make([]bool, int(p.Function)+1)
+		snap.Functions = make([]bool, int(fn)+1)
 	}
-	snap.Functions[p.Function] = p.On
+	snap.Functions[fn] = on
 	if err := r.redis.StoreState(ctx, snap, stateTTL); err != nil {
 		r.log.WithError(err).Debug("dcc-bus redis store")
 	}
 	r.fanState(ctx, snap)
-	if requestID != "" {
-		_ = sess.SendAck(ctx, requestID, true, "")
-	}
+	return nil
 }
 
 // HandleEStop slams every loco the requesting session subscribes to
@@ -492,6 +496,9 @@ func (r *Router) applyEmergencyStop(ctx context.Context, userID uint, sessionID 
 			r.log.WithError(err).Debug("dcc-bus estop redis store")
 		}
 		r.fanState(ctx, snap)
+		if v, ok := r.allowedVehicle(addr); ok {
+			r.applyDeadManSwitchForLoco(context.Background(), addr, userID, v)
+		}
 	}
 	if len(affected) == 0 {
 		return
@@ -506,6 +513,51 @@ func (r *Router) applyEmergencyStop(ctx context.Context, userID uint, sessionID 
 	}); err != nil {
 		r.log.WithError(err).Debug("dcc-bus estop publish")
 	}
+}
+
+func (r *Router) allowedVehicle(addr uint16) (layoutroster.AllowedVehicle, bool) {
+	r.allowedMu.RLock()
+	defer r.allowedMu.RUnlock()
+	v, ok := r.byAddr[addr]
+	return v, ok
+}
+
+// applyDeadManSwitchForLoco runs the per-vehicle dead-man's switch
+// function plan after an emergency stop (§7e.5).
+func (r *Router) applyDeadManSwitchForLoco(ctx context.Context, addr uint16, userID uint, v layoutroster.AllowedVehicle) {
+	switch v.DeadManSwitchOption {
+	case string(domain.DeadManSwitchStopHorn):
+		r.pulseLocoFunction(addr, userID, v.Rp1Function)
+	case string(domain.DeadManSwitchStopHornEmergencyLights):
+		r.pulseLocoFunction(addr, userID, v.Rp1Function)
+		if err := r.setLocoFunction(ctx, addr, userID, v.EmergencyLightsFunction, true, "deadman"); err != nil {
+			r.log.WithError(err).WithFields(logrus.Fields{
+				"addr":     addr,
+				"function": v.EmergencyLightsFunction,
+			}).Warn("dcc-bus dead-man emergency lights failed")
+		}
+	default:
+		// "stop" and unknown values: brake only.
+	}
+}
+
+func (r *Router) pulseLocoFunction(addr uint16, userID uint, fn uint8) {
+	ctx := context.Background()
+	if err := r.setLocoFunction(ctx, addr, userID, fn, true, "deadman"); err != nil {
+		r.log.WithError(err).WithFields(logrus.Fields{
+			"addr":     addr,
+			"function": fn,
+		}).Warn("dcc-bus dead-man rp1 on failed")
+		return
+	}
+	time.AfterFunc(time.Second, func() {
+		if err := r.setLocoFunction(context.Background(), addr, userID, fn, false, "deadman"); err != nil {
+			r.log.WithError(err).WithFields(logrus.Fields{
+				"addr":     addr,
+				"function": fn,
+			}).Warn("dcc-bus dead-man rp1 off failed")
+		}
+	})
 }
 
 // fanState broadcasts a state snapshot to every WS session that

@@ -36,6 +36,14 @@ var (
 	// ErrVehicleInUse blocks deletion when other rows still
 	// reference the vehicle (currently: train_members).
 	ErrVehicleInUse = errors.New("vehicle_in_use")
+
+	// ErrVehicleDccFunctionInvalid is returned when an F-index is
+	// outside the closed F0..F31 catalogue.
+	ErrVehicleDccFunctionInvalid = errors.New("vehicle_dcc_function_invalid")
+
+	// ErrVehicleDeadManSwitchInvalid is returned for an unknown
+	// dead-man's switch option value.
+	ErrVehicleDeadManSwitchInvalid = errors.New("vehicle_deadman_switch_invalid")
 )
 
 const (
@@ -87,6 +95,10 @@ type VehicleCreateInput struct {
 	Kind        domain.VehicleKind
 	Number      string
 	DCCAddress  *uint16
+
+	Rp1Function             *uint8
+	EmergencyLightsFunction *uint8
+	DeadManSwitchOption     *domain.DeadManSwitchOption
 }
 
 // Create registers a new vehicle owned by the caller. The DCC
@@ -112,16 +124,23 @@ func (s *VehicleService) Create(ctx context.Context, in VehicleCreateInput) (dom
 			return domain.Vehicle{}, err
 		}
 	}
+	rp1Fn, emergFn, dmsOpt, err := resolveVehicleDeadManFields(in.Rp1Function, in.EmergencyLightsFunction, in.DeadManSwitchOption)
+	if err != nil {
+		return domain.Vehicle{}, err
+	}
 
 	now := time.Now().UTC()
 	row := domain.Vehicle{
-		DCCAddress:  in.DCCAddress,
-		OwnerUserID: in.OwnerUserID,
-		Name:        name,
-		Kind:        in.Kind,
-		Number:      number,
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		DCCAddress:              in.DCCAddress,
+		OwnerUserID:             in.OwnerUserID,
+		Name:                    name,
+		Kind:                    in.Kind,
+		Number:                  number,
+		Rp1Function:             rp1Fn,
+		EmergencyLightsFunction: emergFn,
+		DeadManSwitchOption:     dmsOpt,
+		CreatedAt:               now,
+		UpdatedAt:               now,
 	}
 	if err := s.vehicles.Insert(ctx, &row); err != nil {
 		return domain.Vehicle{}, err
@@ -136,6 +155,10 @@ type VehicleUpdateInput struct {
 	Name   *string
 	Kind   *domain.VehicleKind
 	Number *string
+
+	Rp1Function             *uint8
+	EmergencyLightsFunction *uint8
+	DeadManSwitchOption     *domain.DeadManSwitchOption
 
 	// DCCAddress carries a tri-state via two pointers:
 	//   - DCCAddress.IsSet == false      → leave the column alone;
@@ -194,6 +217,24 @@ func (s *VehicleService) Update(ctx context.Context, actorID, vehicleID uint, ef
 			}
 			row.DCCAddress = &newAddr
 		}
+	}
+	if in.Rp1Function != nil {
+		if !domain.IsValidDccFunctionNum(*in.Rp1Function) {
+			return domain.Vehicle{}, ErrVehicleDccFunctionInvalid
+		}
+		row.Rp1Function = *in.Rp1Function
+	}
+	if in.EmergencyLightsFunction != nil {
+		if !domain.IsValidDccFunctionNum(*in.EmergencyLightsFunction) {
+			return domain.Vehicle{}, ErrVehicleDccFunctionInvalid
+		}
+		row.EmergencyLightsFunction = *in.EmergencyLightsFunction
+	}
+	if in.DeadManSwitchOption != nil {
+		if !in.DeadManSwitchOption.IsValid() {
+			return domain.Vehicle{}, ErrVehicleDeadManSwitchInvalid
+		}
+		row.DeadManSwitchOption = *in.DeadManSwitchOption
 	}
 
 	row.UpdatedAt = time.Now().UTC()
@@ -263,6 +304,34 @@ func (s *VehicleService) checkDCCAddress(ctx context.Context, ownerID uint, addr
 		return ErrDCCAddressTaken
 	}
 	return nil
+}
+
+func resolveVehicleDeadManFields(
+	rp1Fn, emergFn *uint8,
+	dmsOpt *domain.DeadManSwitchOption,
+) (uint8, uint8, domain.DeadManSwitchOption, error) {
+	rp1 := domain.DefaultVehicleRp1Function
+	if rp1Fn != nil {
+		if !domain.IsValidDccFunctionNum(*rp1Fn) {
+			return 0, 0, "", ErrVehicleDccFunctionInvalid
+		}
+		rp1 = *rp1Fn
+	}
+	emerg := domain.DefaultVehicleEmergencyLightsFunction
+	if emergFn != nil {
+		if !domain.IsValidDccFunctionNum(*emergFn) {
+			return 0, 0, "", ErrVehicleDccFunctionInvalid
+		}
+		emerg = *emergFn
+	}
+	opt := domain.DeadManSwitchStop
+	if dmsOpt != nil {
+		if !dmsOpt.IsValid() {
+			return 0, 0, "", ErrVehicleDeadManSwitchInvalid
+		}
+		opt = *dmsOpt
+	}
+	return rp1, emerg, opt, nil
 }
 
 func sanitiseVehicleName(raw string) (string, error) {

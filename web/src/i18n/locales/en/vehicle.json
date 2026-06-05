@@ -100,11 +100,20 @@
       "dccAddress": "DCC address (optional)",
       "dccAddressHelp": "Leave empty to create a dummy vehicle – visible on the layout but not steerable.",
       "poolHint": "Your DCC pool: {{ranges}}",
-      "poolEmpty": "You don't have any DCC pool assigned – you can still add dummy vehicles."
+      "poolEmpty": "You don't have any DCC pool assigned – you can still add dummy vehicles.",
+      "rp1Function": "Rp1 function",
+      "emergencyLightsFunction": "Emergency lights function",
+      "deadManSwitchOption": "Dead Man's Switch",
+      "dccFunction": "F{{fn}}"
     },
     "submitCreate": "Add",
     "submitEdit": "Save",
     "cancel": "Cancel"
+  },
+  "deadManSwitch": {
+    "stop": "Stop",
+    "stop_horn": "Stop and honk",
+    "stop_horn_emergency_lights": "Stop, honk and turn on emergency lights / Pc6"
   },
   "trainDialog": {
     "create": {

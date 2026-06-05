@@ -97,9 +97,24 @@ type Vehicle struct {
     TemplateID          *uint
     FunctionsDetachedAt *time.Time
 
+    // Per-vehicle dead-man's switch catalogue (§7e.5). Function
+    // numbers are F0..F31. Defaults: Rp1=F2, emergency lights=F0,
+    // option=stop.
+    Rp1Function             uint8               // horn / Rp1 output
+    EmergencyLightsFunction uint8               // Pc6 / emergency lights
+    DeadManSwitchOption     DeadManSwitchOption // stop | stop_horn | stop_horn_emergency_lights
+
     CreatedAt   time.Time
     UpdatedAt   time.Time
 }
+
+type DeadManSwitchOption string
+
+const (
+    DeadManSwitchStop                    DeadManSwitchOption = "stop"
+    DeadManSwitchStopHorn                DeadManSwitchOption = "stop_horn"
+    DeadManSwitchStopHornEmergencyLights DeadManSwitchOption = "stop_horn_emergency_lights"
+)
 
 // Train (Polish: skład) – an ordered group of 1+ Vehicles addressed and
 // driven as a single unit. See the Terminology table.

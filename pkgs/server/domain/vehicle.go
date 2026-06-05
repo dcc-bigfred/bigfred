@@ -40,6 +40,41 @@ func (k VehicleKind) IsValid() bool {
 	return false
 }
 
+// DeadManSwitchOption selects the per-vehicle behaviour when the
+// dcc-bus dead-man's switch fires for a locomotive the user was
+// driving (§7e.5).
+type DeadManSwitchOption string
+
+const (
+	DeadManSwitchStop                    DeadManSwitchOption = "stop"
+	DeadManSwitchStopHorn                DeadManSwitchOption = "stop_horn"
+	DeadManSwitchStopHornEmergencyLights DeadManSwitchOption = "stop_horn_emergency_lights"
+
+	DefaultVehicleRp1Function             uint8 = 2
+	DefaultVehicleEmergencyLightsFunction uint8 = 0
+)
+
+// DeadManSwitchOptions returns the closed catalogue in UI order.
+func DeadManSwitchOptions() []DeadManSwitchOption {
+	return []DeadManSwitchOption{
+		DeadManSwitchStop,
+		DeadManSwitchStopHorn,
+		DeadManSwitchStopHornEmergencyLights,
+	}
+}
+
+// IsValid reports whether o is one of the catalogue entries.
+func (o DeadManSwitchOption) IsValid() bool {
+	switch o {
+	case DeadManSwitchStop, DeadManSwitchStopHorn, DeadManSwitchStopHornEmergencyLights:
+		return true
+	}
+	return false
+}
+
+// IsValidDccFunctionNum reports whether n is a legal F0..F31 index.
+func IsValidDccFunctionNum(n uint8) bool { return n <= 31 }
+
 // Vehicle is one rail vehicle the system tracks (§3a.1).
 //
 // DCCAddress is OPTIONAL:
@@ -67,6 +102,11 @@ type Vehicle struct {
 	// FunctionsDetachedAt is set after copy-on-write detach.
 	TemplateID          *uint      `db:"template_id"`
 	FunctionsDetachedAt *time.Time `db:"functions_detached_at"`
+
+	// Dead-man's switch catalogue (§7e.5). Function numbers are F0..F31.
+	Rp1Function             uint8               `db:"rp1_function"`
+	EmergencyLightsFunction uint8               `db:"emergency_lights_function"`
+	DeadManSwitchOption     DeadManSwitchOption `db:"deadman_switch_option"`
 
 	CreatedAt time.Time `db:"created_at"`
 	UpdatedAt time.Time `db:"updated_at"`

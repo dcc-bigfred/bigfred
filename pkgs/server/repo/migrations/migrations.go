@@ -42,6 +42,7 @@ func register(m *migrator.Migrator) {
 	m.Register(20260526_000001, createCommandStationsUp, createCommandStationsDown)
 	m.Register(20260526_000002, createLayoutCommandStationsUp, createLayoutCommandStationsDown)
 	m.Register(20260604_000001, createVehicleTemplatesAndDccFunctionsUp, createVehicleTemplatesAndDccFunctionsDown)
+	m.Register(20260604_000002, addVehicleDeadManSwitchColumnsUp, addVehicleDeadManSwitchColumnsDown)
 }
 
 // createCommandStationsUp installs the `command_stations` catalogue
@@ -495,4 +496,22 @@ func createVehicleTemplatesAndDccFunctionsDown(s *rel.Schema) {
 		t.DropColumn("functions_detached_at")
 	})
 	s.DropTable("vehicle_templates")
+}
+
+// addVehicleDeadManSwitchColumnsUp stores per-vehicle dead-man's switch
+// function mappings and behaviour (§7e.5).
+func addVehicleDeadManSwitchColumnsUp(s *rel.Schema) {
+	s.AlterTable("vehicles", func(t *rel.AlterTable) {
+		t.Int("rp1_function", rel.Unsigned(true), rel.Default("2"))
+		t.Int("emergency_lights_function", rel.Unsigned(true), rel.Default("0"))
+		t.String("deadman_switch_option", rel.Default("stop"))
+	})
+}
+
+func addVehicleDeadManSwitchColumnsDown(s *rel.Schema) {
+	s.AlterTable("vehicles", func(t *rel.AlterTable) {
+		t.DropColumn("rp1_function")
+		t.DropColumn("emergency_lights_function")
+		t.DropColumn("deadman_switch_option")
+	})
 }

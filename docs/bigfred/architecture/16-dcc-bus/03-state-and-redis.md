@@ -42,7 +42,7 @@ mirrors the same JSON on matching **pub/sub channels** (`SET` +
 
 | Key / channel | JSON root | Purpose |
 |---|---|---|
-| `bigfred:layout:<L>:allowed_vehicles` | `{ layoutId, updatedAt, vehicles[] }` | Drivable vehicles on the layout roster. Each entry: `vehicleId`, `addr`, `ownerUserId`, `controllerUserIds[]`. Dummies (no DCC address) are omitted. |
+| `bigfred:layout:<L>:allowed_vehicles` | `{ layoutId, updatedAt, vehicles[] }` | Drivable vehicles on the layout roster. Each entry: `vehicleId`, `addr`, `ownerUserId`, `controllerUserIds[]`, plus per-vehicle dead-man's switch catalogue: `rp1Function` (F0..F31, default F2), `emergencyLightsFunction` (default F0), `deadManSwitchOption` (`stop` \| `stop_horn` \| `stop_horn_emergency_lights`). Dummies (no DCC address) are omitted. |
 | `bigfred:layout:<L>:defined_trains` | `{ layoutId, updatedAt, trains[] }` | Trains on the layout roster with ordered `members[]` (`vehicleId`, `position`, `reversed`, optional `addr`). |
 
 **Daemon boot:** `GET` both keys (may be missing → empty roster until

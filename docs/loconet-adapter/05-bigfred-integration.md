@@ -44,8 +44,10 @@ Command stations are **admin-only**
 
 ## 5.4 LocoNet — driver limits
 
-[`loconet.go`](../../pkgs/loco/commandstation/loconet.go): speed/dir, **F0–F8**,
-observe; no **F9+**, no CV over LocoNet.
+[`loconet.go`](../../pkgs/loco/commandstation/loconet.go): speed/dir, **F0–F28**
+(F0–F8 via slot DIRF/SND, F9–F28 via `OPC_IMM_PACKET`), observe (incl. F9–F28), and
+**CV read/write on the programming track** (service-mode direct byte). No F29+, no
+POM CV (RailCom), no accessory/sensor control over LocoNet.
 
 ## 5.5 Z21 — catalogue and daemon (RB1110)
 

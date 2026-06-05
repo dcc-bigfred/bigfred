@@ -51,6 +51,11 @@ type LocoNet struct {
 	stateMu sync.Mutex
 	dirfByA map[LocoAddr]byte
 	sndByA  map[LocoAddr]byte
+	// extFnByA caches functions F9..F28 per address. These are NOT held
+	// in the command-station slot (they ride immediate DCC packets), so
+	// the only authoritative copy is the one we keep here, updated both
+	// when WE send and when we observe such a packet on the shared bus.
+	extFnByA map[LocoAddr]uint32
 }
 
 func newLocoNetBase() *LocoNet {
@@ -64,6 +69,7 @@ func newLocoNetBase() *LocoNet {
 		slotAddr: make(map[byte]LocoAddr),
 		dirfByA:  make(map[LocoAddr]byte),
 		sndByA:   make(map[LocoAddr]byte),
+		extFnByA: make(map[LocoAddr]uint32),
 	}
 }
 
@@ -142,6 +148,12 @@ func (l *LocoNet) observe(pkt []byte) {
 		if !ok {
 			return
 		}
+		// System slots (≥120: programming 0x7C, fast clock 0x7B, …) do
+		// not describe a locomotive; skip so a CV reply does not surface
+		// as a bogus address-0 observation.
+		if sd.Slot >= 120 {
+			return
+		}
 		l.setSlot(sd.Addr, sd.Slot)
 		l.setDirf(sd.Addr, sd.DirF)
 		l.setSnd(sd.Addr, sd.Snd)
@@ -199,6 +211,20 @@ func (l *LocoNet) observe(pkt []byte) {
 			fns[fn] = getFnFromSnd(snd, fn)
 		}
 		l.emit(LocoObservation{Addr: addr, Functions: fns})
+	case lnOPC_IMM_PACKET:
+		// Extended functions (F9..F28) ride immediate DCC packets,
+		// addressed by loco number rather than slot. Decode them so an
+		// external throttle's F9+ changes are observed too.
+		dcc := decodeImmDccPacket(pkt)
+		if dcc == nil {
+			return
+		}
+		addr, fns, ok := dccPacketFunctions(dcc)
+		if !ok {
+			return
+		}
+		l.mergeExtFn(addr, fns)
+		l.emit(LocoObservation{Addr: addr, Functions: fns})
 	}
 }
 
@@ -232,12 +258,161 @@ func (l *LocoNet) drainSync() {
 	}
 }
 
-func (l *LocoNet) WriteCV(mode Mode, lcv LocoCV, options ...ctxOptions) error {
-	return errors.New("WriteCV not implemented for LocoNet")
+// progTimeout is the default per-attempt deadline for a service-mode
+// programming task; decoder service-mode reads can take a few seconds.
+const progTimeout = 15 * time.Second
+
+// ReadCV reads a single CV from a decoder on the programming (service)
+// track via the programming slot (0x7C). POM reads over LocoNet need
+// RailCom feedback and are not supported here.
+func (l *LocoNet) ReadCV(mode Mode, lcv LocoCV, options ...ctxOptions) (int, error) {
+	if mode != ProgrammingTrackMode {
+		return 0, fmt.Errorf("ReadCV: LocoNet supports CV read only on the programming track (mode %q); POM read requires RailCom", mode)
+	}
+	ctx := RequestContext{timeout: progTimeout, retries: 0}
+	applyMethodsToCtx(&ctx, options)
+	cv0 := lcv.Cv.Translate() // 0-based CV address
+
+	l.reqMu.Lock()
+	defer l.reqMu.Unlock()
+	l.beginSync()
+	defer l.endSync()
+
+	var lastErr error
+	for i := 0; i <= int(ctx.retries); i++ {
+		val, err := l.readCVLocked(cv0, ctx.timeout)
+		if err == nil {
+			return val, nil
+		}
+		logrus.Debugf("ReadCV: attempt %d/%d failed: %v", i+1, int(ctx.retries)+1, err)
+		lastErr = err
+	}
+	return 0, lastErr
 }
 
-func (l *LocoNet) ReadCV(mode Mode, lcv LocoCV, options ...ctxOptions) (int, error) {
-	return 0, errors.New("ReadCV not implemented for LocoNet")
+// WriteCV writes a single CV to a decoder on the programming (service)
+// track via the programming slot (0x7C). Added alongside ReadCV so the
+// LocoNet CV surface is symmetric; POM writes are not supported here.
+func (l *LocoNet) WriteCV(mode Mode, lcv LocoCV, options ...ctxOptions) error {
+	if mode != ProgrammingTrackMode {
+		return fmt.Errorf("WriteCV: LocoNet supports CV write only on the programming track (mode %q)", mode)
+	}
+	ctx := RequestContext{timeout: progTimeout, retries: 0}
+	applyMethodsToCtx(&ctx, options)
+	cv0 := lcv.Cv.Translate()
+	val := byte(lcv.Cv.Value)
+
+	l.reqMu.Lock()
+	defer l.reqMu.Unlock()
+	l.beginSync()
+	defer l.endSync()
+
+	var lastErr error
+	for i := 0; i <= int(ctx.retries); i++ {
+		if err := l.writeCVLocked(cv0, val, ctx.timeout); err != nil {
+			logrus.Debugf("WriteCV: attempt %d/%d failed: %v", i+1, int(ctx.retries)+1, err)
+			lastErr = err
+			continue
+		}
+		lastErr = nil
+		break
+	}
+	if lastErr != nil {
+		return lastErr
+	}
+
+	if ctx.verify {
+		got, err := l.readCVLocked(cv0, ctx.timeout)
+		if err != nil {
+			return fmt.Errorf("WriteCV: cannot verify written value: %w", err)
+		}
+		if byte(got) != val {
+			return fmt.Errorf("WriteCV: verify mismatch (wrote %d, read %d)", val, got)
+		}
+	}
+	return nil
+}
+
+// readCVLocked runs one service-mode direct-byte read. Caller holds reqMu
+// and has begun a sync window.
+func (l *LocoNet) readCVLocked(cv0 uint16, timeout time.Duration) (int, error) {
+	if err := l.sendLocked(lnBuildProgTask(lnPCMD_READ_DIRECT, cv0, 0)); err != nil {
+		return 0, err
+	}
+	rep, err := l.awaitProgReplyLocked(time.Now().Add(timeout), false)
+	if err != nil {
+		return 0, err
+	}
+	if err := lnProgStatusError(rep.PStat); err != nil {
+		return 0, err
+	}
+	return int(rep.Value), nil
+}
+
+// writeCVLocked runs one service-mode direct-byte write. Caller holds
+// reqMu and has begun a sync window.
+func (l *LocoNet) writeCVLocked(cv0 uint16, val byte, timeout time.Duration) error {
+	if err := l.sendLocked(lnBuildProgTask(lnPCMD_WRITE_DIRECT, cv0, val)); err != nil {
+		return err
+	}
+	// A write may be accepted "blind" (LACK 0x40) with no slot reply.
+	rep, err := l.awaitProgReplyLocked(time.Now().Add(timeout), true)
+	if err != nil {
+		return err
+	}
+	return lnProgStatusError(rep.PStat)
+}
+
+// awaitProgReplyLocked consumes bus packets until the programming task
+// resolves: an error LACK, a "blind" acceptance (success only when
+// allowBlind), or the final OPC_SL_RD_DATA result from slot 0x7C.
+func (l *LocoNet) awaitProgReplyLocked(deadline time.Time, allowBlind bool) (lnProgReply, error) {
+	for time.Now().Before(deadline) {
+		pkt, err := l.readPacketUntil(deadline)
+		if err != nil {
+			return lnProgReply{}, err
+		}
+		// Immediate long-acknowledge for the programmer task.
+		if len(pkt) >= 4 && pkt[0] == lnOPC_LONG_ACK && pkt[1] == 0x7F {
+			switch pkt[2] {
+			case 0x01: // accepted; result follows in an E7 slot read
+				continue
+			case 0x40: // accepted blind; no slot reply will come
+				if allowBlind {
+					return lnProgReply{}, nil
+				}
+				return lnProgReply{}, errors.New("command station accepted programming task 'blind' (no result returned)")
+			case 0x00:
+				return lnProgReply{}, errors.New("programmer busy, task aborted")
+			case 0x7F:
+				return lnProgReply{}, errors.New("programming not implemented by command station")
+			default:
+				return lnProgReply{}, fmt.Errorf("unexpected programmer LACK code 0x%02X", pkt[2])
+			}
+		}
+		if rep, ok := parseLnProgReply(pkt); ok {
+			return rep, nil
+		}
+	}
+	return lnProgReply{}, errors.New("timeout waiting for programming reply")
+}
+
+// lnProgStatusError maps a programming-slot PSTAT byte to an error.
+func lnProgStatusError(pstat byte) error {
+	switch {
+	case pstat == 0:
+		return nil
+	case pstat&lnPSTAT_NO_DECODER != 0:
+		return errors.New("no decoder detected on the programming track")
+	case pstat&lnPSTAT_READ_FAIL != 0:
+		return errors.New("decoder read failed (no acknowledge)")
+	case pstat&lnPSTAT_WRITE_FAIL != 0:
+		return errors.New("decoder write failed (no acknowledge)")
+	case pstat&lnPSTAT_USER_ABORTED != 0:
+		return errors.New("programming task aborted")
+	default:
+		return fmt.Errorf("programming failed (PSTAT=0x%02X)", pstat)
+	}
 }
 
 func (l *LocoNet) SendFn(mode Mode, addr LocoAddr, num FuncNum, toggle bool) error {
@@ -245,18 +420,23 @@ func (l *LocoNet) SendFn(mode Mode, addr LocoAddr, num FuncNum, toggle bool) err
 		return fmt.Errorf("SendFn: unsupported mode '%s' in LocoNet", mode)
 	}
 	fn := int(num)
-	if fn < 0 || fn > 63 {
-		return fmt.Errorf("SendFn: invalid function number %d", fn)
-	}
-	// This implementation supports F0..F8 via standard slot DIRF/SND messages.
-	if fn > 8 {
-		return fmt.Errorf("SendFn: function %d not supported over basic LocoNet slot commands (supports F0-F8)", fn)
+	if fn < 0 || fn > 28 {
+		// F0..F8 ride the slot; F9..F28 ride immediate DCC packets.
+		// F29+ would need the 0xD8.. groups / binary-state packets,
+		// which are not implemented here.
+		return fmt.Errorf("SendFn: unsupported function number %d (LocoNet driver supports F0-F28)", fn)
 	}
 
 	l.reqMu.Lock()
 	defer l.reqMu.Unlock()
 	l.beginSync()
 	defer l.endSync()
+
+	// F9..F28 are not stored in the slot; send them as an immediate DCC
+	// function-group packet addressed by loco number (no slot needed).
+	if fn >= 9 {
+		return l.sendExtFnLocked(addr, fn, toggle)
+	}
 
 	slot, err := l.ensureSlotLocked(addr)
 	if err != nil {
@@ -314,6 +494,14 @@ func (l *LocoNet) ListFunctions(addr LocoAddr) ([]int, error) {
 			if getFnFromSnd(sd.Snd, fn) {
 				on = append(on, fn)
 			}
+		}
+	}
+	// F9..F28 are not in the slot; report them from the cache (the only
+	// state we have, fed by our own sends and observed bus packets).
+	extBits := l.getExtFn(addr)
+	for fn := 9; fn <= 28; fn++ {
+		if extBits&(1<<uint(fn)) != 0 {
+			on = append(on, fn)
 		}
 	}
 	return on, nil
@@ -491,6 +679,63 @@ func (l *LocoNet) setSnd(addr LocoAddr, snd byte) {
 	l.stateMu.Lock()
 	l.sndByA[addr] = snd
 	l.stateMu.Unlock()
+}
+
+func (l *LocoNet) getExtFn(addr LocoAddr) uint32 {
+	l.stateMu.Lock()
+	defer l.stateMu.Unlock()
+	return l.extFnByA[addr]
+}
+
+// setExtFn updates a single F9..F28 bit and returns the new full bitmask.
+func (l *LocoNet) setExtFn(addr LocoAddr, fn int, on bool) uint32 {
+	l.stateMu.Lock()
+	defer l.stateMu.Unlock()
+	bits := l.extFnByA[addr]
+	if on {
+		bits |= 1 << uint(fn)
+	} else {
+		bits &^= 1 << uint(fn)
+	}
+	l.extFnByA[addr] = bits
+	return bits
+}
+
+// mergeExtFn folds an observed set of function bits into the cache.
+func (l *LocoNet) mergeExtFn(addr LocoAddr, fns map[int]bool) {
+	if addr == 0 || len(fns) == 0 {
+		return
+	}
+	l.stateMu.Lock()
+	defer l.stateMu.Unlock()
+	bits := l.extFnByA[addr]
+	for fn, on := range fns {
+		if fn < 0 || fn > 31 {
+			continue
+		}
+		if on {
+			bits |= 1 << uint(fn)
+		} else {
+			bits &^= 1 << uint(fn)
+		}
+	}
+	l.extFnByA[addr] = bits
+}
+
+// sendExtFnLocked sets one F9..F28 function via an immediate DCC packet.
+// The whole group's bitmask is sent, taken from the per-loco cache, so
+// other functions in the group are preserved. Caller holds reqMu.
+func (l *LocoNet) sendExtFnLocked(addr LocoAddr, fn int, on bool) error {
+	bits := l.setExtFn(addr, fn, on)
+	dcc, ok := dccFnGroupPacket(addr, fn, bits)
+	if !ok {
+		return fmt.Errorf("SendFn: no DCC function group for F%d", fn)
+	}
+	imm, err := lnBuildImmPacket(dcc, lnImmRepeats)
+	if err != nil {
+		return err
+	}
+	return l.sendLocked(imm)
 }
 
 // Function bit helpers.

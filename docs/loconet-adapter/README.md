@@ -78,6 +78,7 @@ flowchart LR
   [`z21.go`](../../pkgs/loco/commandstation/z21.go),
   [`driver.go`](../../pkgs/dcc-bus/station/driver.go).
 - Z21 protocol: [`docs/bigfred/protos/z21.md`](../bigfred/protos/z21.md).
+- LocoNet protocol: [`docs/bigfred/protos/loconet.md`](../bigfred/protos/loconet.md).
 - DCC bus: [`16-dcc-bus/`](../bigfred/architecture/16-dcc-bus/README.md).
 - Centrals: [Digikeijs DR5000](https://www.digikeijs.com/),
   [RailBOX RB1110](https://www.railbox.pl/en/products/rb1110).

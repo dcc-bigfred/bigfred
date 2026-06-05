@@ -113,12 +113,35 @@ const (
 	lnOPC_LOCO_SPD   = 0xA0
 	lnOPC_LOCO_DIRF  = 0xA1
 	lnOPC_LOCO_SND   = 0xA2
+	lnOPC_WR_SL_DATA = 0xEF
 	lnOPC_SL_RD_DATA = 0xE7
+	lnOPC_IMM_PACKET = 0xED
 	lnOPC_LONG_ACK   = 0xB4
 	lnOPC_BUSY       = 0x81
 	lnOPC_GPOFF      = 0x82
 	lnOPC_GPON       = 0x83
 	lnOPC_IDLE       = 0x85
+)
+
+// Immediate-packet and programming-track constants (see
+// docs/bigfred/protos/loconet.md §11, §16, §19.2).
+const (
+	// lnImmRepeats is how many times the master re-sends a function
+	// packet on the track (NMRA practice repeats function packets).
+	lnImmRepeats = 2
+
+	// Programming slot and PCMD values for service-mode direct byte
+	// access. The low two bits (0x03) are part of the values observed
+	// from real command stations / JMRI, not just the bare PE 1.0 bits.
+	lnPRG_SLOT          = 0x7C
+	lnPCMD_READ_DIRECT  = 0x2B // 0x03 | byte(0x20) | direct(0x08): read direct byte, service mode
+	lnPCMD_WRITE_DIRECT = 0x6B // 0x43 | byte(0x20) | direct(0x08): write direct byte, service mode
+
+	// PSTAT result bits in the programming-slot reply.
+	lnPSTAT_USER_ABORTED = 0x08
+	lnPSTAT_READ_FAIL    = 0x04
+	lnPSTAT_WRITE_FAIL   = 0x02
+	lnPSTAT_NO_DECODER   = 0x01
 )
 
 func lnBuildLocoAdr(addr LocoAddr) []byte {
@@ -173,6 +196,206 @@ func parseLnSlotData(pkt []byte) (lnSlotData, bool) {
 		DirF:  pkt[6],
 		Snd:   pkt[10],
 	}, true
+}
+
+// --- Extended functions (F9..F28) via immediate DCC packets ---
+
+// dccAddrBytes returns the 1- or 2-byte NMRA address prefix for addr.
+// Addresses below 128 use the short (7-bit) form; 128 and above use the
+// long (14-bit) form. BigFred has no per-loco long/short flag, so this
+// follows the usual address-range heuristic (see loconet.md §11.1).
+func dccAddrBytes(addr LocoAddr) []byte {
+	if addr >= 128 {
+		return []byte{0xC0 | byte((addr>>8)&0x3F), byte(addr & 0xFF)}
+	}
+	return []byte{byte(addr & 0x7F)}
+}
+
+// dccFnGroupPacket builds the NMRA DCC function-group instruction (without
+// the trailing XOR error byte) for the group that contains fn, taking the
+// on/off state of every function in that group from the F0..F31 bitmask
+// `bits`. Only the F9..F28 groups are produced. ok is false otherwise.
+func dccFnGroupPacket(addr LocoAddr, fn int, bits uint32) (pkt []byte, ok bool) {
+	pkt = dccAddrBytes(addr)
+	switch {
+	case fn >= 9 && fn <= 12: // 1010 F12 F11 F10 F9
+		var m byte
+		for i := 0; i < 4; i++ {
+			if bits&(1<<uint(9+i)) != 0 {
+				m |= 1 << uint(i)
+			}
+		}
+		return append(pkt, 0xA0|m), true
+	case fn >= 13 && fn <= 20: // 0xDE <F20..F13>
+		var m byte
+		for i := 0; i < 8; i++ {
+			if bits&(1<<uint(13+i)) != 0 {
+				m |= 1 << uint(i)
+			}
+		}
+		return append(pkt, 0xDE, m), true
+	case fn >= 21 && fn <= 28: // 0xDF <F28..F21>
+		var m byte
+		for i := 0; i < 8; i++ {
+			if bits&(1<<uint(21+i)) != 0 {
+				m |= 1 << uint(i)
+			}
+		}
+		return append(pkt, 0xDF, m), true
+	}
+	return nil, false
+}
+
+// lnBuildImmPacket wraps an NMRA DCC packet (its bytes WITHOUT the XOR
+// error byte) in an OPC_IMM_PACKET message asking the master to emit it
+// on the main track `repeats` times. Up to 5 DCC bytes fit.
+//
+// The DHI byte carries the D7 (MSB) of each payload byte. The Digitrax
+// PE 1.0 spec also fixes its top three bits to 0b001; JMRI omits that
+// and real command stations accept either, so we follow JMRI and emit
+// only the MSB bits (decoders/observers ignore the fixed bit anyway).
+func lnBuildImmPacket(dcc []byte, repeats int) ([]byte, error) {
+	if len(dcc) < 1 || len(dcc) > 5 {
+		return nil, fmt.Errorf("imm packet: dcc length %d out of range (1..5)", len(dcc))
+	}
+	if repeats < 1 {
+		repeats = 1
+	}
+	if repeats > 8 {
+		repeats = 8
+	}
+	reps := byte((len(dcc)&0x07)<<4) | byte((repeats-1)&0x07)
+	var dhi byte
+	im := make([]byte, 5)
+	for i, b := range dcc {
+		if b&0x80 != 0 {
+			dhi |= 1 << uint(i)
+		}
+		im[i] = b & 0x7F
+	}
+	msg := []byte{lnOPC_IMM_PACKET, 0x0B, 0x7F, reps, dhi, im[0], im[1], im[2], im[3], im[4]}
+	return lnAppendChecksum(msg), nil
+}
+
+// decodeImmDccPacket extracts the DCC packet bytes (address + instruction,
+// no XOR byte) from an OPC_IMM_PACKET message, or nil if pkt is not a
+// well-formed immediate DCC packet.
+func decodeImmDccPacket(pkt []byte) []byte {
+	if len(pkt) < 11 || pkt[0] != lnOPC_IMM_PACKET || pkt[1] != 0x0B || pkt[2] != 0x7F {
+		return nil
+	}
+	n := int((pkt[3] >> 4) & 0x07)
+	if n < 1 || n > 5 || len(pkt) < 5+n {
+		return nil
+	}
+	dhi := pkt[4]
+	out := make([]byte, n)
+	for i := 0; i < n; i++ {
+		out[i] = pkt[5+i] & 0x7F
+		if (dhi>>uint(i))&0x01 != 0 {
+			out[i] |= 0x80
+		}
+	}
+	return out
+}
+
+// dccPacketFunctions decodes the loco address and the F9..F28 function
+// bits carried by a DCC function-group packet. ok is false for any packet
+// that is not an F9..F28 function group. The returned map covers exactly
+// the functions of the matched group (so a consumer can detect off too).
+func dccPacketFunctions(dcc []byte) (addr LocoAddr, fns map[int]bool, ok bool) {
+	if len(dcc) < 2 {
+		return 0, nil, false
+	}
+	var instr int
+	b0 := dcc[0]
+	switch {
+	case b0 >= 1 && b0 <= 127: // short address
+		addr = LocoAddr(b0)
+		instr = 1
+	case b0 >= 0xC0 && b0 <= 0xE7: // long (14-bit) address
+		if len(dcc) < 3 {
+			return 0, nil, false
+		}
+		addr = (LocoAddr(b0&0x3F) << 8) | LocoAddr(dcc[1])
+		instr = 2
+	default:
+		return 0, nil, false
+	}
+	if instr >= len(dcc) {
+		return 0, nil, false
+	}
+	ib := dcc[instr]
+	fns = make(map[int]bool, 8)
+	switch {
+	case ib&0xF0 == 0xA0: // F9..F12
+		for i := 0; i < 4; i++ {
+			fns[9+i] = ib&(1<<uint(i)) != 0
+		}
+	case ib == 0xDE: // F13..F20
+		if instr+1 >= len(dcc) {
+			return 0, nil, false
+		}
+		m := dcc[instr+1]
+		for i := 0; i < 8; i++ {
+			fns[13+i] = m&(1<<uint(i)) != 0
+		}
+	case ib == 0xDF: // F21..F28
+		if instr+1 >= len(dcc) {
+			return 0, nil, false
+		}
+		m := dcc[instr+1]
+		for i := 0; i < 8; i++ {
+			fns[21+i] = m&(1<<uint(i)) != 0
+		}
+	default:
+		return 0, nil, false
+	}
+	return addr, fns, true
+}
+
+// --- Programming track (CV read/write) over OPC_WR_SL_DATA slot 0x7C ---
+
+// lnBuildProgTask builds an OPC_WR_SL_DATA task for the programming slot.
+// cv0 is the 0-based CV address (CV1 → 0); val is the byte to write (pass
+// 0 for reads). Mirrors JMRI's progTaskStart for direct byte mode.
+func lnBuildProgTask(pcmd byte, cv0 uint16, val byte) []byte {
+	cvh := byte(((cv0&0x300)>>4)|((cv0&0x80)>>7)) | ((val & 0x80) >> 6)
+	cvl := byte(cv0 & 0x7F)
+	msg := []byte{
+		lnOPC_WR_SL_DATA, 0x0E, lnPRG_SLOT,
+		pcmd,       // PCMD
+		0x00,       // PSTAT (0 on request)
+		0x00,       // HOPSA (service mode: no loco address)
+		0x00,       // LOPSA
+		0x00,       // TRK
+		cvh,        // CVH (CV bits 7..9 + data MSB)
+		cvl,        // CVL (CV bits 0..6)
+		val & 0x7F, // DATA7 (data bits 0..6)
+		0x7F,       // ID1 (PC throttle id)
+		0x7F,       // ID2
+	}
+	return lnAppendChecksum(msg)
+}
+
+type lnProgReply struct {
+	PStat byte
+	Value byte
+}
+
+// parseLnProgReply parses an OPC_SL_RD_DATA reply for the programming slot.
+func parseLnProgReply(pkt []byte) (lnProgReply, bool) {
+	if len(pkt) < 14 || pkt[0] != lnOPC_SL_RD_DATA || pkt[2] != lnPRG_SLOT {
+		return lnProgReply{}, false
+	}
+	if !lnChecksumOK(pkt) {
+		return lnProgReply{}, false
+	}
+	cvh := pkt[8]
+	data7 := pkt[10]
+	// Data MSB (D7) lives in CVH bit1.
+	val := (data7 & 0x7F) | ((cvh & 0x02) << 6)
+	return lnProgReply{PStat: pkt[4], Value: val}, true
 }
 
 func scaleToLnSpeed(speed uint8, speedSteps uint8) (byte, error) {

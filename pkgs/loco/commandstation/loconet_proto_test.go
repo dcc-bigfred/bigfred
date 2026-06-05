@@ -1,6 +1,9 @@
 package commandstation
 
-import "testing"
+import (
+	"bytes"
+	"testing"
+)
 
 func TestLnChecksum(t *testing.T) {
 	// Example from LoconetOverTcp docs: RECEIVE 83 7C
@@ -59,3 +62,145 @@ func TestParseSlotData(t *testing.T) {
 	}
 }
 
+func TestDccAddrBytes(t *testing.T) {
+	if got := dccAddrBytes(3); !bytes.Equal(got, []byte{0x03}) {
+		t.Fatalf("short addr 3: got % X", got)
+	}
+	// 1234 = 0x04D2 -> C0|0x04=0xC4, 0xD2
+	if got := dccAddrBytes(1234); !bytes.Equal(got, []byte{0xC4, 0xD2}) {
+		t.Fatalf("long addr 1234: got % X", got)
+	}
+}
+
+func TestDccFnGroupPacket(t *testing.T) {
+	// F9 on, short address 3 -> [0x03, 0xA1]
+	pkt, ok := dccFnGroupPacket(3, 9, 1<<9)
+	if !ok || !bytes.Equal(pkt, []byte{0x03, 0xA1}) {
+		t.Fatalf("F9 group: ok=%v pkt=% X", ok, pkt)
+	}
+	// F12 on -> mask bit3 -> 0xA8
+	pkt, _ = dccFnGroupPacket(3, 12, 1<<12)
+	if !bytes.Equal(pkt, []byte{0x03, 0xA8}) {
+		t.Fatalf("F12 group: pkt=% X", pkt)
+	}
+	// F13 on -> [0x03, 0xDE, 0x01]
+	pkt, _ = dccFnGroupPacket(3, 13, 1<<13)
+	if !bytes.Equal(pkt, []byte{0x03, 0xDE, 0x01}) {
+		t.Fatalf("F13 group: pkt=% X", pkt)
+	}
+	// F28 on, long address 1234 -> [0xC4, 0xD2, 0xDF, 0x80]
+	pkt, _ = dccFnGroupPacket(1234, 28, 1<<28)
+	if !bytes.Equal(pkt, []byte{0xC4, 0xD2, 0xDF, 0x80}) {
+		t.Fatalf("F28 long group: pkt=% X", pkt)
+	}
+	// F8 is not an extended group
+	if _, ok := dccFnGroupPacket(3, 8, 0); ok {
+		t.Fatalf("F8 should not produce an extended group packet")
+	}
+}
+
+func TestImmPacketRoundTrip(t *testing.T) {
+	for _, addr := range []LocoAddr{3, 1234} {
+		for _, fn := range []int{9, 12, 13, 20, 21, 28} {
+			dcc, ok := dccFnGroupPacket(addr, fn, 1<<uint(fn))
+			if !ok {
+				t.Fatalf("no group for F%d", fn)
+			}
+			imm, err := lnBuildImmPacket(dcc, lnImmRepeats)
+			if err != nil {
+				t.Fatalf("build imm F%d: %v", fn, err)
+			}
+			if !lnChecksumOK(imm) {
+				t.Fatalf("imm checksum invalid: % X", imm)
+			}
+			// Length class is variable; the byte-count must be 0x0B.
+			if imm[1] != 0x0B {
+				t.Fatalf("imm length byte: got 0x%02X", imm[1])
+			}
+			back := decodeImmDccPacket(imm)
+			if !bytes.Equal(back, dcc) {
+				t.Fatalf("imm roundtrip F%d: in=% X out=% X", fn, dcc, back)
+			}
+			gotAddr, fns, ok := dccPacketFunctions(back)
+			if !ok || gotAddr != addr {
+				t.Fatalf("decode F%d: ok=%v addr=%d (want %d)", fn, ok, gotAddr, addr)
+			}
+			if on, present := fns[fn]; !present || !on {
+				t.Fatalf("decode F%d: function not reported on, fns=%v", fn, fns)
+			}
+		}
+	}
+}
+
+func TestImmF9DocExample(t *testing.T) {
+	// Documented example (repeats=2, JMRI-style DHI without the 0x20 bit):
+	// F9 ON, short address 3 -> ED 0B 7F 21 02 03 21 ...
+	dcc, _ := dccFnGroupPacket(3, 9, 1<<9)
+	imm, err := lnBuildImmPacket(dcc, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []byte{0xED, 0x0B, 0x7F, 0x21, 0x02, 0x03, 0x21, 0x00, 0x00, 0x00}
+	if !bytes.Equal(imm[:10], want) {
+		t.Fatalf("imm header mismatch:\n got % X\nwant % X", imm[:10], want)
+	}
+}
+
+func TestProgTaskAndReply(t *testing.T) {
+	// CV1 (0-based 0), read direct byte.
+	task := lnBuildProgTask(lnPCMD_READ_DIRECT, 0, 0)
+	if !lnChecksumOK(task) {
+		t.Fatalf("prog task checksum invalid: % X", task)
+	}
+	want := []byte{lnOPC_WR_SL_DATA, 0x0E, lnPRG_SLOT, lnPCMD_READ_DIRECT, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x7F, 0x7F}
+	if !bytes.Equal(task[:13], want) {
+		t.Fatalf("prog task mismatch:\n got % X\nwant % X", task[:13], want)
+	}
+
+	// CV1000 (0-based 999): CVH=0x31, CVL=0x67.
+	task = lnBuildProgTask(lnPCMD_READ_DIRECT, 999, 0)
+	if task[8] != 0x31 || task[9] != 0x67 {
+		t.Fatalf("CV999 encoding: CVH=0x%02X CVL=0x%02X", task[8], task[9])
+	}
+
+	// Reply carrying value 200 (0xC8): data7=0x48, CVH data-MSB bit set.
+	reply := lnAppendChecksum([]byte{
+		lnOPC_SL_RD_DATA, 0x0E, lnPRG_SLOT,
+		lnPCMD_READ_DIRECT, 0x00, // pcmd, pstat
+		0x00, 0x00, 0x00, // hopsa, lopsa, trk
+		0x02,       // CVH: data MSB (bit1) set
+		0x00,       // CVL
+		0x48,       // DATA7 (low 7 bits of 200)
+		0x7F, 0x7F, // id1, id2
+	})
+	rep, ok := parseLnProgReply(reply)
+	if !ok {
+		t.Fatalf("parse prog reply failed: % X", reply)
+	}
+	if rep.PStat != 0 || rep.Value != 200 {
+		t.Fatalf("prog reply: pstat=0x%02X value=%d (want value 200)", rep.PStat, rep.Value)
+	}
+	if err := lnProgStatusError(rep.PStat); err != nil {
+		t.Fatalf("unexpected pstat error: %v", err)
+	}
+
+	// A no-decoder PSTAT must surface as an error.
+	if err := lnProgStatusError(lnPSTAT_NO_DECODER); err == nil {
+		t.Fatalf("expected error for no-decoder PSTAT")
+	}
+}
+
+func TestDccPacketFunctionsOffBits(t *testing.T) {
+	// F13..F20 group with only F15 on; others must be reported off.
+	dcc, _ := dccFnGroupPacket(7, 15, 1<<15)
+	addr, fns, ok := dccPacketFunctions(dcc)
+	if !ok || addr != 7 {
+		t.Fatalf("decode: ok=%v addr=%d", ok, addr)
+	}
+	if !fns[15] {
+		t.Fatalf("F15 should be on")
+	}
+	if fns[14] || fns[16] {
+		t.Fatalf("neighbours should be off: %v", fns)
+	}
+}

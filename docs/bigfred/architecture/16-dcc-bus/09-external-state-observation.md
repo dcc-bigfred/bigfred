@@ -225,8 +225,9 @@ shared bus shows every packet) so no refresh runs for it.
 - **Z21 broadcast persistence.** Broadcast flags are per-client and lost
   if the Z21 reboots; the daemon sets them once at feed startup. A
   periodic refresh is a possible future hardening.
-- **LocoNet function range.** External F0..F8 changes are observed
-  (basic slot DIRF/SND). F9+ requires the IMM_PACKET / extended-function
-  decode, not implemented (mirrors the existing `SendFn` F0..F8 limit).
+- **LocoNet function range.** External **F0..F28** changes are observed:
+  F0..F8 from the slot DIRF/SND packets, and F9..F28 by decoding the
+  `OPC_IMM_PACKET` DCC function groups (matching `SendFn`'s F0..F28
+  support). F29+ is not decoded.
 - **Polling function range.** The fallback reconciles F0..F28 explicitly
   so an external *off* is detected, not only *on*.

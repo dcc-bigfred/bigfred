@@ -37,7 +37,7 @@
   },
   "templates": {
     "title": "Vehicle templates",
-    "intro": "Templates define a shared function list for many vehicles. When linked, the list is inherited until the first edit.",
+    "intro": "Templates allow you to easily copy a function list to many vehicles. By adding e.g. 10 SM42 locomotives you can enter the functions once and copy them to the other 9. You can also copy functions from another ready template or locomotive of another operator who has already done the tedious work.",
     "listTitle": "Templates",
     "add": "Add template",
     "showLocomotives": "Show locomotives",

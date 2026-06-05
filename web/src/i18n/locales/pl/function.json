@@ -37,7 +37,7 @@
   },
   "templates": {
     "title": "Szablony pojazdów",
-    "intro": "Szablony definiują listę funkcji współdzieloną przez wiele lokomotyw. Po podłączeniu szablonu do pojazdu lista jest dziedziczona do pierwszej edycji.",
+    "intro": "Szablony pozwalają w prosty sposób powielać listę funkcji na wiele pojazdów. Dzięki nim dodając np. 10 lokomotyw SM42 możesz funkcje wpisać raz i skopiować do pozostałch 9. Możesz także pobrać funkcje z innego gotowego szablonu lub lokomotywy innego maszynisty, który już wykonał tą małpią robotę.",
     "listTitle": "Szablony",
     "add": "Dodaj szablon",
     "showLocomotives": "Pokaż lokomotywy",

@@ -15,19 +15,23 @@ Polish caption shown in the icon picker and in tooltips.
 | `light` | Światło |
 | `engine` | Silnik |
 | `sound` | Dźwięk |
-| `horn` | Klakson |
+| `horn_low` | Klakson niski |
+| `horn_high` | Klakson wysoki |
 | `coupler` | Sprzęg |
 | `interior_light` | Światło w środku |
 | `engine_room_light` | Światło przedziału maszynowego |
 | `shunting_steps_light` | Światło stopni manewrowych |
 | `inspection_light` | Światło rewizyjne |
+| `undercarriage_light` | Oświetlenie podwozia |
 | `cab_light` | Światło kabiny |
+| `dashboard_light` | Pulpit maszynisty |
 | `headlight` | Światła czołowe |
 | `roof_headlight` | Reflektor górny |
 | `red_lights` | Światła czerwone |
 | `vestibule_lights` | Światła przedsionka |
 | `destination_board_lights` | Światła tablicy |
 | `door` | Drzwi |
+| `ticket_check` | Sprawdzanie biletów |
 | `smoke` | Dym |
 | `speaker` | Głośnik |
 | `whistle` | Gwizdek |
@@ -45,8 +49,6 @@ Polish caption shown in the icon picker and in tooltips.
 | `wheels` | Koła |
 | `wipers` | Wycieraczki |
 | `sander` | Piasek |
-| `long_whistle` | Długi gwizdek |
-| `short_whistle` | Krótki gwizdek |
 | `pantograph` | Pantograf |
 | `volume_up` | Zwiększ głośność |
 | `volume_down` | Zmniejsz głośność |
@@ -81,8 +83,3 @@ Polish caption shown in the icon picker and in tooltips.
 
 `GET /api/v1/function-icons` returns this list in a stable order (the table
 order above). Scripts reuse the same catalogue for their button icons (§3a.7).
-
-**Legacy aliases** — older drafts used shorter names (`high_horn`,
-`low_horn`, `headlight`, …). Implementations MUST map those to the slugs
-above or reject them; the catalogue in this section supersedes the partial
-list in [§3a.1](./01-entities.md).

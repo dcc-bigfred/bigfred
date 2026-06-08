@@ -19,9 +19,25 @@ Staged checks before club traffic. Pick the section for your central.
 ## 6.2 Uhlenbrock 63120 (DR5000 only)
 
 1. DR5000 **on**; Uhlenbrock 63120 on **LocoNet-T** (not LocoNet-B).
-2. **LNCV 2 = 3** (57600), **LNCV 4 = 1** (Direktmodus).
-3. Uhlenbrock 63120 on **USB 3**; `ls -l /dev/loconet-63120`.
-4. Close serial monitors before `dcc-bus`.
+2. LocoNet LED **blinks** on activity (solid = no bus — fix before LNCV).
+3. **LNCV 2 = 3** (57600), **LNCV 4 = 1** (Direktmodus) — LocoNet-Tool or `rb lncv` (§6.2.1).
+4. Uhlenbrock 63120 on **USB 3**; `ls -l /dev/loconet-63120` (or `ttyUSB0` / `ttyACM0`).
+5. Close serial monitors before `dcc-bus`.
+
+### 6.2.1 LNCV via `rb lncv` (Linux)
+
+Factory USB baud is **115200** until LNCV 2 is changed. Use **`--self-config`**
+for adapter CV2/CV4 (no acknowledge on the wire).
+
+```bash
+rb lncv get --device /dev/ttyUSB0 --baud 115200 --article 63120 --addr 1 0
+rb lncv set --self-config --device /dev/ttyUSB0 --baud 115200 --article 63120 4 1
+rb lncv set --self-config --device /dev/ttyUSB0 --baud 115200 --article 63120 2 3
+rb lncv get --device /dev/ttyUSB0 --baud 57600 --article 63120 2
+rb lncv get --device /dev/ttyUSB0 --baud 57600 --article 63120 4
+```
+
+Details: [§4.2.1](./04-uhlenbrock-63120.md#421-rb-lncv-on-linux).
 
 ## 6.3 Manual serial sanity (DR5000, optional)
 
@@ -43,8 +59,13 @@ Expect bus traffic; **`83 7C`** is a common valid frame. Garbage at 115200 → L
 
 | Symptom | Likely cause | Action |
 |---------|--------------|--------|
-| No `/dev/ttyACM*` | USB / PSU | Data cable; 27 W PSU |
+| No `/dev/ttyACM*` / `ttyUSB*` | USB / PSU | Data cable; 27 W PSU; `dmesg` |
 | `permission denied` | dialout / udev | Fix group and rules |
+| LocoNet LED **solid**, no blink | No bus traffic | Central on; LocoNet-**T**; RJ12 cable; bus power |
+| `rb lncv`: no bytes received | Dead bus or wrong baud | Fix LED/bus; match `--baud` to LNCV 2 |
+| `rb lncv get` works once, then silent | Programming session stuck | Power-cycle 63120; `rb lncv` always sends prog-end |
+| `rb lncv set` timeout (no `--self-config`) | Module busy / write rejected | Retry; use `--self-config` for adapter CV2/CV4 |
+| `xxd` shows nothing (exit 124) | Idle bus **or** dead bus | Normal if central idle; if LED solid → wiring |
 | Random hex | LNCV | 57600 + Direktmodus |
 | `bad checksum` | Bus / baud | LNCV; 62280; shorter run |
 | Commands time out | Central off / wrong port | LocoNet-**T** |

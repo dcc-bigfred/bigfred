@@ -1,12 +1,19 @@
 import { Box, Typography } from "@mui/material";
 
+import { FunctionIconGlyph } from "../functions/FunctionIconGlyph";
 import {
+  cockpit,
   COCKPIT_FUNCTION_ICON_PX,
-  FunctionIconGlyph,
-} from "../functions/FunctionIconGlyph";
-import { cockpit, FUNCTION_BUTTON_SIZE_PX } from "./throttleCockpitTheme";
+  FUNCTION_BUTTON_ICON_TOP_PX,
+  FUNCTION_BUTTON_LABEL_FONT_SIZE_PX,
+  FUNCTION_BUTTON_NUM_FONT_SIZE_PX,
+  FUNCTION_BUTTON_NUM_INSET_PX,
+  FUNCTION_BUTTON_SIZE_PX,
+} from "./throttleCockpitTheme";
 
 interface FunctionGridButtonProps {
+  /** DCC function index label, e.g. `F0`, `F6`. */
+  fnCode: string;
   label: string;
   icon: string;
   active: boolean;
@@ -16,6 +23,7 @@ interface FunctionGridButtonProps {
 
 // FunctionGridButton is one DCC function cell in the throttle cockpit.
 export default function FunctionGridButton({
+  fnCode,
   label,
   icon,
   active,
@@ -32,7 +40,8 @@ export default function FunctionGridButton({
       disabled={disabled}
       onClick={onClick}
       aria-pressed={active}
-      title={label}
+      aria-label={`${fnCode} ${label}`}
+      title={`${fnCode} — ${label}`}
       sx={{
         position: "relative",
         width: FUNCTION_BUTTON_SIZE_PX,
@@ -60,10 +69,30 @@ export default function FunctionGridButton({
         },
       }}
     >
+      <Typography
+        component="span"
+        aria-hidden
+        sx={{
+          position: "absolute",
+          top: FUNCTION_BUTTON_NUM_INSET_PX,
+          left: FUNCTION_BUTTON_NUM_INSET_PX,
+          zIndex: 2,
+          color: cockpit.textMuted,
+          fontWeight: 700,
+          fontSize: FUNCTION_BUTTON_NUM_FONT_SIZE_PX,
+          lineHeight: 1,
+          letterSpacing: "0.02em",
+          textShadow: "0 1px 2px rgba(0,0,0,0.75)",
+          pointerEvents: "none",
+          userSelect: "none",
+        }}
+      >
+        {fnCode}
+      </Typography>
       <Box
         sx={{
           position: "absolute",
-          top: "14%",
+          top: FUNCTION_BUTTON_ICON_TOP_PX,
           left: "50%",
           transform: "translateX(-50%)",
           display: "flex",
@@ -89,7 +118,7 @@ export default function FunctionGridButton({
           zIndex: 1,
           color: cockpit.text,
           fontWeight: 600,
-          fontSize: "0.65rem",
+          fontSize: FUNCTION_BUTTON_LABEL_FONT_SIZE_PX,
           lineHeight: 1.15,
           textAlign: "center",
           maxWidth: "100%",

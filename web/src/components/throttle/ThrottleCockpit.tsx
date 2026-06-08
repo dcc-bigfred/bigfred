@@ -17,6 +17,7 @@ import { useNavigate } from "react-router-dom";
 
 import {
   cockpit,
+  FUNCTION_BUTTON_GRID_GAP_PX,
   FUNCTION_BUTTON_SIZE_PX,
   THROTTLE_PANEL_WIDTH_PX,
 } from "./throttleCockpitTheme";
@@ -209,13 +210,14 @@ export default function ThrottleCockpit({
               display: "grid",
               width: "100%",
               gridTemplateColumns: `repeat(auto-fill, ${FUNCTION_BUTTON_SIZE_PX}px)`,
-              gap: 1,
+              gap: `${FUNCTION_BUTTON_GRID_GAP_PX}px`,
               justifyContent: "start",
             }}
           >
             {configuredFunctions.map((fn) => (
               <FunctionGridButton
                 key={fn.num}
+                fnCode={t("fnLabel", { n: fn.num })}
                 label={fn.label}
                 icon={fn.icon}
                 active={Boolean(functions[fn.num])}

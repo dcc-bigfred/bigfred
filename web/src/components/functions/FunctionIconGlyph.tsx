@@ -1,6 +1,15 @@
 import type { CSSProperties, ReactNode } from "react";
 
+import {
+  functionIconAssetUrl,
+  hasFunctionIconAsset,
+} from "../../icons/functionIconAssets";
 import { cockpit } from "../throttle/throttleCockpitTheme";
+import AssetFunctionIcon from "./AssetFunctionIcon";
+import ArtworkFunctionGlyph, {
+  hasArtworkFunctionGlyph,
+} from "./ArtworkFunctionGlyph";
+import UnknownFunctionGlyph from "./UnknownFunctionGlyph";
 
 /** Slugs from GET /api/v1/function-icons (§3a.8). */
 export type FunctionIconSlug = string;
@@ -60,32 +69,6 @@ const bulb = (
   <path d="M9 15a3 3 0 006 0 5.5 5.5 0 00-6 0zm3 4v2" />
 );
 
-/** Locomotive cab end (front view): body, cab window, three headlamp positions. */
-const locoFrontBody = <path d="M7 20h10l1.5-3.5V9.5L17 6.5H7L5.5 9.5v7L7 20z" />;
-const locoFrontWindow = (
-  <rect x="9.25" y="10.25" width="5.5" height="3.75" rx="0.5" />
-);
-const locoFrontLightTop = (
-  <circle cx="12" cy="7.25" r="1.35" fill="currentColor" stroke="none" />
-);
-const locoFrontLightLeft = (
-  <circle cx="9.25" cy="16.25" r="1.35" fill="currentColor" stroke="none" />
-);
-const locoFrontLightRight = (
-  <circle cx="14.75" cy="16.25" r="1.35" fill="currentColor" stroke="none" />
-);
-const locoFrontWindowLit = (
-  <rect
-    x="9.25"
-    y="10.25"
-    width="5.5"
-    height="3.75"
-    rx="0.5"
-    fill="currentColor"
-    stroke="none"
-  />
-);
-
 /** Bogie / truck (inspection from below). */
 const locoBogie = (
   <>
@@ -112,12 +95,6 @@ const shuntingBulb = (
 );
 
 const GLYPHS: Record<string, ReactNode> = {
-  unspecified: (
-    <>
-      <circle cx="12" cy="12" r="3" />
-      <path d="M12 5v2M12 17v2M5 12h2M17 12h2" />
-    </>
-  ),
   light: (
     <>
       {rays}
@@ -138,12 +115,6 @@ const GLYPHS: Record<string, ReactNode> = {
       <path d="M8 9v6h3l4 4V5l-4 4H8z" />
       <path d="M17 9a3 3 0 010 6" />
       <path d="M18.5 7a5.5 5.5 0 010 10" />
-    </>
-  ),
-  horn: (
-    <>
-      <path d="M5 13h4l3 5V8l-3 5H5z" />
-      <path d="M15 10c2.2 0 4 1.8 4 4s-1.8 4-4 4" />
     </>
   ),
   coupler: (
@@ -175,36 +146,6 @@ const GLYPHS: Record<string, ReactNode> = {
     </>
   ),
   inspection_light: <>{locoBogie}</>,
-  cab_light: (
-    <>
-      {locoFrontBody}
-      {locoFrontWindowLit}
-    </>
-  ),
-  headlight: (
-    <>
-      {locoFrontBody}
-      {locoFrontWindow}
-      {locoFrontLightTop}
-      {locoFrontLightLeft}
-      {locoFrontLightRight}
-    </>
-  ),
-  roof_headlight: (
-    <>
-      {locoFrontBody}
-      {locoFrontWindow}
-      {locoFrontLightTop}
-    </>
-  ),
-  red_lights: (
-    <>
-      {locoFrontBody}
-      {locoFrontWindow}
-      {locoFrontLightLeft}
-      {locoFrontLightRight}
-    </>
-  ),
   vestibule_lights: (
     <>
       <path d="M5 8h14v8H5z" />
@@ -237,12 +178,6 @@ const GLYPHS: Record<string, ReactNode> = {
     <>
       <path d="M7 9v6h2l4 4V5l-4 4H7z" />
       <path d="M16 10.5a2.5 2.5 0 010 3" />
-    </>
-  ),
-  whistle: (
-    <>
-      <path d="M6 14h3l2 4V8l-2 4H6z" />
-      <path d="M14 9c2 0 3.5 1.5 3.5 3.5S16 16 14 16" />
     </>
   ),
   toilet: (
@@ -304,14 +239,6 @@ const GLYPHS: Record<string, ReactNode> = {
       <circle cx="12" cy="18" r="1" fill="currentColor" stroke="none" />
     </>
   ),
-  shunting_mode: (
-    <>
-      <path d="M4 16h16" />
-      <path d="M8 12h8" />
-      <path d="M6 8h12" />
-      <path d="M4 16l2-4M20 16l-2-4" />
-    </>
-  ),
   valve: (
     <>
       <path d="M6 12h12" />
@@ -338,21 +265,6 @@ const GLYPHS: Record<string, ReactNode> = {
       <path d="M6 18l4-8 4 8" />
       <path d="M8 15h8" />
       <path d="M10 12h4" />
-    </>
-  ),
-  long_whistle: (
-    <>
-      <path d="M5 18c0-5 2.5-9 6-10.5L20 7.5v2L12.5 11C9 13 6.5 15.5 5 18z" />
-      <ellipse cx="5" cy="18" rx="1.3" ry="0.9" fill="currentColor" stroke="none" />
-      <path d="M17 8a2 2 0 010 2.5" />
-      <path d="M19.5 6.5a3.5 3.5 0 010 5" />
-    </>
-  ),
-  short_whistle: (
-    <>
-      <path d="M6 17c0-4 2-7 5.5-8.5L14 8v1.5L11 10.5C8.5 12 7 14 7 17z" />
-      <ellipse cx="6" cy="17" rx="1.2" ry="0.8" fill="currentColor" stroke="none" />
-      <path d="M15 9.5a1.5 1.5 0 010 2" />
     </>
   ),
   pantograph: (
@@ -563,7 +475,23 @@ const GLYPHS: Record<string, ReactNode> = {
 };
 
 export function isKnownFunctionIcon(slug: string): boolean {
-  return slug in GLYPHS;
+  if (slug === "unspecified") {
+    return true;
+  }
+  return (
+    slug in GLYPHS || hasArtworkFunctionGlyph(slug) || hasFunctionIconAsset(slug)
+  );
+}
+
+function isUnknownFunctionIcon(slug: string): boolean {
+  if (
+    slug === "unspecified" ||
+    hasArtworkFunctionGlyph(slug) ||
+    hasFunctionIconAsset(slug)
+  ) {
+    return false;
+  }
+  return !(slug in GLYPHS);
 }
 
 export function FunctionIconGlyph({
@@ -581,6 +509,34 @@ export function FunctionIconGlyph({
   style?: CSSProperties;
   className?: string;
 }) {
+  const dimmed = variant === "cockpit" && !active;
+
+  if (hasArtworkFunctionGlyph(slug)) {
+    return (
+      <ArtworkFunctionGlyph
+        slug={slug}
+        size={size}
+        dimmed={dimmed}
+        style={style}
+        className={className}
+      />
+    );
+  }
+
+  const assetUrl = functionIconAssetUrl(slug);
+
+  if (assetUrl) {
+    return (
+      <AssetFunctionIcon
+        src={assetUrl}
+        size={size}
+        dimmed={dimmed}
+        style={style}
+        className={className}
+      />
+    );
+  }
+
   const color =
     variant === "cockpit"
       ? active
@@ -588,13 +544,24 @@ export function FunctionIconGlyph({
         : "rgba(232, 240, 252, 0.72)"
       : undefined;
 
+  if (isUnknownFunctionIcon(slug)) {
+    return (
+      <UnknownFunctionGlyph
+        size={size}
+        dimmed={dimmed}
+        style={{ color, flexShrink: 0, ...style }}
+        className={className}
+      />
+    );
+  }
+
   return (
     <Svg
       size={size}
       style={{ color, flexShrink: 0, ...style }}
       className={className}
     >
-      {GLYPHS[slug] ?? GLYPHS.unspecified}
+      {GLYPHS[slug]}
     </Svg>
   );
 }

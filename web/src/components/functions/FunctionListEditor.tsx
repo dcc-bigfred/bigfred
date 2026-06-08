@@ -41,7 +41,33 @@ import {
   type FunctionCopySource,
   type FunctionUpsertBody,
 } from "../../api/functions";
+import {
+  cockpit,
+  cockpitFunctionButtonGradient,
+} from "../throttle/throttleCockpitTheme";
 import { FunctionIconVisual } from "./functionIconMap";
+
+type IconOption = { slug: string; label: string };
+
+const iconPickerInputSx = {
+  "& .MuiOutlinedInput-root": {
+    background: cockpitFunctionButtonGradient(),
+    color: cockpit.text,
+    "& fieldset": { borderColor: cockpit.border },
+    "&:hover fieldset": { borderColor: cockpit.borderBright },
+    "&.Mui-focused fieldset": { borderColor: cockpit.borderBright },
+  },
+  "& .MuiInputLabel-root": { color: cockpit.textMuted },
+  "& .MuiInputLabel-root.Mui-focused": { color: cockpit.text },
+  "& .MuiSvgIcon-root": { color: cockpit.textMuted },
+} as const;
+
+const iconPickerPaperSx = {
+  bgcolor: cockpit.bgPanel,
+  border: `1px solid ${cockpit.border}`,
+  backgroundImage: "none",
+  "& .MuiAutocomplete-listbox": { p: 0 },
+} as const;
 
 export type FunctionEditorMode = "vehicle" | "template";
 
@@ -195,6 +221,16 @@ export default function FunctionListEditor({
     t(`function:icon.${slug}` as "function:icon.unspecified", {
       defaultValue: slug,
     });
+
+  const iconOptions = useMemo((): IconOption[] => {
+    return (icons.data ?? [{ icon: "unspecified" }]).map((row) => ({
+      slug: row.icon,
+      label: iconLabel(row.icon),
+    }));
+  }, [icons.data, t]);
+
+  const selectedIconOption =
+    iconOptions.find((o) => o.slug === icon) ?? iconOptions[0] ?? null;
 
   const sourceTypeLabel = (kind: FunctionCopySource["kind"]) =>
     kind === "template"
@@ -398,35 +434,85 @@ export default function FunctionListEditor({
                 fullWidth
               />
             )}
-            <FormControl fullWidth>
-              <InputLabel>{t("function:editor.fieldIcon")}</InputLabel>
-              <Select
-                label={t("function:editor.fieldIcon")}
-                value={icon}
-                onChange={(e) => {
-                  const nextIcon = e.target.value;
-                  setIcon(nextIcon);
-                  if (!name.trim()) {
-                    setName(iconLabel(nextIcon));
-                  }
-                }}
-                renderValue={(v) => (
-                  <Stack direction="row" spacing={1} alignItems="center">
-                    <FunctionIconVisual icon={v} />
-                    <span>{iconLabel(v)}</span>
-                  </Stack>
-                )}
-              >
-                {(icons.data ?? [{ icon: "unspecified" }]).map((row) => (
-                  <MenuItem key={row.icon} value={row.icon}>
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      <FunctionIconVisual icon={row.icon} />
-                      <span>{iconLabel(row.icon)}</span>
-                    </Stack>
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <Autocomplete
+              fullWidth
+              disableClearable
+              options={iconOptions}
+              value={selectedIconOption}
+              onChange={(_event, option) => {
+                if (!option) return;
+                setIcon(option.slug);
+                if (!name.trim()) {
+                  setName(option.label);
+                }
+              }}
+              getOptionLabel={(option) => option.label}
+              isOptionEqualToValue={(a, b) => a.slug === b.slug}
+              filterOptions={(options, { inputValue }) => {
+                const q = inputValue.trim().toLowerCase();
+                if (!q) return options;
+                return options.filter(
+                  (o) =>
+                    o.label.toLowerCase().includes(q) ||
+                    o.slug.toLowerCase().includes(q),
+                );
+              }}
+              noOptionsText={t("function:editor.iconNoResults")}
+              slotProps={{ paper: { sx: iconPickerPaperSx } }}
+              renderOption={({ key, ...optionProps }, option) => (
+                <Box
+                  component="li"
+                  key={key}
+                  {...optionProps}
+                  sx={{
+                    display: "flex",
+                    gap: 1,
+                    alignItems: "center",
+                    px: 1.5,
+                    py: 1,
+                    color: cockpit.text,
+                    background: cockpitFunctionButtonGradient(
+                      optionProps["aria-selected"] === true,
+                    ),
+                    borderBottom: `1px solid ${cockpit.border}`,
+                    "&.Mui-focused": {
+                      background: cockpitFunctionButtonGradient(true),
+                    },
+                  }}
+                >
+                  <FunctionIconVisual icon={option.slug} />
+                  <span>{option.label}</span>
+                </Box>
+              )}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label={t("function:editor.fieldIcon")}
+                  placeholder={t("function:editor.iconSearchPlaceholder")}
+                  sx={iconPickerInputSx}
+                  InputProps={{
+                    ...params.InputProps,
+                    startAdornment: (
+                      <>
+                        {selectedIconOption ? (
+                          <Box
+                            sx={{
+                              display: "flex",
+                              alignItems: "center",
+                              pl: 1,
+                              pr: 0.5,
+                            }}
+                          >
+                            <FunctionIconVisual icon={selectedIconOption.slug} />
+                          </Box>
+                        ) : null}
+                        {params.InputProps.startAdornment}
+                      </>
+                    ),
+                  }}
+                />
+              )}
+            />
             <TextField
               label={t("function:editor.fieldTitle")}
               value={name}

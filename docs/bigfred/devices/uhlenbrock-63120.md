@@ -116,8 +116,8 @@ LocoNet frames** (opcode … checksum), not a filtered subset.
 ## 5. LNCV configuration
 
 Program while the module is on a **powered LocoNet bus** (command station on),
-using **LocoNet-Tool** or a LocoNet throttle with LNCV programming (handbook:
-“configure by the Intellibox using LocoNet programming”).
+using **LocoNet-Tool**, a LocoNet throttle with LNCV programming (handbook:
+“configure by the Intellibox using LocoNet programming”), or **`rb lncv`** on Linux.
 
 | LNCV | Description | Factory default | BigFred |
 |------|-------------|-----------------|---------|
@@ -133,6 +133,48 @@ Reference also:
 Wrong **LNCV 2** or **LNCV 4** produces garbage, missing frames, or checksum
 errors in `dcc-bus` logs — not a Pi defect.
 
+### 5.1 `rb lncv` (Linux alternative to LocoNet-Tool)
+
+BigFred ships **`rb lncv get`** and **`rb lncv set`** for Uhlenbrock-class LNCV
+modules. Message format matches JMRI `LncvMessageContents`; implementation:
+[`lncv.go`](../../../pkgs/loco/commandstation/lncv.go).
+
+**Before any command:** LocoNet LED must **flash** on activity (not solid red).
+Command station on; 63120 on LocoNet data port (DR5000: **LocoNet-T**).
+
+```bash
+# Verify bus + module (factory USB baud 115200)
+rb lncv get --device /dev/ttyUSB0 --baud 115200 --article 63120 --addr 1 0
+
+# Self-config: Direktmodus + 57600 (use --self-config — no LACK on wire)
+rb lncv set --self-config --device /dev/ttyUSB0 --baud 115200 --article 63120 4 1
+rb lncv set --self-config --device /dev/ttyUSB0 --baud 115200 --article 63120 2 3
+
+# Verify at new baud
+rb lncv get --device /dev/ttyUSB0 --baud 57600 --article 63120 2
+rb lncv get --device /dev/ttyUSB0 --baud 57600 --article 63120 4
+```
+
+| Flag | Notes |
+|------|-------|
+| `--article 63120` | Normalised to article **6312** |
+| `--addr 1` | Module address (LNCV 0); default **1** |
+| `--self-config` | Required for adapter CV2/CV4; value applied without acknowledge |
+| `-v` | Debug: log `loconet TX` / `loconet RX` hex |
+
+Full flag list and troubleshooting:
+[`loconet-adapter/04-uhlenbrock-63120.md` §4.2.1](../../loconet-adapter/04-uhlenbrock-63120.md#421-rb-lncv-on-linux).
+
+**Self-configuration behaviour:** when CV2 (baud) or CV4 (mode) is written, the
+63120 applies the change internally and may **not echo or acknowledge** the write
+frame on USB. `rb lncv` treats a confirmed-live programming session plus
+`--self-config` as “sent, reconnect to verify”. A power-cycle may be needed if the
+adapter stops responding after a partial session.
+
+**JMRI note:** the 63120's own options are documented as safest to configure from
+a LocoNet throttle on the bus; USB-side programming can briefly drop contact
+during configuration.
+
 ---
 
 ## 6. LED indicators
@@ -141,6 +183,11 @@ errors in `dcc-bus` logs — not a Pi defect.
 |-----|---------|
 | **USB** | Lights when the interface is ready on the USB bus |
 | **LocoNet** | Flashes briefly on each LocoNet packet activity |
+
+| LocoNet LED state | Interpretation |
+|-------------------|----------------|
+| **Blinking** on traffic | Bus alive; safe to run `rb lncv` or `dcc-bus` |
+| **Solid** (no blink) | No valid LocoNet traffic — check central power, RJ12 port (T not B), cable, bus power before LNCV or BigFred bring-up |
 
 ---
 
@@ -270,16 +317,18 @@ External observation:
   automatic layout logic).
 
 Configure the **63120's own LNCVs** here (§5) while connected to a powered LocoNet
-segment. On Windows-only workshop PCs this is the supported path; on Linux, LNCV
-changes may require LocoNet-Tool under Wine, a Windows VM, or programming from a
-LocoNet throttle per handbook.
+segment. On Windows-only workshop PCs this is the supported path.
+
+On **Linux**, use **`rb lncv`** (§5.1) as the primary alternative. Fallbacks:
+LocoNet-Tool under Wine, a Windows VM, or programming from a LocoNet throttle per
+handbook.
 
 ---
 
 ## 11. Bring-up checklist
 
-- [ ] 63120 on **LocoNet-T** (DR5000); central powered; LocoNet LED flashes on activity.
-- [ ] LNCV **2 = 3** (57600), **LNCV 4 = 1** (Direct mode) verified.
+- [ ] 63120 on **LocoNet-T** (DR5000); central powered; LocoNet LED **blinks** on activity (not solid).
+- [ ] LNCV **2 = 3** (57600), **LNCV 4 = 1** (Direct mode) verified (`rb lncv get` or LocoNet-Tool).
 - [ ] USB connected to Pi; `/dev/loconet-63120` (or `ttyACM*`) present; user in **`dialout`**.
 - [ ] No other program holds the serial port (JMRI, minicom, LocoNet-Tool on same path).
 - [ ] BigFred catalogue: `loconet_serial`, URI `serial:///dev/loconet-63120:57600`.
@@ -288,7 +337,10 @@ LocoNet throttle per handbook.
 - [ ] Handheld change on LocoNet visible in web UI.
 
 **Common issues:** factory defaults (115200 + filtered mode), wrong LocoNet port
-(B vs T), weak bus power (add **62280**), parallel serial port users, USB autosuspend.
+(B vs T), **solid LocoNet LED** (no bus traffic), weak bus power (add **62280**),
+parallel serial port users, USB autosuspend, adapter left in LNCV programming mode
+(power-cycle USB + LocoNet, then always close session — `rb lncv` sends prog-end
+automatically).
 
 Optional sanity check ([`loconet-adapter/06-bringup` §6.3](../../loconet-adapter/06-bringup-and-testing.md)):
 

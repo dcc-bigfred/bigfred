@@ -17,6 +17,22 @@ type lnTransport interface {
 	Close() error
 }
 
+// lnRxCounter is implemented by transports that can report how many bytes they
+// have read off the wire (serial). Used to tell "dead bus" apart from "module
+// did not answer" in LNCV diagnostics.
+type lnRxCounter interface {
+	RxByteCount() uint64
+}
+
+// rxByteCount returns the number of bytes read off the wire, or 0 if the
+// transport does not track it.
+func (l *LocoNet) rxByteCount() uint64 {
+	if c, ok := l.t.(lnRxCounter); ok {
+		return c.RxByteCount()
+	}
+	return 0
+}
+
 type LocoNet struct {
 	t lnTransport
 
@@ -93,6 +109,13 @@ func NewLocoNetTCP(host string, port uint16) (*LocoNet, error) {
 	ln.t = t
 	go ln.dispatch()
 	return ln, nil
+}
+
+// SetTimeout adjusts the request/response deadline for LocoNet operations.
+func (l *LocoNet) SetTimeout(d time.Duration) {
+	if d > 0 {
+		l.timeout = d
+	}
 }
 
 func (l *LocoNet) CleanUp() error {

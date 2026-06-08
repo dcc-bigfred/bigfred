@@ -2,6 +2,7 @@ package commandstation
 
 import (
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -11,6 +12,11 @@ import (
 type lnSerialTransport struct {
 	port serial.Port
 	stop chan struct{}
+	// rxBytes counts every byte read off the wire since open. A LocoBuffer-class
+	// adapter (e.g. Uhlenbrock 63120) echoes traffic from a live LocoNet bus, so
+	// a count of zero is a strong signal the bus is dead / unpowered / miswired,
+	// not that the addressed module failed to answer.
+	rxBytes atomic.Uint64
 }
 
 func newLnSerialTransport(device string, baudrate int, rxCh chan<- lnPacket) (*lnSerialTransport, error) {
@@ -46,6 +52,11 @@ func newLnSerialTransport(device string, baudrate int, rxCh chan<- lnPacket) (*l
 	return t, nil
 }
 
+// RxByteCount reports how many bytes have been read off the wire since open.
+func (t *lnSerialTransport) RxByteCount() uint64 {
+	return t.rxBytes.Load()
+}
+
 func (t *lnSerialTransport) WritePacket(pkt []byte) error {
 	_, err := t.port.Write(pkt)
 	return err
@@ -78,6 +89,9 @@ func (t *lnSerialTransport) readLoop(rxCh chan<- lnPacket) {
 			// Some implementations return timeout errors as nil n=0; we just continue.
 			logrus.Debugf("loconet serial read error: %v", err)
 			continue
+		}
+		if n > 0 {
+			t.rxBytes.Add(uint64(n))
 		}
 		for i := 0; i < n; i++ {
 			if pkt, ok := p.PushByte(buf[i]); ok {

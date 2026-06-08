@@ -24,6 +24,7 @@ func NewRootCommand(loc *locoapp.LocoApp) *cobra.Command {
 
 	command.AddCommand(NewSoundCommand(loc))
 	command.AddCommand(NewWifiCommand(loc))
+	command.AddCommand(NewLNCVCommand(loc))
 	command.AddCommand(NewAppCommand(loc))
 
 	return command

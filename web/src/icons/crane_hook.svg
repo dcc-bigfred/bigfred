@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   width="187"
+   height="195"
+   viewBox="0 0 187 195"
+   version="1.1"
+   id="svg98"
+   sodipodi:docname="crane_hook.svg"
+   inkscape:version="1.4.4 (dcaf3e7d9e, 2026-05-05)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs98">
+    <linearGradient
+       id="gradient_1"
+       gradientUnits="userSpaceOnUse"
+       x1="963.74487"
+       y1="1051.7085"
+       x2="872.21051"
+       y2="934.47986"
+       gradientTransform="matrix(1.5,0,0,1.5,-1282.936,-1392.0953)">
+      <stop
+         offset="0"
+         stop-color="#28456C"
+         id="stop16" />
+      <stop
+         offset="1"
+         stop-color="#41699E"
+         id="stop17" />
+    </linearGradient>
+  </defs>
+  <sodipodi:namedview
+     id="namedview98"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="1.1077586"
+     inkscape:cx="31.595331"
+     inkscape:cy="266.3035"
+     inkscape:window-width="1259"
+     inkscape:window-height="1387"
+     inkscape:window-x="12"
+     inkscape:window-y="39"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg98" />
+  <path
+     fill="#1b2f4a"
+     d="m 91.679873,31.859922 c 3.4605,0.345 5.1615,0.5595 7.764,2.946 2.687997,4.3635 2.098497,10.4745 2.185497,15.468 11.1555,-0.426 30.0495,-3.186 39.84,2.01 0.9375,1.116 2.5545,2.5335 2.9175,3.9285 3.336,12.81 -13.215,33.183 -22.9515,39.9285 -6.1245,4.241998 -15.066,2.8995 -19.0155,9.841498 0.444,10.152 14.4225,15.003 20.19,22.5765 3.897,5.115 4.593,10.9935 3.7185,17.1975 -1.08,7.8345 -5.3355,14.88 -11.766,19.482 -7.0425,5.1195 -16.103997,7.032 -24.665997,5.625 -10.155,-1.6695 -16.959,-9.15 -22.6995,-17.1015 -1.014,-3.297 -2.565,-7.758 -1.7265,-11.166 0.7605,-3.0885 1.863,-4.5375 4.569,-5.907 5.862,2.6805 10.4445,13.215 15.462,17.8425 3.9255,3.6195 8.8275,5.6565 14.241,5.2275 4.073997,-0.324 7.250997,-2.283 9.916497,-5.3085 3.0705,-3.486 5.364,-10.479 4.716,-15.099 -1.4565,-10.401 -15.080997,-9.639 -21.493497,-15.84 -5.3175,-5.145 -3.843,-14.265 -3.651,-21.0435 -10.4385,-2.2425 -17.469,-3.898498 -25.6845,-11.113498 -7.626,-6.699 -17.5005,-19.776 -17.79,-30.36 -0.075,-2.736 0.7065,-5.3625 2.7135,-7.2945 6.966,-6.7125 30.513,-3.9285 40.161,-3.747 0.495,-6.2805 1.389,-12.012 3.0495,-18.093 z"
+     id="path449"
+     style="stroke-width:1.5" />
+  <path
+     fill="#badbf8"
+     d="m 59.941373,61.583922 c 22.9245,-0.75 49.009497,-2.247 71.629497,1.311 -2.784,7.4205 -6.5955,13.2495 -11.823,19.164 -4.722,3.588 -10.119,6.633 -15.933,7.9695 -9.776997,2.2485 -20.609997,0.5925 -29.006997,-4.992 -8.2125,-5.463 -12.8835,-13.995 -14.8665,-23.4525 z"
+     id="path450"
+     style="stroke-width:1.5" />
+</svg>

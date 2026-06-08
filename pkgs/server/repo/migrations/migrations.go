@@ -43,6 +43,23 @@ func register(m *migrator.Migrator) {
 	m.Register(20260526_000002, createLayoutCommandStationsUp, createLayoutCommandStationsDown)
 	m.Register(20260604_000001, createVehicleTemplatesAndDccFunctionsUp, createVehicleTemplatesAndDccFunctionsDown)
 	m.Register(20260604_000002, addVehicleDeadManSwitchColumnsUp, addVehicleDeadManSwitchColumnsDown)
+
+	m.Register(20260608_000001, seedPikoSm31TemplateUp, seedPikoSm31TemplateDown)
+	m.Register(20260608_000002, seedPikoZimoSm31TemplateUp, seedPikoZimoSm31TemplateDown)
+	m.Register(20260608_000003, seedSchlesienModelleEsuLoksoundTemplateUp, seedSchlesienModelleEsuLoksoundTemplateDown)
+	m.Register(20260608_000004, seedPikoXpSu46TemplateUp, seedPikoXpSu46TemplateDown)
+	m.Register(20260608_000005, seedPikoXpSp45Su45TemplateUp, seedPikoXpSp45Su45TemplateDown)
+	m.Register(20260608_000006, seedPikoDcc24EsuSp45Su45TemplateUp, seedPikoDcc24EsuSp45Su45TemplateDown)
+	m.Register(20260608_000007, seedRocoZimo810TemplateUp, seedRocoZimo810TemplateDown)
+	m.Register(20260608_000008, seedPikoXpSt44TemplateUp, seedPikoXpSt44TemplateDown)
+	m.Register(20260608_000009, seedPikoDcc24EsuEp07Eu07TemplateUp, seedPikoDcc24EsuEp07Eu07TemplateDown)
+	m.Register(20260608_000010, seedSchlesienModelleEsuEp07Eu07TemplateUp, seedSchlesienModelleEsuEp07Eu07TemplateDown)
+	m.Register(20260608_000011, seedPikoXpEn57TemplateUp, seedPikoXpEn57TemplateDown)
+	m.Register(20260608_000012, seedRoboEsuEn57TemplateUp, seedRoboEsuEn57TemplateDown)
+	m.Register(20260608_000013, seedRoboDigisoundEn57TemplateUp, seedRoboDigisoundEn57TemplateDown)
+	m.Register(20260608_000014, seedRocoDcc24ZimoTy2TemplateUp, seedRocoDcc24ZimoTy2TemplateDown)
+	m.Register(20260608_000015, seedRocoDcc24EsuTy2TemplateUp, seedRocoDcc24EsuTy2TemplateDown)
+	m.Register(20260608_000016, seedPikoXpEt21TemplateUp, seedPikoXpEt21TemplateDown)
 }
 
 // createCommandStationsUp installs the `command_stations` catalogue

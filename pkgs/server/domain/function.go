@@ -25,14 +25,14 @@ func (DccFunction) Table() string { return "dcc_functions" }
 // functionIconOrder is the authoritative catalogue order for
 // GET /api/v1/function-icons.
 var functionIconOrder = []FunctionIcon{
-	"unspecified", "light", "engine", "sound", "horn", "coupler",
+	"unspecified", "light", "engine", "sound", "horn_low", "horn_high", "coupler",
 	"interior_light", "engine_room_light", "shunting_steps_light",
-	"inspection_light", "cab_light", "headlight", "roof_headlight",
+	"inspection_light", "undercarriage_light", "cab_light", "dashboard_light", "headlight", "roof_headlight",
 	"red_lights", "vestibule_lights", "destination_board_lights",
-	"door", "smoke", "speaker", "whistle", "toilet", "compressor",
+	"door", "ticket_check", "smoke", "speaker", "whistle", "toilet", "compressor",
 	"brake_sound", "coal_shoveling", "fan", "hand_brake", "injector",
 	"mute_sounds", "radio_command", "shunting_mode", "valve", "wheels",
-	"wipers", "sander", "long_whistle", "short_whistle", "pantograph",
+	"wipers", "sander", "pantograph",
 	"volume_up", "volume_down", "heavy_load", "wifi", "pc2_signal",
 	"coupling", "uncoupling", "oil_pump", "brake_sound_mute",
 	"wheel_squeal", "bell", "coal_bunker", "watering",

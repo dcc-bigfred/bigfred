@@ -384,7 +384,7 @@ func (r *Router) setLocoFunction(ctx context.Context, addr uint16, userID uint, 
 // down to speed step 1 (DCC EMG-stop) and emits a system.estop
 // audit event on the Redis bus.
 func (r *Router) HandleEStop(ctx context.Context, sess *ws.Session, p protocol.SystemEStopPayload, requestID string) {
-	r.applyEmergencyForSession(ctx, sess, p.Reason)
+	r.applyEmergencyForSession(ctx, sess, p.Reason, false)
 	if requestID != "" {
 		_ = sess.SendAck(ctx, requestID, true, "")
 	}
@@ -401,11 +401,11 @@ func (r *Router) HandleSessionClose(ctx context.Context, sess *ws.Session, reaso
 			"reason":    reason,
 			"addrs":     addrs,
 		}).Info("dcc-bus last user session closed — emergency stop on drive targets")
-		r.applyEmergencyStop(ctx, sess.UserID, sess.ID, addrs, reason)
+		r.applyEmergencyStop(ctx, sess.UserID, sess.ID, addrs, reason, true)
 		return
 	}
 	if reason == "deadman" {
-		r.applyEmergencyForSession(ctx, sess, reason)
+		r.applyEmergencyForSession(ctx, sess, reason, true)
 	}
 }
 
@@ -457,22 +457,22 @@ func (r *Router) collectDriveTargetsForUser(ctx context.Context, userID uint) []
 // applyEmergencyForSession brakes every loco the session subscribed
 // to. We emit one EMG-stop per address so a partial failure (the
 // command station rejected one address) doesn't abort the rest.
-func (r *Router) applyEmergencyForSession(ctx context.Context, sess *ws.Session, reason string) {
-	r.applyEmergencyStop(ctx, sess.UserID, sess.ID, sess.SubscribedAddrs(), reason)
+func (r *Router) applyEmergencyForSession(ctx context.Context, sess *ws.Session, reason string, movingOnly bool) {
+	r.applyEmergencyStop(ctx, sess.UserID, sess.ID, sess.SubscribedAddrs(), reason, movingOnly)
 }
 
 // applyEmergencyStop issues EMG-stop for each address and publishes
 // the audit frame. Shared by per-session and per-user last-session
 // paths.
 //
-// Locos already at normal stop (speed 0 in the cache) are skipped:
-// re-issuing DCC e-stop (wire speed 1) would make the state feed
-// report speed 1 when the user returns to throttle after a benign
-// page navigation.
-func (r *Router) applyEmergencyStop(ctx context.Context, userID uint, sessionID string, addrs []uint16, reason string) {
+// When movingOnly is true (dead-man's switch paths), a loco is acted
+// on only when its cached speed is above 1. When movingOnly is false
+// (manual estop), locos already at normal stop (speed 0) are skipped
+// so a benign page navigation does not surface wire speed 1 in the UI.
+func (r *Router) applyEmergencyStop(ctx context.Context, userID uint, sessionID string, addrs []uint16, reason string, movingOnly bool) {
 	affected := make([]uint16, 0, len(addrs))
 	for _, addr := range addrs {
-		if cached, ok, err := r.redis.LoadState(ctx, addr); err == nil && ok && cached.Speed == 0 {
+		if !r.shouldEmergencyStopLoco(ctx, addr, movingOnly) {
 			continue
 		}
 		if err := r.station.SetSpeed(commandstation.LocoAddr(addr), 1, true, uint8(r.speedSteps)); err != nil {
@@ -513,6 +513,17 @@ func (r *Router) applyEmergencyStop(ctx context.Context, userID uint, sessionID 
 	}); err != nil {
 		r.log.WithError(err).Debug("dcc-bus estop publish")
 	}
+}
+
+func (r *Router) shouldEmergencyStopLoco(ctx context.Context, addr uint16, movingOnly bool) bool {
+	cached, ok, err := r.redis.LoadState(ctx, addr)
+	if err != nil || !ok {
+		return !movingOnly
+	}
+	if movingOnly {
+		return cached.Speed > 1
+	}
+	return cached.Speed != 0
 }
 
 func (r *Router) allowedVehicle(addr uint16) (layoutroster.AllowedVehicle, bool) {

@@ -110,6 +110,11 @@ The dead-man's switch follows §4.5.5:
   `DriveTargets`. This is the **per-daemon** rule — a separate
   daemon (different cs) does not fire just because this one did.
 
+**Speed gate.** The dead-man's switch (idle timeout, last-session
+close) acts on a locomotive only when its cached speed is **above 1**
+— standing or creeping locos are left alone. Manual `system.estop`
+from the throttle is not gated this way (it still skips speed 0 only).
+
 **Per-vehicle function plan (implemented).** After `SetSpeed(0)` /
 EMG-stop on a locomotive, `dcc-bus` reads the vehicle's
 `deadManSwitchOption` from the `allowed_vehicles` snapshot and may

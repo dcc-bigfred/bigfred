@@ -3,7 +3,7 @@
 Two transports carry the application's traffic: REST for CRUD-like,
 idempotent reads/writes, and a single WebSocket for everything that is
 short, frequent and event-driven (throttle, takeover, radio,
-dead-man's switch, scripts).
+Radio Stop, dead-man's switch, scripts).
 
 ## Subsections
 
@@ -12,3 +12,4 @@ dead-man's switch, scripts).
 3. [Takeover state machine](./03-takeover-state-machine.md)
 4. [Radio – delivery rules](./04-radio-delivery.md)
 5. [Drive Session & Dead-Man's Switch](./05-drive-session-dms.md)
+6. [Radio Stop – layout-wide emergency halt](./06-radio-stop.md)

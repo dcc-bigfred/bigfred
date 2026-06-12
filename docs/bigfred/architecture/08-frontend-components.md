@@ -258,9 +258,14 @@ can:
 - set speed and direction (`loco.setSpeed` / `train.setSpeed`),
 - toggle registered DCC functions (`loco.toggleFn`),
 - start and stop attached scripts (`script.run` / `script.stop`),
-- trigger emergency braking (`system.estop`).
+- trigger emergency braking (`system.estop`);
+- trigger **Radio Stop** (`system.radioStop`, §4.6) – layout-wide
+  halt with confirmation dialog and radiostop sound on every throttle
+  session.
 
-All of the above travel over the existing WebSocket connection (§4.2).
+Throttle commands (`loco.*`, `train.*`, `system.estop`) travel over
+the data-plane WebSocket once §7e ships; Radio Stop and other
+control-plane actions use `/api/v1/ws` (§4.2, §7e.7).
 
 #### Server as source of truth (multi-pilot sync)
 

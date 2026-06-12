@@ -90,6 +90,9 @@ channels):
   ships; scope is the command station this `dcc-bus` owns (not a
   global track-power cut). On `loco-server`'s baseline WS the scope
   is global.
+- `system.radioStop` `{}` – **Radio Stop** (§4.6). Control-plane only.
+  Layout-wide halt of every roster vehicle on all command stations;
+  requires drive scope. See §4.6 for fan-out, debounce and audit.
 - `ping`. Both endpoints have independent application-level
   heartbeats; the dead-man's switch (§4.5) fires per-endpoint with
   cross-process coordination via Redis.
@@ -140,6 +143,10 @@ Throttle / state:
   rippling to a linked vehicle). Clients SHOULD re-fetch
   `GET /api/v1/vehicles/{addr}/functions`. See §3a.6.5.
 - `system.status` `{ connected, station: "z21", trackPower: true }`.
+- `system.radioStop` `{ triggeredBy: { userId, login }, at }` –
+  layout-wide halt was triggered (§4.6). Delivered to every
+  control-plane session in the layout; throttle clients play the
+  radiostop sound on receipt.
 
 Layout dashboard (presence + roster):
 

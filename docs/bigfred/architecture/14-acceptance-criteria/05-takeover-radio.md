@@ -46,3 +46,21 @@
 - The interlocking view radio panel shows traffic addressed to that
   box and supports sending preset phrases to drivers and (where the
   protocol allows) other interlockings in the layout.
+
+#### Radio Stop
+
+- A driver with at least one drivable vehicle on the layout sees a
+  **Radiostop** button in the throttle overlay; confirming the dialog
+  sends `system.radioStop` and every roster vehicle on **all**
+  command stations attached to the layout brakes to a standstill.
+- Every open throttle session in the layout (including users who did
+  not press the button) plays the radiostop sound when
+  `system.radioStop` arrives.
+- A user with no drive scope (idle signalman, admin without `driver`)
+  does not see the button and receives `403` if they craft the WS
+  frame manually.
+- The audit log records `system.radio_stop` with the triggering user
+  and the aggregated list of affected vehicle addresses.
+- Radio Stop is independent of the walkie-talkie phrase
+  `STOP_IMMEDIATELY`: sending that phrase does not brake the layout,
+  and Radio Stop does not appear in the interlocking radio panel.

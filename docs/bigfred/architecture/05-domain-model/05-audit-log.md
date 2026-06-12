@@ -70,6 +70,7 @@ func (s *AuditService) List(ctx context.Context, q AuditQuery) ([]domain.AuditLo
 | `script.created/updated/deleted` | `ScriptService.Create/Update/Delete`. `ObjectID = script.id`, `ObjectName = script.name`, `Metadata = {runtime, icon, sourceLen}` (source body is **never** stored in audit). |
 | `script.attached / detached`     | `ScriptService.Attach / Detach`. `ObjectID = script.id`, `Metadata = {vehicleId? , trainId?}`. |
 | `session.emergency_executed`     | `ws.Hub` after the dead-man's switch runs the user's `EmergencyPlan` (§4.5.5). `ObjectID = sessionID`, `ObjectName = sessionID prefix`, `Metadata = {action, affected_vehicles, terminated_scripts}` (number of Goja VMs `vm.Interrupt("deadman")`-ed in the sibling executor as part of the emergency). |
+| `system.radio_stop`              | `ws.Hub` after a successful `system.radioStop` (§4.6). `ObjectType = "layout"`, `ObjectID = layoutID`, `ObjectName = layout.Name`, `Metadata = {triggered_by_user_id, affected_vehicles, terminated_scripts, command_stations: [{id, addrs[]}]}` – one entry per `dcc-bus` that acknowledged the halt. |
 
 **Write-path discipline:**
 

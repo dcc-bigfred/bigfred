@@ -1,5 +1,9 @@
 ### 4.4 Radio – delivery rules
 
+Walkie-talkie radio (this section) is separate from **Radio Stop**
+(§4.6): preset phrases such as `STOP_IMMEDIATELY` are point-to-point
+messages with no layout-wide braking side effect.
+
 - A radio message addressed to `userId` is delivered to **all** of that
   user's open WebSocket sessions (phone + desktop simultaneously).
 - A radio message addressed to `interlockingId` is delivered to the user

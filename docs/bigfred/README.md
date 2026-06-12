@@ -25,9 +25,9 @@ permission checks via **`security`**; see
 
 1. [Terminology](./architecture/00-terminology.md) — authoritative
    vocabulary (driver, signalman, vehicle, train, interlocking,
-   takeover, lease, radio, layout, command station, function, vehicle template,
-   script, throttle mode, dashboard, layout vehicle roster).
-2. [Goals](./architecture/01-goals.md) — platform goals and the 19
+   takeover, lease, radio, radio stop, layout, command station, function,
+   vehicle template, script, throttle mode, dashboard, layout vehicle roster).
+2. [Goals](./architecture/01-goals.md) — platform goals and the 21
    functional goals that drive everything else.
 3. [Technology Stack](./architecture/02-tech-stack.md) — Go (chi, REL,
    Goja, mark3labs/mcp-go, …) and React (Vite, MUI, TanStack Query,
@@ -42,7 +42,7 @@ permission checks via **`security`**; see
    templates / scripts, [function icon catalogue](./architecture/05-domain-model/08-function-icon-catalogue.md).
 7. [Communication Protocol (REST + WebSocket)](./architecture/06-communication-protocol/README.md)
    — REST endpoints, WS actions / events, takeover state machine,
-   radio delivery, drive session + dead-man's switch.
+   radio delivery, drive session + dead-man's switch, Radio Stop.
 8. [Backend Components](./architecture/07-backend-components.md) — Hub,
    Client, dispatch, LocoService, poller, Redis roles, chi wiring.
 9. [Frontend Components](./architecture/08-frontend-components.md) —

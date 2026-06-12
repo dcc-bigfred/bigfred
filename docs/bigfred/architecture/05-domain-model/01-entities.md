@@ -215,7 +215,7 @@ const (
     RadioCancelRoute       RadioPhrase = "CANCEL_ROUTE"
     RadioRouteSet          RadioPhrase = "ROUTE_SET"
     RadioAck               RadioPhrase = "ACK"
-    RadioStopImmediately   RadioPhrase = "STOP_IMMEDIATELY"
+    RadioStopImmediately   RadioPhrase = "STOP_IMMEDIATELY" // walkie-talkie phrase only; see §4.6 for layout-wide Radio Stop
     RadioReadyToDepart     RadioPhrase = "READY_TO_DEPART"
     RadioDepartureCleared  RadioPhrase = "DEPARTURE_CLEARED"
 )

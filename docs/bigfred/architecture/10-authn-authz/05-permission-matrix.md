@@ -3,6 +3,7 @@
 | Capability                                  | driver (own) | driver (leased) | signalman (idle) | signalman (active takeover) | admin (permanent) | admin (sudo) |
 |---------------------------------------------|:------------:|:---------------:|:----------------:|:---------------------------:|:-----------------:|:------------:|
 | Drive vehicle / train                       | ✅            | ✅               | ❌                | ✅                           | ❌¹                | ❌¹           |
+| Trigger Radio Stop (layout-wide halt, §4.6)   | ✅            | ✅               | ❌                | ✅                           | ❌¹                | ❌¹           |
 | Edit vehicle metadata, write CV             | ✅            | ❌               | ❌                | ❌                           | ❌¹                | ❌¹           |
 | Register vehicle (within own DCC pool)      | ✅            | n/a             | n/a              | n/a                         | ❌¹                | ❌¹           |
 | Register vehicle outside the user's DCC pool³ | ❌            | n/a             | n/a              | n/a                         | ✅                 | ✅            |

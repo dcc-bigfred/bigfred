@@ -281,6 +281,11 @@ type RadioSecurityContext struct{}
 
 func (RadioSecurityContext) CanSendTo(actor domain.User, toUser *domain.User, toIlk *domain.Interlocking) Decision
 
+// pkgs/server/security/radio_stop.go
+type RadioStopSecurityContext struct{}
+
+func (RadioStopSecurityContext) CanTrigger(actor domain.User, layoutID uint, driveScope DriveScope) Decision // §4.6.2
+
 // pkgs/server/security/user.go
 type UserSecurityContext struct{}
 

@@ -341,7 +341,19 @@ domain model and the API:
       where it was started. **Stop** is implemented server-side via
       `vm.Interrupt(...)` from a sibling goroutine in the executor.
 
-20. **Sudo elevation – temporary `admin`/`signalman` powers gated by a
+20. **Radio Stop – layout-wide emergency halt** – any user who may drive
+    at least one vehicle or train in the active layout can trigger a
+    **Radio Stop** from the throttle overlay. The signal:
+    - issues a DCC emergency stop to **every vehicle on the layout
+      roster**, across **all** attached command stations;
+    - plays a radiostop alarm sound on **every open throttle session**
+      in the layout;
+    - interrupts running scripts with reason `"radio_stop"`;
+    - is audited (`system.radio_stop`).
+    Radio Stop is separate from the per-session emergency brake
+    (`system.estop`), the dead-man's switch, admin-only `estop_all`,
+    and walkie-talkie phrases such as `STOP_IMMEDIATELY` (§4.6).
+21. **Sudo elevation – temporary `admin`/`signalman` powers gated by a
     layout-scoped PIN.** Every **layout** owns an **admin PIN** that is
     independent of any user PIN. A user already authenticated into that
     layout can **self-elevate** their effective role for a short, fixed
@@ -393,9 +405,10 @@ domain model and the API:
 
 These functional goals drive the domain model (§3a), the REST surface
 (§4.1), the WebSocket protocol (§4.2), the **drive-session contract
-and dead-man's switch (§4.5)**, the **layout / command station addressing rules
-(§3a.4)**, the **audit log (§3a.5)**, the **vehicle functions and
-template inheritance (§3a.6)**, the **server-side scripting model
-in the sibling `scripts-executor` (§3a.7)**, the authorization
-rules (§7a) **including the sudo elevation flow (§7a.7)** and the
-MCP integration (§7b).
+and dead-man's switch (§4.5)**, the **Radio Stop contract (§4.6)**,
+the **layout / command station addressing rules (§3a.4)**, the
+**audit log (§3a.5)**, the **vehicle functions and template
+inheritance (§3a.6)**, the **server-side scripting model in the
+sibling `scripts-executor` (§3a.7)**, the authorization rules
+(§7a) **including the sudo elevation flow (§7a.7)** and the MCP
+integration (§7b).

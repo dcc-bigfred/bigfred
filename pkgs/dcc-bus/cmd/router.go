@@ -261,7 +261,7 @@ func (r *Router) HandleSetSpeed(ctx context.Context, sess *ws.Session, p protoco
 	if err := r.redis.StoreState(ctx, snap, stateTTL); err != nil {
 		r.log.WithError(err).Debug("dcc-bus redis store")
 	}
-	r.fanState(ctx, snap)
+	r.broadcastLocoStateToObservers(ctx, snap)
 	if requestID != "" {
 		_ = sess.SendAck(ctx, requestID, true, "")
 	}
@@ -373,7 +373,7 @@ func (r *Router) setLocoFunction(ctx context.Context, addr uint16, userID uint, 
 	if err := r.redis.StoreState(ctx, snap, stateTTL); err != nil {
 		r.log.WithError(err).Debug("dcc-bus redis store")
 	}
-	r.fanState(ctx, snap)
+	r.broadcastLocoStateToObservers(ctx, snap)
 	return nil
 }
 
@@ -487,7 +487,7 @@ func (r *Router) applyEmergencyStop(ctx context.Context, userID uint, sessionID 
 		if err := r.redis.StoreState(ctx, snap, stateTTL); err != nil {
 			r.log.WithError(err).Debug("dcc-bus estop redis store")
 		}
-		r.fanState(ctx, snap)
+		r.broadcastLocoStateToObservers(ctx, snap)
 		if v, ok := r.roster.AllowedVehicle(addr); ok {
 			r.applyDeadManSwitchForLoco(context.Background(), addr, userID, v)
 		}
@@ -554,9 +554,9 @@ func (r *Router) pulseLocoFunction(addr uint16, userID uint, fn uint8) {
 	})
 }
 
-// fanState broadcasts a state snapshot to every WS session that
+// broadcastLocoStateToObservers broadcasts a state snapshot to every WS session that
 // subscribed to the affected loco.
-func (r *Router) fanState(ctx context.Context, snap protocol.LocoStatePayload) {
+func (r *Router) broadcastLocoStateToObservers(ctx context.Context, snap protocol.LocoStatePayload) {
 	env, err := protocol.Frame(protocol.TypeLocoState, snap)
 	if err != nil {
 		return
@@ -622,7 +622,7 @@ func (r *Router) applyControlSetSpeed(ctx context.Context, p protocol.LocoSetSpe
 	if err := r.redis.StoreState(ctx, snap, stateTTL); err != nil {
 		r.log.WithError(err).Debug("dcc-bus control redis store")
 	}
-	r.fanState(ctx, snap)
+	r.broadcastLocoStateToObservers(ctx, snap)
 }
 
 func (r *Router) applyControlSetFunction(ctx context.Context, p protocol.LocoSetFunctionPayload) {
@@ -651,7 +651,7 @@ func (r *Router) applyControlSetFunction(ctx context.Context, p protocol.LocoSet
 	if err := r.redis.StoreState(ctx, snap, stateTTL); err != nil {
 		r.log.WithError(err).Debug("dcc-bus control redis store")
 	}
-	r.fanState(ctx, snap)
+	r.broadcastLocoStateToObservers(ctx, snap)
 }
 
 // applyEStopAll brakes every roster locomotive — the cs-scoped
@@ -671,7 +671,7 @@ func (r *Router) applyEStopAll(ctx context.Context, reason string) {
 			snap.Functions = cached.Functions
 		}
 		_ = r.redis.StoreState(ctx, snap, stateTTL)
-		r.fanState(ctx, snap)
+		r.broadcastLocoStateToObservers(ctx, snap)
 	}
 	_ = r.redis.Publish(ctx, "system.estop.audit", map[string]any{
 		"reason": reason,

@@ -401,7 +401,7 @@ func (r *Router) HandleSessionClose(ctx context.Context, sess *ws.Session, reaso
 		r.applyEmergencyStop(ctx, sess.UserID, sess.ID, addrs, reason, true)
 		return
 	}
-	if reason == "deadman" {
+	if reason == errors.WsCodeSessionDeadman {
 		r.applyEmergencyForSession(ctx, sess, reason, true)
 	}
 }

@@ -102,7 +102,7 @@ func (r *Router) runSubscriptionRefresh(ctx context.Context, sub commandstation.
 
 func (r *Router) refreshSubscriptions(sub commandstation.LocoInfoSubscriber) {
 	for _, addr := range r.hub.SubscribedAddrs() {
-		if !r.isLocoAllowedOnLayout(addr) {
+		if !r.roster.IsLocoAllowedOnLayout(addr) {
 			continue
 		}
 		if err := sub.SubscribeLocoInfo(commandstation.LocoAddr(addr)); err != nil {
@@ -121,7 +121,7 @@ func (r *Router) runPollFeed(ctx context.Context, interval time.Duration) {
 			return
 		case <-ticker.C:
 			for _, addr := range r.hub.SubscribedAddrs() {
-				if !r.isLocoAllowedOnLayout(addr) {
+				if !r.roster.IsLocoAllowedOnLayout(addr) {
 					continue
 				}
 				r.pollOne(ctx, addr)
@@ -167,7 +167,7 @@ func (r *Router) pollOne(ctx context.Context, addr uint16) {
 // surfacing genuine external changes.
 func (r *Router) applyObservation(ctx context.Context, o commandstation.LocoObservation, source string) {
 	addr := uint16(o.Addr)
-	if !r.isLocoAllowedOnLayout(addr) {
+	if !r.roster.IsLocoAllowedOnLayout(addr) {
 		return
 	}
 

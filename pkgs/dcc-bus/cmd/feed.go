@@ -216,7 +216,7 @@ func (r *Router) applyObservation(ctx context.Context, o commandstation.LocoObse
 	if err := r.redis.StoreState(ctx, snap, stateTTL); err != nil {
 		r.log.WithError(err).Debug("dcc-bus state feed: redis store")
 	}
-	r.fanState(ctx, snap)
+	r.broadcastLocoStateToObservers(ctx, snap)
 	r.log.WithFields(logrus.Fields{
 		"addr":    addr,
 		"speed":   snap.Speed,

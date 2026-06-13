@@ -12,7 +12,9 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/keskad/loco/pkgs/dcc-bus/errors"
 	"github.com/keskad/loco/pkgs/dcc-bus/protocol"
+	"github.com/keskad/loco/pkgs/dcc-bus/security"
 	"github.com/keskad/loco/pkgs/dcc-bus/state"
 	"github.com/keskad/loco/pkgs/dcc-bus/station"
 	"github.com/keskad/loco/pkgs/dcc-bus/ws"
@@ -27,6 +29,10 @@ const (
 	// driven loco never falls off the cache; a forgotten loco evicts
 	// after ~5 minutes.
 	stateTTL = 5 * time.Minute
+
+	// maxDCCFunctionNum is the highest DCC function index fnCache
+	// tracks (F0..F31 on Z21).
+	maxDCCFunctionNum = 31
 )
 
 // Router implements ws.Router. It is the only component that ever
@@ -47,10 +53,9 @@ type Router struct {
 	speedSteps   uint
 	pollInterval time.Duration
 
-	allowedMu sync.RWMutex
-	allowed   map[uint16]struct{} // drivable DCC addresses on the layout
-	byAddr    map[uint16]layoutroster.AllowedVehicle
-	trains    []layoutroster.DefinedTrain
+	roster   *security.RosterGate
+	trainsMu sync.RWMutex
+	trains   []layoutroster.DefinedTrain
 
 	// fnCache mirrors the last sent function bit per (addr, fn) so a
 	// rapid toggle doesn't reissue the same DCC packet.
@@ -102,8 +107,7 @@ func NewRouter(_ context.Context, cfg Config) (*Router, error) {
 		stationURI:       cfg.StationURI,
 		speedSteps:       cfg.SpeedSteps,
 		pollInterval:     time.Duration(cfg.PollIntervalMs) * time.Millisecond,
-		allowed:          make(map[uint16]struct{}, 16),
-		byAddr:           make(map[uint16]layoutroster.AllowedVehicle, 16),
+		roster:           security.NewRosterGate(cfg.LayoutID),
 		fnCache:          make(map[fnKey]bool, 32),
 	}
 	r.ApplyAllowedVehicles(cfg.AllowedVehicles)
@@ -119,7 +123,7 @@ func NewRouter(_ context.Context, cfg Config) (*Router, error) {
 			ConnectionURI: r.stationURI,
 			SpeedSteps:    r.speedSteps,
 		}),
-		"rosterAddrs": len(r.allowed),
+		"rosterAddrs": len(r.roster.AllowedAddrs()),
 	}).Info("dcc-bus router ready")
 	return r, nil
 }
@@ -141,21 +145,13 @@ func (r *Router) stationLogFields() logrus.Fields {
 // ApplyAllowedVehicles replaces the in-memory drivable roster from a
 // loco-server snapshot (boot GET or pub/sub on allowed_vehicles).
 func (r *Router) ApplyAllowedVehicles(snap layoutroster.AllowedVehicles) {
-	if snap.LayoutID != 0 && snap.LayoutID != r.layoutID {
+	if !r.roster.ApplySnapshot(snap) {
 		return
 	}
-	allowed := make(map[uint16]struct{}, len(snap.Vehicles))
-	byAddr := make(map[uint16]layoutroster.AllowedVehicle, len(snap.Vehicles))
 	addrs := make([]uint16, 0, len(snap.Vehicles))
 	for _, v := range snap.Vehicles {
-		allowed[v.Addr] = struct{}{}
-		byAddr[v.Addr] = v
 		addrs = append(addrs, v.Addr)
 	}
-	r.allowedMu.Lock()
-	r.allowed = allowed
-	r.byAddr = byAddr
-	r.allowedMu.Unlock()
 	r.log.WithFields(logrus.Fields{
 		"layoutId": r.layoutID,
 		"addrs":    addrs,
@@ -168,50 +164,14 @@ func (r *Router) ApplyDefinedTrains(snap layoutroster.DefinedTrains) {
 	if snap.LayoutID != 0 && snap.LayoutID != r.layoutID {
 		return
 	}
-	r.allowedMu.Lock()
+	r.trainsMu.Lock()
 	r.trains = append([]layoutroster.DefinedTrain(nil), snap.Trains...)
 	count := len(r.trains)
-	r.allowedMu.Unlock()
+	r.trainsMu.Unlock()
 	r.log.WithFields(logrus.Fields{
 		"layoutId": r.layoutID,
 		"count":    count,
 	}).Info("dcc-bus defined trains updated")
-}
-
-func (r *Router) isLocoAllowedOnLayout(addr uint16) bool {
-	r.allowedMu.RLock()
-	defer r.allowedMu.RUnlock()
-	_, ok := r.allowed[addr]
-	return ok
-}
-
-// userCanControlLoco reports whether userID may drive the locomotive at
-// addr, using controllerUserIds from the allowed_vehicles snapshot.
-func (r *Router) userCanControlLoco(userID uint, addr uint16) bool {
-	r.allowedMu.RLock()
-	v, ok := r.byAddr[addr]
-	r.allowedMu.RUnlock()
-	if !ok {
-		return false
-	}
-	for _, id := range v.ControllerUserIDs {
-		if id == userID {
-			return true
-		}
-	}
-	return false
-}
-
-// denyDriveCommand returns a non-empty ack reason when the user may
-// not issue drive commands for addr (roster membership or control rights).
-func (r *Router) denyDriveCommand(userID uint, addr uint16) string {
-	if !r.isLocoAllowedOnLayout(addr) {
-		return "vehicle_not_on_layout"
-	}
-	if !r.userCanControlLoco(userID, addr) {
-		return "not_authorized"
-	}
-	return ""
 }
 
 // HandleSubscribe accepts a subscription request and immediately
@@ -221,11 +181,11 @@ func (r *Router) HandleSubscribe(ctx context.Context, sess *ws.Session, payload 
 	accepted := make([]uint16, 0, len(payload.Addresses))
 	rejected := make([]uint16, 0)
 	for _, addr := range payload.Addresses {
-		if !r.isLocoAllowedOnLayout(addr) {
+		if !r.roster.IsLocoAllowedOnLayout(addr) {
 			rejected = append(rejected, addr)
 			_ = sess.SendTyped(ctx, protocol.TypeLocoError, protocol.LocoErrorPayload{
 				Address: addr,
-				Code:    "vehicle_not_on_layout",
+				Code:    security.ReasonVehicleNotOnLayout,
 			})
 			continue
 		}
@@ -246,6 +206,7 @@ func (r *Router) HandleSubscribe(ctx context.Context, sess *ws.Session, payload 
 
 	for _, addr := range accepted {
 		if snap, ok, err := r.redis.LoadState(ctx, addr); err == nil && ok {
+			r.seedFnCache(addr, snap.Functions)
 			_ = sess.SendTyped(ctx, protocol.TypeLocoState, snap)
 		}
 	}
@@ -258,7 +219,7 @@ func (r *Router) HandleSubscribe(ctx context.Context, sess *ws.Session, payload 
 // updates the Redis cache and fans the new state out to every other
 // subscribed session.
 func (r *Router) HandleSetSpeed(ctx context.Context, sess *ws.Session, p protocol.LocoSetSpeedPayload, requestID string) {
-	if reason := r.denyDriveCommand(sess.UserID, p.Address); reason != "" {
+	if reason := r.roster.DenyDriveCommand(sess.UserID, p.Address); reason != "" {
 		_ = sess.SendAck(ctx, requestID, false, reason)
 		return
 	}
@@ -275,10 +236,10 @@ func (r *Router) HandleSetSpeed(ctx context.Context, sess *ws.Session, p protoco
 		r.log.WithError(err).WithFields(fields).Warn("dcc-bus command station SetSpeed failed")
 		_ = sess.SendTyped(ctx, protocol.TypeLocoError, protocol.LocoErrorPayload{
 			Address: p.Address,
-			Code:    "command_station_error",
+			Code:    errors.CodeCommandStationError,
 			Detail:  err.Error(),
 		})
-		_ = sess.SendAck(ctx, requestID, false, "command_station_error")
+		_ = sess.SendAck(ctx, requestID, false, errors.CodeCommandStationError)
 		return
 	}
 	r.log.WithFields(logrus.Fields{
@@ -309,17 +270,17 @@ func (r *Router) HandleSetSpeed(ctx context.Context, sess *ws.Session, p protoco
 // HandleSetFunction sets a single function on or off. The desired
 // state is sent to the command station and mirrored in Redis.
 func (r *Router) HandleSetFunction(ctx context.Context, sess *ws.Session, p protocol.LocoSetFunctionPayload, requestID string) {
-	if reason := r.denyDriveCommand(sess.UserID, p.Address); reason != "" {
+	if reason := r.roster.DenyDriveCommand(sess.UserID, p.Address); reason != "" {
 		_ = sess.SendAck(ctx, requestID, false, reason)
 		return
 	}
 	if err := r.setLocoFunction(ctx, p.Address, sess.UserID, p.Function, p.On, "throttle"); err != nil {
 		_ = sess.SendTyped(ctx, protocol.TypeLocoError, protocol.LocoErrorPayload{
 			Address: p.Address,
-			Code:    "command_station_error",
+			Code:    errors.CodeCommandStationError,
 			Detail:  err.Error(),
 		})
-		_ = sess.SendAck(ctx, requestID, false, "command_station_error")
+		_ = sess.SendAck(ctx, requestID, false, errors.CodeCommandStationError)
 		return
 	}
 	if requestID != "" {
@@ -327,13 +288,49 @@ func (r *Router) HandleSetFunction(ctx context.Context, sess *ws.Session, p prot
 	}
 }
 
+// seedFnCache aligns the in-memory function dedup cache with a Redis
+// snapshot (or any authoritative function vector). Called on subscribe
+// so a TTL-expired Redis row cannot leave fnCache believing a function
+// is still on while the UI reads an empty/off snapshot.
+func (r *Router) seedFnCache(addr uint16, functions []bool) {
+	r.fnCacheMu.Lock()
+	defer r.fnCacheMu.Unlock()
+	for fn, on := range functions {
+		if fn > maxDCCFunctionNum {
+			break
+		}
+		r.fnCache[fnKey{Addr: addr, Fn: uint8(fn)}] = on
+	}
+}
+
+// checkFnStateMatches reports whether addr/fn is already in the desired
+// state in both fnCache and Redis. A mismatch in either layer means
+// the DCC command must be issued (and the UI refreshed).
+func (r *Router) checkFnStateMatches(ctx context.Context, addr uint16, fn uint8, on bool) bool {
+	key := fnKey{Addr: addr, Fn: fn}
+	r.fnCacheMu.Lock()
+	previous, hadPrev := r.fnCache[key]
+	r.fnCacheMu.Unlock()
+	if !hadPrev || previous != on {
+		return false
+	}
+	env, ok, err := r.redis.LoadState(ctx, addr)
+	if err != nil || !ok {
+		return false
+	}
+	if int(fn) >= len(env.Functions) {
+		return !on
+	}
+	return env.Functions[fn] == on
+}
+
 // setLocoFunction issues one DCC function command and mirrors the
 // result in Redis. Used by the throttle and the dead-man's switch.
 func (r *Router) setLocoFunction(ctx context.Context, addr uint16, userID uint, fn uint8, on bool, source string) error {
 	key := fnKey{Addr: addr, Fn: fn}
+	unchanged := r.checkFnStateMatches(ctx, addr, fn, on)
 	r.fnCacheMu.Lock()
 	previous, hadPrev := r.fnCache[key]
-	unchanged := hadPrev && previous == on
 	if !unchanged {
 		r.fnCache[key] = on
 	}
@@ -438,12 +435,7 @@ func (r *Router) collectDriveTargetsForUser(ctx context.Context, userID uint) []
 			add(&addrs, addr)
 		}
 	}
-	r.allowedMu.RLock()
-	allowed := make([]uint16, 0, len(r.allowed))
-	for addr := range r.allowed {
-		allowed = append(allowed, addr)
-	}
-	r.allowedMu.RUnlock()
+	allowed := r.roster.AllowedAddrs()
 	for _, addr := range allowed {
 		snap, ok, err := r.redis.LoadState(ctx, addr)
 		if err != nil || !ok || snap.ControlledByUserID != userID {
@@ -496,7 +488,7 @@ func (r *Router) applyEmergencyStop(ctx context.Context, userID uint, sessionID 
 			r.log.WithError(err).Debug("dcc-bus estop redis store")
 		}
 		r.fanState(ctx, snap)
-		if v, ok := r.allowedVehicle(addr); ok {
+		if v, ok := r.roster.AllowedVehicle(addr); ok {
 			r.applyDeadManSwitchForLoco(context.Background(), addr, userID, v)
 		}
 	}
@@ -526,15 +518,6 @@ func (r *Router) shouldEmergencyStopLoco(ctx context.Context, addr uint16, movin
 	return cached.Speed != 0
 }
 
-func (r *Router) allowedVehicle(addr uint16) (layoutroster.AllowedVehicle, bool) {
-	r.allowedMu.RLock()
-	defer r.allowedMu.RUnlock()
-	v, ok := r.byAddr[addr]
-	return v, ok
-}
-
-// applyDeadManSwitchForLoco runs the per-vehicle dead-man's switch
-// function plan after an emergency stop (§7e.5).
 func (r *Router) applyDeadManSwitchForLoco(ctx context.Context, addr uint16, userID uint, v layoutroster.AllowedVehicle) {
 	switch v.DeadManSwitchOption {
 	case string(domain.DeadManSwitchStopHorn):
@@ -614,7 +597,7 @@ func (r *Router) HandleControlCommand(ctx context.Context, raw []byte) {
 }
 
 func (r *Router) applyControlSetSpeed(ctx context.Context, p protocol.LocoSetSpeedPayload) {
-	if !r.isLocoAllowedOnLayout(p.Address) {
+	if !r.roster.IsLocoAllowedOnLayout(p.Address) {
 		return
 	}
 	speed := p.Speed
@@ -643,7 +626,7 @@ func (r *Router) applyControlSetSpeed(ctx context.Context, p protocol.LocoSetSpe
 }
 
 func (r *Router) applyControlSetFunction(ctx context.Context, p protocol.LocoSetFunctionPayload) {
-	if !r.isLocoAllowedOnLayout(p.Address) {
+	if !r.roster.IsLocoAllowedOnLayout(p.Address) {
 		return
 	}
 	if err := r.station.SendFn(commandstation.MainTrackMode, commandstation.LocoAddr(p.Address), commandstation.FuncNum(p.Function), p.On); err != nil {
@@ -674,12 +657,7 @@ func (r *Router) applyControlSetFunction(ctx context.Context, p protocol.LocoSet
 // applyEStopAll brakes every roster locomotive — the cs-scoped
 // emergency stop fired by loco-server (e.g. on takeover failure).
 func (r *Router) applyEStopAll(ctx context.Context, reason string) {
-	r.allowedMu.RLock()
-	addrs := make([]uint16, 0, len(r.allowed))
-	for a := range r.allowed {
-		addrs = append(addrs, a)
-	}
-	r.allowedMu.RUnlock()
+	addrs := r.roster.AllowedAddrs()
 	for _, addr := range addrs {
 		_ = r.station.SetSpeed(commandstation.LocoAddr(addr), 1, true, uint8(r.speedSteps))
 		snap := protocol.LocoStatePayload{

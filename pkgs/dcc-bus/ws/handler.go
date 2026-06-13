@@ -10,6 +10,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/keskad/loco/pkgs/dcc-bus/auth"
+	"github.com/keskad/loco/pkgs/dcc-bus/errors"
 	"github.com/keskad/loco/pkgs/dcc-bus/protocol"
 )
 
@@ -159,7 +160,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := sess.SendTyped(r.Context(), protocol.TypeDccBusOpened, openPayload); err != nil {
 		s.log.WithError(err).Debug("dcc-bus opened frame failed")
-		sess.Close("opened_send_failed")
+		sess.Close(errors.WsCodeSessionSendFailed)
 		s.hub.Unregister(sess)
 		return
 	}
@@ -186,9 +187,9 @@ func (s *Server) readLoop(ctx context.Context, sess *Session) {
 	go s.watchDeadman(dmsCtx, sess)
 
 	defer func() {
-		s.router.HandleSessionClose(context.Background(), sess, "ws_closed")
+		s.router.HandleSessionClose(context.Background(), sess, errors.WsCodeSessionWsClosed)
 		s.hub.Unregister(sess)
-		sess.Close("read_loop_done")
+		sess.Close(errors.WsCodeSessionReadLoopDone)
 		s.log.WithFields(logrus.Fields{
 			"sessionId":              sess.ID,
 			"userId":                 sess.UserID,
@@ -211,7 +212,7 @@ func (s *Server) readLoop(ctx context.Context, sess *Session) {
 		var env protocol.Envelope
 		if err := json.Unmarshal(raw, &env); err != nil {
 			_ = sess.SendTyped(ctx, protocol.TypeLocoError, protocol.LocoErrorPayload{
-				Code: "bad_envelope",
+				Code: errors.WsCodeBadEnvelope,
 			})
 			continue
 		}
@@ -221,7 +222,7 @@ func (s *Server) readLoop(ctx context.Context, sess *Session) {
 
 // dispatch decodes the inbound envelope into a typed payload and
 // delegates to the Router. Unknown types are answered with a
-// `loco.error{code:"unknown_frame"}` so the client surfaces a
+// `loco.error{code:errors.WsCodeUnknownFrame}` so the client surfaces a
 // debuggable error instead of silently dropping the request.
 func (s *Server) dispatch(ctx context.Context, sess *Session, env protocol.Envelope) {
 	switch env.Type {
@@ -231,7 +232,7 @@ func (s *Server) dispatch(ctx context.Context, sess *Session, env protocol.Envel
 	case protocol.TypeLocoSubscribe:
 		var p protocol.LocoSubscribePayload
 		if err := json.Unmarshal(env.Payload, &p); err != nil {
-			_ = sess.SendAck(ctx, env.ID, false, "bad_payload")
+			_ = sess.SendAck(ctx, env.ID, false, errors.WsCodeBadPayload)
 			return
 		}
 		s.router.HandleSubscribe(ctx, sess, p, env.ID)
@@ -239,7 +240,7 @@ func (s *Server) dispatch(ctx context.Context, sess *Session, env protocol.Envel
 	case protocol.TypeLocoSetSpeed:
 		var p protocol.LocoSetSpeedPayload
 		if err := json.Unmarshal(env.Payload, &p); err != nil {
-			_ = sess.SendAck(ctx, env.ID, false, "bad_payload")
+			_ = sess.SendAck(ctx, env.ID, false, errors.WsCodeBadPayload)
 			return
 		}
 		s.router.HandleSetSpeed(ctx, sess, p, env.ID)
@@ -247,7 +248,7 @@ func (s *Server) dispatch(ctx context.Context, sess *Session, env protocol.Envel
 	case protocol.TypeLocoSetFunction:
 		var p protocol.LocoSetFunctionPayload
 		if err := json.Unmarshal(env.Payload, &p); err != nil {
-			_ = sess.SendAck(ctx, env.ID, false, "bad_payload")
+			_ = sess.SendAck(ctx, env.ID, false, errors.WsCodeBadPayload)
 			return
 		}
 		s.router.HandleSetFunction(ctx, sess, p, env.ID)
@@ -261,13 +262,13 @@ func (s *Server) dispatch(ctx context.Context, sess *Session, env protocol.Envel
 
 	default:
 		_ = sess.SendTyped(ctx, protocol.TypeLocoError, protocol.LocoErrorPayload{
-			Code:   "unknown_frame",
+			Code:   errors.WsCodeUnknownFrame,
 			Detail: env.Type,
 		})
 	}
 }
 
-// watchDeadman fires HandleSessionClose("deadman") when the session
+// watchDeadman fires HandleSessionClose(WsCodeSessionDeadman) when the session
 // stays silent past its budget. The Router is responsible for the
 // actual DCC actions (emergency stop on every loco the session owns).
 func (s *Server) watchDeadman(ctx context.Context, sess *Session) {
@@ -283,8 +284,8 @@ func (s *Server) watchDeadman(ctx context.Context, sess *Session) {
 			}
 			if sess.IdleFor() > time.Duration(s.deadmanSecs)*time.Second {
 				s.log.WithField("sessionId", sess.ID).Warn("dcc-bus dead-man triggered")
-				s.router.HandleSessionClose(context.Background(), sess, "deadman")
-				sess.Close("deadman")
+				s.router.HandleSessionClose(context.Background(), sess, errors.WsCodeSessionDeadman)
+				sess.Close(errors.WsCodeSessionDeadman)
 				return
 			}
 		}

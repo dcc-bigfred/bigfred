@@ -33,6 +33,9 @@ const (
 	// maxDCCFunctionNum is the highest DCC function index fnCache
 	// tracks (F0..F31 on Z21).
 	maxDCCFunctionNum = 31
+
+	// pulseRetryInterval is the pause between timed-pulse SendFn retries.
+	pulseRetryInterval = 100 * time.Millisecond
 )
 
 // Router implements ws.Router. It is the only component that ever
@@ -61,6 +64,11 @@ type Router struct {
 	// rapid toggle doesn't reissue the same DCC packet.
 	fnCache   map[fnKey]bool
 	fnCacheMu sync.Mutex
+
+	// pulseActive tracks in-flight timed function pulses per (addr, fn).
+	// A new pulse is dropped while the previous one has not finished.
+	pulseMu     sync.Mutex
+	pulseActive map[fnKey]bool
 }
 
 // Config carries the few inputs Router needs at construction time.
@@ -109,6 +117,7 @@ func NewRouter(_ context.Context, cfg Config) (*Router, error) {
 		pollInterval:     time.Duration(cfg.PollIntervalMs) * time.Millisecond,
 		roster:           security.NewRosterGate(cfg.LayoutID),
 		fnCache:          make(map[fnKey]bool, 32),
+		pulseActive:      make(map[fnKey]bool, 8),
 	}
 	r.ApplyAllowedVehicles(cfg.AllowedVehicles)
 	r.ApplyDefinedTrains(cfg.DefinedTrains)
@@ -521,9 +530,9 @@ func (r *Router) shouldEmergencyStopLoco(ctx context.Context, addr uint16, movin
 func (r *Router) applyDeadManSwitchForLoco(ctx context.Context, addr uint16, userID uint, v layoutroster.AllowedVehicle) {
 	switch v.DeadManSwitchOption {
 	case string(domain.DeadManSwitchStopHorn):
-		r.pulseLocoFunction(addr, userID, v.Rp1Function)
+		r.setTimedLocoFunctionWithRetry(addr, userID, v.Rp1Function, time.Second, "deadman", 3)
 	case string(domain.DeadManSwitchStopHornEmergencyLights):
-		r.pulseLocoFunction(addr, userID, v.Rp1Function)
+		r.setTimedLocoFunctionWithRetry(addr, userID, v.Rp1Function, time.Second, "deadman", 3)
 		if err := r.setLocoFunction(ctx, addr, userID, v.EmergencyLightsFunction, true, "deadman"); err != nil {
 			r.log.WithError(err).WithFields(logrus.Fields{
 				"addr":     addr,
@@ -535,23 +544,81 @@ func (r *Router) applyDeadManSwitchForLoco(ctx context.Context, addr uint16, use
 	}
 }
 
-func (r *Router) pulseLocoFunction(addr uint16, userID uint, fn uint8) {
-	ctx := context.Background()
-	if err := r.setLocoFunction(ctx, addr, userID, fn, true, "deadman"); err != nil {
-		r.log.WithError(err).WithFields(logrus.Fields{
+// beginPulse marks a timed function pulse as in-flight. false means
+// another pulse for the same (addr, fn) is still running.
+func (r *Router) beginPulse(key fnKey) bool {
+	r.pulseMu.Lock()
+	defer r.pulseMu.Unlock()
+	if r.pulseActive[key] {
+		return false
+	}
+	r.pulseActive[key] = true
+	return true
+}
+
+func (r *Router) endPulse(key fnKey) {
+	r.pulseMu.Lock()
+	delete(r.pulseActive, key)
+	r.pulseMu.Unlock()
+}
+
+// setLocoFunctionWithRetry calls setLocoFunction up to retry+1 times.
+// retry 0 means a single attempt.
+func (r *Router) setLocoFunctionWithRetry(ctx context.Context, addr uint16, userID uint, fn uint8, on bool, source string, retry int) error {
+	attempts := retry + 1
+	var last error
+	for i := 0; i < attempts; i++ {
+		last = r.setLocoFunction(ctx, addr, userID, fn, on, source)
+		if last == nil {
+			return nil
+		}
+		if i < attempts-1 {
+			time.Sleep(pulseRetryInterval)
+		}
+	}
+	return last
+}
+
+// setTimedLocoFunctionWithRetry turns fn on, then off after duration.
+// source is recorded in Redis state snapshots (e.g. "deadman", "script").
+// Overlapping calls for the same (addr, fn) are ignored until the
+// previous pulse completes (including the off phase). retry is the
+// number of extra attempts after the first on each phase (0 = none).
+func (r *Router) setTimedLocoFunctionWithRetry(addr uint16, userID uint, fn uint8, duration time.Duration, source string, retry int) {
+	key := fnKey{Addr: addr, Fn: fn}
+	if !r.beginPulse(key) {
+		r.log.WithFields(logrus.Fields{
 			"addr":     addr,
 			"function": fn,
-		}).Warn("dcc-bus dead-man rp1 on failed")
+			"source":   source,
+		}).Debug("dcc-bus pulse function skipped: already active")
 		return
 	}
-	time.AfterFunc(time.Second, func() {
-		if err := r.setLocoFunction(context.Background(), addr, userID, fn, false, "deadman"); err != nil {
+	go func() {
+		ctx := context.Background()
+		if err := r.setLocoFunctionWithRetry(ctx, addr, userID, fn, true, source, retry); err != nil {
+			r.endPulse(key)
 			r.log.WithError(err).WithFields(logrus.Fields{
 				"addr":     addr,
 				"function": fn,
-			}).Warn("dcc-bus dead-man rp1 off failed")
+				"source":   source,
+				"duration": duration,
+				"retry":    retry,
+			}).Warn("dcc-bus pulse function on failed")
+			return
 		}
-	})
+		time.AfterFunc(duration, func() {
+			defer r.endPulse(key)
+			if err := r.setLocoFunctionWithRetry(context.Background(), addr, userID, fn, false, source, retry); err != nil {
+				r.log.WithError(err).WithFields(logrus.Fields{
+					"addr":     addr,
+					"function": fn,
+					"source":   source,
+					"retry":    retry,
+				}).Warn("dcc-bus pulse function off failed")
+			}
+		})
+	}()
 }
 
 // broadcastLocoStateToObservers broadcasts a state snapshot to every WS session that

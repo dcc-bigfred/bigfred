@@ -174,6 +174,9 @@ web/                            # NEW – frontend
 ├── package.json
 ├── vite.config.ts
 ├── index.html
+├── public/
+│   └── sounds/
+│       └── radiostop.ogg       # radiostop alarm, served at /sounds/radiostop.ogg (§4.6.3)
 └── src/
     ├── main.tsx
     ├── App.tsx
@@ -200,6 +203,9 @@ web/                            # NEW – frontend
     │   │                       # and renders run history (start time, duration, reason)
     │   ├── AppShell.tsx        # MUI AppBar (incl. Throttle toggle) + Drawer + Container
     │   ├── ThrottleOverlay.tsx # full-screen driving layer (§6.3b); hosts Loco/Train control
+    │   ├── ThrottleToolbar.tsx # left toolbar inside the overlay: Fullscreen toggle + Radio Stop (§6.3b)
+    │   ├── FullscreenButton.tsx # browser Fullscreen API toggle for the overlay container
+    │   ├── RadioStopButton.tsx # red radiostop button + centred confirm overlay (§4.6.3)
     │   ├── LayoutVehiclesTable.tsx
     │   ├── OnlineUsersTable.tsx
     │   ├── InterlockingsTable.tsx

@@ -114,3 +114,15 @@ func (r *Redis) SubscribeCommands(ctx context.Context) (*redis.PubSub, error) {
 	return sub, nil
 }
 
+// SubscribeLayoutRadioStop listens for layout-wide Radio Stop commands
+// published by loco-server (§4.6.4).
+func (r *Redis) SubscribeLayoutRadioStop(ctx context.Context) (*redis.PubSub, error) {
+	channel := contract.LayoutRadioStopChannel(r.layoutID)
+	sub := r.client.Subscribe(ctx, channel)
+	if _, err := sub.Receive(ctx); err != nil {
+		_ = sub.Close()
+		return nil, err
+	}
+	return sub, nil
+}
+

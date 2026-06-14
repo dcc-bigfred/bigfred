@@ -10,6 +10,13 @@
     "enter": "Enter full screen",
     "exit": "Exit full screen"
   },
+  "radioStop": {
+    "button": "Radio stop",
+    "tooltip": "Halt every locomotive on the layout and sound the alarm on every throttle",
+    "run": "Trigger radio stop",
+    "cancel": "Cancel",
+    "toast": "Radio stop — triggered by {{login}}"
+  },
   "commandStation": "Command station",
   "selectCommandStation": "Select a command station",
   "noCommandStations": "No command station is attached to this layout.",

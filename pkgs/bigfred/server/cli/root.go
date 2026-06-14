@@ -256,9 +256,16 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	}
 
 	if dccBusSvc != nil {
+		radioStopSvc := service.NewRadioStopService(service.RadioStopConfig{
+			Hub:    hub,
+			Redis:  redisSvc,
+			Roster: layoutVehicleSvc,
+			Log:    log,
+		})
 		sessionCtl = service.NewSessionControlService(service.SessionControlConfig{
 			Log:         log,
 			DccBus:      dccBusSvc,
+			RadioStop:   radioStopSvc,
 			CommandStns: commandStations,
 			LayoutCS:    layoutCommandStations,
 			Layouts:     layouts,

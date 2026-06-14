@@ -22,6 +22,7 @@ import {
   THROTTLE_PANEL_WIDTH_PX,
 } from "./throttleCockpitTheme";
 import FullscreenToggleButton from "./FullscreenToggleButton";
+import RadioStopButton from "./RadioStopButton";
 import FunctionGridButton from "./FunctionGridButton";
 import VerticalThrottle from "./VerticalThrottle";
 
@@ -38,6 +39,7 @@ export interface ThrottleCockpitVehicle {
 }
 
 export interface ThrottleCockpitProps {
+  layoutId: number;
   onOpenSetup: () => void;
   vehicles: ThrottleCockpitVehicle[];
   selectedAddress: number | null;
@@ -59,6 +61,7 @@ export interface ThrottleCockpitProps {
 // the left, vertical throttle + stop on the right, direction bar full
 // width at the bottom.
 export default function ThrottleCockpit({
+  layoutId,
   onOpenSetup,
   vehicles,
   selectedAddress,
@@ -120,6 +123,7 @@ export default function ThrottleCockpit({
         }}
       >
         <FullscreenToggleButton />
+        <RadioStopButton layoutId={layoutId} />
 
         <FormControl
           size="small"

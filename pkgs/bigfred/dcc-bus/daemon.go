@@ -10,18 +10,19 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
 
+	"github.com/keskad/loco/pkgs/bigfred/contract"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/auth"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/cmd"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/state"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/station"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/ws"
-	"github.com/keskad/loco/pkgs/bigfred/contract"
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
 )
 
@@ -229,9 +230,16 @@ func (d *Daemon) Run(ctx context.Context) error {
 	}
 	defer trainSub.Close()
 
+	radioStopSub, err := d.redis.SubscribeLayoutRadioStop(ctx)
+	if err != nil {
+		return fmt.Errorf("subscribe radio_stop channel: %w", err)
+	}
+	defer radioStopSub.Close()
+
 	go d.runCommandConsumer(ctx, cmdSub)
 	go d.runAllowedVehiclesConsumer(ctx, vehSub)
 	go d.runDefinedTrainsConsumer(ctx, trainSub)
+	go d.runRadioStopConsumer(ctx, radioStopSub)
 	go d.router.RunStateFeed(ctx)
 
 	serveErr := make(chan error, 1)
@@ -246,6 +254,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 		"layoutId":         d.cfg.LayoutID,
 		"commandStationId": d.cfg.CommandStationID,
 		"port":             d.cfg.Port,
+		"pid":              os.Getpid(),
 		"at":               time.Now().UTC().UnixMilli(),
 	}); err != nil {
 		d.log.WithError(err).Debug("dcc-bus publish daemon.started")
@@ -315,6 +324,21 @@ func (d *Daemon) runDefinedTrainsConsumer(ctx context.Context, sub *redis.PubSub
 				continue
 			}
 			d.router.ApplyDefinedTrains(snap)
+		}
+	}
+}
+
+func (d *Daemon) runRadioStopConsumer(ctx context.Context, sub *redis.PubSub) {
+	ch := sub.Channel()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case msg, ok := <-ch:
+			if !ok {
+				return
+			}
+			d.router.HandleLayoutRadioStopMessage(ctx, []byte(msg.Payload))
 		}
 	}
 }

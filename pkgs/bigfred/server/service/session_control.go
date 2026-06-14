@@ -21,6 +21,7 @@ import (
 type SessionControlService struct {
 	log        *logrus.Logger
 	dccBus     *DccBusService
+	radioStop  *RadioStopService
 	cs         *repo.CommandStations
 	layoutCS   *repo.LayoutCommandStations
 	layoutRows *repo.Layouts
@@ -37,6 +38,7 @@ type SessionControlService struct {
 type SessionControlConfig struct {
 	Log         *logrus.Logger
 	DccBus      *DccBusService
+	RadioStop   *RadioStopService
 	CommandStns *repo.CommandStations
 	LayoutCS    *repo.LayoutCommandStations
 	Layouts     *repo.Layouts
@@ -53,6 +55,7 @@ func NewSessionControlService(cfg SessionControlConfig) *SessionControlService {
 	return &SessionControlService{
 		log:        log,
 		dccBus:     cfg.DccBus,
+		radioStop:  cfg.RadioStop,
 		cs:         cfg.CommandStns,
 		layoutCS:   cfg.LayoutCS,
 		layoutRows: cfg.Layouts,
@@ -99,13 +102,21 @@ func (s *SessionControlService) HandleClosed(_ context.Context, c *ws.Client) {
 // implicitly by accepting the WS upgrade.
 func (s *SessionControlService) HandleEnvelope(ctx context.Context, c *ws.Client, env ws.Envelope) {
 	switch env.Type {
-	case "session.setCommandStation":
+	case ws.TypeSessionSetCommandStation:
 		var p sessionSetCSPayload
 		if err := json.Unmarshal(env.Payload, &p); err != nil {
 			c.SendAck(env.ID, false, "bad_payload")
 			return
 		}
 		s.handleSetCS(ctx, c, p, env.ID)
+
+	case ws.TypeSystemRadioStop:
+		if s.radioStop == nil {
+			c.SendAck(env.ID, false, "dcc_bus_not_configured")
+			return
+		}
+		ok, code := s.radioStop.Trigger(ctx, c.Session())
+		c.SendAck(env.ID, ok, code)
 	}
 }
 

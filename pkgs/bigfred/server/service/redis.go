@@ -127,3 +127,32 @@ func (r *RedisService) PublishLayoutDefinedTrains(ctx context.Context, snap cont
 
 // Close drains the underlying connection pool.
 func (r *RedisService) Close() error { return r.client.Close() }
+
+// GetAllowedVehicles reads the cached layout roster snapshot written by
+// loco-server. Returns an empty snapshot when the key is missing.
+func (r *RedisService) GetAllowedVehicles(ctx context.Context, layoutID uint) (contract.AllowedVehicles, error) {
+	if r == nil || layoutID == 0 {
+		return contract.AllowedVehicles{}, nil
+	}
+	raw, err := r.client.Get(ctx, contract.AllowedVehiclesKey(layoutID)).Result()
+	if err == redis.Nil {
+		return contract.AllowedVehicles{LayoutID: layoutID}, nil
+	}
+	if err != nil {
+		return contract.AllowedVehicles{}, err
+	}
+	return contract.UnmarshalAllowedVehicles([]byte(raw))
+}
+
+// PublishLayoutRadioStop notifies every dcc-bus daemon on the layout
+// to run the roster halt (§4.6.4).
+func (r *RedisService) PublishLayoutRadioStop(ctx context.Context, layoutID uint, cmd contract.RadioStopCommandWire) error {
+	if r == nil || layoutID == 0 {
+		return nil
+	}
+	raw, err := contract.BuildRadioStopCommandPayload(cmd)
+	if err != nil {
+		return err
+	}
+	return r.client.Publish(ctx, contract.LayoutRadioStopChannel(layoutID), raw).Err()
+}

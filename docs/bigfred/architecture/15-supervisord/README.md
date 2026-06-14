@@ -1,7 +1,7 @@
 ## §7d Process Supervisor (Supervisord)
 
 This section describes a **non-root supervisord integration** inside
-`pkgs/server`. The Go backend owns declarative process groups, renders
+`pkgs/bigfred/server`. The Go backend owns declarative process groups, renders
 supervisord configuration from embedded Go templates, and applies changes
 via supervisord's built-in hot reload (`supervisorctl reread` +
 `supervisorctl update`).

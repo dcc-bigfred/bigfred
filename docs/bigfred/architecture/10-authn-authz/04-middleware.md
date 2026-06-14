@@ -6,7 +6,7 @@ adapter**: it loads the entities, hands them to the relevant
 WebSocket error code.
 
 ```go
-// pkgs/server/http/middleware.go
+// pkgs/bigfred/server/http/middleware.go
 //
 // RequireRole consults the EFFECTIVE role set inside the JWT-pinned
 // layout (§7a.2). Sudo admins pass the same gate as permanent admins

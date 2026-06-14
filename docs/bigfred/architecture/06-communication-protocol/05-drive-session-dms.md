@@ -22,7 +22,7 @@ read **directly from the JWT** issued by `POST /api/v1/auth/login`
 **immutable for the lifetime of the session**.
 
 ```go
-// pkgs/server/ws/session.go
+// pkgs/bigfred/server/ws/session.go
 type DriveSession struct {
     ID            string              // uuid, also returned to the client
     UserID        uint
@@ -70,7 +70,7 @@ triggering the emergency action.
 #### 4.5.3 Emergency plan
 
 ```go
-// pkgs/server/domain/user.go (extension)
+// pkgs/bigfred/server/domain/user.go (extension)
 type EmergencyAction string
 
 const (

@@ -5,20 +5,18 @@ reused, not duplicated.
 
 ### 3.1 Backend layer responsibilities
 
-Three packages under `pkgs/server/` form the main backend stack. Keep
+Three packages under `pkgs/bigfred/server/` form the main backend stack. Keep
 business rules out of `http` / `ws`; keep authorization policy out of
 `service` (delegate to `security` instead of inlining role checks).
 
 | Package | Role |
 |--------|------|
-| **`pkgs/server/http`** (and **`pkgs/server/ws`**) | Handle incoming HTTP / WebSocket traffic: routing (chi), middleware, session/JWT authentication, request/response mapping, status codes. Handlers are thin adapters — they parse input, read identity from context, call a `*Service`, and serialize the result or map sentinel errors to HTTP/WS codes. |
-| **`pkgs/server/service`** | Application / use-case layer: input validation, loading entities for authorization, calling `pkgs/server/security` to check permissions, business logic (conditionals, orchestration), `pkgs/server/repo` access, and calls to other services (`DCCPoolService`, `AuditService`, `DccBusService`, …). |
-| **`pkgs/server/security`** | Pure, stateless policy layer (§7a.3): given loaded `domain.*` values, answers whether an actor may perform an action. No SQL, no HTTP. Invoked from services; HTTP middleware may use it for coarse route guards (see §7a.4). |
+| **`pkgs/bigfred/server/http`** (and **`pkgs/bigfred/server/ws`**) | Handle incoming HTTP / WebSocket traffic: routing (chi), middleware, session/JWT authentication, request/response mapping, status codes. Handlers are thin adapters — they parse input, read identity from context, call a `*Service`, and serialize the result or map sentinel errors to HTTP/WS codes. |
+| **`pkgs/bigfred/server/service`** | Application / use-case layer: input validation, loading entities for authorization, calling `pkgs/bigfred/server/security` to check permissions, business logic (conditionals, orchestration), `pkgs/bigfred/server/repo` access, and calls to other services (`DCCPoolService`, `AuditService`, `DccBusService`, …). |
+| **`pkgs/bigfred/server/security`** | Pure, stateless policy layer (§7a.3): given loaded `domain.*` values, answers whether an actor may perform an action. No SQL, no HTTP. Invoked from services; HTTP middleware may use it for coarse route guards (see §7a.4). |
 
 ```
 pkgs/
-├── layoutroster/               # shared JSON types + Redis key names for
-│   └── snapshot.go             #   layout roster snapshots (server → dcc-bus)
 ├── loco/                       # existing – core domain
 │   ├── app/                    # LocoApp – controller layer
 │   ├── commandstation/         # Z21, LocoNet
@@ -26,9 +24,14 @@ pkgs/
 │   └── syntax/
 ├── rb/                         # existing – Railbox-specific code
 │
-├── server/                     # NEW – web application
-│   ├── main.go                 # cmd entrypoint for `loco server`
-│   ├── cli/                    # cobra command: `loco server`
+└── bigfred/                    # BigFred application stack (server, dcc-bus, contract)
+    ├── contract/               # Redis wire contract between server ↔ dcc-bus (§3.2)
+    │   ├── README.md           #   package overview
+    │   ├── allowedvehicles.go  #   roster keys, types, Marshal/Unmarshal, builders
+    │   └── redis.go            #   key/channel templates + builder functions
+    └── server/                 # web application  (also hosts dcc-bus/ — see block below)
+    |   ├── main.go             # cmd entrypoint for `loco server`
+    |   ├── cli/                # cobra command: `loco server`
     ├── http/                   # transport adapter — §3.1; delegates to service/
     │   ├── router.go           # chi router + middleware
     │   ├── locos.go            # REST handlers (GET/POST/PUT/DELETE)
@@ -143,18 +146,19 @@ pkgs/
         └── bus.go              # in-process event bus (channels)
 
 # Sibling process – same module, just a different main(). Reuses
-# `pkgs/server/scripts`, `pkgs/server/executor`, `pkgs/server/service`,
-# `pkgs/server/security`. Does NOT import `pkgs/server/http` or `ws`.
+# `pkgs/bigfred/server/scripts`, `pkgs/bigfred/server/executor`, `pkgs/bigfred/server/service`,
+# `pkgs/bigfred/server/security`. Does NOT import `pkgs/bigfred/server/http` or `ws`.
 pkgs/scripts-executor/          # NEW – sandbox process for user JS
 ├── main.go                     # cmd entrypoint for `loco scripts-executor`
 └── cli/                        # cobra command + flags (socket path, cpu/mem caps)
 
 # Sibling process – same module, different main(). One process per
 # (layout × command_station) pair (§7e). Reuses pkgs/loco/commandstation
-# (DCC), pkgs/server/domain (entities), pkgs/layoutroster (Redis JSON types),
-# pkgs/dcc-bus/state (Redis client). Does NOT import pkgs/server/repo or SQLite.
+# (DCC), pkgs/bigfred/server/domain (entities), pkgs/bigfred/contract (Redis key
+# templates, builders, snapshot types, Marshal/Unmarshal — see §3.2),
+# pkgs/bigfred/dcc-bus/state (Redis client). Does NOT import pkgs/bigfred/server/repo or SQLite.
 # Exposes WebSocket on --port for throttle traffic.
-pkgs/dcc-bus/                   # throttle data-plane daemon
+pkgs/bigfred/dcc-bus/                   # throttle data-plane daemon
 ├── daemon.go                   # assembly: Redis, Station, Router, WS server
 ├── cli/cli.go                  # cobra subcommand + flags
 ├── cliargs/station.go          # shared --station-* flag builders (server + daemon)
@@ -212,3 +216,27 @@ web/                            # NEW – frontend
     │   └── ScriptsPage.tsx     # the "Scripts" tab: list, edit, attach
     └── styles/
 ```
+
+### 3.2 Contract package (`pkgs/bigfred/contract`)
+
+`loco-server` and `dcc-bus` are sibling processes that coordinate **only over
+Redis**. The `contract` package is their shared wire specification — not a
+runtime service, but the typed boundary both sides import:
+
+| Concern | Where in `contract` |
+|--------|---------------------|
+| Redis key / channel **templates** (`*Tmpl` constants with `%d` / `%s`) | [`redis.go`](../../../../pkgs/bigfred/contract/redis.go) |
+| **Builder functions** that turn layout ID, command-station ID, DCC address, … into a concrete key or channel string | same file (`AllowedVehiclesKey`, `DccBusEventChannel`, …) |
+| **JSON snapshot types** for roster data the server publishes and dcc-bus caches | [`allowedvehicles.go`](../../../../pkgs/bigfred/contract/allowedvehicles.go) |
+| **Payload helpers** — `Marshal` / `Unmarshal*` and `NowMS()` — that encode and decode wire bytes from plain Go values | same file |
+
+The server loads catalogue rows from SQLite, assembles `AllowedVehicles` /
+`DefinedTrains` structs from primitive fields, calls `contract.Marshal`, and
+`SET` + `PUBLISH`es on the keys from `contract.AllowedVehiclesKey` /
+`contract.DefinedTrainsKey`. The daemon never opens SQLite; it
+`GET`/`SUBSCRIBE`s those keys and decodes with `contract.Unmarshal*`.
+
+Keep every new cross-process Redis name in `redis.go` first. Do not scatter
+literals in `server` or `dcc-bus`. The package must not import either side
+(so the dependency graph stays acyclic). See also the package
+[`README.md`](../../../../pkgs/bigfred/contract/README.md).

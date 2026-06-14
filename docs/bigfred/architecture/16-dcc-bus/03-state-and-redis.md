@@ -32,7 +32,17 @@ output:
 
 Catalogue truth lives in **`loco-server`'s SQLite**. The daemon never
 queries it. Instead `loco-server` builds JSON snapshots and publishes
-them on Redis (types in `pkgs/layoutroster`).
+them on Redis using types and helpers from
+[`pkgs/bigfred/contract`](../../../../pkgs/bigfred/contract/README.md).
+
+> The authoritative inventory of **every Redis key, channel and key
+> template** used across loco-server and dcc-bus lives in
+> [`pkgs/bigfred/contract/redis.go`](../../../../pkgs/bigfred/contract/redis.go)
+> (templates + builder functions). Roster JSON shapes and
+> `Marshal` / `Unmarshal*` helpers live in
+> [`allowedvehicles.go`](../../../../pkgs/bigfred/contract/allowedvehicles.go).
+> The literals below document those same templates; see also
+> [§3.2 Contract package](../04-repository-layout.md#32-contract-package-pkgsbigfredcontract).
 
 #### Layout roster snapshots
 

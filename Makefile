@@ -9,15 +9,15 @@ build:
 	GOOS=windows GOARCH=amd64 go build -o bin/rb.exe pkgs/rb/main.go
 
 # --- BigFred: backend (loco-server) ---------------------------------------
-# Built from pkgs/server. CGO_ENABLED=0 keeps cross-compile working
+# Built from pkgs/bigfred/server. CGO_ENABLED=0 keeps cross-compile working
 # because the DB driver is the pure-Go modernc.org/sqlite (see
-# pkgs/server/repo/db.go).
+# pkgs/bigfred/server/repo/db.go).
 .PHONY: server server-build
 server:
-	go run ./pkgs/server -- --log-level=debug --http 0.0.0.0:8080
+	go run ./pkgs/bigfred/server -- --log-level=debug --http 0.0.0.0:8080
 
 server-build:
-	CGO_ENABLED=0 GOOS=linux go build -o bin/loco-server ./pkgs/server
+	CGO_ENABLED=0 GOOS=linux go build -o bin/loco-server ./pkgs/bigfred/server
 
 # --- BigFred: frontend (Vite + React + MUI) -------------------------------
 # `web-dev` starts Vite on :5173 and proxies /api/v1 to the Go backend

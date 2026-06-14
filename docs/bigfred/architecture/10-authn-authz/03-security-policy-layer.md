@@ -1,7 +1,7 @@
-### 7a.3 Domain Policy Layer (`pkgs/server/security`)
+### 7a.3 Domain Policy Layer (`pkgs/bigfred/server/security`)
 
 All "is the actor allowed to do X to Y?" decisions live in **stateless
-policy structs** under `pkgs/server/security`. The pattern has four
+policy structs** under `pkgs/bigfred/server/security`. The pattern has four
 hard rules; together they keep authorization easy to reason about and
 trivial to test.
 
@@ -15,7 +15,7 @@ trivial to test.
    the caller's responsibility (service or middleware) – the policy
    never reaches out.
 3. **Pure domain language.** Inside the policy you may only refer to
-   `pkgs/server/domain` types and `time.Time`. No HTTP, no SQL, no
+   `pkgs/bigfred/server/domain` types and `time.Time`. No HTTP, no SQL, no
    `errors.Is` against transport-level errors.
 4. **One `Decision` type.** Methods return `security.Decision`, never
    `(bool, error)`. The reason is a machine-readable string so HTTP can
@@ -29,7 +29,7 @@ bounded context's authorization rules.
 #### 7a.3.1 `Decision` type
 
 ```go
-// pkgs/server/security/decision.go
+// pkgs/bigfred/server/security/decision.go
 package security
 
 type Decision struct {
@@ -47,13 +47,13 @@ func Deny(reason string) Decision {
 #### 7a.3.2 `LocoSecurityContext` – the canonical example
 
 ```go
-// pkgs/server/security/loco.go
+// pkgs/bigfred/server/security/loco.go
 package security
 
 import (
     "time"
 
-    "github.com/keskad/loco/pkgs/server/domain"
+    "github.com/keskad/loco/pkgs/bigfred/server/domain"
 )
 
 // LocoSecurityContext is a stateless policy. Construct it with a zero
@@ -128,7 +128,7 @@ func (LocoSecurityContext) CanRegisterLoco(actor domain.User, dccAddr uint16, po
 #### 7a.3.3 Other policy contexts (signatures)
 
 ```go
-// pkgs/server/security/train.go
+// pkgs/bigfred/server/security/train.go
 type TrainSecurityContext struct{ Loco LocoSecurityContext }
 
 type TrainDriveInput struct {
@@ -152,7 +152,7 @@ func (TrainSecurityContext) CanEditTrain(actor domain.User, t domain.Train) Deci
 // the whole consist.
 func (TrainSecurityContext) CanDriveMember(actor domain.User, t domain.Train, m domain.Vehicle, in LocoDriveInput) Decision
 
-// pkgs/server/security/lease.go
+// pkgs/bigfred/server/security/lease.go
 type LeaseSecurityContext struct{}
 
 func (LeaseSecurityContext) CanLeaseOutVehicle(actor domain.User, vehicle domain.Vehicle, expiresAt, now time.Time) Decision
@@ -160,7 +160,7 @@ func (LeaseSecurityContext) CanRevokeVehicleLease(actor domain.User, lease domai
 func (LeaseSecurityContext) CanLeaseOutTrain(actor domain.User, train domain.Train, expiresAt, now time.Time) Decision
 func (LeaseSecurityContext) CanRevokeTrainLease(actor domain.User, lease domain.TrainLease) Decision
 
-// pkgs/server/security/interlocking.go
+// pkgs/bigfred/server/security/interlocking.go
 type InterlockingSecurityContext struct{}
 
 // CanOccupy now also verifies that the interlocking is whitelisted in
@@ -170,13 +170,13 @@ func (InterlockingSecurityContext) CanOccupy(actor domain.User, ilk domain.Inter
 func (InterlockingSecurityContext) CanDisplace(actor domain.User, current *domain.InterlockingSession, layoutSignalman *domain.LayoutSignalman) Decision // same layout-scoped signalman grant; used when join carries force:true
 func (InterlockingSecurityContext) CanRequestTakeover(actor domain.User, current *domain.InterlockingSession) Decision
 
-// pkgs/server/security/command_station.go
+// pkgs/bigfred/server/security/command_station.go
 type CommandStationSecurityContext struct{}
 
 func (CommandStationSecurityContext) CanEditCommandStation(actor domain.User) Decision  // admin only
 func (CommandStationSecurityContext) CanViewConnection(actor domain.User) Decision // admin only
 
-// pkgs/server/security/layout.go
+// pkgs/bigfred/server/security/layout.go
 type LayoutSecurityContext struct{}
 
 // CanLoginToLayout is the policy behind POST /api/v1/auth/login. The
@@ -249,7 +249,7 @@ func (LayoutSecurityContext) CanSudo(actor domain.User, p domain.Layout) Decisio
 // be the session owner – every authenticated driver may pick.
 func (LayoutSecurityContext) CanSetSessionCommandStation(actor domain.User, p domain.Layout, attachment *domain.LayoutCommandStation, catalogue *domain.CommandStation) Decision
 
-// pkgs/server/security/audit.go
+// pkgs/bigfred/server/security/audit.go
 // The audit log is read-only and admin-only. There is no Can*Write
 // policy because writes never originate from a user request – they
 // originate from other services after a successful mutation.
@@ -257,7 +257,7 @@ type AuditSecurityContext struct{}
 
 func (AuditSecurityContext) CanReadAuditLog(actor domain.User) Decision  // admin only
 
-// pkgs/server/security/function.go
+// pkgs/bigfred/server/security/function.go
 // Vehicle function DEFINITION editing is owner-only. Invoking a function
 // at runtime is allowed for anyone with current driving authority and
 // re-uses LocoSecurityContext.CanDriveLoco; CanInvokeFunction simply
@@ -267,7 +267,7 @@ type FunctionSecurityContext struct{}
 func (FunctionSecurityContext) CanEditFunctions(actor domain.User, vehicle domain.Vehicle) Decision
 func (FunctionSecurityContext) CanInvokeFunction(actor domain.User, vehicle domain.Vehicle, num uint8, registered []domain.DccFunction) Decision
 
-// pkgs/server/security/template.go
+// pkgs/bigfred/server/security/template.go
 // Vehicle templates: anyone can create; owner or admin can edit/delete.
 // Using a template to seed a new vehicle is allowed for any user.
 type TemplateSecurityContext struct{}
@@ -276,23 +276,23 @@ func (TemplateSecurityContext) CanCreateTemplate(actor domain.User) Decision    
 func (TemplateSecurityContext) CanEditTemplate(actor domain.User, t domain.VehicleTemplate) Decision   // owner OR admin
 func (TemplateSecurityContext) CanDeleteTemplate(actor domain.User, t domain.VehicleTemplate) Decision // owner OR admin
 
-// pkgs/server/security/radio.go
+// pkgs/bigfred/server/security/radio.go
 type RadioSecurityContext struct{}
 
 func (RadioSecurityContext) CanSendTo(actor domain.User, toUser *domain.User, toIlk *domain.Interlocking) Decision
 
-// pkgs/server/security/radio_stop.go
+// pkgs/bigfred/server/security/radio_stop.go
 type RadioStopSecurityContext struct{}
 
 func (RadioStopSecurityContext) CanTrigger(actor domain.User, layoutID uint, driveScope DriveScope) Decision // §4.6.2
 
-// pkgs/server/security/user.go
+// pkgs/bigfred/server/security/user.go
 type UserSecurityContext struct{}
 
 func (UserSecurityContext) CanManageUsers(actor domain.User) Decision
 func (UserSecurityContext) CanGrantTemporaryRole(actor domain.User, target domain.User, role domain.Role, expiresAt, now time.Time) Decision
 
-// pkgs/server/security/apikey.go
+// pkgs/bigfred/server/security/apikey.go
 type APIKeySecurityContext struct{}
 
 const APIKeyMaxLifetime = 365 * 24 * time.Hour
@@ -311,7 +311,7 @@ Because the policies are pure functions over domain structs, tests need
 no mocks, no fixtures and no I/O – plain table tests are enough:
 
 ```go
-// pkgs/server/security/loco_test.go
+// pkgs/bigfred/server/security/loco_test.go
 func TestLocoSecurity_CanDriveLoco(t *testing.T) {
     now := time.Now()
     sec := security.LocoSecurityContext{}

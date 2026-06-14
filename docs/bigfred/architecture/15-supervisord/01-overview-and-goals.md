@@ -5,7 +5,7 @@
 BigFred already relies on **sibling processes** isolated from the main
 `server` binary — most notably `scripts-executor` (§3a.7). The current
 architecture sketches a hand-rolled supervisor in
-`pkgs/server/executor/supervisor.go` (spawn, exponential backoff, health
+`pkgs/bigfred/server/executor/supervisor.go` (spawn, exponential backoff, health
 flag, graceful shutdown). That approach works for one child but does not
 scale cleanly when more managed processes appear (per-layout command-station
 workers, dedicated pollers, optional sidecars).
@@ -75,7 +75,7 @@ source of truth** for *what* should run.
 ```
 
 `server` remains the DCC/throttle authority. Managed processes stay
-siblings — they never import `pkgs/server/http` or `pkgs/server/ws`.
+siblings — they never import `pkgs/bigfred/server/http` or `pkgs/bigfred/server/ws`.
 
 #### Why supervisord instead of extending the hand-rolled supervisor
 

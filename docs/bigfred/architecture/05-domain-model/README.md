@@ -2,7 +2,7 @@
 
 The multi-user functional goals translate into the following entities.
 REL maps these structs onto SQLite tables; the domain types live in
-`pkgs/server/domain/` and contain **no persistence tags beyond the few
+`pkgs/bigfred/server/domain/` and contain **no persistence tags beyond the few
 hints REL needs**, so the controller layer (`LocoApp` and the services)
 stays free of any ORM imports.
 

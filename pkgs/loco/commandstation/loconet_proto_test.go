@@ -62,6 +62,31 @@ func TestParseSlotData(t *testing.T) {
 	}
 }
 
+func TestLnBuildLocoAdr(t *testing.T) {
+	// OPC_LOCO_ADR must be a 4-byte message: BF <ADR_HI> <ADR_LO> <CHK>.
+	// A malformed 5-byte frame is silently rejected by the command station
+	// (no E7 reply), which times out every slot allocation.
+	pkt := lnBuildLocoAdr(3)
+	if want := []byte{0xBF, 0x00, 0x03, 0x43}; !bytes.Equal(pkt, want) {
+		t.Fatalf("loco 3: got % X, want % X", pkt, want)
+	}
+	if n, ok := lnMsgLen(pkt[0], pkt); !ok || n != 4 || len(pkt) != 4 {
+		t.Fatalf("expected a 4-byte frame, got len=%d (lnMsgLen=%d ok=%v)", len(pkt), n, ok)
+	}
+	if !lnChecksumOK(pkt) {
+		t.Fatalf("checksum invalid: % X", pkt)
+	}
+
+	// Long address splits into 7-bit high/low halves.
+	long := lnBuildLocoAdr(1234) // 1234 = hi 0x09, lo 0x52
+	if want := []byte{0xBF, 0x09, 0x52}; !bytes.Equal(long[:3], want) {
+		t.Fatalf("loco 1234: got % X, want prefix % X", long, want)
+	}
+	if len(long) != 4 || !lnChecksumOK(long) {
+		t.Fatalf("loco 1234: bad frame % X", long)
+	}
+}
+
 func TestDccAddrBytes(t *testing.T) {
 	if got := dccAddrBytes(3); !bytes.Equal(got, []byte{0x03}) {
 		t.Fatalf("short addr 3: got % X", got)

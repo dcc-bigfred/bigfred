@@ -60,13 +60,21 @@ func (app *LocoApp) InitializeCommandStation() error {
 				return fmt.Errorf("cannot initialize app: %s", cmdErr)
 			}
 		case "tcp":
+			// Raw binary LocoNet over TCP (the common case; RocRail's lbtcp).
+			cmd, cmdErr := commandstation.NewLocoNetTCPBinary(app.Config.Server.Address, app.Config.Server.Port)
+			app.Station = cmd
+			if cmdErr != nil {
+				return fmt.Errorf("cannot initialize app: %s", cmdErr)
+			}
+		case "lbserver":
+			// ASCII LoconetOverTcp / LbServer protocol.
 			cmd, cmdErr := commandstation.NewLocoNetTCP(app.Config.Server.Address, app.Config.Server.Port)
 			app.Station = cmd
 			if cmdErr != nil {
 				return fmt.Errorf("cannot initialize app: %s", cmdErr)
 			}
 		default:
-			return fmt.Errorf("unknown loconet connection type '%s' (expected serial|tcp)", app.Config.Server.Conn)
+			return fmt.Errorf("unknown loconet connection type '%s' (expected serial|tcp|lbserver)", app.Config.Server.Conn)
 		}
 	} else {
 		return fmt.Errorf("unknown command station type '%s'", app.Config.Server.Type)

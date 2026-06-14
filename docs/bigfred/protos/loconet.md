@@ -973,10 +973,13 @@ ED 0B 7F 23 20 03 21 00 00 00 00 <CHK>
 
 ## 20 LoconetOverTcp framing
 
-BigFred's **`loconet_tcp`** driver
-([`loconet_tcp.go`](../../../pkgs/loco/commandstation/loconet_tcp.go)) speaks the
-ASCII [LoconetOverTcp](https://loconetovertcp.sourceforge.net/Protocol/LoconetOverTcp.html)
-protocol, used by `LbServer`-style gateways and the Digikeijs DR5000 LBServer LAN mode.
+BigFred's **`loconet_tcp`** kind supports two TCP wire formats. The **default**
+(`tcp://`) is **raw binary** LocoNet over TCP (§20.4). The ASCII
+[LoconetOverTcp](https://loconetovertcp.sourceforge.net/Protocol/LoconetOverTcp.html)
+protocol described in this section — spoken by `LbServer`-style gateways and the Digikeijs
+DR5000 LBServer LAN mode — is the
+[`lnTCPASCIITransport`](../../../pkgs/loco/commandstation/loconet_tcp_ascii.go) driver, selected with
+the `lbserver://` scheme.
 
 ### 20.1 Line syntax
 
@@ -1010,10 +1013,31 @@ confirms success/failure. Clients expecting a command-station reply see it right
 the `SENT` token (skipping any `OPC_BUSY` / `BREAK`). This mirrors the half-duplex
 echo model of the raw bus (§4.1).
 
-> **BigFred implementation:** `lnTCPTransport.WritePacket()` emits
+> **BigFred implementation:** `lnTCPASCIITransport.WritePacket()` emits
 > `SEND <hex…>\r\n` (refusing bad checksums); `readLoop()` parses `RECEIVE` lines into
 > packets (validating checksum), logs `VERSION` / `SENT`, and ignores other tokens.
-> Parsing is shared with the serial path through `lnParseHexBytes()`.
+> Parsing is shared with the serial path through `lnParseHexBytes()`. The reader is a
+> plain blocking line reader (it never arms a per-read deadline that could drop a
+> half-received `RECEIVE` line), it locates the `RECEIVE` token anywhere in the line
+> (tolerating a leading `TIMESTAMP`), and it trims the payload to the opcode's length
+> code before checksumming — matching RocRail's `lbserver.c` behaviour.
+
+### 20.4 Raw binary variant (no ASCII framing)
+
+Not every LocoNet-over-TCP peer speaks the ASCII LbServer protocol: some bridges stream
+**raw LocoNet bytes** straight over the socket (opcode … checksum inclusive), with no
+`SEND`/`RECEIVE` lines. This is the protocol of RocRail's **`lbtcp`** client
+(`rocdigs/impl/loconet/lbtcp.c`), as opposed to its ASCII `lbserver.c`. Pointing the
+ASCII transport at such a peer connects fine but every request times out, because no
+`RECEIVE` line ever arrives.
+
+BigFred handles this with a second transport,
+[`lnTCPBinaryTransport`](../../../pkgs/loco/commandstation/loconet_tcp_binary.go)
+(`NewLocoNetTCPBinary`): it `Write`s the raw message bytes and reassembles inbound frames
+with the same `lnStreamParser` (§5) the serial transport uses. Raw binary is the **default**
+and the more common case, so it is selected by the bare `tcp://host:port` scheme; the ASCII
+LbServer protocol (`lnTCPASCIITransport`) is selected with `lbserver://host:port`
+(see [`05-domain-model/01-entities.md`](../architecture/05-domain-model/01-entities.md)).
 
 ---
 
@@ -1119,7 +1143,8 @@ How this spec maps to BigFred's drivers
 | Kind | Transport | Wire | URI |
 |------|-----------|------|-----|
 | `loconet_serial` | `lnSerialTransport` | UART **57600 8N1** to a LocoBuffer-class interface (Uhlenbrock 63120) | `serial:///dev/loconet-63120:57600` |
-| `loconet_tcp` | `lnTCPTransport` | LoconetOverTcp (§20) ASCII over TCP | `tcp://<host>:<port>` |
+| `loconet_tcp` | `lnTCPBinaryTransport` | Raw binary LocoNet over TCP (§20.4; RocRail `lbtcp`); **default** | `tcp://<host>:<port>` |
+| `loconet_tcp` | `lnTCPASCIITransport` | LoconetOverTcp (§20) ASCII over TCP (LbServer) | `lbserver://<host>:<port>` |
 
 The serial transport reconstructs packets with `lnStreamParser` (§5); the TCP
 transport parses `RECEIVE` lines (§20). Both push validated packets onto a shared

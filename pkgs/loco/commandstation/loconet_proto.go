@@ -147,7 +147,13 @@ const (
 func lnBuildLocoAdr(addr LocoAddr) []byte {
 	lo := byte(addr & 0x7F)
 	hi := byte((addr >> 7) & 0x7F)
-	return lnAppendChecksum([]byte{lnOPC_LOCO_ADR, 0x00, lo, hi})
+	// OPC_LOCO_ADR is a 4-byte message: BF <ADR_HI> <ADR_LO> <CHK> (the
+	// opcode's length code is 4). The earlier form inserted a spurious
+	// extra byte (BF 00 <lo> <hi> <chk>), producing a malformed 5-byte
+	// frame that the command station rejected on its length/checksum and
+	// never answered with the E7 slot read — so every slot allocation
+	// (and thus SetSpeed / SendFn / GetSpeed / ListFunctions) timed out.
+	return lnAppendChecksum([]byte{lnOPC_LOCO_ADR, hi, lo})
 }
 
 func lnBuildRqSlotData(slot byte) []byte {

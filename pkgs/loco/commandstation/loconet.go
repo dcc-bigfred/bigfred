@@ -102,7 +102,23 @@ func NewLocoNetSerial(device string, baudrate int) (*LocoNet, error) {
 
 func NewLocoNetTCP(host string, port uint16) (*LocoNet, error) {
 	ln := newLocoNetBase()
-	t, err := newLnTCPTransport(host, port, ln.rxCh)
+	t, err := newLnTCPASCIITransport(host, port, ln.rxCh)
+	if err != nil {
+		return nil, err
+	}
+	ln.t = t
+	go ln.dispatch()
+	return ln, nil
+}
+
+// NewLocoNetTCPBinary connects to a gateway that speaks RAW LocoNet bytes
+// over TCP (no ASCII SEND/RECEIVE framing) — the protocol of RocRail's
+// lbtcp client. Use this when a LoconetOverTcp/LbServer (ASCII) connection
+// dials successfully but every request times out because the peer streams
+// binary LocoNet instead of `RECEIVE` lines.
+func NewLocoNetTCPBinary(host string, port uint16) (*LocoNet, error) {
+	ln := newLocoNetBase()
+	t, err := newLnTCPBinaryTransport(host, port, ln.rxCh)
 	if err != nil {
 		return nil, err
 	}

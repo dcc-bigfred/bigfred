@@ -26,9 +26,9 @@ type Router interface {
 	// `loco.state` snapshot for each accepted address.
 	HandleSubscribe(ctx context.Context, sess *Session, payload protocol.LocoSubscribePayload, requestID string)
 	// HandleSetSpeed handles a single throttle move.
-	HandleSetSpeed(ctx context.Context, sess *Session, payload protocol.LocoSetSpeedPayload, requestID string)
+	HandleSetSpeed(ctx context.Context, sess *Session, payload contract.LocoSetSpeedWire, requestID string)
 	// HandleSetFunction toggles one locomotive function.
-	HandleSetFunction(ctx context.Context, sess *Session, payload protocol.LocoSetFunctionPayload, requestID string)
+	HandleSetFunction(ctx context.Context, sess *Session, payload contract.LocoSetFunctionWire, requestID string)
 	// HandleEStop fires the data-plane emergency stop scoped to
 	// this daemon's command station.
 	HandleEStop(ctx context.Context, sess *Session, payload protocol.SystemEStopPayload, requestID string)
@@ -239,7 +239,7 @@ func (s *Server) dispatch(ctx context.Context, sess *Session, env contract.Envel
 		s.router.HandleSubscribe(ctx, sess, p, env.ID)
 
 	case protocol.TypeLocoSetSpeed:
-		var p protocol.LocoSetSpeedPayload
+		var p contract.LocoSetSpeedWire
 		if err := json.Unmarshal(env.Payload, &p); err != nil {
 			_ = sess.SendAck(ctx, env.ID, false, errors.WsCodeBadPayload)
 			return
@@ -247,7 +247,7 @@ func (s *Server) dispatch(ctx context.Context, sess *Session, env contract.Envel
 		s.router.HandleSetSpeed(ctx, sess, p, env.ID)
 
 	case protocol.TypeLocoSetFunction:
-		var p protocol.LocoSetFunctionPayload
+		var p contract.LocoSetFunctionWire
 		if err := json.Unmarshal(env.Payload, &p); err != nil {
 			_ = sess.SendAck(ctx, env.ID, false, errors.WsCodeBadPayload)
 			return

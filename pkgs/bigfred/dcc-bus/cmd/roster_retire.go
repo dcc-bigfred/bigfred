@@ -41,7 +41,7 @@ func (r *Router) retireRemovedLoco(ctx context.Context, addr uint16) {
 			r.log.WithError(err).WithFields(fields).Warn("dcc-bus roster retire SendFn failed")
 		}
 	}
-	r.clearFnCacheForAddr(addr)
+	r.fnCache.ClearAddr(addr)
 
 	snap := contract.LocoStateWire{
 		Address:   addr,
@@ -58,15 +58,5 @@ func (r *Router) retireRemovedLoco(ctx context.Context, addr uint16) {
 	}
 	if r.hub != nil {
 		r.broadcastLocoStateToObservers(ctx, snap)
-	}
-}
-
-func (r *Router) clearFnCacheForAddr(addr uint16) {
-	r.fnCacheMu.Lock()
-	defer r.fnCacheMu.Unlock()
-	for k := range r.fnCache {
-		if k.Addr == addr {
-			delete(r.fnCache, k)
-		}
 	}
 }

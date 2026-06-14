@@ -7,7 +7,7 @@ import (
 
 func TestFnStateMatchesWithoutCacheEntry(t *testing.T) {
 	t.Parallel()
-	r := &Router{fnCache: make(map[fnKey]bool)}
+	r := &Router{fnCache: NewFunctionsCache()}
 	if r.checkFnStateMatches(context.Background(), 31, 0, true) {
 		t.Fatal("empty fnCache must not suppress a function command")
 	}
@@ -15,19 +15,19 @@ func TestFnStateMatchesWithoutCacheEntry(t *testing.T) {
 
 func TestSeedFnCacheFromSubscribeSnapshot(t *testing.T) {
 	t.Parallel()
-	r := &Router{fnCache: make(map[fnKey]bool)}
-	r.fnCache[fnKey{Addr: 31, Fn: 0}] = true
-	r.fnCache[fnKey{Addr: 31, Fn: 1}] = true
+	c := NewFunctionsCache()
+	c.Set(31, 0, true)
+	c.Set(31, 1, true)
 
-	r.seedFnCache(31, []bool{false, false, true})
+	c.Seed(31, []bool{false, false, true})
 
-	if r.fnCache[fnKey{Addr: 31, Fn: 0}] {
+	if on, _ := c.Get(31, 0); on {
 		t.Fatal("expected F0 seeded to false")
 	}
-	if r.fnCache[fnKey{Addr: 31, Fn: 1}] {
+	if on, _ := c.Get(31, 1); on {
 		t.Fatal("expected F1 seeded to false")
 	}
-	if !r.fnCache[fnKey{Addr: 31, Fn: 2}] {
+	if on, ok := c.Get(31, 2); !ok || !on {
 		t.Fatal("expected F2 seeded to true")
 	}
 }

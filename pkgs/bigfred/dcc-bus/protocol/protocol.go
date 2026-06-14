@@ -1,8 +1,14 @@
-// Package protocol carries the wire shapes exchanged on the dcc-bus
-// WebSocket endpoint (§7e.4) and on the Redis pub/sub channels
-// (§7e.3). The Go declarations are the source of truth for the
-// dcc-bus side of the contract; `tygo` generates the matching
+// Package protocol carries the wire shapes that are exclusive to the
+// dcc-bus WebSocket endpoint (§7e.4): subscribe requests, the welcome
+// frame, acks and errors. The Go declarations are the source of truth
+// for the dcc-bus side of the contract; `tygo` generates the matching
 // TypeScript declarations consumed by the frontend.
+//
+// Control intents that ALSO travel server → daemon on the Redis command
+// channel (§7e.3) — loco.setSpeed and loco.setFunction — live in
+// pkgs/bigfred/contract (LocoSetSpeedWire, LocoSetFunctionWire) so both
+// processes share one definition. Likewise the per-loco state snapshot
+// (contract.LocoStateWire) and the envelope (contract.EnvelopeWire).
 //
 // The contract is intentionally tiny — every frame is either an
 // authoritative state snapshot from the daemon or a control intent
@@ -52,27 +58,6 @@ type PingPayload struct{}
 // subscription set; unsubscribe is implicit on WS close.
 type LocoSubscribePayload struct {
 	Addresses []uint16 `json:"addresses"`
-}
-
-// LocoSetSpeedPayload carries one throttle move. `Speed` is 0-127
-// (128-step mode) or 0-28 (28-step) — the daemon translates to the
-// command-station's wire format. `Forward` is the direction bit.
-// `Emergency` triggers an EMG stop regardless of Speed when true.
-type LocoSetSpeedPayload struct {
-	Address   uint16 `json:"address"`
-	Speed     uint8  `json:"speed"`
-	Forward   bool   `json:"forward"`
-	Emergency bool   `json:"emergency,omitempty"`
-}
-
-// LocoSetFunctionPayload toggles a single locomotive function (F0..
-// F28). The daemon coalesces consecutive toggles of the same Fn
-// within `coalesceWindow` to a single DCC packet so a UI bounce
-// doesn't flood the bus.
-type LocoSetFunctionPayload struct {
-	Address  uint16 `json:"address"`
-	Function uint8  `json:"function"`
-	On       bool   `json:"on"`
 }
 
 // SystemEStopPayload is the data-plane emergency stop. Scope is

@@ -64,6 +64,30 @@ type EnvelopeWire struct {
 	Payload json.RawMessage `json:"payload,omitempty"`
 }
 
+// LocoSetSpeedWire carries one throttle move. It is the inner payload of a
+// loco.setSpeed envelope, used both by the dcc-bus WebSocket (client →
+// daemon) and the DccBusCommandChannel (loco-server → daemon, e.g.
+// train.setSpeed fan-out or a script). Speed is 0-127 (128-step mode) or
+// 0-28 (28-step) — the daemon translates to the command-station's wire
+// format. Forward is the direction bit. Emergency triggers an EMG stop
+// regardless of Speed when true.
+type LocoSetSpeedWire struct {
+	Address   uint16 `json:"address"`
+	Speed     uint8  `json:"speed"`
+	Forward   bool   `json:"forward"`
+	Emergency bool   `json:"emergency,omitempty"`
+}
+
+// LocoSetFunctionWire toggles a single locomotive function (F0..F31). It is
+// the inner payload of a loco.setFunction envelope, shared by the dcc-bus
+// WebSocket (client → daemon) and the DccBusCommandChannel (loco-server →
+// daemon).
+type LocoSetFunctionWire struct {
+	Address  uint16 `json:"address"`
+	Function uint8  `json:"function"`
+	On       bool   `json:"on"`
+}
+
 func marshalEnvelope(eventType, id string, payload []byte) ([]byte, error) {
 	env := EnvelopeWire{Type: eventType, ID: id}
 	if len(payload) > 0 {

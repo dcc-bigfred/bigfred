@@ -31,9 +31,10 @@ func TestRetireRemovedLocoStopsAndClearsFunctions(t *testing.T) {
 	r := &Router{
 		station:    st,
 		hub:        ws.NewHub(),
-		fnCache:    map[fnKey]bool{{Addr: 31, Fn: 2}: true},
+		fnCache:    NewFunctionsCache(),
 		speedSteps: 128,
 	}
+	r.fnCache.Set(31, 2, true)
 	r.retireRemovedLoco(context.Background(), 31)
 
 	if len(speedAddrs) != 1 || speedAddrs[0] != 31 {
@@ -42,7 +43,7 @@ func TestRetireRemovedLocoStopsAndClearsFunctions(t *testing.T) {
 	if fnOffCount != int(maxDCCFunctionNum)+1 {
 		t.Fatalf("SendFn off count = %d, want %d", fnOffCount, maxDCCFunctionNum+1)
 	}
-	if _, ok := r.fnCache[fnKey{Addr: 31, Fn: 2}]; ok {
+	if _, ok := r.fnCache.Get(31, 2); ok {
 		t.Fatal("fnCache entry should be cleared")
 	}
 }
@@ -67,7 +68,7 @@ func TestApplyAllowedVehiclesRetiresRemovedBeforeNewRoster(t *testing.T) {
 		station:    st,
 		hub:        ws.NewHub(),
 		roster:     security.NewRosterGate(2),
-		fnCache:    make(map[fnKey]bool),
+		fnCache:    NewFunctionsCache(),
 		layoutID:   2,
 		speedSteps: 128,
 		log:        logrus.New(),
@@ -76,7 +77,7 @@ func TestApplyAllowedVehiclesRetiresRemovedBeforeNewRoster(t *testing.T) {
 		LayoutID: 2,
 		Vehicles: []contract.AllowedVehicle{{Addr: 31}, {Addr: 42}},
 	})
-	r.fnCache[fnKey{Addr: 31, Fn: 1}] = true
+	r.fnCache.Set(31, 1, true)
 
 	r.ApplyAllowedVehicles(context.Background(), contract.AllowedVehicles{
 		LayoutID: 2,

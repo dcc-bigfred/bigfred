@@ -5,6 +5,9 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+
+	"github.com/keskad/loco/pkgs/bigfred/contract"
+	"github.com/keskad/loco/pkgs/loco/commandstation"
 )
 
 const (
@@ -44,6 +47,46 @@ func (r *Router) setLocoFunctionWithRetry(ctx context.Context, addr uint16, user
 		}
 	}
 	return last
+}
+
+// setLocoFunction issues one DCC function command and mirrors the
+// result in Redis. Used by the throttle and the dead-man's switch.
+func (r *Router) setLocoFunction(ctx context.Context, addr uint16, userID uint, fn uint8, on bool, source string) error {
+	unchanged := r.checkFnStateMatches(ctx, addr, fn, on)
+	if unchanged {
+		return nil
+	}
+	previous, hadPrev := r.fnCache.Stage(addr, fn, on)
+	if err := r.station.SendFn(commandstation.MainTrackMode, commandstation.LocoAddr(addr), commandstation.FuncNum(fn), on); err != nil {
+		fields := r.stationLogFields()
+		fields["addr"] = addr
+		fields["function"] = fn
+		fields["on"] = on
+		r.log.WithError(err).WithFields(fields).Warn("dcc-bus command station SendFn failed")
+		r.fnCache.Rollback(addr, fn, previous, hadPrev)
+		return err
+	}
+
+	snap := contract.LocoStateWire{
+		Address:            addr,
+		ControlledByUserID: userID,
+		Source:             source,
+		At:                 time.Now().UTC().UnixMilli(),
+	}
+	if env, ok, err := r.redis.LoadState(ctx, addr); err == nil && ok {
+		snap.Speed = env.Speed
+		snap.Forward = env.Forward
+		snap.Functions = make([]bool, max(len(env.Functions), int(fn)+1))
+		copy(snap.Functions, env.Functions)
+	} else {
+		snap.Functions = make([]bool, int(fn)+1)
+	}
+	snap.Functions[fn] = on
+	if err := r.redis.StoreState(ctx, snap, stateTTL); err != nil {
+		r.log.WithError(err).Debug("dcc-bus redis store")
+	}
+	r.broadcastLocoStateToObservers(ctx, snap)
+	return nil
 }
 
 // setTimedLocoFunctionWithRetry turns fn on, then off after duration.

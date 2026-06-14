@@ -14,7 +14,7 @@ and wire-format bytes from primitive Go values.
 |------|----------------|
 | [`allowedvehicles.go`](allowedvehicles.go) | Layout roster keys, snapshot types (`AllowedVehicles`, `DefinedTrains`, …), `Marshal` / `Unmarshal*`, and payload builders. |
 | [`locostate.go`](locostate.go) | Per-loco state key (`loco:state`), `LocoStateWire`, and `BuildLocoStatePayload`. |
-| [`dccbus.go`](dccbus.go) | Command/event channels, port-pool hash, `EnvelopeWire`, and envelope/port builders. |
+| [`dccbus.go`](dccbus.go) | Command/event channels, port-pool hash, `EnvelopeWire`, command intents (`LocoSetSpeedWire`, `LocoSetFunctionWire`), and envelope/port builders. |
 
 ## Key templates and builders
 
@@ -58,9 +58,13 @@ Typical consumer flow (dcc-bus):
 snap, err := contract.UnmarshalAllowedVehicles(msg.Payload)
 ```
 
-Command and event envelopes on `dcc-bus:cmd:*` / `dcc-bus:evt:*` reuse the
-WebSocket protocol types in `pkgs/bigfred/dcc-bus/protocol`; roster snapshots
-are the primary payload family defined in this package today.
+Command intents carried on `dcc-bus:cmd:*` (server → daemon) — `LocoSetSpeedWire`
+and `LocoSetFunctionWire` — live here because they are part of the cross-process
+contract; the dcc-bus WebSocket reuses the same structs for the client → daemon
+direction. State snapshots (`LocoStateWire`) and roster snapshots are the other
+payload families defined in this package. Frames that never leave the dcc-bus
+WebSocket (subscribe, ack, errors, the welcome frame) stay in
+`pkgs/bigfred/dcc-bus/protocol`.
 
 ## What does **not** belong here
 

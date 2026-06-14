@@ -199,9 +199,7 @@ func (r *Router) applyObservation(ctx context.Context, o commandstation.LocoObse
 			changed = true
 			// Keep the function dedup cache honest after an external
 			// change so the next in-app toggle isn't wrongly collapsed.
-			r.fnCacheMu.Lock()
-			r.fnCache[fnKey{Addr: addr, Fn: uint8(fn)}] = on
-			r.fnCacheMu.Unlock()
+			r.fnCache.Set(addr, uint8(fn), on)
 		}
 	}
 	if !changed {

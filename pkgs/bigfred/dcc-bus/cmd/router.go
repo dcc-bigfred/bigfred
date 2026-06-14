@@ -57,10 +57,7 @@ type Router struct {
 	trainsMu sync.RWMutex
 	trains   []contract.DefinedTrain
 
-	// fnCache mirrors the last sent function bit per (addr, fn) so a
-	// rapid toggle doesn't reissue the same DCC packet.
-	fnCache   map[fnKey]bool
-	fnCacheMu sync.Mutex
+	fnCache *FunctionsCache
 
 	// pulseActive tracks in-flight timed function pulses per (addr, fn).
 	// A new pulse is dropped while the previous one has not finished.
@@ -88,11 +85,6 @@ type Config struct {
 	PollIntervalMs uint
 }
 
-type fnKey struct {
-	Addr uint16
-	Fn   uint8
-}
-
 // NewRouter assembles the router and seeds the layout roster cache
 // from Redis snapshots published by loco-server.
 func NewRouter(_ context.Context, cfg Config) (*Router, error) {
@@ -113,7 +105,7 @@ func NewRouter(_ context.Context, cfg Config) (*Router, error) {
 		speedSteps:       cfg.SpeedSteps,
 		pollInterval:     time.Duration(cfg.PollIntervalMs) * time.Millisecond,
 		roster:           security.NewRosterGate(cfg.LayoutID),
-		fnCache:          make(map[fnKey]bool, 32),
+		fnCache:          NewFunctionsCache(),
 		pulseActive:      make(map[fnKey]bool, 8),
 	}
 	r.ApplyAllowedVehicles(context.Background(), cfg.AllowedVehicles)
@@ -225,7 +217,7 @@ func (r *Router) HandleSubscribe(ctx context.Context, sess *ws.Session, payload 
 
 	for _, addr := range accepted {
 		if snap, ok, err := r.redis.LoadState(ctx, addr); err == nil && ok {
-			r.seedFnCache(addr, snap.Functions)
+			r.fnCache.Seed(addr, snap.Functions)
 			_ = sess.SendTyped(ctx, protocol.TypeLocoState, snap)
 		}
 	}
@@ -237,7 +229,7 @@ func (r *Router) HandleSubscribe(ctx context.Context, sess *ws.Session, payload 
 // HandleSetSpeed forwards a throttle move to the command station,
 // updates the Redis cache and fans the new state out to every other
 // subscribed session.
-func (r *Router) HandleSetSpeed(ctx context.Context, sess *ws.Session, p protocol.LocoSetSpeedPayload, requestID string) {
+func (r *Router) HandleSetSpeed(ctx context.Context, sess *ws.Session, p contract.LocoSetSpeedWire, requestID string) {
 	if reason := r.roster.DenyDriveCommand(sess.UserID, p.Address); reason != "" {
 		_ = sess.SendAck(ctx, requestID, false, reason)
 		return
@@ -288,7 +280,7 @@ func (r *Router) HandleSetSpeed(ctx context.Context, sess *ws.Session, p protoco
 
 // HandleSetFunction sets a single function on or off. The desired
 // state is sent to the command station and mirrored in Redis.
-func (r *Router) HandleSetFunction(ctx context.Context, sess *ws.Session, p protocol.LocoSetFunctionPayload, requestID string) {
+func (r *Router) HandleSetFunction(ctx context.Context, sess *ws.Session, p contract.LocoSetFunctionWire, requestID string) {
 	if reason := r.roster.DenyDriveCommand(sess.UserID, p.Address); reason != "" {
 		_ = sess.SendAck(ctx, requestID, false, reason)
 		return
@@ -307,30 +299,11 @@ func (r *Router) HandleSetFunction(ctx context.Context, sess *ws.Session, p prot
 	}
 }
 
-// seedFnCache aligns the in-memory function dedup cache with a Redis
-// snapshot (or any authoritative function vector). Called on subscribe
-// so a TTL-expired Redis row cannot leave fnCache believing a function
-// is still on while the UI reads an empty/off snapshot.
-func (r *Router) seedFnCache(addr uint16, functions []bool) {
-	r.fnCacheMu.Lock()
-	defer r.fnCacheMu.Unlock()
-	for fn, on := range functions {
-		if fn > maxDCCFunctionNum {
-			break
-		}
-		r.fnCache[fnKey{Addr: addr, Fn: uint8(fn)}] = on
-	}
-}
-
 // checkFnStateMatches reports whether addr/fn is already in the desired
 // state in both fnCache and Redis. A mismatch in either layer means
 // the DCC command must be issued (and the UI refreshed).
 func (r *Router) checkFnStateMatches(ctx context.Context, addr uint16, fn uint8, on bool) bool {
-	key := fnKey{Addr: addr, Fn: fn}
-	r.fnCacheMu.Lock()
-	previous, hadPrev := r.fnCache[key]
-	r.fnCacheMu.Unlock()
-	if !hadPrev || previous != on {
+	if !r.fnCache.Matches(addr, fn, on) {
 		return false
 	}
 	env, ok, err := r.redis.LoadState(ctx, addr)
@@ -341,99 +314,6 @@ func (r *Router) checkFnStateMatches(ctx context.Context, addr uint16, fn uint8,
 		return !on
 	}
 	return env.Functions[fn] == on
-}
-
-// setLocoFunction issues one DCC function command and mirrors the
-// result in Redis. Used by the throttle and the dead-man's switch.
-func (r *Router) setLocoFunction(ctx context.Context, addr uint16, userID uint, fn uint8, on bool, source string) error {
-	key := fnKey{Addr: addr, Fn: fn}
-	unchanged := r.checkFnStateMatches(ctx, addr, fn, on)
-	r.fnCacheMu.Lock()
-	previous, hadPrev := r.fnCache[key]
-	if !unchanged {
-		r.fnCache[key] = on
-	}
-	r.fnCacheMu.Unlock()
-
-	if unchanged {
-		return nil
-	}
-	if err := r.station.SendFn(commandstation.MainTrackMode, commandstation.LocoAddr(addr), commandstation.FuncNum(fn), on); err != nil {
-		fields := r.stationLogFields()
-		fields["addr"] = addr
-		fields["function"] = fn
-		fields["on"] = on
-		r.log.WithError(err).WithFields(fields).Warn("dcc-bus command station SendFn failed")
-		r.fnCacheMu.Lock()
-		if hadPrev {
-			r.fnCache[key] = previous
-		} else {
-			delete(r.fnCache, key)
-		}
-		r.fnCacheMu.Unlock()
-		return err
-	}
-
-	snap := contract.LocoStateWire{
-		Address:            addr,
-		ControlledByUserID: userID,
-		Source:             source,
-		At:                 time.Now().UTC().UnixMilli(),
-	}
-	if env, ok, err := r.redis.LoadState(ctx, addr); err == nil && ok {
-		snap.Speed = env.Speed
-		snap.Forward = env.Forward
-		snap.Functions = make([]bool, max(len(env.Functions), int(fn)+1))
-		copy(snap.Functions, env.Functions)
-	} else {
-		snap.Functions = make([]bool, int(fn)+1)
-	}
-	snap.Functions[fn] = on
-	if err := r.redis.StoreState(ctx, snap, stateTTL); err != nil {
-		r.log.WithError(err).Debug("dcc-bus redis store")
-	}
-	r.broadcastLocoStateToObservers(ctx, snap)
-	return nil
-}
-
-// HandleEStop slams every loco the requesting session subscribes to
-// down to speed step 1 (DCC EMG-stop) and emits a system.estop
-// audit event on the Redis bus.
-func (r *Router) HandleEStop(ctx context.Context, sess *ws.Session, p protocol.SystemEStopPayload, requestID string) {
-	r.applyEmergencyForSession(ctx, sess, p.Reason, false)
-	if requestID != "" {
-		_ = sess.SendAck(ctx, requestID, true, "")
-	}
-}
-
-// HandleSessionClose runs the dead-man's plan and fires audit. Called
-// from the WS server when a browser session goes away (any reason).
-func (r *Router) HandleSessionClose(ctx context.Context, sess *ws.Session, reason string) {
-	if r.isLastSessionForUser(sess) {
-		addrs := r.collectDriveTargetsForUser(ctx, sess.UserID)
-		r.log.WithFields(logrus.Fields{
-			"sessionId": sess.ID,
-			"userId":    sess.UserID,
-			"reason":    reason,
-			"addrs":     addrs,
-		}).Info("dcc-bus last user session closed — emergency stop on drive targets")
-		r.applyEmergencyStop(ctx, sess.UserID, sess.ID, addrs, reason, true)
-		return
-	}
-	if reason == errors.WsCodeSessionDeadman {
-		r.applyEmergencyForSession(ctx, sess, reason, true)
-	}
-}
-
-// isLastSessionForUser reports whether sess is the only live WS
-// session for its user on this daemon (§7e.5 per-daemon rule).
-func (r *Router) isLastSessionForUser(sess *ws.Session) bool {
-	for _, s := range r.hub.SessionsForUser(sess.UserID) {
-		if s.ID != sess.ID {
-			return false
-		}
-	}
-	return true
 }
 
 // collectDriveTargetsForUser returns every locomotive address the
@@ -465,95 +345,6 @@ func (r *Router) collectDriveTargetsForUser(ctx context.Context, userID uint) []
 	return addrs
 }
 
-// applyEmergencyForSession brakes every loco the session subscribed
-// to. We emit one EMG-stop per address so a partial failure (the
-// command station rejected one address) doesn't abort the rest.
-func (r *Router) applyEmergencyForSession(ctx context.Context, sess *ws.Session, reason string, movingOnly bool) {
-	r.applyEmergencyStop(ctx, sess.UserID, sess.ID, sess.SubscribedAddrs(), reason, movingOnly)
-}
-
-// applyEmergencyStop issues EMG-stop for each address and publishes
-// the audit frame. Shared by per-session and per-user last-session
-// paths.
-//
-// When movingOnly is true (dead-man's switch paths), a loco is acted
-// on only when its cached speed is above 1. When movingOnly is false
-// (manual estop), locos already at normal stop (speed 0) are skipped
-// so a benign page navigation does not surface wire speed 1 in the UI.
-func (r *Router) applyEmergencyStop(ctx context.Context, userID uint, sessionID string, addrs []uint16, reason string, movingOnly bool) {
-	affected := make([]uint16, 0, len(addrs))
-	for _, addr := range addrs {
-		if !r.shouldEmergencyStopLoco(ctx, addr, movingOnly) {
-			continue
-		}
-		if err := r.station.SetSpeed(commandstation.LocoAddr(addr), 1, true, uint8(r.speedSteps)); err != nil {
-			r.log.WithError(err).WithField("addr", addr).Warn("dcc-bus estop failed")
-			continue
-		}
-		affected = append(affected, addr)
-		snap := contract.LocoStateWire{
-			Address:            addr,
-			Speed:              1,
-			Forward:            true,
-			ControlledByUserID: userID,
-			Source:             "estop",
-			At:                 time.Now().UTC().UnixMilli(),
-		}
-		if cached, ok, err := r.redis.LoadState(ctx, addr); err == nil && ok {
-			snap.Functions = cached.Functions
-			snap.Forward = cached.Forward
-		}
-		if err := r.redis.StoreState(ctx, snap, stateTTL); err != nil {
-			r.log.WithError(err).Debug("dcc-bus estop redis store")
-		}
-		r.broadcastLocoStateToObservers(ctx, snap)
-		if v, ok := r.roster.AllowedVehicle(addr); ok {
-			r.applyDeadManSwitchForLoco(context.Background(), addr, userID, v)
-		}
-	}
-	if len(affected) == 0 {
-		return
-	}
-
-	if err := r.redis.Publish(ctx, "system.estop.audit", map[string]any{
-		"reason":    reason,
-		"userId":    userID,
-		"sessionId": sessionID,
-		"addrs":     affected,
-		"at":        time.Now().UTC().UnixMilli(),
-	}); err != nil {
-		r.log.WithError(err).Debug("dcc-bus estop publish")
-	}
-}
-
-func (r *Router) shouldEmergencyStopLoco(ctx context.Context, addr uint16, movingOnly bool) bool {
-	cached, ok, err := r.redis.LoadState(ctx, addr)
-	if err != nil || !ok {
-		return !movingOnly
-	}
-	if movingOnly {
-		return cached.Speed > 1
-	}
-	return cached.Speed != 0
-}
-
-func (r *Router) applyDeadManSwitchForLoco(ctx context.Context, addr uint16, userID uint, v contract.AllowedVehicle) {
-	switch v.DeadManSwitchOption {
-	case string(domain.DeadManSwitchStopHorn):
-		r.setTimedLocoFunctionWithRetry(addr, userID, v.Rp1Function, time.Second, "deadman", 3)
-	case string(domain.DeadManSwitchStopHornEmergencyLights):
-		r.setTimedLocoFunctionWithRetry(addr, userID, v.Rp1Function, time.Second, "deadman", 3)
-		if err := r.setLocoFunction(ctx, addr, userID, v.EmergencyLightsFunction, true, "deadman"); err != nil {
-			r.log.WithError(err).WithFields(logrus.Fields{
-				"addr":     addr,
-				"function": v.EmergencyLightsFunction,
-			}).Warn("dcc-bus dead-man emergency lights failed")
-		}
-	default:
-		// "stop" and unknown values: brake only.
-	}
-}
-
 // broadcastLocoStateToObservers broadcasts a state snapshot to every WS session that
 // subscribed to the affected loco.
 func (r *Router) broadcastLocoStateToObservers(ctx context.Context, snap contract.LocoStateWire) {
@@ -578,14 +369,14 @@ func (r *Router) HandleControlCommand(ctx context.Context, raw []byte) {
 
 	switch env.Type {
 	case protocol.TypeLocoSetSpeed:
-		var p protocol.LocoSetSpeedPayload
+		var p contract.LocoSetSpeedWire
 		if err := json.Unmarshal(env.Payload, &p); err != nil {
 			return
 		}
 		r.applyControlSetSpeed(ctx, p)
 
 	case protocol.TypeLocoSetFunction:
-		var p protocol.LocoSetFunctionPayload
+		var p contract.LocoSetFunctionWire
 		if err := json.Unmarshal(env.Payload, &p); err != nil {
 			return
 		}
@@ -596,7 +387,9 @@ func (r *Router) HandleControlCommand(ctx context.Context, raw []byte) {
 	}
 }
 
-func (r *Router) applyControlSetSpeed(ctx context.Context, p protocol.LocoSetSpeedPayload) {
+// applyControlSetSpeed sets a single throttle move. The desired state is
+// sent to the command station and mirrored in Redis.
+func (r *Router) applyControlSetSpeed(ctx context.Context, p contract.LocoSetSpeedWire) {
 	if !r.roster.IsLocoAllowedOnLayout(p.Address) {
 		return
 	}
@@ -625,59 +418,17 @@ func (r *Router) applyControlSetSpeed(ctx context.Context, p protocol.LocoSetSpe
 	r.broadcastLocoStateToObservers(ctx, snap)
 }
 
-func (r *Router) applyControlSetFunction(ctx context.Context, p protocol.LocoSetFunctionPayload) {
+// applyControlSetFunction sets a single function on or off. The desired
+// state is sent to the command station and mirrored in Redis.
+func (r *Router) applyControlSetFunction(ctx context.Context, p contract.LocoSetFunctionWire) {
 	if !r.roster.IsLocoAllowedOnLayout(p.Address) {
 		return
 	}
-	if err := r.station.SendFn(commandstation.MainTrackMode, commandstation.LocoAddr(p.Address), commandstation.FuncNum(p.Function), p.On); err != nil {
-		r.log.WithError(err).WithField("addr", p.Address).Warn("dcc-bus control setFn failed")
-		return
-	}
-	key := fnKey{Addr: p.Address, Fn: p.Function}
-	r.fnCacheMu.Lock()
-	r.fnCache[key] = p.On
-	r.fnCacheMu.Unlock()
-	snap := contract.LocoStateWire{Address: p.Address, Source: "server", At: time.Now().UTC().UnixMilli()}
+	userID := uint(0)
 	if cached, ok, err := r.redis.LoadState(ctx, p.Address); err == nil && ok {
-		snap.Speed = cached.Speed
-		snap.Forward = cached.Forward
-		snap.ControlledByUserID = cached.ControlledByUserID
-		snap.Functions = make([]bool, max(len(cached.Functions), int(p.Function)+1))
-		copy(snap.Functions, cached.Functions)
-	} else {
-		snap.Functions = make([]bool, int(p.Function)+1)
+		userID = cached.ControlledByUserID
 	}
-	snap.Functions[p.Function] = p.On
-	if err := r.redis.StoreState(ctx, snap, stateTTL); err != nil {
-		r.log.WithError(err).Debug("dcc-bus control redis store")
-	}
-	r.broadcastLocoStateToObservers(ctx, snap)
-}
-
-// applyEStopAll brakes every roster locomotive — the cs-scoped
-func (r *Router) applyEStopAll(ctx context.Context, reason string) {
-	addrs := r.roster.AllowedAddrs()
-	for _, addr := range addrs {
-		_ = r.station.SetSpeed(commandstation.LocoAddr(addr), 1, true, uint8(r.speedSteps))
-		snap := contract.LocoStateWire{
-			Address: addr,
-			Speed:   0,
-			Forward: true,
-			Source:  "estop",
-			At:      time.Now().UTC().UnixMilli(),
-		}
-		if cached, ok, err := r.redis.LoadState(ctx, addr); err == nil && ok {
-			snap.Functions = cached.Functions
-		}
-		_ = r.redis.StoreState(ctx, snap, stateTTL)
-		r.broadcastLocoStateToObservers(ctx, snap)
-	}
-	_ = r.redis.Publish(ctx, "system.estop.audit", map[string]any{
-		"reason": reason,
-		"scope":  "all",
-		"addrs":  addrs,
-		"at":     time.Now().UTC().UnixMilli(),
-	})
+	_ = r.setLocoFunction(ctx, p.Address, userID, p.Function, p.On, "server")
 }
 
 func max(a, b int) int {

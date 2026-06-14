@@ -43,6 +43,28 @@ func (g *RosterGate) ApplySnapshot(snap contract.AllowedVehicles) bool {
 	return true
 }
 
+// DiffRemoved returns DCC addresses on the current roster that are
+// absent from snap. Call before ApplySnapshot to retire locos falling
+// off the layout roster.
+func (g *RosterGate) DiffRemoved(snap contract.AllowedVehicles) []uint16 {
+	if snap.LayoutID != 0 && snap.LayoutID != g.layoutID {
+		return nil
+	}
+	next := make(map[uint16]struct{}, len(snap.Vehicles))
+	for _, v := range snap.Vehicles {
+		next[v.Addr] = struct{}{}
+	}
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	removed := make([]uint16, 0)
+	for addr := range g.allowed {
+		if _, keep := next[addr]; !keep {
+			removed = append(removed, addr)
+		}
+	}
+	return removed
+}
+
 // AllowedAddrs returns every DCC address on the layout roster.
 func (g *RosterGate) AllowedAddrs() []uint16 {
 	g.mu.RLock()

@@ -56,6 +56,16 @@ func (h *Hub) Count() int {
 	return len(h.sessions)
 }
 
+// UnsubscribeAll removes locomotive subscriptions from every live session.
+func (h *Hub) UnsubscribeAll(addrs ...uint16) {
+	if len(addrs) == 0 {
+		return
+	}
+	for _, s := range h.Snapshot() {
+		s.Unsubscribe(addrs...)
+	}
+}
+
 // Broadcast sends env to every session that has subscribed to addr,
 // or to every session when addr == 0 (used for `dcc-bus.opened`
 // echoes and `system.estop` broadcasts). Errors are swallowed so a

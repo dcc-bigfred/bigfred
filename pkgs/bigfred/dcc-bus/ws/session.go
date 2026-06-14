@@ -56,6 +56,15 @@ func (s *Session) Subscribe(addrs ...uint16) {
 	}
 }
 
+// Unsubscribe drops interest in the given locomotive addresses.
+func (s *Session) Unsubscribe(addrs ...uint16) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, a := range addrs {
+		delete(s.subscribed, a)
+	}
+}
+
 // SubscribedAddrs returns the current subscription set.
 func (s *Session) SubscribedAddrs() []uint16 {
 	s.mu.Lock()

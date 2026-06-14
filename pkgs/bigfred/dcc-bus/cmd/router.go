@@ -12,15 +12,15 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/keskad/loco/pkgs/bigfred/contract"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/errors"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/protocol"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/security"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/state"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/station"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/ws"
-	"github.com/keskad/loco/pkgs/bigfred/contract"
-	"github.com/keskad/loco/pkgs/loco/commandstation"
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
+	"github.com/keskad/loco/pkgs/loco/commandstation"
 )
 
 const (
@@ -116,7 +116,7 @@ func NewRouter(_ context.Context, cfg Config) (*Router, error) {
 		fnCache:          make(map[fnKey]bool, 32),
 		pulseActive:      make(map[fnKey]bool, 8),
 	}
-	r.ApplyAllowedVehicles(cfg.AllowedVehicles)
+	r.ApplyAllowedVehicles(context.Background(), cfg.AllowedVehicles)
 	r.ApplyDefinedTrains(cfg.DefinedTrains)
 	r.log.WithFields(logrus.Fields{
 		"layoutId":         r.layoutID,
@@ -149,11 +149,24 @@ func (r *Router) stationLogFields() logrus.Fields {
 }
 
 // ApplyAllowedVehicles replaces the in-memory drivable roster from a
-// loco-server snapshot (boot GET or pub/sub on allowed_vehicles).
-func (r *Router) ApplyAllowedVehicles(snap contract.AllowedVehicles) {
+// loco-server snapshot (boot GET or pub/sub on allowed_vehicles). Locos
+// that were on the previous roster but missing from snap are stopped and
+// have their functions turned off before the new roster is applied.
+func (r *Router) ApplyAllowedVehicles(ctx context.Context, snap contract.AllowedVehicles) {
+	if snap.LayoutID != 0 && snap.LayoutID != r.layoutID {
+		return
+	}
+
+	// if any loco was removed from allowed vehicles, then stop it and turn off its functions
+	removed := r.roster.DiffRemoved(snap)
+	r.retireRemovedLocos(ctx, removed)
+
+	// apply new list
 	if !r.roster.ApplySnapshot(snap) {
 		return
 	}
+
+	// logging
 	addrs := make([]uint16, 0, len(snap.Vehicles))
 	for _, v := range snap.Vehicles {
 		addrs = append(addrs, v.Addr)

@@ -50,3 +50,27 @@ func TestRosterGateApplySnapshotIgnoresOtherLayout(t *testing.T) {
 		t.Fatal("roster must stay empty")
 	}
 }
+
+func TestRosterGateDiffRemoved(t *testing.T) {
+	t.Parallel()
+	g := NewRosterGate(2)
+	g.ApplySnapshot(contract.AllowedVehicles{
+		LayoutID: 2,
+		Vehicles: []contract.AllowedVehicle{
+			{Addr: 31},
+			{Addr: 42},
+		},
+	})
+
+	removed := g.DiffRemoved(contract.AllowedVehicles{
+		LayoutID: 2,
+		Vehicles: []contract.AllowedVehicle{{Addr: 42}},
+	})
+	if len(removed) != 1 || removed[0] != 31 {
+		t.Fatalf("removed = %v, want [31]", removed)
+	}
+
+	if diff := g.DiffRemoved(contract.AllowedVehicles{LayoutID: 3, Vehicles: []contract.AllowedVehicle{{Addr: 99}}}); diff != nil {
+		t.Fatalf("foreign layout diff = %v, want nil", diff)
+	}
+}

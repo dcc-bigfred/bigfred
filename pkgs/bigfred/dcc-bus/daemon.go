@@ -294,7 +294,7 @@ func (d *Daemon) runAllowedVehiclesConsumer(ctx context.Context, sub *redis.PubS
 				d.log.WithError(err).Warn("dcc-bus allowed_vehicles: bad payload")
 				continue
 			}
-			d.router.ApplyAllowedVehicles(snap)
+			d.router.ApplyAllowedVehicles(ctx, snap)
 		}
 	}
 }

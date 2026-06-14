@@ -112,8 +112,9 @@ func (r *Router) applyDeadManSwitchForLoco(ctx context.Context, addr uint16, use
 	}
 }
 
-// applyEStopAll brakes every roster locomotive — the cs-scoped
-func (r *Router) applyEStopAll(ctx context.Context, reason string) {
+// applyEStopAll brakes every roster locomotive on this command station.
+// Returns the roster addresses included in the halt (for audit ack).
+func (r *Router) applyEStopAll(ctx context.Context, reason string) []uint16 {
 	addrs := r.roster.AllowedAddrs()
 	for _, addr := range addrs {
 		_ = r.station.SetSpeed(commandstation.LocoAddr(addr), 1, true, uint8(r.speedSteps))
@@ -136,4 +137,5 @@ func (r *Router) applyEStopAll(ctx context.Context, reason string) {
 		"addrs":  addrs,
 		"at":     time.Now().UTC().UnixMilli(),
 	})
+	return addrs
 }

@@ -31,6 +31,7 @@ import ThrottleCockpit from "../components/throttle/ThrottleCockpit";
 import ThrottleNavigationGuard from "../components/throttle/ThrottleNavigationGuard";
 import ThrottleSetupDialog from "../components/throttle/ThrottleSetupDialog";
 import { useDebouncedSpeedSend } from "../hooks/useDebouncedSpeedSend";
+import { useRadioStopSound } from "../hooks/useRadioStopSound";
 import { useThrottleSpeedOverride } from "../hooks/useThrottleSpeedOverride";
 import { useThrottleCommandStationSelection } from "../hooks/useThrottleCommandStationSelection";
 import { useThrottleVehicleSelection } from "../hooks/useThrottleVehicleSelection";
@@ -71,6 +72,7 @@ export default function ThrottlePage() {
   }, []);
 
   const layoutID = me?.layoutId ?? null;
+  useRadioStopSound();
   const stations = session?.availableCommandStations ?? [];
   const sessionCommandStationId =
     session?.currentSession?.commandStationId ?? 0;
@@ -427,6 +429,7 @@ function IdleThrottle({
   return (
     <Box sx={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
       <ThrottleCockpit
+        layoutId={layoutID}
         onOpenSetup={onOpenSetup}
         vehicles={vehicles}
         selectedAddress={selectedAddr}
@@ -542,6 +545,7 @@ function ConnectedThrottle({
         onLeaveConfirm={handleLeaveConfirm}
       />
       <ThrottleCockpit
+        layoutId={layoutID}
         onOpenSetup={onOpenSetup}
         vehicles={vehicles}
         selectedAddress={selectedAddr}

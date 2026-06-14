@@ -380,6 +380,9 @@ func (r *Router) HandleControlCommand(ctx context.Context, raw []byte) {
 
 	case protocol.TypeSystemEStop:
 		r.applyEStopAll(ctx, "system")
+
+	case protocol.TypeSystemRadioStop:
+		r.HandleRadioStop(ctx)
 	}
 }
 

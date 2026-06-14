@@ -346,13 +346,21 @@ domain model and the API:
     **Radio Stop** from the throttle overlay. The signal:
     - issues a DCC emergency stop to **every vehicle on the layout
       roster**, across **all** attached command stations;
-    - plays a radiostop alarm sound on **every open throttle session**
-      in the layout;
+    - additionally **fires every connected driver's dead-man's-switch
+      emergency plan** (clamped to the `stop_my_vehicles`…`release_my_leases`
+      band, never escalating to the admin-only `estop_all`), so each
+      operator's own fail-safe (scripts, leases) runs as if their last
+      session had dropped (§4.6.1a);
+    - plays a radiostop alarm sound (`/sounds/radiostop.ogg`) on
+      **every open throttle session** in the layout;
     - interrupts running scripts with reason `"radio_stop"`;
     - is audited (`system.radio_stop`).
-    Radio Stop is separate from the per-session emergency brake
-    (`system.estop`), the dead-man's switch, admin-only `estop_all`,
-    and walkie-talkie phrases such as `STOP_IMMEDIATELY` (§4.6).
+    It is triggered from a red button on the throttle overlay's left
+    toolbar (next to the Fullscreen toggle) behind a confirmation
+    overlay. Radio Stop is separate from the per-session emergency brake
+    (`system.estop`), the **automatic** dead-man's switch, admin-only
+    `estop_all`, and walkie-talkie phrases such as `STOP_IMMEDIATELY`
+    (§4.6).
 21. **Sudo elevation – temporary `admin`/`signalman` powers gated by a
     layout-scoped PIN.** Every **layout** owns an **admin PIN** that is
     independent of any user PIN. A user already authenticated into that

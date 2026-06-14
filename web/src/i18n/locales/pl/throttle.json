@@ -10,6 +10,13 @@
     "enter": "Włącz pełny ekran",
     "exit": "Wyłącz pełny ekran"
   },
+  "radioStop": {
+    "button": "Radiostop",
+    "tooltip": "Zatrzymaj wszystkie lokomotywy na makiecie i włącz alarm na każdym sterowaniu",
+    "run": "Uruchom radiostop",
+    "cancel": "Anuluj",
+    "toast": "Radiostop — uruchomiony przez {{login}}"
+  },
   "commandStation": "Centralka",
   "selectCommandStation": "Wybierz centralkę",
   "noCommandStations": "Do tej makiety nie podpięto żadnej centralki.",

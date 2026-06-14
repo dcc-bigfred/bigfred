@@ -49,18 +49,30 @@
 
 #### Radio Stop
 
-- A driver with at least one drivable vehicle on the layout sees a
-  **Radiostop** button in the throttle overlay; confirming the dialog
-  sends `system.radioStop` and every roster vehicle on **all**
+- A driver with at least one drivable vehicle on the layout sees a red
+  **Radiostop** button on the throttle overlay's **left toolbar**,
+  immediately to the right of the **Fullscreen** toggle. Pressing it
+  opens a centred overlay with a red **„Uruchom radiostop”** button and
+  a **„Anuluj”** button below it; only **„Uruchom radiostop”** sends
+  `system.radioStop`, after which every roster vehicle on **all**
   command stations attached to the layout brakes to a standstill.
+- In addition to the roster halt, **every connected driver's
+  dead-man's-switch emergency plan is fired** (effect b, §4.6.1a):
+  their running scripts stop with reason `"radio_stop"`, and a driver
+  whose plan is `release_my_leases` has their outbound leases revoked.
+  A connected admin whose plan is `estop_all` is **clamped to
+  `stop_my_vehicles`** — Radio Stop never cuts track power.
+- The Fullscreen toggle puts the throttle overlay into browser
+  fullscreen and back; its icon reflects `document.fullscreenElement`.
 - Every open throttle session in the layout (including users who did
-  not press the button) plays the radiostop sound when
-  `system.radioStop` arrives.
+  not press the button) plays the radiostop sound (`/sounds/radiostop.ogg`)
+  when `system.radioStop` arrives.
 - A user with no drive scope (idle signalman, admin without `driver`)
   does not see the button and receives `403` if they craft the WS
   frame manually.
-- The audit log records `system.radio_stop` with the triggering user
-  and the aggregated list of affected vehicle addresses.
+- The audit log records `system.radio_stop` with the triggering user,
+  the aggregated list of affected vehicle addresses, and the
+  `fired_emergency_plans` list of per-user plans that were run.
 - Radio Stop is independent of the walkie-talkie phrase
   `STOP_IMMEDIATELY`: sending that phrase does not brake the layout,
   and Radio Stop does not appear in the interlocking radio panel.

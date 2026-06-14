@@ -260,12 +260,95 @@ can:
 - start and stop attached scripts (`script.run` / `script.stop`),
 - trigger emergency braking (`system.estop`);
 - trigger **Radio Stop** (`system.radioStop`, §4.6) – layout-wide
-  halt with confirmation dialog and radiostop sound on every throttle
+  halt with confirmation overlay and radiostop sound on every throttle
   session.
 
 Throttle commands (`loco.*`, `train.*`, `system.estop`) travel over
 the data-plane WebSocket once §7e ships; Radio Stop and other
 control-plane actions use `/api/v1/ws` (§4.2, §7e.7).
+
+#### Left toolbar – Fullscreen and Radio Stop
+
+The overlay renders a thin **toolbar pinned to its left edge**
+(`<ThrottleToolbar>`), above the vehicle/train driving surface. Two
+controls live there, left to right:
+
+1. **Fullscreen toggle** (`<FullscreenButton>`) – toggles the browser
+   Fullscreen API on the overlay container
+   (`element.requestFullscreen()` / `document.exitFullscreen()`). The
+   icon flips between `Fullscreen` and `FullscreenExit` based on
+   `document.fullscreenElement`. Strings: `throttle.fullscreen.enter` /
+   `throttle.fullscreen.exit`. Shown to every operator in throttle
+   mode (no extra gate).
+2. **Radio Stop** (`<RadioStopButton>`) – sits immediately to the right
+   of the Fullscreen toggle. Red, radio-handset icon. Rendered **only**
+   when `useCanDriveAny()` passes (same gate as the AppBar Throttle
+   toggle and §4.6.2). Pressing it opens `<RadioStopConfirmOverlay>`.
+
+`<RadioStopConfirmOverlay>` is a centred MUI `Dialog` containing a
+primary **red** button **„Uruchom radiostop”** and, below it, a neutral
+**„Anuluj”**. Only the former dispatches `system.radioStop {}` on the
+**control plane** (`useControlPlane()`), then closes; „Anuluj” just
+dismisses. Strings: `throttle.radioStop.button`,
+`throttle.radioStop.run`, `throttle.radioStop.cancel`,
+`throttle.radioStop.tooltip`.
+
+```tsx
+// ThrottleToolbar.tsx (excerpt)
+function ThrottleToolbar({ overlayRef }: { overlayRef: RefObject<HTMLElement> }) {
+  const canDrive = useCanDriveAny();
+  return (
+    <Stack className="throttle-toolbar" direction="row" spacing={1}>
+      <FullscreenButton target={overlayRef} />
+      {canDrive && <RadioStopButton />}
+    </Stack>
+  );
+}
+
+function RadioStopButton() {
+  const { send } = useControlPlane();
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <IconButton color="error" aria-label={t("throttle:radioStop.button")}
+                  onClick={() => setOpen(true)}>
+        <SettingsInputAntennaIcon />
+      </IconButton>
+      <Dialog open={open} onClose={() => setOpen(false)}>
+        <Stack spacing={2} sx={{ p: 3, alignItems: "stretch" }}>
+          <Button variant="contained" color="error" size="large"
+                  onClick={() => { send({ type: "system.radioStop", payload: {} }); setOpen(false); }}>
+            {t("throttle:radioStop.run")}
+          </Button>
+          <Button variant="text" onClick={() => setOpen(false)}>
+            {t("throttle:radioStop.cancel")}
+          </Button>
+        </Stack>
+      </Dialog>
+    </>
+  );
+}
+```
+
+#### Radiostop alarm playback
+
+A small `useRadioStopSound()` hook (mounted once inside the overlay)
+subscribes to the control-plane `system.radioStop` push event and
+plays the bundled asset at **`/sounds/radiostop.ogg`**:
+
+```tsx
+function useRadioStopSound() {
+  useControlPlaneEvent("system.radioStop", () => {
+    new Audio("/sounds/radiostop.ogg").play().catch(() => {/* autoplay blocked */});
+  });
+}
+```
+
+The same clip plays on **every** open throttle session in the layout
+(the operator who pressed the button and everyone else), so the alarm
+is heard simultaneously. Non-throttle surfaces (dashboard) receive the
+same event but only show a toast (`throttle.radioStop.toast`) — they do
+not mount the audio hook.
 
 #### Server as source of truth (multi-pilot sync)
 

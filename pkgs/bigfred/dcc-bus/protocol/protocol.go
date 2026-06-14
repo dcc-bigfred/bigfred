@@ -119,6 +119,7 @@ const (
 	TypeLocoSetSpeed    = "loco.setSpeed"
 	TypeLocoSetFunction = "loco.setFunction"
 	TypeSystemEStop     = "system.estop"
+	TypeSystemRadioStop = "system.radioStop"
 
 	TypeDccBusOpened = "dcc-bus.opened"
 	TypeLocoState    = "loco.state"

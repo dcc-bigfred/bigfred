@@ -34,11 +34,23 @@ func Open(cs domain.CommandStation) (commandstation.Station, error) {
 		return commandstation.NewLocoNetSerial(device, baud)
 
 	case domain.CommandStationKindLocoNetTCP:
-		host, port, err := parseHostPort(cs.ConnectionURI, "tcp", 1234)
+		// loconet_tcp speaks RAW binary LocoNet over TCP by default
+		// (tcp://) — the common case (RocRail's lbtcp). The ASCII
+		// LoconetOverTcp/LbServer protocol is selected with the lbserver://
+		// scheme.
+		uri := strings.TrimSpace(cs.ConnectionURI)
+		if strings.HasPrefix(uri, "lbserver://") {
+			host, port, err := parseHostPort(uri, "lbserver", 1234)
+			if err != nil {
+				return nil, fmt.Errorf("loconet_tcp uri %q: %w", cs.ConnectionURI, err)
+			}
+			return commandstation.NewLocoNetTCP(host, port)
+		}
+		host, port, err := parseHostPort(uri, "tcp", 1234)
 		if err != nil {
 			return nil, fmt.Errorf("loconet_tcp uri %q: %w", cs.ConnectionURI, err)
 		}
-		return commandstation.NewLocoNetTCP(host, port)
+		return commandstation.NewLocoNetTCPBinary(host, port)
 
 	default:
 		return nil, fmt.Errorf("unsupported command station kind %q", cs.Kind)
@@ -57,10 +69,7 @@ func parseHostPort(uri, scheme string, defaultPort uint16) (string, uint16, erro
 	if s == "" {
 		return "", 0, fmt.Errorf("empty uri")
 	}
-	prefix := scheme + "://"
-	if strings.HasPrefix(s, prefix) {
-		s = strings.TrimPrefix(s, prefix)
-	}
+	s = strings.TrimPrefix(s, scheme+"://")
 	host, portStr, err := net.SplitHostPort(s)
 	if err != nil {
 		// no port → use default

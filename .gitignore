@@ -11,3 +11,4 @@ bin/*
 /bigfred.db-shm
 /web/node_modules
 /web/dist
+/.tmp

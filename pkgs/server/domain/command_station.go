@@ -14,7 +14,9 @@ const (
 	// a serial / USB port (e.g. Digitrax PR3, MS100).
 	CommandStationKindLocoNetSerial CommandStationKind = "loconet_serial"
 	// CommandStationKindLocoNetTCP connects to a LocoNet-over-TCP
-	// gateway (e.g. JMRI, lbserver).
+	// gateway (e.g. JMRI, lbserver). The connection URI scheme selects the
+	// wire format: `tcp://` for raw binary LocoNet over TCP (default),
+	// `lbserver://` for the ASCII LoconetOverTcp/LbServer protocol.
 	CommandStationKindLocoNetTCP CommandStationKind = "loconet_tcp"
 )
 
@@ -48,7 +50,8 @@ func (k CommandStationKind) IsValid() bool {
 // boot time:
 //   - z21:            `udp://<host>:<port>`     (port defaults to 21105)
 //   - loconet_serial: `serial://<device>:<baud>` (e.g. `serial:///dev/ttyUSB0:57600`)
-//   - loconet_tcp:    `tcp://<host>:<port>`
+//   - loconet_tcp:    `tcp://<host>:<port>`       (raw binary LocoNet; default)
+//                     `lbserver://<host>:<port>`  (ASCII LoconetOverTcp/LbServer)
 //
 // Keeping the URI as a plain string (rather than a JSON blob) keeps
 // admin UX trivial — copy-paste from the Z21 sticker, save, done.

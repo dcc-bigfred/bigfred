@@ -234,11 +234,7 @@ func (r *Router) HandleSetSpeed(ctx context.Context, sess *ws.Session, p contrac
 		_ = sess.SendAck(ctx, requestID, false, reason)
 		return
 	}
-	speed := p.Speed
-	if p.Emergency {
-		speed = 1 // DCC EMG-stop is "speed step 1" in 128-step mode
-	}
-	if err := r.station.SetSpeed(commandstation.LocoAddr(p.Address), speed, p.Forward, uint8(r.speedSteps)); err != nil {
+	if err := r.stationSetSpeed(p.Address, p.Speed, p.Forward, p.Emergency); err != nil {
 		fields := r.stationLogFields()
 		fields["addr"] = p.Address
 		fields["speed"] = p.Speed
@@ -393,11 +389,7 @@ func (r *Router) applyControlSetSpeed(ctx context.Context, p contract.LocoSetSpe
 	if !r.roster.IsLocoAllowedOnLayout(p.Address) {
 		return
 	}
-	speed := p.Speed
-	if p.Emergency {
-		speed = 1
-	}
-	if err := r.station.SetSpeed(commandstation.LocoAddr(p.Address), speed, p.Forward, uint8(r.speedSteps)); err != nil {
+	if err := r.stationSetSpeed(p.Address, p.Speed, p.Forward, p.Emergency); err != nil {
 		r.log.WithError(err).WithField("addr", p.Address).Warn("dcc-bus control setSpeed failed")
 		return
 	}

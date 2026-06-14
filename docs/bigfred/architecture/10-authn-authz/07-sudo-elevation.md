@@ -131,7 +131,7 @@ targets the row keyed by the caller's own `user_id`.
 #### 7a.7.3 The `SudoService` surface
 
 ```go
-// pkgs/server/service/sudo.go
+// pkgs/bigfred/server/service/sudo.go
 package service
 
 // SudoConfig groups the few knobs the service exposes. Defaults

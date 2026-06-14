@@ -228,12 +228,12 @@ overlay strings. Initial coverage:
 Following §7c, the daemon does **not** ship localized strings; only
 machine codes (`loco.error.code` values) travel the wire.
 
-#### Reusing `pkgs/server` types
+#### Reusing `pkgs/bigfred/server` types
 
-`tygo` (§ Tech stack) already generates TS types from `pkgs/server/ws`
+`tygo` (§ Tech stack) already generates TS types from `pkgs/bigfred/server/ws`
 Go structs. The new envelope types
 (`DccBusOpened`, `LocoError`, `SystemStatus`, …) live in
-`pkgs/dcc-bus/ws/protocol.go` and are exported from the same `tygo`
+`pkgs/bigfred/dcc-bus/ws/protocol.go` and are exported from the same `tygo`
 file so the frontend gets them automatically.
 
 #### Acceptance summary (UX-side)

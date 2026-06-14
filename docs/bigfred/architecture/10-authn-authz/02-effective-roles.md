@@ -24,13 +24,13 @@ sources(user, layout) =
 effective(user, layout) = permanent ∪ temp_grant ∪ layout_signalman ∪ sudo                  // flat set of roles
 ```
 
-The struct lives in `pkgs/server/domain` because the policy layer
-(§7a.3) is allowed to depend only on `pkgs/server/domain` and `time`.
+The struct lives in `pkgs/bigfred/server/domain` because the policy layer
+(§7a.3) is allowed to depend only on `pkgs/bigfred/server/domain` and `time`.
 It is intentionally minimal — `Has(role)` is the single question
 authority checks ask:
 
 ```go
-// pkgs/server/domain/sudo.go
+// pkgs/bigfred/server/domain/sudo.go
 package domain
 
 // EffectiveRoles is the result of AuthService.Effective(ctx, layoutID).

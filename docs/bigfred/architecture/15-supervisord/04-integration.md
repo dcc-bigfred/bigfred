@@ -32,7 +32,7 @@ managed processes. Shutdown reverses the order.
 #### Replacing `executor/supervisor.go`
 
 The hand-rolled supervisor planned in
-[`04-repository-layout.md`](../04-repository-layout.md) (`pkgs/server/executor/supervisor.go`)
+[`04-repository-layout.md`](../04-repository-layout.md) (`pkgs/bigfred/server/executor/supervisor.go`)
 is **superseded** by this component:
 
 | Before (§7 #12) | After (§7d) |
@@ -42,7 +42,7 @@ is **superseded** by this component:
 | `executor.healthy` flag in Go | `SupervisordService.AllStatus` + RPC dial |
 | manual SIGKILL after 5 s | `stopwaitsecs` + `ScriptService.Shutdown` RPC |
 
-Keep `pkgs/server/executor/` for the RPC client/server (`client.go`,
+Keep `pkgs/bigfred/server/executor/` for the RPC client/server (`client.go`,
 `server.go`, `messages.go`, `codec.go`). Remove `supervisor.go` from the
 plan — its responsibilities move to `SupervisordService`.
 
@@ -156,7 +156,7 @@ Update [`04-repository-layout.md`](../04-repository-layout.md) when
 implementing:
 
 ```
-pkgs/server/supervisord/
+pkgs/bigfred/server/supervisord/
     templates/supervisord.conf.tmpl
     config.go
     render.go
@@ -164,14 +164,14 @@ pkgs/server/supervisord/
     daemon.go
     render_test.go              # golden-file template tests
 
-pkgs/server/service/supervisord.go
-pkgs/server/service/supervisord_test.go   # fake supervisorctl in tests
+pkgs/bigfred/server/service/supervisord.go
+pkgs/bigfred/server/service/supervisord_test.go   # fake supervisorctl in tests
 ```
 
 Remove from the planned tree:
 
 ```
-pkgs/server/executor/supervisor.go   # deleted — replaced by §7d
+pkgs/bigfred/server/executor/supervisor.go   # deleted — replaced by §7d
 ```
 
 #### Makefile / dev environment

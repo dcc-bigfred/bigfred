@@ -1,6 +1,6 @@
 ## 5. Backend Components
 
-Layering under `pkgs/server/` is defined in
+Layering under `pkgs/bigfred/server/` is defined in
 [§3.1 Backend layer responsibilities](./04-repository-layout.md#31-backend-layer-responsibilities):
 `http` / `ws` terminate transport and authentication; `service` owns
 validation, permission checks via `security`, orchestration, and
@@ -18,7 +18,7 @@ repositories.
 
 ### 5.1 WebSocket Hub
 
-`pkgs/server/ws/hub.go` – central registry of connected clients with a
+`pkgs/bigfred/server/ws/hub.go` – central registry of connected clients with a
 channel-based broadcaster.
 
 ```go
@@ -104,7 +104,7 @@ func (h *Hub) dispatch(ev Event) {
 
 ### 5.2 Per-Connection Client
 
-`pkgs/server/ws/client.go`:
+`pkgs/bigfred/server/ws/client.go`:
 
 ```go
 package ws
@@ -172,7 +172,7 @@ func (c *Client) writeLoop(ctx context.Context) {
 
 ### 5.3 Action Dispatch → LocoApp / Station
 
-`pkgs/server/ws/handlers.go`:
+`pkgs/bigfred/server/ws/handlers.go`:
 
 ```go
 func (c *Client) handle(ctx context.Context, env Envelope) {

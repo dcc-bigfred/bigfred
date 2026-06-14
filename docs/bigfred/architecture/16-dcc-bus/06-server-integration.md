@@ -7,7 +7,7 @@ daemon's command channel for non-frontend writes.
 #### New components in `loco-server`
 
 ```
-pkgs/server/
+pkgs/bigfred/server/
 ├── service/
 │   ├── dcc_bus.go              # DccBusService — desired-state, port pool, command channel
 │   ├── dcc_bus_test.go
@@ -20,7 +20,7 @@ pkgs/server/
     └── …
 ```
 
-The existing `pkgs/server/service/loco.go` (currently a thin wrapper
+The existing `pkgs/bigfred/server/service/loco.go` (currently a thin wrapper
 around `LocoApp.Station.SetSpeed`) **shrinks**: in-process DCC writes
 move out and the file becomes a publish-to-Redis-command-channel
 helper used by `TrainService`, `ScriptService`, the takeover state
@@ -30,7 +30,7 @@ machine and the dead-man's switch. See `LocoServiceDriver` below.
 
 `DccBusService.buildProgramSpec` loads the `CommandStation` row from
 SQLite (`CommandStationsRepo.FindByID`) and appends the shared CLI
-flags via `pkgs/dcc-bus/cliargs.AppendStationFlags` (`--station-name`,
+flags via `pkgs/bigfred/dcc-bus/cliargs.AppendStationFlags` (`--station-name`,
 `--station-kind`, `--station-uri`, `--speed-steps`). The daemon never
 opens the database.
 
@@ -42,7 +42,7 @@ and catalogue mutations (and once per layout at server bootstrap). See
 #### `DccBusService` — desired-state and lifecycle
 
 ```go
-// pkgs/server/service/dcc_bus.go
+// pkgs/bigfred/server/service/dcc_bus.go
 type DccBusConfig struct {
     PortMin           uint16        // default 9200
     PortMax           uint16        // default 9209 (small pool; one main track + one programming track is typical)

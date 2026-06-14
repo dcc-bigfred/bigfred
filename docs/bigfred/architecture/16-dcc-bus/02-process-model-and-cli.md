@@ -36,7 +36,7 @@ deployment ships one binary.
 | `--poll-interval-ms` | uint | no | `0` (→ `750`) | State-feed polling cadence for drivers without push. Ignored when the driver implements `StateObserver` (LocoNet and Z21). See §7e.9. |
 | `--allowed-origin` | string[] | no | – | Optional WS `Origin` allow-list (repeatable). Empty → permissive; production usually proxies through `loco-server`. |
 
-Flag names are defined once in `pkgs/dcc-bus/cliargs` so `loco-server` and the daemon stay in sync.
+Flag names are defined once in `pkgs/bigfred/dcc-bus/cliargs` so `loco-server` and the daemon stay in sync.
 
 Validation rules applied at boot (before accepting WS clients):
 

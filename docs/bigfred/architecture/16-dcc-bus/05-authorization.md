@@ -2,7 +2,7 @@
 
 The daemon's policy stance is "**zero implicit trust**" on the data
 plane. WS upgrades are JWT-gated; drive commands are gated against the
-**Redis-published roster** (§7e.3). Full `pkgs/server/security`
+**Redis-published roster** (§7e.3). Full `pkgs/bigfred/server/security`
 evaluation with leases and takeovers inside the daemon is the target
 architecture; the current cut implements roster membership plus
 `controllerUserIds` from `allowed_vehicles`.

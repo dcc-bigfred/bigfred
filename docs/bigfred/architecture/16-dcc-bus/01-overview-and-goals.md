@@ -45,7 +45,7 @@ risk surfaces and deserve **process isolation**.
    the catalogue contains.
 3. **Re-use, do not re-invent, the security layer.** Every command
    that hits the daemon's WebSocket is gated by exactly the same
-   `*SecurityContext` objects from `pkgs/server/security` (§7a.3) that
+   `*SecurityContext` objects from `pkgs/bigfred/server/security` (§7a.3) that
    `loco-server` uses. The policies stay pure / stateless; only the
    *callers* differ.
 4. **Session-aware.** The WS upgrade reads the JWT issued by
@@ -188,9 +188,11 @@ delegate the **mechanism** to supervisord.
 - It is **not a database service.** Catalogue writes go through
   `loco-server`'s REL repositories. The daemon never opens SQLite;
   it consumes pre-built JSON snapshots published by the server on
-  Redis (`pkgs/layoutroster`).
+  Redis via [`pkgs/bigfred/contract`](../../../../pkgs/bigfred/contract/README.md)
+  (key templates + builders in `redis.go`, payload types and
+  `Marshal` / `Unmarshal*` in `allowedvehicles.go`).
 - It is **not an authorization authority.** It enforces the same
-  `pkgs/server/security` policies as the server but it does not mint
+  `pkgs/bigfred/server/security` policies as the server but it does not mint
   JWTs, does not extend sudo elevations, does not write audit rows.
   Audit lines for throttle activity continue to be written by
   `loco-server` based on the events the daemon publishes back through

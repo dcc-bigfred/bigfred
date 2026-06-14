@@ -4,7 +4,7 @@ Implemented in milestones; each milestone is independently shippable.
 
 **M1 – Real-time throttle (no users, in-process baseline).**
 
-1. Add the new `pkgs/server` package with `chi` + `coder/websocket` and a
+1. Add the new `pkgs/bigfred/server` package with `chi` + `coder/websocket` and a
    single `/api/v1/ws` endpoint that echoes messages. Build it as a third
    binary next to `loco` and `rb`.
 2. Expose `LocoService` as a thin wrapper over the existing `app.LocoApp`
@@ -149,7 +149,7 @@ layouts but the DCC bus still lives inside `loco-server`. M4.5 extracts
 the throttle data plane into a per-`(layoutId, commandStationId)`
 sibling daemon supervised by §7d (`SupervisordService`).
 
-16a. Add `pkgs/dcc-bus/` (cobra subcommand on the same `loco-server`
+16a. Add `pkgs/bigfred/dcc-bus/` (cobra subcommand on the same `loco-server`
     binary) with `--layout-id`, `--command-station-id`, `--port`,
     `--bind`, `--station-name`, `--station-kind`, `--station-uri`,
     `--speed-steps`, `--jwt-secret`, `--redis-addr`, `--heartbeat-secs`,
@@ -164,7 +164,7 @@ sibling daemon supervised by §7d (`SupervisordService`).
     `loco.toggleFn`, `system.estop`, `ping`. JWT auth (`?token=`)
     rejects upgrades whose `layoutId` does not match `--layout-id`.
     `coder/websocket` is reused; the policy gate goes through
-    `pkgs/server/security` byte-for-byte (§7e.5).
+    `pkgs/bigfred/server/security` byte-for-byte (§7e.5).
 16c. Add the per-daemon poller (§7e.3) that ticks
     `Station.GetSpeed` / `ListFunctions` for subscribed addresses
     in the *interesting set* — vehicles from the layout's
@@ -240,7 +240,7 @@ sibling daemon supervised by §7d (`SupervisordService`).
     hard cap 365 days), and the corresponding REST endpoints plus a
     React screen to mint and revoke keys (showing plaintext exactly
     once). Each key is bound to the layout that was active when minted.
-20. Add the `pkgs/server/mcp` package using
+20. Add the `pkgs/bigfred/server/mcp` package using
     `github.com/mark3labs/mcp-go`. Wire the SSE handler under `/mcp`
     behind the API-key middleware, and add a `loco server --mcp-stdio`
     subcommand for local clients (Claude Desktop / Cursor). Expose the
@@ -256,7 +256,7 @@ sibling daemon supervised by §7d (`SupervisordService`).
     layers. Wire `AuditService.Log` into every `Script` and
     `ScriptAttachment` mutation (create / update / delete /
     attach / detach).
-22. Build `pkgs/server/scripts/runtime.go`: a `Runtime` struct that
+22. Build `pkgs/bigfred/server/scripts/runtime.go`: a `Runtime` struct that
     embeds `*goja.Runtime`, wires `findFirstLoco`, `findByDCCAddr`,
     `members`, `sleep`, `log` and the `Vehicle` helper via
     `vm.Set` + `UncapFieldNameMapper`, and exposes
@@ -267,7 +267,7 @@ sibling daemon supervised by §7d (`SupervisordService`).
     `sleep`, `funcOff`) against a stubbed `LocoService` and
     asserting the exact sequence of `SetSpeed` / `SetFunction`
     calls.
-23. Build `pkgs/server/executor/`: the length-prefixed JSON codec,
+23. Build `pkgs/bigfred/server/executor/`: the length-prefixed JSON codec,
     the `Client` used in `server`, the `Server` used in
     `scripts-executor`, and the `Supervisor` (exec the child,
     exponential backoff, health pings, in-flight run accounting).

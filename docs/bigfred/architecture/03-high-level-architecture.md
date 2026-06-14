@@ -61,7 +61,7 @@
         │  ──────────────────────  │   │  · pkgs/loco/commandstation      │  │
         │  Per active run:         │   │    (Z21 / LocoNet)               │  │
         │   1 goroutine            │   │  · ws://*:<port>/ws (data plane) │  │
-        │   1 *goja.Runtime        │   │  · pkgs/server/security re-check │  │
+        │   1 *goja.Runtime        │   │  · pkgs/bigfred/server/security re-check │  │
         │   vm.Interrupt for       │   │  · subscribe vehicles from       │  │
         │   deadline / user-stop / │   │    LayoutVehicle roster          │  │
         │   dead-man's switch      │   │  · Redis loco:state writer       │  │

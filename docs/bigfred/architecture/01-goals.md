@@ -292,7 +292,7 @@ domain model and the API:
     - to protect the main server, the Goja VMs do **not** run inside
       the `server` process. They run inside a separate
       **`scripts-executor` process** spawned by the server. The
-      executor reuses the **same Go codebase** (same `pkgs/server`
+      executor reuses the **same Go codebase** (same `pkgs/bigfred/server`
       domain, services, security layer) – the only difference is the
       `main()` entry point: instead of opening REST/WS sockets it
       opens an internal RPC channel and waits for run requests. A

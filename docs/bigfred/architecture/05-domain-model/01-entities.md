@@ -1,7 +1,7 @@
 ### 3a.1 Entities
 
 ```go
-// pkgs/server/domain/user.go
+// pkgs/bigfred/server/domain/user.go
 type Role string // "driver" | "signalman" | "admin"
 
 type User struct {
@@ -57,7 +57,7 @@ type APIKey struct {
 ```
 
 ```go
-// pkgs/server/domain/vehicle.go
+// pkgs/bigfred/server/domain/vehicle.go
 
 // VehicleKind is the closed catalogue of physical vehicle classes
 // that show up on a modeling layout. The values steer UI icons and
@@ -138,7 +138,7 @@ type TrainMember struct {
 ```
 
 ```go
-// pkgs/server/domain/lease.go
+// pkgs/bigfred/server/domain/lease.go
 // A vehicle or train can be leased to another user for DRIVING ONLY.
 // Edit rights (CV writes, rename, delete, change train composition)
 // always stay with the owner.
@@ -164,7 +164,7 @@ type TrainLease struct {
 ```
 
 ```go
-// pkgs/server/domain/interlocking.go
+// pkgs/bigfred/server/domain/interlocking.go
 // A signal box / interlocking. At most one active session per interlocking.
 type Interlocking struct {
     ID        uint
@@ -184,7 +184,7 @@ type InterlockingSession struct {
 ```
 
 ```go
-// pkgs/server/domain/takeover.go
+// pkgs/bigfred/server/domain/takeover.go
 // Request issued by a signalman wanting driving authority over a driver's
 // vehicle or train. The driver has 15 seconds to reject.
 type TakeoverTarget string // "vehicle" | "train"
@@ -204,7 +204,7 @@ type TakeoverRequest struct {
 ```
 
 ```go
-// pkgs/server/domain/radio.go
+// pkgs/bigfred/server/domain/radio.go
 // Walkie-talkie messages between signalmen and drivers use a closed
 // vocabulary so that translations and UI buttons stay deterministic.
 type RadioPhrase string
@@ -232,7 +232,7 @@ type RadioMessage struct {
 ```
 
 ```go
-// pkgs/server/domain/command_station.go
+// pkgs/bigfred/server/domain/command_station.go
 type CommandStationConnectionType string
 
 const (
@@ -265,7 +265,7 @@ type CommandStation struct {
 ```
 
 ```go
-// pkgs/server/domain/layout.go
+// pkgs/bigfred/server/domain/layout.go
 // Layout (Polish: makieta) – a modeling event / room. The user picks a
 // layout on the login form (§7a.1) and the resulting drive session is
 // pinned to it for its entire lifetime.
@@ -393,7 +393,7 @@ type LayoutVehicle struct {
 ```
 
 ```go
-// pkgs/server/domain/sudo.go
+// pkgs/bigfred/server/domain/sudo.go
 
 // EffectiveRoles is the flat result of
 // `AuthService.Effective(ctx, user, layoutID)`. Permanent role,
@@ -437,7 +437,7 @@ type SudoElevation struct {
 ```
 
 ```go
-// pkgs/server/domain/audit.go
+// pkgs/bigfred/server/domain/audit.go
 // AuditAction is a closed vocabulary of audit event types. Adding a new
 // audited event requires adding it here AND wiring AuditService.Log in
 // the matching service. Keeping the vocabulary closed makes the audit
@@ -535,7 +535,7 @@ type AuditLogEntry struct {
 ```
 
 ```go
-// pkgs/server/domain/function.go
+// pkgs/bigfred/server/domain/function.go
 // FunctionIcon is a CLOSED catalogue (67 values). The authoritative slug
 // list with Polish labels lives in §3a.8 (08-function-icon-catalogue.md).
 // The frontend ships one SVG per slug; Tygo re-generates the TS union.
@@ -572,7 +572,7 @@ type DccFunction struct {
 ```
 
 ```go
-// pkgs/server/domain/template.go
+// pkgs/bigfred/server/domain/template.go
 // VehicleTemplate – a reusable definition of a function list for a
 // class of vehicles. Owner (or admin) may edit; any user may use a
 // template to seed a new vehicle (goal 16).
@@ -593,7 +593,7 @@ type VehicleTemplate struct {
 ```
 
 ```go
-// pkgs/server/domain/script.go
+// pkgs/bigfred/server/domain/script.go
 // ScriptRuntime names the embedded interpreter used to execute the
 // script source. Today only Goja (pure-Go ECMAScript 5.1+) is wired
 // up. The enum is kept open so future runtimes (e.g. a sandboxed

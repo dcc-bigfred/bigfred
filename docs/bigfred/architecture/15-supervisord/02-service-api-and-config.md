@@ -3,7 +3,7 @@
 #### Package layout
 
 ```
-pkgs/server/supervisord/
+pkgs/bigfred/server/supervisord/
 ├── templates/
 │   └── supervisord.conf.tmpl    # embedded via //go:embed
 ├── config.go                    # ProgramSpec, GroupSpec, RenderConfig
@@ -11,11 +11,11 @@ pkgs/server/supervisord/
 ├── ctl.go                       # supervisorctl wrapper (unix socket)
 └── daemon.go                    # spawn / wait / stop supervisord process
 
-pkgs/server/service/supervisord.go
+pkgs/bigfred/server/service/supervisord.go
 └── SupervisordService           # public façade used by cli/ and other services
 ```
 
-Low-level supervisord interaction stays in `pkgs/server/supervisord`
+Low-level supervisord interaction stays in `pkgs/bigfred/server/supervisord`
 (no HTTP imports). `SupervisordService` in `service/` follows the same
 rule as `AuthService` / `LayoutService`: plain Go API, no transport
 awareness.
@@ -23,7 +23,7 @@ awareness.
 #### Domain structs
 
 ```go
-// pkgs/server/supervisord/config.go
+// pkgs/bigfred/server/supervisord/config.go
 
 // ProgramSpec is one supervisord [program:NAME] entry.
 type ProgramSpec struct {
@@ -60,7 +60,7 @@ Validation rules (enforced before render):
 #### SupervisordService
 
 ```go
-// pkgs/server/service/supervisord.go
+// pkgs/bigfred/server/service/supervisord.go
 
 type SupervisordConfig struct {
     // Binaries — default "supervisord" / "supervisorctl"
@@ -133,7 +133,7 @@ but see a snapshot.
 The template is embedded and executed with a single root struct:
 
 ```go
-// pkgs/server/supervisord/render.go
+// pkgs/bigfred/server/supervisord/render.go
 
 type templateData struct {
     RunAsUser  string

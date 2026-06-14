@@ -12,3 +12,4 @@ bin/*
 /web/node_modules
 /web/dist
 /.tmp
+/backup-*.txt

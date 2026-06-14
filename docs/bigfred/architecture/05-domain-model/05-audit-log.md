@@ -6,7 +6,7 @@ The audit log is implemented as a single append-only table
 calls `Log` **after** the underlying mutation has succeeded.
 
 ```go
-// pkgs/server/service/audit.go
+// pkgs/bigfred/server/service/audit.go
 type AuditService struct {
     repo rel.Repository
     bus  *bus.Bus // optional: stream to admin WS sessions

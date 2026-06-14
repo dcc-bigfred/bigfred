@@ -59,9 +59,9 @@ different subcommands:
 - `loco server`             — REST + WS + Station + REL + executor supervisor.
 - `loco scripts-executor`   — Goja VMs + executor RPC server.
 
-The two processes share `pkgs/server/scripts`, `pkgs/server/executor`,
-`pkgs/server/service` and `pkgs/server/security`. They **do not**
-share `pkgs/server/http` or `pkgs/server/ws` (the executor has no
+The two processes share `pkgs/bigfred/server/scripts`, `pkgs/bigfred/server/executor`,
+`pkgs/bigfred/server/service` and `pkgs/bigfred/server/security`. They **do not**
+share `pkgs/bigfred/server/http` or `pkgs/bigfred/server/ws` (the executor has no
 need for the HTTP / WebSocket layers).
 
 The RPC channel is a **Unix domain socket** with `0600` permissions
@@ -74,7 +74,7 @@ loopback TCP on `127.0.0.1` with a per-boot shared secret echoed via
 an env var to the child process.
 
 ```go
-// pkgs/server/executor/messages.go (subset)
+// pkgs/bigfred/server/executor/messages.go (subset)
 type RunStart struct {
     Type        string          `json:"type"`        // "run.start"
     RunID       string          `json:"runId"`

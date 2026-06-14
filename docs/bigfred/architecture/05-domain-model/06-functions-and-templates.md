@@ -47,7 +47,7 @@ tables.
 #### 3a.6.1 Resolution at read time
 
 ```go
-// pkgs/server/service/function.go
+// pkgs/bigfred/server/service/function.go
 type ResolvedFunction struct {
     Num      uint8
     Name     string

@@ -115,7 +115,7 @@ leaked key small.
 ### 7b.4 Mounting MCP next to chi
 
 ```go
-// pkgs/server/mcp/server.go
+// pkgs/bigfred/server/mcp/server.go
 package mcp
 
 import (
@@ -123,7 +123,7 @@ import (
 
     "github.com/mark3labs/mcp-go/server"
 
-    "github.com/keskad/loco/pkgs/server/service"
+    "github.com/keskad/loco/pkgs/bigfred/server/service"
 )
 
 func New(loco *service.LocoService, radio *service.RadioService) *server.MCPServer {
@@ -137,7 +137,7 @@ func New(loco *service.LocoService, radio *service.RadioService) *server.MCPServ
 ```
 
 ```go
-// pkgs/server/mcp/tools_loco.go
+// pkgs/bigfred/server/mcp/tools_loco.go
 import (
     "context"
 
@@ -168,7 +168,7 @@ func registerLocoTools(s *server.MCPServer, loco *service.LocoService) {
 ```
 
 ```go
-// pkgs/server/main.go – mount both HTTP and MCP from a single process
+// pkgs/bigfred/server/main.go – mount both HTTP and MCP from a single process
 sseHandler := server.NewSSEServer(mcpSrv,
     server.WithBaseURL("/mcp"),
 )

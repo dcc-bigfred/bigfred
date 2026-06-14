@@ -5,7 +5,7 @@ SQL; persistence goes through `rel.Repository`, which is mocked in
 tests with the `reltest` package.
 
 ```go
-// pkgs/server/repo/db.go
+// pkgs/bigfred/server/repo/db.go
 package repo
 
 import (
@@ -29,7 +29,7 @@ func Open(ctx context.Context, dsn string) (rel.Repository, *sql.DB, error) {
 ```
 
 ```go
-// pkgs/server/repo/leases.go
+// pkgs/bigfred/server/repo/leases.go
 package repo
 
 import (
@@ -39,7 +39,7 @@ import (
     "github.com/go-rel/rel"
     "github.com/go-rel/rel/where"
 
-    "github.com/keskad/loco/pkgs/server/domain"
+    "github.com/keskad/loco/pkgs/bigfred/server/domain"
 )
 
 // ActiveVehicleLease returns the currently active lease for a vehicle
@@ -69,7 +69,7 @@ func LeaseVehicle(ctx context.Context, repo rel.Repository, l domain.VehicleLeas
 ```
 
 ```go
-// pkgs/server/repo/migrations/001_init.go – REL migrations live in Go
+// pkgs/bigfred/server/repo/migrations/001_init.go – REL migrations live in Go
 package migrations
 
 import "github.com/go-rel/rel"

@@ -9,6 +9,7 @@ import {
 import AdminRoute from "./components/AdminRoute";
 import AppShell from "./components/AppShell";
 import ProtectedRoute from "./components/ProtectedRoute";
+import WakeLockKeeper from "./components/WakeLockKeeper";
 import HomePage from "./pages/HomePage";
 import InterlockingPage from "./pages/InterlockingPage";
 import LoginPage from "./pages/LoginPage";
@@ -82,5 +83,10 @@ const router = createBrowserRouter(
 );
 
 export default function App() {
-  return <RouterProvider router={router} />;
+  return (
+    <>
+      <WakeLockKeeper />
+      <RouterProvider router={router} />
+    </>
+  );
 }

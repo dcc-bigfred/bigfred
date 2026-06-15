@@ -65,6 +65,7 @@
       "actions": {
         "radio": "Radio",
         "stop": "Zatrzymaj skład",
+        "stopHint": "Zatrzymaj tylko ten skład (nie całą makietę)",
         "takeover": "Przejęcie"
       }
     },

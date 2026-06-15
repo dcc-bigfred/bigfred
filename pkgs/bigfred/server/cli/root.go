@@ -262,6 +262,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	}
 
 	var radioStopSvc *service.RadioStopService
+	var estopTargetSvc *service.EStopTargetService
 	if dccBusSvc != nil && redisReady {
 		radioStopSvc = service.NewRadioStopService(service.RadioStopConfig{
 			Hub:    hub,
@@ -270,12 +271,22 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 			Auth:   authSvc,
 			Log:    log,
 		})
+		estopTargetSvc = service.NewEStopTargetService(service.EStopTargetConfig{
+			DccBus:      dccBusSvc,
+			Roster:      layoutVehicleSvc,
+			Layouts:     layoutSvc,
+			Auth:        authSvc,
+			IlkSessions: interlockingSessions,
+			LayoutIlks:  layoutInterlockings,
+			Log:         log,
+		})
 	}
 
 	sessionCtl = service.NewSessionControlService(service.SessionControlConfig{
 		Log:         log,
 		DccBus:      dccBusSvc,
 		RadioStop:   radioStopSvc,
+		EStopTarget: estopTargetSvc,
 		CommandStns: commandStations,
 		LayoutCS:    layoutCommandStations,
 		Layouts:     layouts,

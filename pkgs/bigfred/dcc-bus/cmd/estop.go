@@ -16,11 +16,9 @@ import (
 // HandleEStop slams every loco the requesting session subscribes to
 // down to speed step 1 (DCC EMG-stop) and emits a system.estop
 // audit event on the Redis bus.
-func (r *Router) HandleEStop(ctx context.Context, sess *ws.Session, p protocol.SystemEStopPayload, requestID string) {
+func (r *Router) HandleEStop(ctx context.Context, sess *ws.Session, p protocol.SystemEStopPayload, requestID string) ws.Outcome {
 	r.applyEmergencyForSession(ctx, sess, p.Reason, false)
-	if requestID != "" {
-		_ = sess.SendAck(ctx, requestID, true, "")
-	}
+	return r.ackOutcome(ctx, sess, requestID, true, "")
 }
 
 // applyEmergencyForSession brakes every loco the session subscribed

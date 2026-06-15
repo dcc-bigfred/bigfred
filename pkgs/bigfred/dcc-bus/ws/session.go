@@ -31,6 +31,7 @@ type Session struct {
 	subscribed  map[uint16]struct{}
 	lastBeat    time.Time
 	closed      bool
+	closeReason string
 }
 
 // NewSession allocates a new client handle from a verified Identity.
@@ -142,11 +143,22 @@ func (s *Session) Close(reason string) {
 		return
 	}
 	s.closed = true
+	if s.closeReason == "" {
+		s.closeReason = reason
+	}
 	conn := s.conn
 	s.mu.Unlock()
 	if conn != nil {
 		_ = conn.Close(websocket.StatusNormalClosure, reason)
 	}
+}
+
+// CloseReason returns the first reason passed to Close, or "" when the
+// session is still open.
+func (s *Session) CloseReason() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.closeReason
 }
 
 // IsClosed reports whether Close has already been called.

@@ -188,7 +188,7 @@ func (r *Router) ApplyDefinedTrains(snap contract.DefinedTrains) {
 // HandleSubscribe accepts a subscription request and immediately
 // emits a state snapshot for each accepted address (or whatever is
 // currently cached in Redis).
-func (r *Router) HandleSubscribe(ctx context.Context, sess *ws.Session, payload protocol.LocoSubscribePayload, requestID string) {
+func (r *Router) HandleSubscribe(ctx context.Context, sess *ws.Session, payload protocol.LocoSubscribePayload, requestID string) ws.Outcome {
 	accepted := make([]uint16, 0, len(payload.Addresses))
 	rejected := make([]uint16, 0)
 	for _, addr := range payload.Addresses {
@@ -222,17 +222,17 @@ func (r *Router) HandleSubscribe(ctx context.Context, sess *ws.Session, payload 
 		}
 	}
 	if requestID != "" {
-		_ = sess.SendAck(ctx, requestID, true, "")
+		return r.ackOutcome(ctx, sess, requestID, true, "")
 	}
+	return ws.OK()
 }
 
 // HandleSetSpeed forwards a throttle move to the command station,
 // updates the Redis cache and fans the new state out to every other
 // subscribed session.
-func (r *Router) HandleSetSpeed(ctx context.Context, sess *ws.Session, p contract.LocoSetSpeedWire, requestID string) {
+func (r *Router) HandleSetSpeed(ctx context.Context, sess *ws.Session, p contract.LocoSetSpeedWire, requestID string) ws.Outcome {
 	if reason := r.roster.DenyDriveCommand(sess.UserID, p.Address); reason != "" {
-		_ = sess.SendAck(ctx, requestID, false, reason)
-		return
+		return r.ackOutcome(ctx, sess, requestID, false, reason)
 	}
 	if err := r.stationSetSpeed(p.Address, p.Speed, p.Forward, p.Emergency); err != nil {
 		fields := r.stationLogFields()
@@ -246,8 +246,7 @@ func (r *Router) HandleSetSpeed(ctx context.Context, sess *ws.Session, p contrac
 			Code:    errors.CodeCommandStationError,
 			Detail:  err.Error(),
 		})
-		_ = sess.SendAck(ctx, requestID, false, errors.CodeCommandStationError)
-		return
+		return r.ackOutcome(ctx, sess, requestID, false, errors.CodeCommandStationError)
 	}
 	r.log.WithFields(logrus.Fields{
 		"addr":    p.Address,
@@ -269,17 +268,14 @@ func (r *Router) HandleSetSpeed(ctx context.Context, sess *ws.Session, p contrac
 		r.log.WithError(err).Debug("dcc-bus redis store")
 	}
 	r.broadcastLocoStateToObservers(ctx, snap)
-	if requestID != "" {
-		_ = sess.SendAck(ctx, requestID, true, "")
-	}
+	return r.ackOutcome(ctx, sess, requestID, true, "")
 }
 
 // HandleSetFunction sets a single function on or off. The desired
 // state is sent to the command station and mirrored in Redis.
-func (r *Router) HandleSetFunction(ctx context.Context, sess *ws.Session, p contract.LocoSetFunctionWire, requestID string) {
+func (r *Router) HandleSetFunction(ctx context.Context, sess *ws.Session, p contract.LocoSetFunctionWire, requestID string) ws.Outcome {
 	if reason := r.roster.DenyDriveCommand(sess.UserID, p.Address); reason != "" {
-		_ = sess.SendAck(ctx, requestID, false, reason)
-		return
+		return r.ackOutcome(ctx, sess, requestID, false, reason)
 	}
 	if err := r.setLocoFunction(ctx, p.Address, sess.UserID, p.Function, p.On, "throttle"); err != nil {
 		_ = sess.SendTyped(ctx, protocol.TypeLocoError, protocol.LocoErrorPayload{
@@ -287,12 +283,26 @@ func (r *Router) HandleSetFunction(ctx context.Context, sess *ws.Session, p cont
 			Code:    errors.CodeCommandStationError,
 			Detail:  err.Error(),
 		})
-		_ = sess.SendAck(ctx, requestID, false, errors.CodeCommandStationError)
-		return
+		return r.ackOutcome(ctx, sess, requestID, false, errors.CodeCommandStationError)
 	}
-	if requestID != "" {
-		_ = sess.SendAck(ctx, requestID, true, "")
+	return r.ackOutcome(ctx, sess, requestID, true, "")
+}
+
+// ackOutcome sends an acknowledgement to the client.
+func (r *Router) ackOutcome(ctx context.Context, sess *ws.Session, requestID string, ok bool, errCode string) ws.Outcome {
+	if requestID == "" {
+		if ok {
+			return ws.OK()
+		}
+		return ws.Fail(errCode)
 	}
+	if err := sess.SendAck(ctx, requestID, ok, errCode); err != nil {
+		return ws.Fail(ws.ErrorCodeSendFailed)
+	}
+	if ok {
+		return ws.OK()
+	}
+	return ws.Fail(errCode)
 }
 
 // checkFnStateMatches reports whether addr/fn is already in the desired

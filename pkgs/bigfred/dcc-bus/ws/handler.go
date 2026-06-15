@@ -24,14 +24,14 @@ type Router interface {
 	// updates for a set of locomotive addresses. The daemon
 	// validates membership in the layout roster and pushes a
 	// `loco.state` snapshot for each accepted address.
-	HandleSubscribe(ctx context.Context, sess *Session, payload protocol.LocoSubscribePayload, requestID string)
+	HandleSubscribe(ctx context.Context, sess *Session, payload protocol.LocoSubscribePayload, requestID string) Outcome
 	// HandleSetSpeed handles a single throttle move.
-	HandleSetSpeed(ctx context.Context, sess *Session, payload contract.LocoSetSpeedWire, requestID string)
+	HandleSetSpeed(ctx context.Context, sess *Session, payload contract.LocoSetSpeedWire, requestID string) Outcome
 	// HandleSetFunction toggles one locomotive function.
-	HandleSetFunction(ctx context.Context, sess *Session, payload contract.LocoSetFunctionWire, requestID string)
+	HandleSetFunction(ctx context.Context, sess *Session, payload contract.LocoSetFunctionWire, requestID string) Outcome
 	// HandleEStop fires the data-plane emergency stop scoped to
 	// this daemon's command station.
-	HandleEStop(ctx context.Context, sess *Session, payload protocol.SystemEStopPayload, requestID string)
+	HandleEStop(ctx context.Context, sess *Session, payload protocol.SystemEStopPayload, requestID string) Outcome
 	// HandleSessionClose is called once when the session goes away
 	// (any reason: WS close, error, ctx cancellation). It is the
 	// router's chance to fire the dead-man's plan and drop user-
@@ -52,6 +52,7 @@ type Server struct {
 	speedSteps    uint
 	layoutID      uint
 	csID          uint
+	metrics       *Metrics
 
 	// AllowedOrigins is forwarded verbatim to websocket.AcceptOptions.
 	// Empty slice means InsecureSkipVerify = true (acceptable when
@@ -72,6 +73,7 @@ type ServerConfig struct {
 	HeartbeatSecs  float64
 	DeadmanSecs    float64
 	AllowedOrigins []string
+	Metrics        *Metrics
 }
 
 // NewServer returns a ready-to-mount Server. Heartbeat and dead-man
@@ -104,6 +106,7 @@ func NewServer(cfg ServerConfig) *Server {
 		heartbeatSecs:  hb,
 		deadmanSecs:    dms,
 		AllowedOrigins: cfg.AllowedOrigins,
+		metrics:        cfg.Metrics,
 	}
 }
 
@@ -175,6 +178,10 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 		"speedSteps":       s.speedSteps,
 	}).Info("dcc-bus browser session opened (command station driver already bound at daemon start)")
 
+	if s.metrics != nil {
+		s.metrics.RecordSessionOpened()
+	}
+
 	s.readLoop(r.Context(), sess)
 }
 
@@ -188,6 +195,13 @@ func (s *Server) readLoop(ctx context.Context, sess *Session) {
 	go s.watchDeadman(dmsCtx, sess)
 
 	defer func() {
+		reason := sess.CloseReason()
+		if reason == "" {
+			reason = errors.WsCodeSessionWsClosed
+		}
+		if s.metrics != nil {
+			s.metrics.RecordSessionClosed(reason)
+		}
 		s.router.HandleSessionClose(context.Background(), sess, errors.WsCodeSessionWsClosed)
 		s.hub.Unregister(sess)
 		sess.Close(errors.WsCodeSessionReadLoopDone)
@@ -215,6 +229,9 @@ func (s *Server) readLoop(ctx context.Context, sess *Session) {
 			_ = sess.SendTyped(ctx, protocol.TypeLocoError, protocol.LocoErrorPayload{
 				Code: errors.WsCodeBadEnvelope,
 			})
+			if s.metrics != nil {
+				s.metrics.RecordInvalidEnvelope()
+			}
 			continue
 		}
 		s.dispatch(ctx, sess, env)
@@ -226,47 +243,84 @@ func (s *Server) readLoop(ctx context.Context, sess *Session) {
 // `loco.error{code:errors.WsCodeUnknownFrame}` so the client surfaces a
 // debuggable error instead of silently dropping the request.
 func (s *Server) dispatch(ctx context.Context, sess *Session, env contract.EnvelopeWire) {
+	start := time.Now()
+	var out Outcome
+
 	switch env.Type {
 	case protocol.TypePing:
-		_ = sess.SendTyped(ctx, protocol.TypePong, nil)
+		out = s.handlePing(ctx, sess)
 
 	case protocol.TypeLocoSubscribe:
 		var p protocol.LocoSubscribePayload
 		if err := json.Unmarshal(env.Payload, &p); err != nil {
-			_ = sess.SendAck(ctx, env.ID, false, errors.WsCodeBadPayload)
-			return
+			out = s.ackOrFail(ctx, sess, env.ID, false, errors.WsCodeBadPayload)
+			break
 		}
-		s.router.HandleSubscribe(ctx, sess, p, env.ID)
+		out = s.router.HandleSubscribe(ctx, sess, p, env.ID)
 
 	case protocol.TypeLocoSetSpeed:
 		var p contract.LocoSetSpeedWire
 		if err := json.Unmarshal(env.Payload, &p); err != nil {
-			_ = sess.SendAck(ctx, env.ID, false, errors.WsCodeBadPayload)
-			return
+			out = s.ackOrFail(ctx, sess, env.ID, false, errors.WsCodeBadPayload)
+			break
 		}
-		s.router.HandleSetSpeed(ctx, sess, p, env.ID)
+		out = s.router.HandleSetSpeed(ctx, sess, p, env.ID)
 
 	case protocol.TypeLocoSetFunction:
 		var p contract.LocoSetFunctionWire
 		if err := json.Unmarshal(env.Payload, &p); err != nil {
-			_ = sess.SendAck(ctx, env.ID, false, errors.WsCodeBadPayload)
-			return
+			out = s.ackOrFail(ctx, sess, env.ID, false, errors.WsCodeBadPayload)
+			break
 		}
-		s.router.HandleSetFunction(ctx, sess, p, env.ID)
+		out = s.router.HandleSetFunction(ctx, sess, p, env.ID)
 
 	case protocol.TypeSystemEStop:
 		var p protocol.SystemEStopPayload
 		if env.Payload != nil {
 			_ = json.Unmarshal(env.Payload, &p)
 		}
-		s.router.HandleEStop(ctx, sess, p, env.ID)
+		out = s.router.HandleEStop(ctx, sess, p, env.ID)
 
 	default:
-		_ = sess.SendTyped(ctx, protocol.TypeLocoError, protocol.LocoErrorPayload{
-			Code:   errors.WsCodeUnknownFrame,
-			Detail: env.Type,
-		})
+		out = s.handleUnknown(ctx, sess, env.Type)
 	}
+
+	if s.metrics != nil {
+		s.metrics.Record(env.Type, out, time.Since(start))
+	}
+}
+
+func (s *Server) handlePing(ctx context.Context, sess *Session) Outcome {
+	if err := sess.SendTyped(ctx, protocol.TypePong, nil); err != nil {
+		return Fail(ErrorCodeSendFailed)
+	}
+	return OK()
+}
+
+func (s *Server) handleUnknown(ctx context.Context, sess *Session, frameType string) Outcome {
+	if err := sess.SendTyped(ctx, protocol.TypeLocoError, protocol.LocoErrorPayload{
+		Code:   errors.WsCodeUnknownFrame,
+		Detail: frameType,
+	}); err != nil {
+		return Fail(ErrorCodeSendFailed)
+	}
+	return Fail(errors.WsCodeUnknownFrame)
+}
+
+func (s *Server) ackOrFail(ctx context.Context, sess *Session, requestID string, ok bool, errCode string) Outcome {
+	if requestID == "" {
+		if ok {
+			return OK()
+		}
+		return Fail(errCode)
+	}
+	if err := sess.SendAck(ctx, requestID, ok, errCode); err != nil {
+		return Fail(ErrorCodeSendFailed)
+	}
+	if ok {
+		return OK()
+	}
+	return Fail(errCode)
 }
 
 // watchDeadman fires HandleSessionClose(WsCodeSessionDeadman) when the session
@@ -285,6 +339,9 @@ func (s *Server) watchDeadman(ctx context.Context, sess *Session) {
 			}
 			if sess.IdleFor() > time.Duration(s.deadmanSecs)*time.Second {
 				s.log.WithField("sessionId", sess.ID).Warn("dcc-bus dead-man triggered")
+				if s.metrics != nil {
+					s.metrics.RecordDeadmanTriggered()
+				}
 				s.router.HandleSessionClose(context.Background(), sess, errors.WsCodeSessionDeadman)
 				sess.Close(errors.WsCodeSessionDeadman)
 				return

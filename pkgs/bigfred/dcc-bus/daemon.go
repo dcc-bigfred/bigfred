@@ -211,6 +211,26 @@ func New(ctx context.Context, log *logrus.Logger, cfg Config) (*Daemon, error) {
 	}
 
 	verifier := auth.NewVerifier(cfg.JWTSecret, cfg.LayoutID)
+
+	var wsMetrics *ws.Metrics
+	if cfg.EnableTelemetry && cfg.OTLPEndpoint != "" {
+		var metricsErr error
+		wsMetrics, metricsErr = ws.NewMetrics(ws.MetricsConfig{
+			Enabled:          true,
+			LayoutID:         cfg.LayoutID,
+			CommandStationID: cfg.CommandStationID,
+		})
+		if metricsErr != nil {
+			if metricsShutdown != nil {
+				_ = metricsShutdown(context.Background())
+			}
+			_ = st.CleanUp()
+			_ = rds.Close()
+			return nil, fmt.Errorf("init ws metrics: %w", metricsErr)
+		}
+		log.Info("dcc-bus ws metrics enabled")
+	}
+
 	wsSrv := ws.NewServer(ws.ServerConfig{
 		Verifier:       verifier,
 		Hub:            hub,
@@ -222,6 +242,7 @@ func New(ctx context.Context, log *logrus.Logger, cfg Config) (*Daemon, error) {
 		HeartbeatSecs:  cfg.HeartbeatSecs,
 		DeadmanSecs:    cfg.DeadmanSecs,
 		AllowedOrigins: cfg.AllowedOrigins,
+		Metrics:        wsMetrics,
 	})
 
 	srv := &http.Server{

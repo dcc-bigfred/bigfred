@@ -51,7 +51,7 @@ func (r *Router) applyEmergencyStop(ctx context.Context, userID uint, sessionID 
 		affected = append(affected, addr)
 		snap := contract.LocoStateWire{
 			Address:            addr,
-			Speed:              1,
+			Speed:              0,
 			Forward:            true,
 			ControlledByUserID: userID,
 			Source:             "estop",

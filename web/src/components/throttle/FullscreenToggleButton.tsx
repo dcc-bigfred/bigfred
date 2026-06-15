@@ -1,4 +1,4 @@
-import { Button, Tooltip } from "@mui/material";
+import { IconButton, Tooltip } from "@mui/material";
 import FullscreenIcon from "@mui/icons-material/Fullscreen";
 import FullscreenExitIcon from "@mui/icons-material/FullscreenExit";
 import { useTranslation } from "react-i18next";
@@ -19,26 +19,14 @@ export default function FullscreenToggleButton() {
 
   return (
     <Tooltip title={label}>
-      <Button
+      <IconButton
         size="small"
         onClick={() => void toggle()}
         aria-label={label}
-        startIcon={active ? <FullscreenExitIcon /> : <FullscreenIcon />}
-        sx={{
-          flexShrink: 0,
-          color: cockpit.text,
-          borderColor: cockpit.border,
-          textTransform: "none",
-          fontWeight: 500,
-          whiteSpace: "nowrap",
-          minWidth: 0,
-          px: 1,
-          "& .MuiButton-startIcon": { mr: 0.5 },
-        }}
-        variant="outlined"
+        sx={{ color: cockpit.text }}
       >
-        {t("fullscreen.label")}
-      </Button>
+        {active ? <FullscreenExitIcon fontSize="small" /> : <FullscreenIcon fontSize="small" />}
+      </IconButton>
     </Tooltip>
   );
 }

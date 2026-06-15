@@ -535,6 +535,7 @@ function InterlockingStaffedWorkArea({
   return (
     <Stack spacing={2}>
       {radioInbound.alertNode}
+      {radioInbound.overlay}
       {takeoverRejected && (
         <AutoDismissAlert
           severity="warning"
@@ -587,13 +588,15 @@ function InterlockingStaffedWorkArea({
 function RosterMotionSubscriber({ layoutId }: { layoutId: number }) {
   const dcc = useDccBusOptional();
   const vehicles = useLayoutVehiclesForMotion(layoutId);
+  const subscribe = dcc?.subscribe;
+  const status = dcc?.status;
 
   useEffect(() => {
-    if (!dcc || vehicles.length === 0) {
+    if (!subscribe || vehicles.length === 0 || status !== "open") {
       return;
     }
-    void dcc.subscribe(vehicles);
-  }, [dcc, vehicles]);
+    void subscribe(vehicles);
+  }, [subscribe, status, vehicles]);
 
   return null;
 }

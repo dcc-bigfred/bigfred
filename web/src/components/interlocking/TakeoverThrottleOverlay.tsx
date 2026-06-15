@@ -74,6 +74,7 @@ function TakeoverOverlayBody({
   const vehicles = useLayoutVehicles(layoutId).data ?? [];
   const trains = useLayoutTrains(layoutId).data ?? [];
   const dcc = useDccBus();
+  const { subscribe, status, states, speedSteps: busSpeedSteps, setSpeed, setFunction } = dcc;
 
   const drive = useMemo(() => {
     if (grant.target === "vehicle") {
@@ -112,17 +113,17 @@ function TakeoverOverlayBody({
   }, [grant, vehicles, trains]);
 
   useEffect(() => {
-    if (!drive || dcc.status !== "open") {
+    if (!drive || status !== "open") {
       return;
     }
-    void dcc.subscribe(drive.addresses);
-  }, [dcc, drive]);
+    void subscribe(drive.addresses);
+  }, [subscribe, status, drive]);
 
-  const state = drive != null ? dcc.states.get(drive.dccAddress) : undefined;
+  const state = drive != null ? states.get(drive.dccAddress) : undefined;
   const speed = state?.speed ?? 0;
   const forward = state?.forward ?? true;
   const functions = state?.functions ?? [];
-  const maxSpeed = maxSpeedValue(dcc.speedSteps ?? 128);
+  const maxSpeed = maxSpeedValue(busSpeedSteps ?? 128);
   const canClose = speed === 0;
 
   const fnList = useVehicleFunctions(
@@ -141,7 +142,7 @@ function TakeoverOverlayBody({
     drive?.dccAddress ?? null,
   );
   const cockpitSpeed = Math.min(displaySpeed, maxSpeed);
-  const { queueSpeed, sendSpeedNow } = useDebouncedSpeedSend(dcc.setSpeed);
+  const { queueSpeed, sendSpeedNow } = useDebouncedSpeedSend(setSpeed);
 
   const leaseRemaining = useLeaseCountdown(grant.leaseExpiresAt);
   const [releasing, setReleasing] = useState(false);
@@ -248,7 +249,7 @@ function TakeoverOverlayBody({
               sendSpeedNow(drive.dccAddress, cockpitSpeed, fwd);
             }}
             onFunctionToggle={(n) => {
-              void dcc.setFunction(drive.dccAddress, n, !(functions[n] ?? false));
+              void setFunction(drive.dccAddress, n, !(functions[n] ?? false));
             }}
             onStop={() => {
               noteUserSpeed(0);

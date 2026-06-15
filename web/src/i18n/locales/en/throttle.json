@@ -23,7 +23,8 @@
     "chatEmpty": "No radio messages yet.",
     "pickInterlocking": "Pick an interlocking",
     "searchInterlocking": "Search interlockings…",
-    "noInterlockings": "No interlockings assigned to this layout."
+    "noInterlockings": "No interlockings assigned to this layout.",
+    "reply": "Reply"
   },
   "takeover": {
     "requestedTitle": "Takeover request",

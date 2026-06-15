@@ -23,7 +23,8 @@
     "chatEmpty": "Brak wiadomości radiowych.",
     "pickInterlocking": "Wybierz nastawnię",
     "searchInterlocking": "Szukaj nastawni…",
-    "noInterlockings": "Brak nastawni przypisanych do makiety."
+    "noInterlockings": "Brak nastawni przypisanych do makiety.",
+    "reply": "Odpowiedz"
   },
   "takeover": {
     "requestedTitle": "Prośba o przejęcie składu",

@@ -11,15 +11,19 @@ import {
 import ReplyIcon from "@mui/icons-material/Reply";
 import { useTranslation } from "react-i18next";
 
+import { useMe } from "../../api/auth";
 import {
   contextLabel,
-  formatRadioChatLine,
   radioContextFromMessage,
+  radioMessageOpacity,
+  radioMessagesNewestFirst,
   useInterlockingRadio,
   type RadioMessage,
   type RadioSendContext,
   type RadioSendTarget,
 } from "../../api/radio";
+import { useRadioMessageClock } from "../../hooks/useRadioMessageClock";
+import RadioChatLine from "../radio/RadioChatLine";
 import RadioPhrasePickerDialog from "./RadioPhrasePickerDialog";
 
 interface InterlockingChatPanelProps {
@@ -41,8 +45,14 @@ export default function InterlockingChatPanel({
   unreadCount = 0,
 }: InterlockingChatPanelProps) {
   const { t } = useTranslation(["interlocking", "radio"]);
-  const messages = useInterlockingRadio(interlockingId).data ?? [];
+  const me = useMe().data;
+  const { data: rawMessages } = useInterlockingRadio(interlockingId);
+  const messages = useMemo(
+    () => radioMessagesNewestFirst(rawMessages ?? []),
+    [rawMessages],
+  );
   const [reply, setReply] = useState<ReplyTarget | null>(null);
+  const now = useRadioMessageClock();
 
   const empty = messages.length === 0;
 
@@ -81,6 +91,10 @@ export default function InterlockingChatPanel({
                 <ChatRow
                   key={msg.messageId}
                   msg={msg}
+                  now={now}
+                  viewerUserId={me?.id}
+                  selfLabel={t("radio:self")}
+                  showReply={me?.id !== msg.from.userId}
                   onReply={() =>
                     setReply({
                       to: { userId: msg.from.userId },
@@ -102,6 +116,7 @@ export default function InterlockingChatPanel({
           onClose={() => setReply(null)}
           to={reply.to}
           context={reply.context}
+          side="signalman"
           targetLabel={reply.targetLabel}
           contextLabel={reply.contextLabel}
         />
@@ -112,17 +127,22 @@ export default function InterlockingChatPanel({
 
 function ChatRow({
   msg,
+  now,
+  viewerUserId,
+  selfLabel,
+  showReply,
   onReply,
 }: {
   msg: RadioMessage;
+  now: number;
+  viewerUserId?: number;
+  selfLabel: string;
+  showReply: boolean;
   onReply: () => void;
 }) {
   const { t } = useTranslation(["interlocking", "radio"]);
   const phraseLabel = t(`radio:phrase.${msg.phrase}`);
-  const line = useMemo(
-    () => formatRadioChatLine(msg, phraseLabel),
-    [msg, phraseLabel],
-  );
+  const opacity = radioMessageOpacity(msg.sentAt, now);
 
   return (
     <Stack
@@ -135,8 +155,16 @@ function ChatRow({
         "&:hover": { bgcolor: "action.hover", borderRadius: 1 },
       }}
     >
-      <Typography variant="body2" sx={{ flex: 1, minWidth: 0, wordBreak: "break-word" }}>
-        {line}
+      <Typography
+        variant="body2"
+        sx={{ flex: 1, minWidth: 0, wordBreak: "break-word", opacity }}
+      >
+        <RadioChatLine
+          msg={msg}
+          phraseLabel={phraseLabel}
+          viewerUserId={viewerUserId}
+          selfLabel={selfLabel}
+        />
         {msg.note ? (
           <Typography component="span" variant="body2" color="text.secondary">
             {" "}
@@ -144,16 +172,18 @@ function ChatRow({
           </Typography>
         ) : null}
       </Typography>
-      <Tooltip title={t("interlocking:view.chat.reply")}>
-        <IconButton
-          size="small"
-          aria-label={t("interlocking:view.chat.reply")}
-          onClick={onReply}
-          sx={{ width: 36, flexShrink: 0 }}
-        >
-          <ReplyIcon fontSize="small" />
-        </IconButton>
-      </Tooltip>
+      {showReply && (
+        <Tooltip title={t("interlocking:view.chat.reply")}>
+          <IconButton
+            size="small"
+            aria-label={t("interlocking:view.chat.reply")}
+            onClick={onReply}
+            sx={{ width: 36, flexShrink: 0 }}
+          >
+            <ReplyIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      )}
     </Stack>
   );
 }

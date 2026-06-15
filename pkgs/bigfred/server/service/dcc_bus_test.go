@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -46,5 +47,21 @@ func TestPortForReportsCachedAllocation(t *testing.T) {
 	}
 	if got := d.PortFor(7, 4); got != 0 {
 		t.Fatalf("PortFor unknown = %d", got)
+	}
+}
+
+func TestAppendDccBusTelemetryArgs(t *testing.T) {
+	args := appendDccBusTelemetryArgs([]string{"loco-server", "dcc-bus"}, DccBusConfig{
+		EnableTelemetry: true,
+		OTLPEndpoint:    "127.0.0.1:4317",
+	})
+	got := strings.Join(args, " ")
+	if !strings.Contains(got, "--enable-telemetry") || !strings.Contains(got, "--otel-endpoint 127.0.0.1:4317") {
+		t.Fatalf("args = %q", got)
+	}
+
+	unchanged := appendDccBusTelemetryArgs([]string{"x"}, DccBusConfig{EnableTelemetry: true})
+	if len(unchanged) != 1 {
+		t.Fatalf("expected no flags without endpoint, got %v", unchanged)
 	}
 }

@@ -14,7 +14,11 @@ build:
 # pkgs/bigfred/server/repo/db.go).
 .PHONY: server server-build
 server:
-	go run ./pkgs/bigfred/server -- --log-level=debug --http 0.0.0.0:8080
+	go run ./pkgs/bigfred/server --log-level=debug --http 0.0.0.0:8080
+
+.PHONY: server-telemetry server-build
+server-telemetry:
+	go run ./pkgs/bigfred/server --log-level=debug --http 0.0.0.0:8080 --enable-telemetry
 
 server-build:
 	CGO_ENABLED=0 GOOS=linux go build -o bin/loco-server ./pkgs/bigfred/server

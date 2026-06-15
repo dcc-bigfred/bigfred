@@ -20,6 +20,8 @@ func TestDiagnosticsService_resolveFileID(t *testing.T) {
 		{"supervisord.log", filepath.Join(dir, "supervisord.log"), nil},
 		{"supervisord.config", cfg, nil},
 		{"redis.stdout", filepath.Join(dir, "redis.stdout.log"), nil},
+		{"alloy.stdout", filepath.Join(dir, "alloy.stdout.log"), nil},
+		{"alloy.stderr", filepath.Join(dir, "alloy.stderr.log"), nil},
 		{"dcc-bus.evil/../supervisord.log", "", ErrDiagnosticsForbidden},
 		{"dcc-bus.not-a-bus.log", "", ErrDiagnosticsForbidden},
 		{"unknown", "", ErrDiagnosticsForbidden},
@@ -77,5 +79,27 @@ func TestDiagnosticsService_listDccBusEntries(t *testing.T) {
 	}
 	if len(entries) != 2 {
 		t.Fatalf("entries=%d want 2", len(entries))
+	}
+}
+
+func TestDiagnosticsService_Sources_includesAlloy(t *testing.T) {
+	dir := t.TempDir()
+	svc := &DiagnosticsService{configPath: filepath.Join(dir, "supervisord.conf"), logDir: dir}
+	src, err := svc.Sources()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var alloy *DiagnosticGroup
+	for i := range src.Groups {
+		if src.Groups[i].ID == "alloy" {
+			alloy = &src.Groups[i]
+			break
+		}
+	}
+	if alloy == nil {
+		t.Fatal("alloy group missing")
+	}
+	if len(alloy.Entries) != 2 || alloy.Entries[0].ID != "alloy.stdout" {
+		t.Fatalf("alloy entries: %+v", alloy.Entries)
 	}
 }

@@ -23,6 +23,7 @@ import (
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/state"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/station"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/ws"
+	bfotel "github.com/keskad/loco/pkgs/bigfred/otel"
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
 )
 
@@ -51,6 +52,13 @@ type Config struct {
 	// state from the command station. 0 disables polling (events
 	// only land via WS / control-cmd).
 	PollIntervalMs uint
+
+	// EnableTelemetry turns on the command-station latency histogram
+	// wrapper when OTLPEndpoint is also set.
+	EnableTelemetry bool
+	// OTLPEndpoint is the gRPC host:port for metric export (Alloy).
+	// Telemetry stays off when this is empty.
+	OTLPEndpoint string
 }
 
 // Daemon is the assembled dcc-bus instance.
@@ -58,10 +66,11 @@ type Daemon struct {
 	cfg Config
 	log *logrus.Logger
 
-	redis  *state.Redis
-	rds    *redis.Client
-	srv    *http.Server
-	router *cmd.Router
+	redis           *state.Redis
+	rds             *redis.Client
+	srv             *http.Server
+	router          *cmd.Router
+	metricsShutdown func(context.Context) error
 }
 
 // New validates cfg, opens Redis + the command station driver and
@@ -143,6 +152,36 @@ func New(ctx context.Context, log *logrus.Logger, cfg Config) (*Daemon, error) {
 		_ = rds.Close()
 		return nil, fmt.Errorf("open command station: %w", err)
 	}
+
+	var metricsShutdown func(context.Context) error
+	if cfg.EnableTelemetry && cfg.OTLPEndpoint != "" {
+		var shutdownErr error
+		metricsShutdown, shutdownErr = bfotel.InitMetrics(ctx, "dcc-bus", cfg.OTLPEndpoint)
+		if shutdownErr != nil {
+			_ = st.CleanUp()
+			_ = rds.Close()
+			return nil, fmt.Errorf("init station metrics export: %w", shutdownErr)
+		}
+		log.WithField("endpoint", cfg.OTLPEndpoint).Info("dcc-bus station metrics enabled")
+
+		st, err = station.Wrap(st, station.InstrumentConfig{
+			Enabled:          true,
+			LayoutID:         cfg.LayoutID,
+			CommandStationID: cfg.CommandStationID,
+			Kind:             cs.Kind,
+		})
+		if err != nil {
+			if metricsShutdown != nil {
+				_ = metricsShutdown(context.Background())
+			}
+			_ = st.CleanUp()
+			_ = rds.Close()
+			return nil, fmt.Errorf("wrap command station metrics: %w", err)
+		}
+	} else if cfg.EnableTelemetry {
+		log.Debug("dcc-bus station metrics disabled: no OTLP endpoint configured")
+	}
+
 	log.WithFields(logrus.Fields{
 		"commandStationId": cs.ID,
 		"connection":       station.Describe(cs),
@@ -192,12 +231,13 @@ func New(ctx context.Context, log *logrus.Logger, cfg Config) (*Daemon, error) {
 	}
 
 	return &Daemon{
-		cfg:    cfg,
-		log:    log,
-		redis:  red,
-		rds:    rds,
-		srv:    srv,
-		router: router,
+		cfg:             cfg,
+		log:             log,
+		redis:           red,
+		rds:             rds,
+		srv:             srv,
+		router:          router,
+		metricsShutdown: metricsShutdown,
 	}, nil
 }
 
@@ -345,6 +385,11 @@ func (d *Daemon) runRadioStopConsumer(ctx context.Context, sub *redis.PubSub) {
 
 // Close releases every dependency the daemon opened. Idempotent.
 func (d *Daemon) Close() error {
+	if d.metricsShutdown != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		_ = d.metricsShutdown(ctx)
+		cancel()
+	}
 	if d.srv != nil {
 		_ = d.srv.Close()
 	}

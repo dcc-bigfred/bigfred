@@ -15,7 +15,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/keskad/loco/pkgs/bigfred/contract"
-	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/cliargs"
+	dccbuscli "github.com/keskad/loco/pkgs/bigfred/dcc-bus/cli"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/protocol"
 	"github.com/keskad/loco/pkgs/bigfred/server/repo"
 	"github.com/keskad/loco/pkgs/bigfred/server/supervisord"
@@ -60,6 +60,12 @@ type DccBusConfig struct {
 	// ProxyEnabled controls whether session.opened reports the
 	// reverse-proxy path (default true) or the raw daemon port.
 	ProxyEnabled bool
+	// EnableTelemetry forwards --enable-telemetry to spawned dcc-bus
+	// daemons when OTLPEndpoint is set.
+	EnableTelemetry bool
+	// OTLPEndpoint is the OTLP/gRPC address dcc-bus exports metrics to
+	// (typically the local Alloy receiver).
+	OTLPEndpoint string
 }
 
 // DccBusService is the loco-server-side orchestrator for dcc-bus
@@ -68,7 +74,7 @@ type DccBusConfig struct {
 // onto the daemon's Redis channels (§7e.6).
 type DccBusService struct {
 	cfg    DccBusConfig
-	sup    *SupervisordService
+	sup    Supervisor
 	redis  *RedisService
 	cs     *repo.CommandStations
 	log    *logrus.Logger
@@ -86,7 +92,7 @@ type portKey struct {
 // caller MUST run SupervisordService.Start before any EnsureRunning
 // call. `redis` may be nil in tests that don't need the persistent
 // port assignment; production wires it.
-func NewDccBusService(cfg DccBusConfig, sup *SupervisordService, redis *RedisService, cs *repo.CommandStations, log *logrus.Logger) *DccBusService {
+func NewDccBusService(cfg DccBusConfig, sup Supervisor, redis *RedisService, cs *repo.CommandStations, log *logrus.Logger) *DccBusService {
 	if log == nil {
 		log = logrus.New()
 	}
@@ -380,10 +386,11 @@ func (d *DccBusService) buildProgramSpec(ctx context.Context, name string, layou
 		"--redis-addr", d.cfg.RedisAddr,
 		"--jwt-secret", string(d.cfg.JWTSecret),
 	}
-	args = cliargs.AppendStationFlags(args, cs)
+	args = dccbuscli.AppendStationFlags(args, cs)
 	for _, origin := range d.cfg.AllowedOrigins {
 		args = append(args, "--allowed-origin", origin)
 	}
+	args = appendDccBusTelemetryArgs(args, d.cfg)
 	return supervisord.ProgramSpec{
 		Name:         name,
 		Command:      strings.Join(args, " "),
@@ -392,4 +399,11 @@ func (d *DccBusService) buildProgramSpec(ctx context.Context, name string, layou
 		StartSecs:    1,
 		StopWaitSecs: 5,
 	}, nil
+}
+
+func appendDccBusTelemetryArgs(args []string, cfg DccBusConfig) []string {
+	if !cfg.EnableTelemetry || cfg.OTLPEndpoint == "" {
+		return args
+	}
+	return append(args, "--enable-telemetry", "--otel-endpoint", cfg.OTLPEndpoint)
 }

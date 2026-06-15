@@ -146,6 +146,8 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	trainMembers := repo.NewTrainMembers(repository)
 	layoutVehicles := repo.NewLayoutVehicles(repository)
 	layoutTrains := repo.NewLayoutTrains(repository)
+	vehicleLeases := repo.NewVehicleLeases(repository)
+	trainLeases := repo.NewTrainLeases(repository)
 	commandStations := repo.NewCommandStations(repository)
 	layoutCommandStations := repo.NewLayoutCommandStations(repository)
 	_ = layoutTrains
@@ -170,7 +172,8 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		authSvc, hub, presenceSvc,
 	)
 	layoutVehicleSvc := service.NewLayoutVehicleService(
-		layoutVehicles, layoutTrains, vehicles, trains, trainMembers, users, hub,
+		layoutVehicles, layoutTrains, vehicles, trains, trainMembers,
+		vehicleLeases, trainLeases, users, hub,
 	)
 
 	go hub.Run(ctx)
@@ -260,6 +263,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 			Hub:    hub,
 			Redis:  redisSvc,
 			Roster: layoutVehicleSvc,
+			Auth:   authSvc,
 			Log:    log,
 		})
 		sessionCtl = service.NewSessionControlService(service.SessionControlConfig{

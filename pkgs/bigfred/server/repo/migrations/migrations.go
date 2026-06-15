@@ -60,6 +60,8 @@ func register(m *migrator.Migrator) {
 	m.Register(20260608_000014, seedRocoDcc24ZimoTy2TemplateUp, seedRocoDcc24ZimoTy2TemplateDown)
 	m.Register(20260608_000015, seedRocoDcc24EsuTy2TemplateUp, seedRocoDcc24EsuTy2TemplateDown)
 	m.Register(20260608_000016, seedPikoXpEt21TemplateUp, seedPikoXpEt21TemplateDown)
+	m.Register(20260615_000001, createVehicleLeasesUp, createVehicleLeasesDown)
+	m.Register(20260615_000002, createTrainLeasesUp, createTrainLeasesDown)
 }
 
 // createCommandStationsUp installs the `command_stations` catalogue
@@ -531,4 +533,38 @@ func addVehicleDeadManSwitchColumnsDown(s *rel.Schema) {
 		t.DropColumn("emergency_lights_function")
 		t.DropColumn("deadman_switch_option")
 	})
+}
+
+func createVehicleLeasesUp(s *rel.Schema) {
+	s.CreateTable("vehicle_leases", func(t *rel.Table) {
+		t.ID("id")
+		t.Int("vehicle_id", rel.Unsigned(true))
+		t.Int("from_user_id", rel.Unsigned(true))
+		t.Int("to_user_id", rel.Unsigned(true))
+		t.DateTime("started_at")
+		t.DateTime("expires_at")
+		t.DateTime("revoked_at", rel.Required(false))
+	})
+	s.Exec(rel.Raw(`CREATE INDEX vehicle_leases_vehicle_id_expires_at ON vehicle_leases(vehicle_id, expires_at)`))
+}
+
+func createVehicleLeasesDown(s *rel.Schema) {
+	s.DropTable("vehicle_leases")
+}
+
+func createTrainLeasesUp(s *rel.Schema) {
+	s.CreateTable("train_leases", func(t *rel.Table) {
+		t.ID("id")
+		t.Int("train_id", rel.Unsigned(true))
+		t.Int("from_user_id", rel.Unsigned(true))
+		t.Int("to_user_id", rel.Unsigned(true))
+		t.DateTime("started_at")
+		t.DateTime("expires_at")
+		t.DateTime("revoked_at", rel.Required(false))
+	})
+	s.Exec(rel.Raw(`CREATE INDEX train_leases_train_id_expires_at ON train_leases(train_id, expires_at)`))
+}
+
+func createTrainLeasesDown(s *rel.Schema) {
+	s.DropTable("train_leases")
 }

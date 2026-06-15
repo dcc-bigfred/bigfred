@@ -59,6 +59,8 @@ type LayoutVehicleService struct {
 	vehicles       *repo.Vehicles
 	trains         *repo.Trains
 	members        *repo.TrainMembers
+	vehicleLeases  repo.Leases[domain.VehicleLease]
+	trainLeases    repo.Leases[domain.TrainLease]
 	users          *repo.Users
 	hub            *ws.Hub
 	redis          layoutRosterRedisSync
@@ -72,6 +74,8 @@ func NewLayoutVehicleService(
 	vehicles *repo.Vehicles,
 	trains *repo.Trains,
 	members *repo.TrainMembers,
+	vehicleLeases repo.Leases[domain.VehicleLease],
+	trainLeases repo.Leases[domain.TrainLease],
 	users *repo.Users,
 	hub *ws.Hub,
 ) *LayoutVehicleService {
@@ -81,6 +85,8 @@ func NewLayoutVehicleService(
 		vehicles:       vehicles,
 		trains:         trains,
 		members:        members,
+		vehicleLeases:  vehicleLeases,
+		trainLeases:    trainLeases,
 		users:          users,
 		hub:            hub,
 		sec:            security.LayoutSecurityContext{},

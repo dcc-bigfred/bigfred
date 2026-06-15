@@ -16,12 +16,16 @@ import { cockpit } from "./throttleCockpitTheme";
 
 interface RadioStopButtonProps {
   layoutId: number;
+  variant?: "icon" | "bar";
 }
 
 // RadioStopButton opens a confirmation overlay and fires system.radioStop
 // on the control plane when the operator confirms (§4.6.3).
-export default function RadioStopButton({ layoutId }: RadioStopButtonProps) {
-  const { t } = useTranslation("throttle");
+export default function RadioStopButton({
+  layoutId,
+  variant = "icon",
+}: RadioStopButtonProps) {
+  const { t } = useTranslation(["throttle", "interlocking"]);
   const { sendAction } = useSocket();
   const me = useMe().data;
   const roster = useLayoutVehicles(layoutId).data ?? [];
@@ -32,12 +36,13 @@ export default function RadioStopButton({ layoutId }: RadioStopButtonProps) {
     if (!me) {
       return false;
     }
+    if (variant === "bar") {
+      return me.isSignalman;
+    }
     return roster.some(
-      (v) =>
-        v.dccAddress != null &&
-        v.ownerId === me.id,
+      (v) => v.dccAddress != null && v.ownerId === me.id,
     );
-  }, [me, roster]);
+  }, [me, roster, variant]);
 
   const handleConfirm = useCallback(async () => {
     setBusy(true);
@@ -53,19 +58,35 @@ export default function RadioStopButton({ layoutId }: RadioStopButtonProps) {
     return null;
   }
 
-  return (
-    <>
-      <Tooltip title={t("radioStop.tooltip")}>
+  const trigger =
+    variant === "bar" ? (
+      <Button
+        variant="contained"
+        color="error"
+        startIcon={<SettingsInputAntennaIcon />}
+        onClick={() => setOpen(true)}
+        aria-label={t("interlocking:view.radioStop.barLabel")}
+        sx={{ alignSelf: "stretch" }}
+      >
+        {t("interlocking:view.radioStop.barLabel")}
+      </Button>
+    ) : (
+      <Tooltip title={t("throttle:radioStop.tooltip")}>
         <IconButton
           size="small"
           color="error"
           onClick={() => setOpen(true)}
-          aria-label={t("radioStop.button")}
+          aria-label={t("throttle:radioStop.button")}
           sx={{ flexShrink: 0 }}
         >
           <SettingsInputAntennaIcon fontSize="small" />
         </IconButton>
       </Tooltip>
+    );
+
+  return (
+    <>
+      {trigger}
 
       <Dialog
         open={open}
@@ -73,8 +94,8 @@ export default function RadioStopButton({ layoutId }: RadioStopButtonProps) {
         aria-labelledby="radio-stop-title"
         PaperProps={{
           sx: {
-            bgcolor: cockpit.header,
-            border: `1px solid ${cockpit.border}`,
+            bgcolor: variant === "icon" ? cockpit.header : undefined,
+            border: variant === "icon" ? `1px solid ${cockpit.border}` : undefined,
             minWidth: 280,
           },
         }}
@@ -87,15 +108,15 @@ export default function RadioStopButton({ layoutId }: RadioStopButtonProps) {
             disabled={busy}
             onClick={() => void handleConfirm()}
           >
-            {t("radioStop.run")}
+            {t("throttle:radioStop.run")}
           </Button>
           <Button
             variant="text"
             disabled={busy}
             onClick={() => setOpen(false)}
-            sx={{ color: cockpit.text }}
+            sx={variant === "icon" ? { color: cockpit.text } : undefined}
           >
-            {t("radioStop.cancel")}
+            {t("throttle:radioStop.cancel")}
           </Button>
         </Stack>
       </Dialog>

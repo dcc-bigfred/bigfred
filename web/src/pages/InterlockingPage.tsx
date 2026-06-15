@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Box,
@@ -15,11 +15,16 @@ import {
   Paper,
   Snackbar,
   Stack,
+  Tab,
+  Tabs,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import LoginIcon from "@mui/icons-material/Login";
 import LogoutIcon from "@mui/icons-material/Logout";
+import SettingsIcon from "@mui/icons-material/Settings";
 import { useTranslation } from "react-i18next";
 import {
   useBlocker,
@@ -36,14 +41,27 @@ import {
   useLeaveInterlocking,
   type InterlockingOccupant,
 } from "../api/interlockings";
-import { useSocket } from "../context/SocketContext";
+import { useLayoutVehicles } from "../api/vehicles";
+import InterlockingChatPanel from "../components/interlocking/InterlockingChatPanel";
+import InterlockingRosterPanel from "../components/interlocking/InterlockingRosterPanel";
+import CommandStationPicker from "../components/throttle/CommandStationPicker";
+import RadioStopButton from "../components/throttle/RadioStopButton";
+import ThrottleSetupDialog from "../components/throttle/ThrottleSetupDialog";
+import AutoDismissAlert from "../components/AutoDismissAlert";
+import {
+  DccBusProvider,
+  useDccBusOptional,
+} from "../context/DccBusContext";
+import {
+  useSocket,
+  type CommandStationChangedPayload,
+} from "../context/SocketContext";
+import { useThrottleCommandStationSelection } from "../hooks/useThrottleCommandStationSelection";
 
 // InterlockingPage renders §6.3d: header with name/location/occupant,
 // signalman-only join/leave actions, displacement confirmation,
-// navigation guard while occupying and a displaced-user toast.
-//
-// Radio panel and takeover are intentionally out of scope here; they
-// land in a later milestone together with the WS protocol pieces.
+// navigation guard while occupying, staffed work area (radio stop bar,
+// chat + roster panels) and command-station picker for in-motion chips.
 export default function InterlockingPage() {
   const params = useParams<{ id: string }>();
   const idNum = Number(params.id);
@@ -52,22 +70,17 @@ export default function InterlockingPage() {
   const { t } = useTranslation(["interlocking", "errors", "common"]);
 
   const me = useMe().data ?? null;
+  const layoutId = me?.layoutId ?? null;
   const detail = useInterlocking(id);
   const join = useJoinInterlocking();
   const leave = useLeaveInterlocking();
   const { subscribe } = useSocket();
 
-  // Local "am I occupying" tracker. Derived from the REST/WS occupant
-  // identity rather than the mutation result so it survives reloads
-  // and stays correct when another tab of the same user joins/leaves.
   const isOccupying = useMemo(() => {
     if (!me || !detail.data?.occupant) return false;
     return detail.data.occupant.userId === me.id;
   }, [me, detail.data?.occupant]);
 
-  // displacement toast — server emits interlocking.occupantChanged
-  // with reason:"displaced" when we get pushed out; show a transient
-  // banner so the user understands the page suddenly says "vacant".
   const [displacedToast, setDisplacedToast] = useState(false);
   useEffect(() => {
     if (id == null) return;
@@ -78,7 +91,6 @@ export default function InterlockingPage() {
         occupant?: InterlockingOccupant;
       };
       if (data.interlockingId !== id) return;
-      // We were the previous occupant and got displaced.
       if (
         data.reason === "displaced" &&
         me &&
@@ -87,7 +99,6 @@ export default function InterlockingPage() {
       ) {
         setDisplacedToast(true);
       }
-      // The replacement occupant arrived (someone forced us out).
       if (
         data.reason === "displaced" &&
         me &&
@@ -100,10 +111,6 @@ export default function InterlockingPage() {
     });
   }, [id, me, isOccupying, subscribe]);
 
-  // ----- Displacement confirmation flow -----
-  // When the box is already staffed by someone else, POST /join
-  // returns 409. We surface the incumbent's login in a dialog and
-  // only retry with force:true on explicit confirmation (§6.3d).
   const [confirmDisplace, setConfirmDisplace] = useState<
     InterlockingOccupant | null
   >(null);
@@ -118,7 +125,6 @@ export default function InterlockingPage() {
         setConfirmDisplace(null);
       } catch (err) {
         if (err instanceof ApiError && err.code === "interlocking_occupied") {
-          // 409 — pop the dialog if we still have an occupant to name.
           const incumbent = detail.data?.occupant ?? null;
           if (incumbent && !force) {
             setConfirmDisplace(incumbent);
@@ -153,11 +159,6 @@ export default function InterlockingPage() {
     [t],
   );
 
-  // ----- Navigation guard while occupying -----
-  // The router blocks transitions when isOccupying is true; the user
-  // is asked whether to leave the box. Closing the browser tab is
-  // NOT intercepted (the session lingers until explicit leave,
-  // displacement or logout — §6.3d).
   const blocker = useBlocker(isOccupying);
 
   if (id == null) {
@@ -203,15 +204,11 @@ export default function InterlockingPage() {
   if (!row) return null;
 
   const occupant = row.occupant;
-  // /me.isSignalman is true for layout signalman grants AND for any
-  // effective admin (permanent or sudo). Occupying while sudo is
-  // active is allowed; leaving only needs isOccupying — rights may
-  // have expired since join.
   const canJoin = !!me?.isSignalman;
   const busy = join.isPending || leave.isPending;
 
   return (
-    <Container maxWidth="md" sx={{ py: { xs: 3, sm: 4 } }}>
+    <Container maxWidth="xl" sx={{ py: { xs: 3, sm: 4 } }}>
       <Stack spacing={3}>
         <Box>
           <Button
@@ -254,17 +251,20 @@ export default function InterlockingPage() {
             )}
 
             {isOccupying || canJoin ? (
-              <Stack direction="row" spacing={1}>
+              <Stack direction="row" spacing={1} alignItems="center">
                 {isOccupying ? (
-                  <Button
-                    variant="contained"
-                    color="warning"
-                    startIcon={<LogoutIcon />}
-                    onClick={handleLeave}
-                    disabled={busy}
-                  >
-                    {t("interlocking:view.actions.leave")}
-                  </Button>
+                  <>
+                    <InterlockingSetupButton layoutId={layoutId} />
+                    <Button
+                      variant="contained"
+                      color="warning"
+                      startIcon={<LogoutIcon />}
+                      onClick={handleLeave}
+                      disabled={busy}
+                    >
+                      {t("interlocking:view.actions.leave")}
+                    </Button>
+                  </>
                 ) : (
                   <Button
                     variant="contained"
@@ -285,14 +285,9 @@ export default function InterlockingPage() {
           </Stack>
         </Paper>
 
-        <Paper variant="outlined" sx={{ p: { xs: 2, sm: 3 } }}>
-          <Typography variant="h6" gutterBottom>
-            {t("interlocking:view.radioTitle")}
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            {t("interlocking:view.radioComingSoon")}
-          </Typography>
-        </Paper>
+        {isOccupying && layoutId != null && layoutId > 0 && (
+          <InterlockingStaffedWorkArea layoutId={layoutId} />
+        )}
       </Stack>
 
       <DisplaceDialog
@@ -332,6 +327,226 @@ export default function InterlockingPage() {
       </Snackbar>
     </Container>
   );
+}
+
+function InterlockingSetupButton({ layoutId }: { layoutId: number | null }) {
+  const { t } = useTranslation(["interlocking", "throttle"]);
+  const [open, setOpen] = useState(false);
+  if (layoutId == null || layoutId <= 0) {
+    return null;
+  }
+  return (
+    <>
+      <IconButton
+        color="primary"
+        onClick={() => setOpen(true)}
+        aria-label={t("throttle:setup.open")}
+      >
+        <SettingsIcon />
+      </IconButton>
+      <InterlockingCommandStationDialog
+        layoutId={layoutId}
+        open={open}
+        onClose={() => setOpen(false)}
+      />
+    </>
+  );
+}
+
+function InterlockingCommandStationDialog({
+  layoutId,
+  open,
+  onClose,
+}: {
+  layoutId: number;
+  open: boolean;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation(["throttle", "interlocking"]);
+  const {
+    session,
+    setCommandStation,
+    connected,
+    reconnecting,
+    subscribe,
+  } = useSocket();
+  const stations = session?.availableCommandStations ?? [];
+  const sessionCommandStationId =
+    session?.currentSession?.commandStationId ?? 0;
+  const { selectedCS, selectCommandStation } =
+    useThrottleCommandStationSelection(
+      layoutId,
+      stations,
+      sessionCommandStationId,
+    );
+  const [selecting, setSelecting] = useState(false);
+  const [spawnError, setSpawnError] = useState<string | null>(null);
+  const spawnGenRef = useRef(0);
+
+  useEffect(() => {
+    return subscribe("session.commandStationChanged", (raw) => {
+      const p = raw as CommandStationChangedPayload;
+      if (p.commandStationId !== selectedCS) {
+        return;
+      }
+      if (p.status === "running" && p.wsUrl) {
+        setSpawnError(null);
+        setSelecting(false);
+      } else if (p.status === "degraded") {
+        setSpawnError(p.reason ?? "dcc_bus_unavailable");
+        setSelecting(false);
+      }
+    });
+  }, [subscribe, selectedCS]);
+
+  useEffect(() => {
+    if (!open || !connected || !session?.sessionId || selectedCS <= 0) {
+      return;
+    }
+    const gen = ++spawnGenRef.current;
+    setSelecting(true);
+    setSpawnError(null);
+    void setCommandStation(selectedCS).then((result) => {
+      if (gen !== spawnGenRef.current) {
+        return;
+      }
+      setSelecting(false);
+      if (!result.ok) {
+        setSpawnError(result.error ?? "dcc_bus_unavailable");
+      }
+    });
+  }, [open, connected, session?.sessionId, selectedCS, setCommandStation]);
+
+  return (
+    <ThrottleSetupDialog open={open} onClose={onClose}>
+      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+        <Chip
+          color={connected ? "success" : "default"}
+          label={t(
+            connected
+              ? "throttle:controlPlane.online"
+              : "throttle:controlPlane.offline",
+          )}
+        />
+      </Stack>
+      {reconnecting && (
+        <AutoDismissAlert severity="warning" resetKey="control-reconnecting">
+          {t("throttle:controlPlane.reconnecting")}
+        </AutoDismissAlert>
+      )}
+      <CommandStationPicker
+        stations={stations}
+        currentID={selectedCS}
+        disabled={selecting}
+        allowClear
+        onChange={(csID) => {
+          setSpawnError(null);
+          selectCommandStation(csID);
+        }}
+      />
+      {spawnError && (
+        <Alert severity="error">{t(`errors:${spawnError}` as const, { defaultValue: spawnError })}</Alert>
+      )}
+      {selectedCS === 0 && (
+        <AutoDismissAlert severity="info" resetKey={`select-cs-${stations.length}`}>
+          {stations.length === 0
+            ? t("throttle:noCommandStations")
+            : t("interlocking:view.setup.selectCommandStation")}
+        </AutoDismissAlert>
+      )}
+    </ThrottleSetupDialog>
+  );
+}
+
+function InterlockingStaffedWorkArea({ layoutId }: { layoutId: number }) {
+  const theme = useTheme();
+  const narrow = useMediaQuery(theme.breakpoints.down("md"));
+  const { t } = useTranslation("interlocking");
+  const { session } = useSocket();
+  const stations = session?.availableCommandStations ?? [];
+  const sessionCommandStationId =
+    session?.currentSession?.commandStationId ?? 0;
+  const { selectedCS } = useThrottleCommandStationSelection(
+    layoutId,
+    stations,
+    sessionCommandStationId,
+  );
+  const activeWsUrl =
+    stations.find((s) => s.id === selectedCS)?.wsUrl ?? null;
+  const [tab, setTab] = useState(0);
+
+  const panels = (
+    <Stack
+      direction={narrow ? "column" : "row"}
+      spacing={2}
+      alignItems="stretch"
+      sx={{ minHeight: 320 }}
+    >
+      {(narrow ? tab === 0 : true) && (
+        <Box sx={{ flex: narrow ? undefined : 1, minWidth: 0 }}>
+          <InterlockingChatPanel />
+        </Box>
+      )}
+      {(narrow ? tab === 1 : true) && (
+        <Box sx={{ flex: narrow ? undefined : 1, minWidth: 0, maxWidth: narrow ? undefined : 480 }}>
+          <InterlockingRosterPanel layoutId={layoutId} />
+        </Box>
+      )}
+    </Stack>
+  );
+
+  const body = activeWsUrl ? (
+    <DccBusProvider wsUrl={activeWsUrl}>
+      <RosterMotionSubscriber layoutId={layoutId} />
+      {panels}
+    </DccBusProvider>
+  ) : (
+    panels
+  );
+
+  return (
+    <Stack spacing={2}>
+      <RadioStopButton layoutId={layoutId} variant="bar" />
+      {narrow && (
+        <Tabs
+          value={tab}
+          onChange={(_, value: number) => setTab(value)}
+          variant="fullWidth"
+        >
+          <Tab label={t("view.panels.chat")} />
+          <Tab label={t("view.panels.roster")} />
+        </Tabs>
+      )}
+      {body}
+    </Stack>
+  );
+}
+
+function RosterMotionSubscriber({ layoutId }: { layoutId: number }) {
+  const dcc = useDccBusOptional();
+  const vehicles = useLayoutVehiclesForMotion(layoutId);
+
+  useEffect(() => {
+    if (!dcc || vehicles.length === 0) {
+      return;
+    }
+    void dcc.subscribe(vehicles);
+  }, [dcc, vehicles]);
+
+  return null;
+}
+
+function useLayoutVehiclesForMotion(layoutId: number): number[] {
+  const roster = useLayoutVehicles(layoutId).data ?? [];
+  return useMemo(() => {
+    const addrs: number[] = [];
+    for (const v of roster) {
+      if (v.dccAddress != null) {
+        addrs.push(v.dccAddress);
+      }
+    }
+    return addrs;
+  }, [roster]);
 }
 
 function OccupantBadge({
@@ -411,8 +626,6 @@ function NavigationGuardDialog({
   const { t } = useTranslation("interlocking");
   const open = blocker.state === "blocked";
 
-  // Close icon for accessibility on touch devices where tapping the
-  // dim overlay is not always intuitive.
   return (
     <Dialog open={open} onClose={() => blocker.reset?.()}>
       <DialogTitle>

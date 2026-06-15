@@ -38,8 +38,35 @@
     "occupant": "Staffed by {{login}}",
     "occupantSelf": "You are staffing this box ({{login}})",
     "signalmanOnlyHint": "Only signalmen of this layout can occupy or leave the interlocking.",
-    "radioTitle": "Radio",
-    "radioComingSoon": "Radio panel will be available together with the takeover flow in the next milestone.",
+    "radioStop": {
+      "barLabel": "Radio stop"
+    },
+    "setup": {
+      "selectCommandStation": "Pick a command station to show in-motion chips on the roster."
+    },
+    "panels": {
+      "chat": "Radio",
+      "roster": "Consists"
+    },
+    "chat": {
+      "title": "Interlocking radio",
+      "placeholder": "The signalman group chat lands in the next milestone stage (M5)."
+    },
+    "roster": {
+      "title": "Layout consists",
+      "search": "Search consists…",
+      "empty": "No vehicles or trains on the layout roster.",
+      "inMotion": "in motion",
+      "columns": {
+        "consist": "Consist",
+        "actions": "Actions"
+      },
+      "actions": {
+        "radio": "Radio",
+        "stop": "Stop consist",
+        "takeover": "Takeover"
+      }
+    },
     "actions": {
       "occupy": "Occupy interlocking",
       "leave": "Leave interlocking"

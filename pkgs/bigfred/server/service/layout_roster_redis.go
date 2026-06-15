@@ -2,9 +2,11 @@ package service
 
 import (
 	"context"
+	"time"
 
 	"github.com/keskad/loco/pkgs/bigfred/contract"
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
+	"github.com/keskad/loco/pkgs/bigfred/server/helpers"
 )
 
 // layoutRosterPublisher pushes full roster snapshots to Redis for dcc-bus.
@@ -86,12 +88,22 @@ func (s *LayoutVehicleService) SyncLayoutRosterToRedis(ctx context.Context, layo
 }
 
 // buildAllowedVehiclesSnapshot lists drivable vehicles on the layout
-// roster with per-vehicle controller user ids (owner today).
+// roster with controllerUserIds folded from owner plus active leases.
 func (s *LayoutVehicleService) buildAllowedVehiclesSnapshot(ctx context.Context, layoutID uint) (contract.AllowedVehicles, error) {
 	entries, err := s.ListVehicles(ctx, layoutID)
 	if err != nil {
 		return contract.AllowedVehicles{}, err
 	}
+	trainEntries, err := s.ListTrains(ctx, layoutID)
+	if err != nil {
+		return contract.AllowedVehicles{}, err
+	}
+
+	lesseesByVehicle, err := s.resolveLesseesByVehicle(ctx, entries, trainEntries, time.Now().UTC())
+	if err != nil {
+		return contract.AllowedVehicles{}, err
+	}
+
 	out := contract.AllowedVehicles{
 		LayoutID:  layoutID,
 		UpdatedAt: contract.NowMS(),
@@ -105,13 +117,73 @@ func (s *LayoutVehicleService) buildAllowedVehiclesSnapshot(ctx context.Context,
 			VehicleID:               e.Vehicle.ID,
 			Addr:                    *e.Vehicle.DCCAddress,
 			OwnerUserID:             e.Vehicle.OwnerUserID,
-			ControllerUserIDs:       []uint{e.Vehicle.OwnerUserID},
+			ControllerUserIDs:       helpers.MergeUserIDs(e.Vehicle.OwnerUserID, lesseesByVehicle[e.Vehicle.ID]...),
 			Rp1Function:             e.Vehicle.Rp1Function,
 			EmergencyLightsFunction: e.Vehicle.EmergencyLightsFunction,
 			DeadManSwitchOption:     string(e.Vehicle.DeadManSwitchOption),
 		})
 	}
 	return out, nil
+}
+
+// resolveLesseesByVehicle is the single place where a train "decomposes"
+// into its member vehicles for driving-authority purposes. It returns,
+// per vehicle id, the active lessees drawn from BOTH sources:
+//
+//   - VehicleLease — a lease over the individual vehicle;
+//   - TrainLease   — a lease over a whole train, expanded onto every
+//     current member vehicle (membership is point-in-time here).
+//
+// The result is a projection, not a persistence equivalence: it does
+// not imply a train is interchangeable with its vehicles (ordering,
+// reversal and train identity live in the defined_trains snapshot).
+func (s *LayoutVehicleService) resolveLesseesByVehicle(
+	ctx context.Context,
+	vehicleEntries []RosterVehicleEntry,
+	trainEntries []RosterTrainEntry,
+	now time.Time,
+) (map[uint][]uint, error) {
+	lesseesByVehicle := make(map[uint][]uint)
+
+	if s.vehicleLeases != nil && len(vehicleEntries) > 0 {
+		vehicleIDs := make([]uint, 0, len(vehicleEntries))
+		for _, e := range vehicleEntries {
+			vehicleIDs = append(vehicleIDs, e.Vehicle.ID)
+		}
+		rows, err := s.vehicleLeases.ListActive(ctx, vehicleIDs, now)
+		if err != nil {
+			return nil, err
+		}
+		for _, lease := range rows {
+			lesseesByVehicle[lease.VehicleID] = append(lesseesByVehicle[lease.VehicleID], lease.ToUserID)
+		}
+	}
+
+	if s.trainLeases != nil && len(trainEntries) > 0 {
+		trainIDs := make([]uint, 0, len(trainEntries))
+		for _, e := range trainEntries {
+			trainIDs = append(trainIDs, e.Train.ID)
+		}
+		rows, err := s.trainLeases.ListActive(ctx, trainIDs, now)
+		if err != nil {
+			return nil, err
+		}
+		trainLessee := make(map[uint]uint, len(rows))
+		for _, lease := range rows {
+			trainLessee[lease.TrainID] = lease.ToUserID
+		}
+		for _, te := range trainEntries {
+			lessee, ok := trainLessee[te.Train.ID]
+			if !ok {
+				continue
+			}
+			for _, m := range te.Members {
+				lesseesByVehicle[m.VehicleID] = append(lesseesByVehicle[m.VehicleID], lessee)
+			}
+		}
+	}
+
+	return lesseesByVehicle, nil
 }
 
 // buildDefinedTrainsSnapshot lists layout trains with member DCC

@@ -31,8 +31,8 @@ func (cv *CV) Translate() uint16 {
 // and fall back to polling GetSpeed / ListFunctions when it is absent.
 type Station interface {
 	// WriteCV sends a write request to the command station to write CV of specific value for a given locomotive
-	WriteCV(mode Mode, lcv LocoCV, options ...ctxOptions) error
-	ReadCV(mode Mode, lcv LocoCV, options ...ctxOptions) (int, error)
+	WriteCV(mode Mode, lcv LocoCV, options ...Option) error
+	ReadCV(mode Mode, lcv LocoCV, options ...Option) (int, error)
 	SendFn(mode Mode, addr LocoAddr, num FuncNum, toggle bool) error
 	// ListFunctions returns a list of function numbers that are currently active (on) for the given locomotive
 	ListFunctions(addr LocoAddr) ([]int, error)
@@ -71,6 +71,9 @@ type fnStateKey struct {
 //
 
 type ctxOptions func(*RequestContext) error
+
+// Option configures per-request driver behaviour such as timeout or retries.
+type Option = ctxOptions
 
 type RequestContext struct {
 	timeout time.Duration

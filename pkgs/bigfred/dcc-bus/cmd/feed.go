@@ -7,6 +7,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/keskad/loco/pkgs/bigfred/contract"
+	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/station"
 	"github.com/keskad/loco/pkgs/loco/commandstation"
 )
 
@@ -42,7 +43,7 @@ const (
 // RunStateFeed blocks until ctx is cancelled and is meant to run in its
 // own goroutine.
 func (r *Router) RunStateFeed(ctx context.Context) {
-	if obs, ok := r.station.(commandstation.StateObserver); ok {
+	if obs, ok := station.AsStateObserver(r.station); ok {
 		r.log.Info("dcc-bus state feed: driver supports push, consuming observations")
 		r.runObserverFeed(ctx, obs)
 		return
@@ -64,7 +65,7 @@ func (r *Router) runObserverFeed(ctx context.Context, obs commandstation.StateOb
 	// were explicitly subscribed to; without this, an external handset
 	// moving a loco the daemon never queried stays invisible. Drivers on
 	// a shared bus (LocoNet) don't implement this and need no refresh.
-	if sub, ok := r.station.(commandstation.LocoInfoSubscriber); ok {
+	if sub, ok := station.AsLocoInfoSubscriber(r.station); ok {
 		go r.runSubscriptionRefresh(ctx, sub)
 	}
 

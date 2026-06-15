@@ -1,6 +1,4 @@
-// Package cliargs builds dcc-bus command-line flags shared by
-// loco-server (supervisord spawn) and the dcc-bus subcommand.
-package cliargs
+package cli
 
 import (
 	"errors"
@@ -11,13 +9,13 @@ import (
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
 )
 
-// Station flag names — keep in sync with pkgs/dcc-bus/cli and
-// pkgs/server/service/dcc_bus.go.
+// Station flag names — keep in sync with loco-server supervisord spawn
+// (pkgs/bigfred/server/service/dcc_bus.go).
 const (
-	FlagStationName      = "station-name"
-	FlagStationKind      = "station-kind"
-	FlagStationURI       = "station-uri"
-	FlagSpeedSteps       = "speed-steps"
+	FlagStationName = "station-name"
+	FlagStationKind = "station-kind"
+	FlagStationURI  = "station-uri"
+	FlagSpeedSteps  = "speed-steps"
 )
 
 // AppendStationFlags appends command-station connection flags for cs.

@@ -1,0 +1,39 @@
+package station
+
+import "github.com/keskad/loco/pkgs/loco/commandstation"
+
+// innerStation is implemented by decorators that wrap a driver.
+type innerStation interface {
+	Inner() commandstation.Station
+}
+
+// AsStateObserver returns the push observer behind optional wrappers.
+func AsStateObserver(s commandstation.Station) (commandstation.StateObserver, bool) {
+	for s != nil {
+		if obs, ok := s.(commandstation.StateObserver); ok {
+			return obs, true
+		}
+		u, ok := s.(innerStation)
+		if !ok {
+			return nil, false
+		}
+		s = u.Inner()
+	}
+	return nil, false
+}
+
+// AsLocoInfoSubscriber returns the Z21 subscription helper behind
+// optional wrappers.
+func AsLocoInfoSubscriber(s commandstation.Station) (commandstation.LocoInfoSubscriber, bool) {
+	for s != nil {
+		if sub, ok := s.(commandstation.LocoInfoSubscriber); ok {
+			return sub, true
+		}
+		u, ok := s.(innerStation)
+		if !ok {
+			return nil, false
+		}
+		s = u.Inner()
+	}
+	return nil, false
+}

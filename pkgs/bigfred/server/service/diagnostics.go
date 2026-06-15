@@ -55,7 +55,7 @@ type DiagnosticContent struct {
 }
 
 // DiagnosticsService exposes read-only access to a fixed set of
-// supervisord/redis/dcc-bus log paths under the active LogDir.
+// supervisord/redis/alloy/dcc-bus log paths under the active LogDir.
 type DiagnosticsService struct {
 	configPath string
 	logDir     string
@@ -63,7 +63,7 @@ type DiagnosticsService struct {
 
 // NewDiagnosticsService builds a catalogue from supervisord paths.
 // When sup is nil, default XDG paths are used (files may be absent).
-func NewDiagnosticsService(sup *SupervisordService) (*DiagnosticsService, error) {
+func NewDiagnosticsService(sup Supervisor) (*DiagnosticsService, error) {
 	var configPath, logDir string
 	if sup != nil {
 		configPath, logDir = sup.Paths()
@@ -103,6 +103,14 @@ func (d *DiagnosticsService) Sources() (DiagnosticSources, error) {
 			Entries: []DiagnosticEntry{
 				{ID: "redis.stdout", Label: "redis.stdout.log"},
 				{ID: "redis.stderr", Label: "redis.stderr.log"},
+			},
+		},
+		{
+			ID:    "alloy",
+			Label: "Alloy",
+			Entries: []DiagnosticEntry{
+				{ID: "alloy.stdout", Label: "alloy.stdout.log"},
+				{ID: "alloy.stderr", Label: "alloy.stderr.log"},
 			},
 		},
 		{
@@ -209,6 +217,10 @@ func (d *DiagnosticsService) resolveFileID(fileID string) (absPath, displayName 
 		return filepath.Join(d.logDir, "redis.stdout.log"), "redis.stdout.log", nil
 	case "redis.stderr":
 		return filepath.Join(d.logDir, "redis.stderr.log"), "redis.stderr.log", nil
+	case "alloy.stdout":
+		return filepath.Join(d.logDir, "alloy.stdout.log"), "alloy.stdout.log", nil
+	case "alloy.stderr":
+		return filepath.Join(d.logDir, "alloy.stderr.log"), "alloy.stderr.log", nil
 	default:
 		if strings.HasPrefix(fileID, "dcc-bus.") {
 			name := strings.TrimPrefix(fileID, "dcc-bus.")

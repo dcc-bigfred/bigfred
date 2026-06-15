@@ -14,7 +14,6 @@ import (
 	"github.com/spf13/cobra"
 
 	dccbus "github.com/keskad/loco/pkgs/bigfred/dcc-bus"
-	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/cliargs"
 )
 
 // Flags collects every command-line knob the dcc-bus daemon exposes.
@@ -40,6 +39,9 @@ type Flags struct {
 
 	PollIntervalMs uint
 
+	EnableTelemetry bool
+	OTLPEndpoint   string
+
 	AllowedOrigins []string
 }
 
@@ -64,7 +66,7 @@ should rarely be invoked manually.`,
 			if err != nil {
 				return err
 			}
-			cs, err := cliargs.CommandStationFromFlags(
+			cs, err := CommandStationFromFlags(
 				f.CommandStationID, f.StationName, f.StationKind, f.StationURI, f.StationSpeedSteps,
 			)
 			if err != nil {
@@ -82,6 +84,8 @@ should rarely be invoked manually.`,
 				HeartbeatSecs:    f.HeartbeatSecs,
 				DeadmanSecs:      f.DeadmanSecs,
 				PollIntervalMs:   f.PollIntervalMs,
+				EnableTelemetry:  f.EnableTelemetry,
+				OTLPEndpoint:     resolveOTLPEndpoint(f),
 			}
 			d, err := dccbus.New(c.Context(), log, cfg)
 			if err != nil {
@@ -97,15 +101,17 @@ should rarely be invoked manually.`,
 	cmd.Flags().StringVar(&f.BindAddr, "bind", "127.0.0.1", "interface to bind the WebSocket listener on")
 	cmd.Flags().Uint16Var(&f.Port, "port", 0, "TCP port to expose the WebSocket on (required; allocated by loco-server)")
 	cmd.Flags().StringVar(&f.RedisAddr, "redis-addr", "127.0.0.1:6380", "redis host:port used for state cache and pub/sub")
-	cmd.Flags().StringVar(&f.StationName, cliargs.FlagStationName, "", "command station display name (required; set by loco-server)")
-	cmd.Flags().StringVar(&f.StationKind, cliargs.FlagStationKind, "", "driver kind: z21 | loconet_serial | loconet_tcp (required)")
-	cmd.Flags().StringVar(&f.StationURI, cliargs.FlagStationURI, "", "connection URI for the command station (required)")
-	cmd.Flags().UintVar(&f.StationSpeedSteps, cliargs.FlagSpeedSteps, 128, "DCC speed steps (14 or 28 or 128)")
+	cmd.Flags().StringVar(&f.StationName, FlagStationName, "", "command station display name (required; set by loco-server)")
+	cmd.Flags().StringVar(&f.StationKind, FlagStationKind, "", "driver kind: z21 | loconet_serial | loconet_tcp (required)")
+	cmd.Flags().StringVar(&f.StationURI, FlagStationURI, "", "connection URI for the command station (required)")
+	cmd.Flags().UintVar(&f.StationSpeedSteps, FlagSpeedSteps, 128, "DCC speed steps (14 or 28 or 128)")
 	cmd.Flags().StringVar(&f.JWTSecret, "jwt-secret", "", "JWT signing secret (use --jwt-secret-env to read from an env var instead)")
 	cmd.Flags().StringVar(&f.JWTSecretEnv, "jwt-secret-env", "BIGFRED_JWT_SECRET", "env var name to read the JWT secret from when --jwt-secret is empty")
 	cmd.Flags().Float64Var(&f.HeartbeatSecs, "heartbeat-secs", 5, "WS keepalive interval the daemon advertises to clients")
 	cmd.Flags().Float64Var(&f.DeadmanSecs, "deadman-secs", 6, "idle window after which the daemon applies emergency stop to client subscriptions")
 	cmd.Flags().UintVar(&f.PollIntervalMs, "poll-interval-ms", 0, "state-feed polling cadence in ms for drivers without push (0 == default)")
+	cmd.Flags().BoolVar(&f.EnableTelemetry, "enable-telemetry", false, "record command-station latency histograms (requires --otel-endpoint or OTEL_EXPORTER_OTLP_ENDPOINT)")
+	cmd.Flags().StringVar(&f.OTLPEndpoint, "otel-endpoint", "", "OTLP/gRPC metrics endpoint for Alloy (required for --enable-telemetry; defaults to OTEL_EXPORTER_OTLP_ENDPOINT)")
 	cmd.Flags().StringSliceVar(&f.AllowedOrigins, "allowed-origin", nil, "explicit WS Origin allow-list (empty == accept any; the reverse proxy on loco-server gates Origin in production)")
 
 	return cmd
@@ -121,6 +127,13 @@ func resolveSecret(f Flags) ([]byte, error) {
 		}
 	}
 	return nil, errors.New("dcc-bus: --jwt-secret (or " + f.JWTSecretEnv + " env var) must be set so the daemon can verify session tokens")
+}
+
+func resolveOTLPEndpoint(f Flags) string {
+	if f.OTLPEndpoint != "" {
+		return f.OTLPEndpoint
+	}
+	return os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
 }
 
 // Run is a convenience helper for tests / harnesses that want to

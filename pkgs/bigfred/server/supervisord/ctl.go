@@ -64,12 +64,6 @@ func (c *Ctl) StopProgram(ctx context.Context, name string) error {
 	return err
 }
 
-// RestartProgram restarts a single program.
-func (c *Ctl) RestartProgram(ctx context.Context, name string) error {
-	_, err := c.run(ctx, "restart", name)
-	return err
-}
-
 // Ping checks whether supervisord responds on the unix socket.
 func (c *Ctl) Ping(ctx context.Context) error {
 	_, err := c.run(ctx, "pid")

@@ -1,4 +1,4 @@
-package cliargs
+package cli
 
 import (
 	"testing"

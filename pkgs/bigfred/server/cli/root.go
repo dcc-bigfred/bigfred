@@ -24,6 +24,7 @@ import (
 	"github.com/keskad/loco/pkgs/bigfred/server/repo"
 	"github.com/keskad/loco/pkgs/bigfred/server/repo/migrations"
 	"github.com/keskad/loco/pkgs/bigfred/server/service"
+	"github.com/keskad/loco/pkgs/bigfred/server/supervisord"
 	"github.com/keskad/loco/pkgs/bigfred/server/ws"
 )
 
@@ -49,6 +50,9 @@ type Flags struct {
 	RedisAddr     string
 	RedisExternal bool
 	RedisPersist  bool
+
+	EnableTelemetry  bool
+	TelemetryConfig  string
 
 	// LogLevel is a logrus level name (debug, info, warn, error). The
 	// BIGFRED_LOG_LEVEL env var overrides the flag when set.
@@ -102,6 +106,10 @@ real-time throttle commands.`,
 		"do not spawn a managed redis-server; dial --redis-addr instead (operator runs Redis out-of-band)")
 	cmd.Flags().BoolVar(&f.RedisPersist, "redis-persist", false,
 		"keep RDB snapshots / AOF for the managed redis-server; off by default because dcc-bus rebuilds state cheaply")
+	cmd.Flags().BoolVar(&f.EnableTelemetry, "enable-telemetry", false,
+		"start Grafana Alloy via supervisord and enable dcc-bus metric export")
+	cmd.Flags().StringVar(&f.TelemetryConfig, "telemetry-config", service.DefaultTelemetryConfigPath,
+		"path to the Alloy config file (used with --enable-telemetry)")
 
 	cmd.AddCommand(dccbuscli.NewCommand(log))
 
@@ -190,18 +198,37 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	defer func() { _ = redisSvc.Close() }()
 	layoutVehicleSvc.SetRedisRosterPublisher(redisSvc)
 
-	var supSvc *service.SupervisordService
+	var supSvc service.Supervisor
 	if !f.NoSupervisor {
-		initial := service.DefaultInfraProcesses(service.RedisConfig{
-			Bin:                  f.RedisBin,
-			BindAddr:             f.RedisBindAddr,
-			Port:                 f.RedisPort,
-			DataDir:              f.RedisDataDir,
-			EphemeralPersistence: !f.RedisPersist,
-			Disable:              f.RedisExternal,
+		supPaths, err := supervisord.DefaultPaths()
+		if err != nil {
+			return fmt.Errorf("supervisord paths: %w", err)
+		}
+		telemetryCfg := service.TelemetryConfig{
+			Enable:               f.EnableTelemetry,
+			ConfigPath:           f.TelemetryConfig,
+			OTLPEndpoint:         service.DefaultOTLPEndpoint,
+			SupervisordConfigDir: supPaths.ConfigDir,
+		}
+		initial := service.DefaultInfraProcesses(service.InfraConfig{
+			Redis: service.RedisConfig{
+				Bin:                  f.RedisBin,
+				BindAddr:             f.RedisBindAddr,
+				Port:                 f.RedisPort,
+				DataDir:              f.RedisDataDir,
+				EphemeralPersistence: !f.RedisPersist,
+				Disable:              f.RedisExternal,
+			},
+			Telemetry: telemetryCfg,
 		})
 		supSvc, err = service.NewSupervisordService(service.SupervisordConfig{
+			ConfigDir:    supPaths.ConfigDir,
+			ConfigPath:   supPaths.ConfigPath,
+			SocketPath:   supPaths.SocketPath,
+			PIDFile:      supPaths.PIDFile,
+			LogDir:       supPaths.LogDir,
 			InitialState: initial,
+			Telemetry:    telemetryCfg,
 			Log:          log,
 		})
 		if err != nil {
@@ -209,6 +236,13 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		}
 		if err := supSvc.Start(ctx); err != nil {
 			return fmt.Errorf("supervisord start: %w", err)
+		}
+		if f.EnableTelemetry {
+			log.WithFields(logrus.Fields{
+				"config":    f.TelemetryConfig,
+				"alloy_run": service.AlloyRunConfigPath(telemetryCfg),
+				"generated": service.BigFredAlloyGeneratedPath(supPaths.ConfigDir, telemetryCfg),
+			}).Info("telemetry enabled: supervisord will manage alloy")
 		}
 		supSvc.RunHealthLoop(ctx, 5*time.Second, func(states []service.ProgramState) {
 			log.WithField("programs", states).Debug("supervisord status changed")
@@ -247,13 +281,15 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	if supSvc != nil && redisReady {
 		executable, _ := os.Executable()
 		dccBusSvc = service.NewDccBusService(service.DccBusConfig{
-			Executable:   executable,
-			RedisAddr:    redisAddr,
-			JWTSecret:    secret,
-			PortMin:      9200,
-			PortMax:      9209,
-			SpawnTimeout: 10 * time.Second,
-			ProxyEnabled: true,
+			Executable:      executable,
+			RedisAddr:       redisAddr,
+			JWTSecret:       secret,
+			PortMin:         9200,
+			PortMax:         9209,
+			SpawnTimeout:    10 * time.Second,
+			ProxyEnabled:    true,
+			EnableTelemetry: f.EnableTelemetry,
+			OTLPEndpoint:    service.DefaultOTLPEndpoint,
 		}, supSvc, redisSvc, commandStations, log)
 		if err := dccBusSvc.HydratePorts(ctx); err != nil {
 			log.WithError(err).Warn("dcc-bus hydrate ports")

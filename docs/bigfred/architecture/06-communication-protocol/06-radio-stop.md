@@ -91,23 +91,32 @@ the `[stop_my_vehicles, release_my_leases]` band**.
 
 #### 4.6.2 Authorization
 
-Any authenticated user who **may drive at least one vehicle or train**
-in the active layout may trigger Radio Stop:
+Two independent grounds authorize Radio Stop in the active layout:
 
-- a **driver** on an owned or leased vehicle;
-- a **signalman** while holding active takeover authority on a target;
-- a user with a **temporary `driver` grant** that covers at least one
-  roster vehicle.
+1. **Drive scope** — any user who **may drive at least one vehicle or
+   train**:
+   - a **driver** on an owned or leased vehicle;
+   - a user with a **temporary `driver` grant** that covers at least one
+     roster vehicle.
+2. **Signalman role** — any user who holds the **`signalman` role** in
+   the active layout (layout-scoped grant or self-grant). This is
+   **independent of whether they currently occupy an interlocking or
+   hold a takeover**: a signalman directing traffic must be able to halt
+   the layout in an emergency even when they are not driving anything.
+   This is the explicit broadening over the earlier rule, which only let
+   a signalman trigger Radio Stop *while holding active takeover
+   authority*.
 
-Users who cannot open throttle mode (no drive scope) cannot trigger
-Radio Stop. **`admin` alone is not sufficient** – the permanent admin
-role does not imply drive rights (§7a.5). Admins who also hold
-`driver` (or are mid-takeover as signalman) follow the same rule as
-everyone else.
+Users who satisfy **neither** ground cannot trigger Radio Stop.
+**`admin` alone is still not sufficient** – the permanent admin role
+implies neither drive rights nor the signalman role (§7a.5). Admins who
+also hold `driver` or `signalman` follow the rules above.
 
 The check is implemented once in `RadioStopSecurityContext.CanTrigger`
 (§7a.3) and reused by the WS handler, MCP tool surface and any future
-REST alias.
+REST alias. Its inputs are therefore the drivable roster **and** the
+caller's effective roles in the layout (so the signalman ground can be
+evaluated); `Allow` if either ground passes.
 
 #### 4.6.3 UI affordance
 
@@ -131,6 +140,14 @@ with the narrower per-vehicle estop control.
 - The button is shown whenever throttle mode is open and the user
   passes the authorization rule above (same gate as the AppBar
   **Throttle** toggle in §6.3b).
+
+**Second placement — interlocking view.** The staffed **interlocking
+view** (§6.3d) also surfaces Radio Stop, **above its two panels**, so a
+signalman can halt the layout without entering throttle mode. It reuses
+the same component and confirm overlay but renders the **icon together
+with the text label „Radio stop"** (the throttle placement is
+icon-only). It is shown to any signalman staffing the box per the
+signalman ground in §4.6.2.
 
 **Confirmation overlay (destructive action).** Tapping Radio Stop does
 **not** fire immediately. It opens a **modal overlay centred on the

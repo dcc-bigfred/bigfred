@@ -112,11 +112,33 @@ Takeover (signalman → driver arbitration):
 - `takeover.cancel` `{ requestId }` – emitted by the signalman to back
   out of their own request before the timer elapses.
 
+Per-target emergency stop (signalman roster action, §6.3d):
+
+- `system.estopTarget` `{ target: "vehicle" | "train", targetId }` –
+  **„Zatrzymaj skład"**: an emergency stop scoped to a **single**
+  vehicle or train (NOT the whole layout — that is Radio Stop, §4.6).
+  Control-plane only; `loco-server` resolves the target's DCC
+  address(es) and fans the EMG-stop to the owning `dcc-bus`
+  daemon(s). Authorized for the **active signalman of an interlocking**
+  in the target's layout (and for the target's own driver/owner). Unlike
+  takeover it transfers no driving authority and opens no throttle — it
+  just brakes the target to a standstill.
+
 Radio ("walkie-talkie"):
 
-- `radio.send` `{ to: { userId?, interlockingId? }, phrase, note? }` –
-  sends a structured radio message. Exactly one of `userId` or
-  `interlockingId` must be set.
+- `radio.send` `{ to: { userId?, interlockingId? }, context: { vehicleId?, trainId? }, phrase, note? }` –
+  sends a structured radio message. Exactly one of `to.userId` /
+  `to.interlockingId` must be set, **and** exactly one of
+  `context.vehicleId` / `context.trainId` must be set (the message is
+  always about a specific vehicle or train, §4.4.1). On a successful
+  `ack` the sender's client plays `/sounds/interlockings/radio-sent.ogg`.
+- `radio.replay` `{ scope: "interlocking", interlockingId } | { scope: "user" }` –
+  request the recent Redis-backed history for the caller's chat surface
+  (the signalman's group chat for an interlocking, or the driver's own
+  conversations). The server answers with a burst of `radio.message`
+  frames (or a single `radio.history` envelope). Used on chat-panel
+  mount and after a reconnect; the same data is also reachable over REST
+  (§4.1) for the chat-history overlay.
 
 #### Server → Client (Events)
 
@@ -167,18 +189,37 @@ Takeover:
 - `takeover.requested` `{ requestId, signalman, target, targetId, autoGrantAt }`
   – sent to the affected driver; client SHOULD render a modal with a
   15-second countdown synced to `autoGrantAt`.
-- `takeover.granted` `{ requestId, target, targetId, signalman }` –
-  driving authority moved to the signalman; throttle UI on the driver
-  side is disabled (read-only telemetry).
-- `takeover.released` `{ requestId, target, targetId }` – signalman
-  ended the takeover or left the interlocking; driver regains control.
+- `takeover.granted` `{ requestId, target, targetId, signalman, leaseExpiresAt }` –
+  the 15 s window elapsed without a reject. The server has created a
+  **5-minute self-lease** to the signalman (`leaseExpiresAt = now + 5m`,
+  §4.3) and driving authority moved to the signalman. On the **driver's**
+  side this **ends the throttle session for that target**: the client
+  shows "Twoja sesja Throttle zakończyła się z powodu przejęcia składu",
+  **redirects to the dashboard**, and the target drops out of the
+  driver's throttle picker until release. (Previously the driver's UI
+  merely went read-only; now the driver leaves the throttle entirely.)
+- `takeover.released` `{ requestId, target, targetId, reason?: "lease_expired"|"signalman_released"|"signalman_left" }` –
+  the 5-minute lease expired, the signalman released the takeover
+  (closed the throttle overlay at speed 0), or left the interlocking.
+  The lease is revoked and the target **reappears in the original
+  driver's throttle picker** so they can resume driving.
 - `takeover.rejected` `{ requestId }` / `takeover.cancelled` / `takeover.expired`.
 
 Radio:
 
-- `radio.message` `{ messageId, from, to, phrase, note?, sentAt }` –
-  delivered to the addressee (a specific user) or to the active
-  signalman of the addressed interlocking.
+- `radio.message` `{ messageId, from: { userId, login }, to: { userId? , interlockingId? }, context: { vehicle?: { id, name }, train?: { id, name } }, phrase, note?, sentAt }` –
+  delivered to the addressee (all of a specific user's sessions) or to
+  the active signalman of the addressed interlocking (§4.4.2). The
+  payload carries enough denormalized data to render the chat line
+  `({from.login}) {context name}: {translated phrase}` without a second
+  fetch. On receipt the recipient plays
+  `/sounds/interlockings/{phrase}.ogg`, the driver's throttle **chat
+  icon lights red** (unread) and an **alert-style popup** is shown in the
+  throttle view (§6.3b). Visibility scoping (which messages a given
+  session receives/replays) follows §4.4.3.
+- `radio.history` `{ scope, messages: [ radio.message payloads… ] }` –
+  optional batched answer to `radio.replay` (server MAY instead stream
+  individual `radio.message` frames). Ordered oldest→newest.
 
 Scripts (server-side Goja runs in the sibling executor, §3a.7):
 

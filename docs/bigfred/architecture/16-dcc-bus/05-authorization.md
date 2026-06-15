@@ -2,10 +2,21 @@
 
 The daemon's policy stance is "**zero implicit trust**" on the data
 plane. WS upgrades are JWT-gated; drive commands are gated against the
-**Redis-published roster** (§7e.3). Full `pkgs/bigfred/server/security`
-evaluation with leases and takeovers inside the daemon is the target
-architecture; the current cut implements roster membership plus
-`controllerUserIds` from `allowed_vehicles`.
+**Redis-published roster** (§7e.3).
+
+**`dcc-bus` has no concept of a lease or a takeover.** It never models
+who *owns* a vehicle, who *leased* it, or whether a *takeover* is
+active. The only thing it knows is, per DCC address, a flat set of
+`controllerUserIds` — "these user ids may drive this address right
+now". Resolving the domain semantics (owner + active lessees +
+the 5-minute takeover self-lease holder, §4.3) into that flat set is
+done **exclusively by `loco-server`**, which has SQLite and the full
+`pkgs/bigfred/server/security` policy layer. When a lease starts or
+ends, or a takeover is granted/released, `loco-server` recomputes
+`controllerUserIds` and republishes the `allowed_vehicles` snapshot;
+the daemon simply swaps its in-memory map and the next command sees
+the new set. The daemon therefore stays stateless about driving rights
+and cannot drift from the server's authoritative decision.
 
 #### Authenticating the WS upgrade
 
@@ -43,7 +54,7 @@ authorize subsequent actions.
 | Action | Domain objects loaded | Policy method | Notes |
 |---|---|---|---|
 | `loco.subscribe { addr }` | `allowed_vehicles` snapshot | `addr` present in snapshot | Read-only telemetry; any authenticated layout user may subscribe. Rejects with `vehicle_not_on_layout`. |
-| `loco.setSpeed` / `loco.toggleFn` | `allowed_vehicles` snapshot | `userId ∈ controllerUserIds` for `addr` | Rejects with `not_authorized` or `vehicle_not_on_layout`. Target: full `CanDriveLoco` once leases are folded into `controllerUserIds`. |
+| `loco.setSpeed` / `loco.toggleFn` | `allowed_vehicles` snapshot | `userId ∈ controllerUserIds` for `addr` | Rejects with `not_authorized` or `vehicle_not_on_layout`. `controllerUserIds` is the **server-computed** set (owner + active lessees + active takeover self-lease holder); the daemon does **not** re-derive lease/takeover semantics — it only checks membership. |
 | `loco.toggleFn { fn }` | additionally `[]DccFunction` (resolved list) | `FunctionSecurityContext.CanInvokeFunction` | Refuses unregistered functions with `function_not_registered`. |
 | `system.estop` | the user's session-local `DriveTargets` | `LocoSecurityContext.CanDriveLoco` evaluated **per target** with the user as actor | Targets where the policy now denies are silently dropped (e.g. lease expired moments before estop). Audited via the event channel. |
 | `ping` | none | none | – |

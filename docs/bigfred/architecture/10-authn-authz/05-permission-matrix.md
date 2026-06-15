@@ -3,7 +3,7 @@
 | Capability                                  | driver (own) | driver (leased) | signalman (idle) | signalman (active takeover) | admin (permanent) | admin (sudo) |
 |---------------------------------------------|:------------:|:---------------:|:----------------:|:---------------------------:|:-----------------:|:------------:|
 | Drive vehicle / train                       | ✅            | ✅               | ❌                | ✅                           | ❌¹                | ❌¹           |
-| Trigger Radio Stop (layout-wide halt, §4.6)   | ✅            | ✅               | ❌                | ✅                           | ❌¹                | ❌¹           |
+| Trigger Radio Stop (layout-wide halt, §4.6)   | ✅            | ✅               | ✅⁵               | ✅                           | ❌¹                | ❌¹           |
 | Edit vehicle metadata, write CV             | ✅            | ❌               | ❌                | ❌                           | ❌¹                | ❌¹           |
 | Register vehicle (within own DCC pool)      | ✅            | n/a             | n/a              | n/a                         | ❌¹                | ❌¹           |
 | Register vehicle outside the user's DCC pool³ | ❌            | n/a             | n/a              | n/a                         | ✅                 | ✅            |
@@ -41,6 +41,11 @@
    and admin-PIN rotation. A sudo admin grants the same authority as
    a permanent admin everywhere — the 2-minute window plus the
    rate-limiter on the PIN dialog are the only guard rails (§7a.7).
+⁵ Radio Stop is authorized by **either** drive scope **or** the
+   `signalman` role (§4.6.2). A signalman may halt the layout even when
+   **idle** — without occupying an interlocking or holding a takeover —
+   so the layout's traffic director always has the emergency halt at
+   hand. (The earlier rule only allowed it mid-takeover.)
 
 The signalman icon next to the padlock (§7a.7) is **not** a sudo
 elevation: it writes a permanent `LayoutSignalman` row with

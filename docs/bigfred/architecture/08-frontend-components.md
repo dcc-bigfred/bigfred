@@ -350,6 +350,49 @@ is heard simultaneously. Non-throttle surfaces (dashboard) receive the
 same event but only show a toast (`throttle.radioStop.toast`) — they do
 not mount the audio hook.
 
+#### Radio and chat (driver side)
+
+The throttle toolbar carries **two more icons next to the Radio Stop
+button**: a **radio** icon and a **chat** icon. They are the driver's
+walkie-talkie surface (§4.4) and are independent of the layout-wide
+Radio Stop.
+
+**Radio icon (`<ThrottleRadioButton>` → `<ThrottleRadioOverlay>`).**
+Opens an on-screen overlay used to **send** a radio message about the
+**currently driven** vehicle/train (that target is the message
+`context`). The overlay stacks, top to bottom:
+
+1. **Interlocking picker** — a **text field with search** that filters
+   the layout's interlockings (`GET /api/v1/interlockings`); the picked
+   box becomes `to.interlockingId`.
+2. **Phrase picker** — the same **searchable table** of the closed
+   `RadioPhrase` vocabulary used on the signalman side
+   (`<RadioPhrasePickerDialog>`), so the driver visually finds the phrase.
+
+Selecting a phrase emits
+`radio.send { to:{ interlockingId }, context:{ vehicleId | trainId }, phrase }`
+and plays `/sounds/interlockings/radio-sent.ogg` on ack.
+
+**Chat icon (`<ThrottleChatButton>` → `<ThrottleChatOverlay>`).** Opens a
+popup/overlay showing **this driver's chat history with the various
+signalmen** (their own conversations only, §4.4.3), seeded via
+`radio.replay { scope:"user" }` (Redis, §4.4.4) and kept live by
+`radio.message`. Same line format as the signalman panel.
+
+**Unread indicator + incoming alert.** When a `radio.message` arrives for
+the driver:
+
+- the **chat icon lights red** (an unread badge) until the chat overlay
+  is opened;
+- an **alert-style popup** is shown in the throttle view (similar to an
+  on-screen alert), surfacing the translated phrase and its
+  vehicle/train context;
+- the receiver plays `/sounds/interlockings/{phrase}.ogg`.
+
+A small `useRadioSounds()` hook (sibling of `useRadioStopSound()`,
+§6.3b) plays `radio-sent.ogg` on the sender's `radio.send` ack and
+`{phrase}.ogg` on each inbound `radio.message`.
+
 #### Server as source of truth (multi-pilot sync)
 
 The DCC bus and the backend **command station** are shared state. A
@@ -655,13 +698,113 @@ enabled only for users with the layout-scoped **signalman** role.
    - **Opuść nastawnię** (*Leave interlocking*) – visible when the
      caller **is** the active occupant. Calls
      `POST /api/v1/interlockings/{id}/leave`.
-3. **Radio panel** – the interlocking's **chat** with drivers and other
-   signal boxes: a scrollable message list (`radio.message` events +
-   persisted replay on mount) and a phrase picker that emits
-   `radio.send`. Traffic addressed to this interlocking's id, messages
-   from/to drivers in the layout, and cross-interlocking phrases the
-   protocol allows are all rendered here – this is the signalman's
-   primary comms surface while staffing the box.
+   - **Command-station picker (cog button)** – a **settings / cog icon**
+     (`Settings`, identical to the throttle, §6.3b) that opens a setup
+     dialog (`<ThrottleSetupDialog>` reused) hosting the
+     **command-station dropdown** + connection status. The signalman
+     needs a picked command station to **drive a taken-over target** in
+     the throttle overlay (the throttle dispatch invariant requires
+     `session.CommandStationID != nil`, §4.5.1) and to scope a per-target
+     **„Zatrzymaj skład"** estop. It is populated from
+     `session.opened.availableCommandStations`, fires
+     `session.setCommandStation` on change, and re-renders on
+     `session.commandStationChanged` / `layout.commandStationsChanged` —
+     exactly like the throttle picker. When the list has a single entry
+     the UI MAY auto-pick it.
+3. **Radio Stop bar** – directly **above the two panels** the staffed box
+   renders a **Radio Stop** button (`<RadioStopButton variant="bar">`).
+   It uses the **same red radio-handset icon** as the throttle button
+   (§6.3b) but, unlike the icon-only throttle control, it shows the
+   **text label „Radio stop"** next to the icon. Pressing it opens the
+   same `<RadioStopConfirmOverlay>` and, on confirm, dispatches
+   `system.radioStop {}` on the control plane (layout-wide halt, §4.6).
+   It is shown to any **signalman** staffing the box (see the extended
+   authorization in §4.6.2), independent of whether they currently hold a
+   takeover.
+4. **Two-panel work area** – below the Radio Stop bar the staffed box
+   renders a **two-column layout**: a **radio chat** panel on the left and
+   a **vehicle/train roster** panel on the right (details below). On
+   narrow screens the two collapse into tabs.
+
+##### Left panel – radio chat (`<InterlockingChatPanel>`)
+
+The signalman's **group chat** with every driver in the layout. It is a
+**fixed-width, vertically scrollable** column (`overflow-y: auto`)
+showing all traffic exchanged with all drivers (§4.4.3) ordered by time.
+
+- **Data:** seeded on mount via `radio.replay { scope:"interlocking", interlockingId }`
+  (Redis-backed, §4.4.4) or the REST replay endpoint (§4.1), then kept
+  live by `radio.message` events.
+- **Line format:** `({driverLogin}) {vehicle or train name}: {radio
+  phrase translated into the signalman's language}`. The login + context
+  name come from the message's denormalized `from.login` /
+  `context.*.name`; the phrase is rendered through the `radio.json` i18n
+  catalogue (the closed `RadioPhrase` vocabulary maps 1:1 to keys, §7c).
+- **Reply affordance:** each line carries a **„Odpowiedz"** icon button
+  pinned to a **fixed position on the right** of the row. The chat text
+  wraps (`white-space: normal`, the icon column has a fixed width) so the
+  icon never shifts as the message grows. Pressing it opens the **phrase
+  picker popup** (below) pre-addressed to that driver and pre-filled with
+  the same vehicle/train context, so a reply stays in the same
+  conversation thread.
+- **Phrase picker popup (`<RadioPhrasePickerDialog>`):** instead of a
+  free-text field this is a **searchable table** of the closed
+  `RadioPhrase` vocabulary — one row per phrase showing its translated
+  label (and optionally a short description), with a text **search box**
+  in the header that filters rows client-side so the operator can *find
+  a message visually* quickly. Selecting a row emits
+  `radio.send { to:{ userId }, context:{ vehicleId | trainId }, phrase }`
+  and plays `/sounds/interlockings/radio-sent.ogg` on ack. An optional
+  capped `note` field may accompany the phrase.
+
+##### Right panel – vehicle/train roster (`<InterlockingRosterPanel>`)
+
+A **fixed-width, scrollable** table of the vehicles and trains on the
+current layout, with a **live "in motion" indicator** (derived from each
+target's `loco.state.speed != 0`). The table header carries a **search
+box** that filters rows **client-side**.
+
+Columns:
+
+| Column | Content |
+|--------|---------|
+| **Skład** | `({driverLogin}) {vehicle or train name}` — the owner/driver login plus the train (skład) or single vehicle (lokomotywa) name. A small chip shows **„w ruchu"** when the target is moving. |
+| **Akcje** | three icon buttons (left→right): **Radio**, **Stop**, **Przejęcie kontroli**. |
+
+Action icons:
+
+- **Radio** (`SettingsInputAntenna`) – opens the same
+  `<RadioPhrasePickerDialog>` (searchable phrase table) pre-addressed to
+  that driver, with the row's vehicle/train as the message context. Sends
+  `radio.send`.
+- **Stop** (`Stop`, red) – **„Zatrzymaj skład"**: emits
+  `system.estopTarget { target, targetId }` (§4.2) to brake **only that
+  one** vehicle/train. Distinct from the layout-wide Radio Stop (§4.6);
+  the tooltip makes the single-target scope explicit.
+- **Przejęcie kontroli** (`Engineering`) – opens the **takeover** flow
+  (`takeover.request { target, targetId }`, §4.3). After the 15 s window
+  grants the takeover, the signalman gets a closable throttle overlay
+  (below) and the driver is evicted from their throttle.
+
+##### Takeover throttle overlay (signalman drives without leaving the box)
+
+When a takeover is **granted** (§4.3), the signalman does **not** leave
+the interlocking view. Instead a **closable throttle overlay**
+(`<TakeoverThrottleOverlay>`) opens **on top of** the interlocking view,
+hosting the same `LocoControlPage` / `TrainControlPage` driving surface
+(§6.3, §6.3a) for the taken-over target. The interlocking chat + roster
+stay mounted underneath.
+
+- The overlay is driven by the **5-minute self-lease** created on grant;
+  a small countdown badge shows the remaining lease time
+  (`takeover.granted.leaseExpiresAt`).
+- **Close gate:** the overlay's close control is **disabled while the
+  target's speed is not 0** (read from `loco.state`). The operator must
+  bring the target to a standstill before closing. Closing the overlay
+  (at speed 0) **releases the takeover** (revokes the lease, emits
+  `takeover.released { reason:"signalman_released" }`).
+- Leaving the interlocking, displacement, or the 5-minute lease expiry
+  also release the takeover and tear the overlay down.
 
 #### Leaving the view while still occupying
 

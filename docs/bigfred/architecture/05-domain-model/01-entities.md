@@ -186,20 +186,36 @@ type InterlockingSession struct {
 ```go
 // pkgs/bigfred/server/domain/takeover.go
 // Request issued by a signalman wanting driving authority over a driver's
-// vehicle or train. The driver has 15 seconds to reject.
+// vehicle or train. The driver has 15 seconds to reject; if they do not,
+// the request is granted automatically (§4.3).
 type TakeoverTarget string // "vehicle" | "train"
-type TakeoverState  string // "pending" | "granted" | "rejected" | "cancelled" | "expired"
+type TakeoverState  string // "pending" | "granted" | "rejected" | "cancelled" | "expired" | "released"
+
+// TakeoverWindow is the driver's reject window; TakeoverLeaseDuration is
+// how long the signalman holds the target once granted (the self-lease).
+const (
+	TakeoverWindow        = 15 * time.Second
+	TakeoverLeaseDuration = 5 * time.Minute
+)
 
 type TakeoverRequest struct {
-    ID              uint
-    SignalmanUserID uint
-    DriverUserID    uint
-    Target          TakeoverTarget
-    TargetID        uint        // vehicle.id or train.id
-    RequestedAt     time.Time
-    DecisionAt      *time.Time
-    AutoGrantAt     time.Time   // RequestedAt + 15s
-    State           TakeoverState
+	ID              uint
+	SignalmanUserID uint
+	DriverUserID    uint
+	Target          TakeoverTarget
+	TargetID        uint        // vehicle.id or train.id
+	RequestedAt     time.Time
+	DecisionAt      *time.Time
+	AutoGrantAt     time.Time   // RequestedAt + TakeoverWindow
+
+	// On grant, the service creates a VehicleLease / TrainLease
+	// (FromUserID = owner, ToUserID = signalman, ExpiresAt = grant +
+	// TakeoverLeaseDuration) and stores its id here so release can revoke
+	// it. The driver's throttle session for the target is ended and the
+	// target hidden from their throttle picker until release (§4.3).
+	GrantedLeaseID  *uint
+	ReleasedAt      *time.Time
+	State           TakeoverState
 }
 ```
 
@@ -207,27 +223,52 @@ type TakeoverRequest struct {
 // pkgs/bigfred/server/domain/radio.go
 // Walkie-talkie messages between signalmen and drivers use a closed
 // vocabulary so that translations and UI buttons stay deterministic.
+//
+// IMPORTANT: RadioMessage is NOT a SQLite-persisted entity. Radio is
+// operational chatter, not an audit trail: messages live ONLY in Redis
+// with a default 4-hour TTL and are gone afterwards (§4.4.4). This type
+// is therefore a value object serialised into Redis streams, never a
+// REL-mapped table row. (Radio Stop, by contrast, IS audited — see
+// AuditSessionEmergencyExecuted / `system.radio_stop`.)
 type RadioPhrase string
 
 const (
-    RadioStoppedAtSignal   RadioPhrase = "STOPPED_AT_SIGNAL_READY_TO_ENTER"
-    RadioEntryPermitted    RadioPhrase = "ENTRY_PERMITTED"
-    RadioCancelRoute       RadioPhrase = "CANCEL_ROUTE"
-    RadioRouteSet          RadioPhrase = "ROUTE_SET"
-    RadioAck               RadioPhrase = "ACK"
-    RadioStopImmediately   RadioPhrase = "STOP_IMMEDIATELY" // walkie-talkie phrase only; see §4.6 for layout-wide Radio Stop
-    RadioReadyToDepart     RadioPhrase = "READY_TO_DEPART"
-    RadioDepartureCleared  RadioPhrase = "DEPARTURE_CLEARED"
+	RadioStoppedAtSignal   RadioPhrase = "STOPPED_AT_SIGNAL_READY_TO_ENTER"
+	RadioEntryPermitted    RadioPhrase = "ENTRY_PERMITTED"
+	RadioCancelRoute       RadioPhrase = "CANCEL_ROUTE"
+	RadioRouteSet          RadioPhrase = "ROUTE_SET"
+	RadioAck               RadioPhrase = "ACK"
+	RadioStopImmediately   RadioPhrase = "STOP_IMMEDIATELY" // walkie-talkie phrase only; see §4.6 for layout-wide Radio Stop
+	RadioReadyToDepart     RadioPhrase = "READY_TO_DEPART"
+	RadioDepartureCleared  RadioPhrase = "DEPARTURE_CLEARED"
 )
 
+// RadioMessage is a single walkie-talkie message. Stored ONLY in Redis
+// (default TTL 4h, §4.4.4); ID is a Redis stream / ULID id, not a SQL
+// primary key.
+//
+// Target  — exactly one of ToUserID / ToInterlockingID is set.
+// Context — exactly one of ContextVehicleID / ContextTrainID is set; a
+//           message is always ABOUT a specific vehicle or train so the
+//           chat line can render "({fromLogin}) {context name}: {phrase}"
+//           and the signalman can correlate it with the roster panel
+//           (§4.4.1, §6.3d).
 type RadioMessage struct {
-    ID              uint
-    FromUserID      uint
-    ToUserID        *uint // nil if directed at an interlocking
-    ToInterlockingID *uint
-    Phrase          RadioPhrase
-    Note            string    // optional free-text, capped (e.g. 80 chars)
-    SentAt          time.Time
+	ID               string // Redis stream id / ULID (NOT a SQL id)
+	LayoutID         uint
+	FromUserID       uint
+	FromLogin        string // denormalized for chat rendering & replay
+	ToUserID         *uint  // nil if directed at an interlocking
+	ToInterlockingID *uint  // nil if directed at a user
+
+	// Context: exactly one of the two is non-nil (vehicle XOR train).
+	ContextVehicleID *uint
+	ContextTrainID   *uint
+	ContextName      string // denormalized vehicle/train name for the chat line
+
+	Phrase RadioPhrase
+	Note   string // optional free-text, capped (e.g. 80 chars)
+	SentAt time.Time
 }
 ```
 

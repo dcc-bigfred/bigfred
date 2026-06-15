@@ -41,3 +41,9 @@ permission checks via **`security`**; see
 16. [Acceptance Criteria](./architecture/14-acceptance-criteria/README.md)
 17. [Process Supervisor (Supervisord)](./architecture/15-supervisord/README.md)
 18. [DCC Bus Daemon (`dcc-bus`)](./architecture/16-dcc-bus/README.md)
+
+## Implementation plans
+
+Task-scoped implementation plans live under [`./plans/`](./plans/):
+
+- [M5 – Interlocking view, radio & takeover](./plans/m5-interlocking-radio-takeover.md)

@@ -69,8 +69,17 @@ trains, train catalogue changes, and once per layout at
 
 `loco.subscribe` gates on membership in `allowed_vehicles`.
 `loco.setSpeed` / `loco.toggleFn` additionally require
-`session.userId ∈ controllerUserIds` for that address (today the server
-publishes `[ownerUserId]`; leases/takeovers will extend the slice).
+`session.userId ∈ controllerUserIds` for that address. The daemon has
+**no notion of leases or takeovers** — `controllerUserIds` is the flat,
+already-resolved set that `loco-server` computes from the catalogue:
+the **owner**, every **active lessee** (`VehicleLease` / `TrainLease`),
+and the **takeover self-lease holder** when a signalman has taken the
+target over (the 5-minute lease of §4.3 is just another lessee from the
+daemon's point of view). Whenever any of those change, `loco-server`
+republishes the `allowed_vehicles` snapshot and the daemon swaps its
+map before the next command. (The bootstrap implementation may publish
+just `[ownerUserId]` until the lease/takeover folding lands in M3/M5;
+the wire shape and the daemon's membership check do not change.)
 
 #### Per-vehicle invalidation channels (planned)
 

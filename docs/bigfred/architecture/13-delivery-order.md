@@ -222,17 +222,35 @@ sibling daemon supervised by §7d (`SupervisordService`).
 
 **M5 – Interlockings, takeover, radio.**
 
-17. Add `interlockings`, `interlocking_sessions`, `takeover_requests`
-    and `radio_messages` tables and services, all **filtered through
-    the active layout's `LayoutInterlocking` whitelist**. Implement the
-    15-second takeover state machine and the closed-vocabulary radio.
-    Wire `AuditService.Log` for `session.emergency_executed` emitted by
-    the dead-man's switch handler in the Hub.
-18. Add the **layout dashboard** (`HomePage.tsx` – three live tables,
-    §6.3c) and the **interlocking view** (`InterlockingPage.tsx` –
-    occupy / leave with displacement confirm, navigation guard, radio
-    panel, §6.3d). Add `layout_vehicles` table and presence tracking
+17. Add `interlockings`, `interlocking_sessions` and `takeover_requests`
+    tables and services, all **filtered through the active layout's
+    `LayoutInterlocking` whitelist**. Implement the **15-second takeover
+    state machine whose grant creates a 5-minute self-lease** to the
+    signalman (reusing `VehicleLease` / `TrainLease`), ends the driver's
+    throttle session for the target, and removes the target from their
+    throttle picker until release (§4.3). Implement the closed-vocabulary
+    radio with **Redis-only storage (default 4h TTL, NO SQLite
+    `radio_messages` table)**: every message carries a **target** (user
+    XOR interlocking) and a **context** (vehicle XOR train), is fanned
+    into the addressee's and sender's Redis streams (§4.4.4), and is
+    replayed via `radio.replay` / the read-only REST endpoints
+    (`GET …/interlockings/{id}/radio`, `GET /api/v1/radio/mine`).
+    Add the per-target emergency stop `system.estopTarget`
+    („Zatrzymaj skład"). Wire `AuditService.Log` for
+    `session.emergency_executed` emitted by the dead-man's switch handler
     in the Hub.
+18. Add the **layout dashboard** (`HomePage.tsx` – three live tables,
+    §6.3c) and the **two-panel interlocking view** (`InterlockingPage.tsx`
+    – occupy / leave with displacement confirm, navigation guard, left
+    **radio chat** panel + right **searchable vehicle/train roster** with
+    per-row Radio / Stop / Takeover actions, the **searchable phrase
+    table** popup, and the **closable takeover throttle overlay** gated on
+    speed 0, §6.3d). Add the driver-side throttle **radio** and **chat**
+    overlays (searchable interlocking picker + phrase table, group-chat
+    history, red unread badge, on-screen alert popup, §6.3b) and the
+    `useRadioSounds()` hook (`radio-sent.ogg` / `{phrase}.ogg` under
+    `web/public/sounds/interlockings/`). Add `layout_vehicles` table and
+    presence tracking in the Hub.
 
 **M6 – API keys + built-in MCP server.**
 

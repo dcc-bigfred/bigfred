@@ -97,6 +97,14 @@ GET    /api/v1/interlockings                                      *           # 
 POST   /api/v1/interlockings/{id}/join   { force?: bool }         signalman   # become active occupant; requires interlocking ∈ active layout. When already occupied: `409 interlocking_occupied` unless `force:true`, which ends the incumbent session (`reason:"displaced"`) and opens a new one for the caller.
 POST   /api/v1/interlockings/{id}/leave                           signalman   # end own active session for this interlocking (idempotent if not occupying)
 
+# --- Radio history replay (READ-ONLY; Redis-backed, 4h TTL, §4.4.4) ---
+# Sending radio is WS-only (`radio.send`); these endpoints only SEED the
+# chat surfaces on mount (the WS keeps them live afterwards). Each row is
+# a RadioMessage projection: { id, from:{userId,login}, to:{userId?,interlockingId?},
+# context:{ vehicle?:{id,name}, train?:{id,name} }, phrase, note?, sentAt }.
+GET    /api/v1/interlockings/{id}/radio                          signalman   # group-chat replay for a box the caller occupies (all drivers in the layout, §4.4.3). 403 unless the caller is the active occupant. ?limit= (default 200).
+GET    /api/v1/radio/mine                                        *           # the caller's own conversations (their messages + messages addressed to them). Seeds the driver throttle chat overlay (§6.3b). ?limit= (default 200).
+
 # --- Command Stations (catalogue of `centralki`) ---
 GET    /api/v1/command-stations                                            *           # list (name + connection type only; admin sees full Connection)
 GET    /api/v1/command-stations/{id}                                       admin       # full details incl. Connection
@@ -148,5 +156,8 @@ GET    /api/v1/audit-log/{id}                                     admin
 GET    /api/v1/system/status                                      *           # command station info FOR THE CALLER'S CURRENTLY PICKED COMMAND STATION (resolved via the session's CommandStationID); returns `{ commandStationSelected:false }` until the user fires session.setCommandStation
 ```
 
-Takeover, throttle and radio are **all WebSocket-only** because they are
-short, frequent, and event-driven.
+Takeover, throttle and radio **sending** are **WebSocket-only** because
+they are short, frequent, and event-driven. The only REST surface radio
+exposes is the **read-only history replay** above (`GET …/interlockings/{id}/radio`
+and `GET /api/v1/radio/mine`), which just seeds the chat panels from
+Redis (§4.4.4); everything live still flows over the WebSocket.

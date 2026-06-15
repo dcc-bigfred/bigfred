@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import {
   Box,
   FormControl,
@@ -55,6 +55,7 @@ export interface ThrottleCockpitProps {
   onDirectionChange: (forward: boolean) => void;
   onFunctionToggle: (fn: number) => void;
   onStop: () => void;
+  headerExtra?: ReactNode;
 }
 
 // ThrottleCockpit is the locomotive-control surface: function grid on
@@ -76,6 +77,7 @@ export default function ThrottleCockpit({
   onDirectionChange,
   onFunctionToggle,
   onStop,
+  headerExtra,
 }: ThrottleCockpitProps) {
   const { t } = useTranslation("throttle");
   const navigate = useNavigate();
@@ -124,6 +126,7 @@ export default function ThrottleCockpit({
       >
         <FullscreenToggleButton />
         <RadioStopButton layoutId={layoutId} />
+        {headerExtra}
 
         <FormControl
           size="small"

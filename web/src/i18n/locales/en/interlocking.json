@@ -50,7 +50,8 @@
     },
     "chat": {
       "title": "Interlocking radio",
-      "placeholder": "The signalman group chat lands in the next milestone stage (M5)."
+      "empty": "No radio messages yet.",
+      "reply": "Reply"
     },
     "roster": {
       "title": "Layout consists",
@@ -66,6 +67,15 @@
         "stop": "Stop consist",
         "takeover": "Takeover"
       }
+    },
+    "takeover": {
+      "overlayTitle": "Takeover control",
+      "close": "Close",
+      "releaseVehicle": "Release vehicle",
+      "releaseTrain": "Release consist",
+      "stopBeforeClose": "Stop the consist (speed 0) before releasing control.",
+      "leaseRemaining": "Lease: {{time}}",
+      "noDccTarget": "This consist has no DCC address assigned."
     },
     "actions": {
       "occupy": "Occupy interlocking",

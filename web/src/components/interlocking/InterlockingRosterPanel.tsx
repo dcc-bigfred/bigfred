@@ -26,15 +26,34 @@ import {
   type RosterTrain,
   type RosterVehicle,
 } from "../../api/vehicles";
+import type { RadioSendContext, RadioSendTarget } from "../../api/radio";
+import { useTakeoverActions } from "../../api/takeover";
 import { useDccBusOptional } from "../../context/DccBusContext";
+import RadioPhrasePickerDialog from "./RadioPhrasePickerDialog";
 
 interface InterlockingRosterPanelProps {
   layoutId: number;
 }
 
 type RosterRow =
-  | { kind: "vehicle"; key: string; login: string; name: string; addresses: number[] }
-  | { kind: "train"; key: string; login: string; name: string; addresses: number[] };
+  | {
+      kind: "vehicle";
+      key: string;
+      ownerUserId: number;
+      entityId: number;
+      login: string;
+      name: string;
+      addresses: number[];
+    }
+  | {
+      kind: "train";
+      key: string;
+      ownerUserId: number;
+      entityId: number;
+      login: string;
+      name: string;
+      addresses: number[];
+    };
 
 function vehicleRow(v: RosterVehicle): RosterRow | null {
   if (v.dccAddress == null) {
@@ -43,6 +62,8 @@ function vehicleRow(v: RosterVehicle): RosterRow | null {
   return {
     kind: "vehicle",
     key: `v-${v.id}`,
+    ownerUserId: v.ownerId,
+    entityId: v.id,
     login: v.ownerLogin,
     name: v.name,
     addresses: [v.dccAddress],
@@ -63,6 +84,8 @@ function trainRow(
   return {
     kind: "train",
     key: `t-${t.id}`,
+    ownerUserId: t.ownerId,
+    entityId: t.id,
     login: t.ownerLogin,
     name: t.name,
     addresses,
@@ -75,10 +98,17 @@ export default function InterlockingRosterPanel({
   layoutId,
 }: InterlockingRosterPanelProps) {
   const { t } = useTranslation("interlocking");
+  const { requestTakeover } = useTakeoverActions();
   const dcc = useDccBusOptional();
   const vehicles = useLayoutVehicles(layoutId).data ?? [];
   const trains = useLayoutTrains(layoutId).data ?? [];
   const [query, setQuery] = useState("");
+  const [radioTarget, setRadioTarget] = useState<{
+    to: RadioSendTarget;
+    context: RadioSendContext;
+    targetLabel: string;
+    contextLabel: string;
+  } | null>(null);
 
   const rows = useMemo(() => {
     const addrByVehicle = new Map<number, number>();
@@ -177,11 +207,23 @@ export default function InterlockingRosterPanel({
                   <TableCell align="right">
                     <Stack direction="row" spacing={0.5} justifyContent="flex-end">
                       <Tooltip title={t("view.roster.actions.radio")}>
-                        <span>
-                          <IconButton size="small" disabled aria-label={t("view.roster.actions.radio")}>
-                            <SettingsInputAntennaIcon fontSize="small" />
-                          </IconButton>
-                        </span>
+                        <IconButton
+                          size="small"
+                          aria-label={t("view.roster.actions.radio")}
+                          onClick={() =>
+                            setRadioTarget({
+                              to: { userId: row.ownerUserId },
+                              context:
+                                row.kind === "vehicle"
+                                  ? { vehicleId: row.entityId }
+                                  : { trainId: row.entityId },
+                              targetLabel: row.login,
+                              contextLabel: row.name,
+                            })
+                          }
+                        >
+                          <SettingsInputAntennaIcon fontSize="small" />
+                        </IconButton>
                       </Tooltip>
                       <Tooltip title={t("view.roster.actions.stop")}>
                         <span>
@@ -191,11 +233,18 @@ export default function InterlockingRosterPanel({
                         </span>
                       </Tooltip>
                       <Tooltip title={t("view.roster.actions.takeover")}>
-                        <span>
-                          <IconButton size="small" disabled aria-label={t("view.roster.actions.takeover")}>
-                            <SwapHorizIcon fontSize="small" />
-                          </IconButton>
-                        </span>
+                        <IconButton
+                          size="small"
+                          aria-label={t("view.roster.actions.takeover")}
+                          onClick={() =>
+                            void requestTakeover(
+                              row.kind === "vehicle" ? "vehicle" : "train",
+                              row.entityId,
+                            )
+                          }
+                        >
+                          <SwapHorizIcon fontSize="small" />
+                        </IconButton>
                       </Tooltip>
                     </Stack>
                   </TableCell>
@@ -205,6 +254,16 @@ export default function InterlockingRosterPanel({
           </TableBody>
         </Table>
       </TableContainer>
+      {radioTarget && (
+        <RadioPhrasePickerDialog
+          open
+          onClose={() => setRadioTarget(null)}
+          to={radioTarget.to}
+          context={radioTarget.context}
+          targetLabel={radioTarget.targetLabel}
+          contextLabel={radioTarget.contextLabel}
+        />
+      )}
     </Paper>
   );
 }

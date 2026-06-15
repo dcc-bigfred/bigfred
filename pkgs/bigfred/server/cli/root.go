@@ -148,6 +148,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	layoutTrains := repo.NewLayoutTrains(repository)
 	vehicleLeases := repo.NewVehicleLeases(repository)
 	trainLeases := repo.NewTrainLeases(repository)
+	takeoverRequests := repo.NewTakeoverRequests(repository)
 	commandStations := repo.NewCommandStations(repository)
 	layoutCommandStations := repo.NewLayoutCommandStations(repository)
 	_ = layoutTrains
@@ -241,6 +242,8 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	var dccBusSvc *service.DccBusService
 	var dccLayoutSync *service.DccBusLayoutSync
 	var sessionCtl *service.SessionControlService
+	var radioSvc *service.RadioService
+	var takeoverSvc *service.TakeoverService
 	if supSvc != nil && redisReady {
 		executable, _ := os.Executable()
 		dccBusSvc = service.NewDccBusService(service.DccBusConfig{
@@ -258,31 +261,72 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		dccLayoutSync = service.NewDccBusLayoutSync(dccBusSvc, layoutSvc, hub)
 	}
 
-	if dccBusSvc != nil {
-		radioStopSvc := service.NewRadioStopService(service.RadioStopConfig{
+	var radioStopSvc *service.RadioStopService
+	if dccBusSvc != nil && redisReady {
+		radioStopSvc = service.NewRadioStopService(service.RadioStopConfig{
 			Hub:    hub,
 			Redis:  redisSvc,
 			Roster: layoutVehicleSvc,
 			Auth:   authSvc,
 			Log:    log,
 		})
-		sessionCtl = service.NewSessionControlService(service.SessionControlConfig{
-			Log:         log,
-			DccBus:      dccBusSvc,
-			RadioStop:   radioStopSvc,
-			CommandStns: commandStations,
-			LayoutCS:    layoutCommandStations,
-			Layouts:     layouts,
+	}
+
+	sessionCtl = service.NewSessionControlService(service.SessionControlConfig{
+		Log:         log,
+		DccBus:      dccBusSvc,
+		RadioStop:   radioStopSvc,
+		CommandStns: commandStations,
+		LayoutCS:    layoutCommandStations,
+		Layouts:     layouts,
+	})
+
+	if redisReady {
+		radioStore := service.NewRadioStore(service.RadioStoreConfig{Redis: redisSvc})
+		radioSvc = service.NewRadioService(service.RadioConfig{
+			Store:         radioStore,
+			Hub:           hub,
+			Auth:          authSvc,
+			Vehicles:      vehicles,
+			Trains:        trains,
+			IlkSessions:   interlockingSessions,
+			LayoutIlks:    layoutInterlockings,
+			Interlockings: interlockings,
 		})
+		takeoverSvc = service.NewTakeoverService(service.TakeoverConfig{
+			DB:            repository,
+			Requests:      takeoverRequests,
+			VehicleLeases: vehicleLeases,
+			TrainLeases:   trainLeases,
+			Vehicles:      vehicles,
+			Trains:        trains,
+			TrainMembers:  trainMembers,
+			IlkSessions:   interlockingSessions,
+			Users:         users,
+			Roster:        layoutVehicleSvc,
+			Auth:          authSvc,
+			Hub:           hub,
+		})
+		occupancySvc.SetTakeoverService(takeoverSvc)
+		if err := takeoverSvc.RecoverPending(ctx); err != nil {
+			log.WithError(err).Warn("takeover recover pending")
+		}
+		go takeoverSvc.RunJanitor(ctx)
+		hub.SetControlHandler(service.NewCompositeControlHandler(
+			sessionCtl,
+			service.NewRadioControlService(radioSvc),
+			service.NewTakeoverControlService(takeoverSvc),
+		))
+	} else {
 		hub.SetControlHandler(sessionCtl)
+	}
+
+	if dccBusSvc != nil {
 		commandStationSvc.SetRuntime(service.CommandStationRuntime{
 			DccSync:    dccLayoutSync,
 			SessionCtl: sessionCtl,
 		})
 
-		// Fan dcc-bus daemon events back onto the control plane so
-		// the dashboard / sudo UI reacts to estop audits, daemon
-		// crashes and (future) takeover broadcasts.
 		evtConsumer := service.NewDccBusEventConsumer(redisSvc, hub, log)
 		if err := evtConsumer.Start(ctx); err != nil {
 			log.WithError(err).Warn("dcc-bus event consumer start")
@@ -357,6 +401,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		Diagnostics:      diagSvc,
 		Hub:              hub,
 		DccBus:           dccBusSvc,
+		Radio:            radioSvc,
 		AllowedOrigins:   f.AllowedOrigins,
 		SecureCookie:     f.SecureCookie,
 	})

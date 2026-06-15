@@ -47,6 +47,7 @@ type InterlockingOccupancyService struct {
 	auth                *AuthService
 	hub                 *ws.Hub
 	presence            *PresenceService
+	takeover            *TakeoverService
 	sec                 security.InterlockingSecurityContext
 }
 
@@ -69,6 +70,11 @@ func NewInterlockingOccupancyService(
 		hub:                 hub,
 		presence:            presence,
 	}
+}
+
+// SetTakeoverService wires takeover release on leave/displace.
+func (s *InterlockingOccupancyService) SetTakeoverService(t *TakeoverService) {
+	s.takeover = t
 }
 
 // GetForLayout returns one whitelisted interlocking enriched with
@@ -222,6 +228,9 @@ func (s *InterlockingOccupancyService) Join(ctx context.Context, in JoinInput) (
 		if err := s.sessions.End(ctx, current, now); err != nil {
 			return JoinResult{}, err
 		}
+		if s.takeover != nil {
+			_ = s.takeover.ReleaseAllForSignalman(ctx, current.SignalmanUserID, "signalman_left")
+		}
 		s.broadcastOccupant(in.LayoutID, in.InterlockingID, nil, "displaced")
 	}
 
@@ -264,6 +273,9 @@ func (s *InterlockingOccupancyService) Leave(ctx context.Context, interlockingID
 	}
 	if err := s.sessions.End(ctx, &sess, now); err != nil {
 		return err
+	}
+	if s.takeover != nil {
+		_ = s.takeover.ReleaseAllForSignalman(ctx, actor.ID, "signalman_left")
 	}
 	s.broadcastOccupant(layoutID, interlockingID, nil, "left")
 	s.presence.RefreshAndBroadcast(ctx, layoutID)

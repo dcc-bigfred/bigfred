@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
+  Badge,
   Box,
   Button,
   Chip,
@@ -42,6 +43,9 @@ import {
   type InterlockingOccupant,
 } from "../api/interlockings";
 import { useLayoutVehicles } from "../api/vehicles";
+import TakeoverThrottleOverlay, {
+  useTakeoverSignalmanSession,
+} from "../components/interlocking/TakeoverThrottleOverlay";
 import InterlockingChatPanel from "../components/interlocking/InterlockingChatPanel";
 import InterlockingRosterPanel from "../components/interlocking/InterlockingRosterPanel";
 import CommandStationPicker from "../components/throttle/CommandStationPicker";
@@ -57,6 +61,7 @@ import {
   type CommandStationChangedPayload,
 } from "../context/SocketContext";
 import { useThrottleCommandStationSelection } from "../hooks/useThrottleCommandStationSelection";
+import { useInterlockingRadioInbound } from "../hooks/useInterlockingRadioInbound";
 
 // InterlockingPage renders §6.3d: header with name/location/occupant,
 // signalman-only join/leave actions, displacement confirmation,
@@ -285,8 +290,11 @@ export default function InterlockingPage() {
           </Stack>
         </Paper>
 
-        {isOccupying && layoutId != null && layoutId > 0 && (
-          <InterlockingStaffedWorkArea layoutId={layoutId} />
+        {isOccupying && layoutId != null && layoutId > 0 && id != null && (
+          <InterlockingStaffedWorkArea
+            layoutId={layoutId}
+            interlockingId={id}
+          />
         )}
       </Stack>
 
@@ -458,7 +466,13 @@ function InterlockingCommandStationDialog({
   );
 }
 
-function InterlockingStaffedWorkArea({ layoutId }: { layoutId: number }) {
+function InterlockingStaffedWorkArea({
+  layoutId,
+  interlockingId,
+}: {
+  layoutId: number;
+  interlockingId: number;
+}) {
   const theme = useTheme();
   const narrow = useMediaQuery(theme.breakpoints.down("md"));
   const { t } = useTranslation("interlocking");
@@ -474,6 +488,9 @@ function InterlockingStaffedWorkArea({ layoutId }: { layoutId: number }) {
   const activeWsUrl =
     stations.find((s) => s.id === selectedCS)?.wsUrl ?? null;
   const [tab, setTab] = useState(0);
+  const { grant, clearGrant } = useTakeoverSignalmanSession(layoutId);
+  const chatVisible = !narrow || tab === 0;
+  const radioInbound = useInterlockingRadioInbound(interlockingId, chatVisible);
 
   const panels = (
     <Stack
@@ -484,7 +501,10 @@ function InterlockingStaffedWorkArea({ layoutId }: { layoutId: number }) {
     >
       {(narrow ? tab === 0 : true) && (
         <Box sx={{ flex: narrow ? undefined : 1, minWidth: 0 }}>
-          <InterlockingChatPanel />
+          <InterlockingChatPanel
+            interlockingId={interlockingId}
+            unreadCount={radioInbound.unreadCount}
+          />
         </Box>
       )}
       {(narrow ? tab === 1 : true) && (
@@ -506,14 +526,33 @@ function InterlockingStaffedWorkArea({ layoutId }: { layoutId: number }) {
 
   return (
     <Stack spacing={2}>
+      {radioInbound.alertNode}
       <RadioStopButton layoutId={layoutId} variant="bar" />
+      {grant && activeWsUrl && (
+        <TakeoverThrottleOverlay
+          layoutId={layoutId}
+          grant={grant}
+          wsUrl={activeWsUrl}
+          onClose={clearGrant}
+        />
+      )}
       {narrow && (
         <Tabs
           value={tab}
           onChange={(_, value: number) => setTab(value)}
           variant="fullWidth"
         >
-          <Tab label={t("view.panels.chat")} />
+          <Tab
+            label={
+              <Badge
+                color="error"
+                badgeContent={radioInbound.unreadCount}
+                invisible={radioInbound.unreadCount === 0}
+              >
+                {t("view.panels.chat")}
+              </Badge>
+            }
+          />
           <Tab label={t("view.panels.roster")} />
         </Tabs>
       )}

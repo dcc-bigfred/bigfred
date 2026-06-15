@@ -26,6 +26,7 @@ import type plRole from "./locales/pl/role.json";
 import type plHome from "./locales/pl/home.json";
 import type plLayout from "./locales/pl/layout.json";
 import type plInterlocking from "./locales/pl/interlocking.json";
+import type plRadio from "./locales/pl/radio.json";
 import type plVehicle from "./locales/pl/vehicle.json";
 import type plUser from "./locales/pl/user.json";
 import type plSudo from "./locales/pl/sudo.json";
@@ -45,6 +46,7 @@ declare module "i18next" {
       home: typeof plHome;
       layout: typeof plLayout;
       interlocking: typeof plInterlocking;
+      radio: typeof plRadio;
       vehicle: typeof plVehicle;
       user: typeof plUser;
       sudo: typeof plSudo;

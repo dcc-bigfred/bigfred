@@ -45,9 +45,16 @@ type AllowedVehicles struct {
 // AllowedVehicle ties a DCC address to catalogue metadata dcc-bus
 // needs for subscribe gating and drive-authority checks without SQLite.
 type AllowedVehicle struct {
-	VehicleID         uint   `json:"vehicleId"`
-	Addr              uint16 `json:"addr"`
-	OwnerUserID       uint   `json:"ownerUserId"`
+	VehicleID   uint   `json:"vehicleId"`
+	Addr        uint16 `json:"addr"`
+	OwnerUserID uint   `json:"ownerUserId"`
+
+	// ControllerUserIDs is the flat, already-resolved set of user ids
+	// allowed to drive this address right now. loco-server computes it
+	// from the catalogue (owner + active lessees + the 5-minute takeover
+	// self-lease holder, §4.3) and republishes the snapshot whenever it
+	// changes. dcc-bus has NO concept of a lease or a takeover: it only
+	// checks membership in this slice. See §7e.5.
 	ControllerUserIDs []uint `json:"controllerUserIds"`
 
 	// Per-vehicle dead-man's switch catalogue (§7e.5). Copied from the

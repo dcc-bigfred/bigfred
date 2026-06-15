@@ -21,7 +21,6 @@ import {
   FUNCTION_BUTTON_SIZE_PX,
   THROTTLE_PANEL_WIDTH_PX,
 } from "./throttleCockpitTheme";
-import FullscreenToggleButton from "./FullscreenToggleButton";
 import RadioStopButton from "./RadioStopButton";
 import FunctionGridButton from "./FunctionGridButton";
 import VerticalThrottle from "./VerticalThrottle";
@@ -124,7 +123,6 @@ export default function ThrottleCockpit({
           minHeight: 48,
         }}
       >
-        <FullscreenToggleButton />
         <RadioStopButton layoutId={layoutId} />
         {headerExtra}
 

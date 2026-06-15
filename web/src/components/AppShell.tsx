@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   AppBar,
   Box,
-  Button,
   Chip,
   IconButton,
   Stack,
@@ -14,9 +13,9 @@ import {
 } from "@mui/material";
 import SpeedIcon from "@mui/icons-material/Speed";
 import MenuIcon from "@mui/icons-material/Menu";
+import DashboardIcon from "@mui/icons-material/Dashboard";
 import PeopleIcon from "@mui/icons-material/People";
 import MapIcon from "@mui/icons-material/Map";
-import EventIcon from "@mui/icons-material/Event";
 import AccountTreeIcon from "@mui/icons-material/AccountTree";
 import DirectionsRailwayIcon from "@mui/icons-material/DirectionsRailway";
 import HistoryIcon from "@mui/icons-material/History";
@@ -33,15 +32,18 @@ import { useTranslation } from "react-i18next";
 import { useLogout, useMe } from "../api/auth";
 import { SocketProvider } from "../context/SocketContext";
 import LanguageMenu from "./LanguageMenu";
-import SudoIndicators from "./SudoIndicator";
+import { useSudoMobileMenuItems } from "./SudoIndicator";
 import MobileNavDrawer, { type MobileNavSection } from "./MobileNavDrawer";
 import TopBarMenu, { type TopBarMenuItem } from "./TopBarMenu";
+import FullscreenToggleButton from "./throttle/FullscreenToggleButton";
 
 // AppShell renders the top app bar shared by every authenticated
 // screen. The post-login pages render inside its <Outlet/>.
 //
 // Layout, left → right inside the AppBar:
-//   [☰] [BigFred] ……spacer…… [Sterowanie] [layout chip] [sudo] [menus] [🌐]
+//   [☰] [BigFred] ……spacer…… [layout chip] [⚡][⛶] [menus†] [🌐]
+//   † dropdown menus (My / Admin / Account) hide below `md`; the ☰
+//   drawer is always available when logged in.
 //
 // Throttle is a persistent top-bar link (not inside the My dropdown).
 // The dropdowns use TopBarMenu for account-level / admin-level actions.
@@ -52,17 +54,24 @@ import TopBarMenu, { type TopBarMenuItem } from "./TopBarMenu";
 // that don't belong in a side drawer.
 export default function AppShell() {
   const me = useMe().data;
+
+  return (
+    <SocketProvider enabled={!!me}>
+      <AppShellContent />
+    </SocketProvider>
+  );
+}
+
+function AppShellContent() {
+  const me = useMe().data;
   const logout = useLogout();
   const navigate = useNavigate();
   const theme = useTheme();
   const isThrottlePage = Boolean(useMatch("/throttle"));
   const isCompactNav = useMediaQuery(theme.breakpoints.down("md"));
+  const hideAppTitle = useMediaQuery(theme.breakpoints.down("lg"));
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const onThrottlePage = Boolean(useMatch("/throttle"));
-
-  useEffect(() => {
-    if (!isCompactNav) setMobileNavOpen(false);
-  }, [isCompactNav]);
 
   // Namespaces:
   //   common — appName, nav.*, comingSoon
@@ -90,13 +99,6 @@ export default function AppShell() {
         label: t("nav.administration.layouts"),
         icon: <MapIcon fontSize="small" />,
         onClick: () => navigate("/admin/layouts"),
-      },
-      {
-        id: "parties",
-        label: t("nav.administration.parties"),
-        icon: <EventIcon fontSize="small" />,
-        disabled: true,
-        tooltip: comingSoon("M4"),
       },
       {
         id: "interlockings",
@@ -194,9 +196,33 @@ export default function AppShell() {
 
   const isAdmin = me?.effectiveRole === "admin";
 
+  const closeMobileNav = useCallback(() => setMobileNavOpen(false), []);
+  const { items: sudoMobileItems, dialogs: sudoMobileDialogs } =
+    useSudoMobileMenuItems();
+
+  const quickNavItems: TopBarMenuItem[] = useMemo(
+    () => [
+      {
+        id: "dashboard",
+        label: t("nav.dashboard"),
+        icon: <DashboardIcon fontSize="small" />,
+        onClick: () => navigate("/"),
+      },
+      {
+        id: "throttle",
+        label: t("nav.my.throttle"),
+        icon: <SpeedIcon fontSize="small" />,
+        onClick: () => navigate("/throttle"),
+      },
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [t],
+  );
+
   const mobileNavSections: MobileNavSection[] = useMemo(() => {
     if (!me) return [];
     const sections: MobileNavSection[] = [
+      { id: "quick", items: [...quickNavItems, ...sudoMobileItems] },
       { id: "my", label: t("nav.my.menuLabel"), items: myItems },
     ];
     if (isAdmin) {
@@ -215,6 +241,8 @@ export default function AppShell() {
   }, [
     me,
     isAdmin,
+    quickNavItems,
+    sudoMobileItems,
     myItems,
     administrationItems,
     accountItems,
@@ -228,7 +256,6 @@ export default function AppShell() {
     })}`;
 
   return (
-    <SocketProvider enabled={!!me}>
     <Box
       sx={{
         display: "flex",
@@ -239,8 +266,14 @@ export default function AppShell() {
       }}
     >
       <AppBar position="sticky">
-        <Toolbar>
-          {isCompactNav && me && (
+        <Toolbar
+          sx={{
+            // Default MUI icons are 24px; small variants 20px — bump both by 4px.
+            "& .MuiSvgIcon-root": { fontSize: 28 },
+            "& .MuiSvgIcon-fontSizeSmall": { fontSize: 24 },
+          }}
+        >
+          {me && (
             <IconButton
               color="inherit"
               edge="start"
@@ -252,21 +285,23 @@ export default function AppShell() {
             </IconButton>
           )}
 
-          <Typography
-            variant="h6"
-            component={Link}
-            to="/"
-            sx={{
-              flexGrow: 1,
-              color: "inherit",
-              textDecoration: "none",
-              "&:hover": { opacity: 0.9 },
-              minWidth: 0,
-            }}
-            noWrap
-          >
-            {t("appName")}
-          </Typography>
+          <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+            {!hideAppTitle && (
+              <Typography
+                variant="h6"
+                component={Link}
+                to="/"
+                sx={{
+                  color: "inherit",
+                  textDecoration: "none",
+                  "&:hover": { opacity: 0.9 },
+                }}
+                noWrap
+              >
+                {t("appName")}
+              </Typography>
+            )}
+          </Box>
 
           <Stack
             direction="row"
@@ -281,10 +316,13 @@ export default function AppShell() {
                 system row is shown via its i18n label, never its
                 stored Name. */}
             {me && (
-              <Tooltip title={t("layout:loginPicker.label")}>
+              <Tooltip title={t("nav.goToDashboard")}>
                 <Chip
                   size="small"
                   color="default"
+                  component={Link}
+                  to="/"
+                  clickable
                   icon={<MapIcon fontSize="small" />}
                   label={
                     me.layoutIsSystem
@@ -294,33 +332,29 @@ export default function AppShell() {
                   sx={{
                     bgcolor: "rgba(255,255,255,0.16)",
                     color: "inherit",
+                    textDecoration: "none",
                     "& .MuiChip-icon": { color: "inherit" },
+                    "&:hover": { bgcolor: "rgba(255,255,255,0.24)" },
                   }}
                 />
               </Tooltip>
             )}
 
-            {/* Sudo indicators (§7a.7). The padlock drives the
-                temporary admin elevation; the engineer-cap drives
-                the permanent signalman self-grant. Both stay
-                hidden until the user is authenticated. */}
-            {me && <SudoIndicators />}
-
             {me && (
-              <Button
-                color="inherit"
-                component={Link}
-                to="/throttle"
-                startIcon={<SpeedIcon />}
-                aria-current={onThrottlePage ? "page" : undefined}
-                sx={{
-                  textTransform: "none",
-                  fontWeight: onThrottlePage ? 700 : 500,
-                  flexShrink: 0,
-                }}
-              >
-                {t("nav.my.throttle")}
-              </Button>
+              <>
+                <Tooltip title={t("nav.my.throttle")}>
+                  <IconButton
+                    color="inherit"
+                    component={Link}
+                    to="/throttle"
+                    aria-current={onThrottlePage ? "page" : undefined}
+                    aria-label={t("nav.my.throttle")}
+                  >
+                    <SpeedIcon />
+                  </IconButton>
+                </Tooltip>
+                <FullscreenToggleButton />
+              </>
             )}
 
             {me && !isCompactNav && (
@@ -347,15 +381,18 @@ export default function AppShell() {
         </Toolbar>
       </AppBar>
 
-      {me && isCompactNav && (
-        <MobileNavDrawer
-          open={mobileNavOpen}
-          onClose={() => setMobileNavOpen(false)}
-          title={t("nav.drawerTitle")}
-          closeLabel={t("nav.closeMenu")}
-          sections={mobileNavSections}
-          identityLine={accountCaption ?? undefined}
-        />
+      {me && (
+        <>
+          <MobileNavDrawer
+            open={mobileNavOpen}
+            onClose={closeMobileNav}
+            title={t("nav.drawerTitle")}
+            closeLabel={t("nav.closeMenu")}
+            sections={mobileNavSections}
+            identityLine={accountCaption ?? undefined}
+          />
+          {sudoMobileDialogs}
+        </>
       )}
 
       <Box
@@ -371,6 +408,5 @@ export default function AppShell() {
         <Outlet />
       </Box>
     </Box>
-    </SocketProvider>
   );
 }

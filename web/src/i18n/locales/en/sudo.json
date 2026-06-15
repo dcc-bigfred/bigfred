@@ -19,6 +19,12 @@
       "active": "Step down from signalman"
     }
   },
+  "nav": {
+    "elevateAdmin": "Elevate permissions",
+    "revokeAdmin": "Revoke elevated permissions",
+    "becomeSignalman": "Become traffic controller",
+    "revokeSignalman": "Step down as traffic controller"
+  },
   "dialog": {
     "title": {
       "admin": "Layout admin PIN",

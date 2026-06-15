@@ -67,6 +67,19 @@
         "stop": "Stop consist",
         "stopHint": "Stop this consist only (not the whole layout)",
         "takeover": "Takeover"
+      },
+      "stopConfirm": {
+        "title": "Stop consist?",
+        "message": "Are you sure you want to emergency-stop {{target}}? Only this consist will be stopped.",
+        "confirm": "Stop",
+        "cancel": "Cancel"
+      },
+      "stopError": {
+        "error": "Failed to stop the consist.",
+        "not_authorized_to_stop": "You are not allowed to stop this consist.",
+        "vehicle_is_dummy": "This consist has no DCC address assigned.",
+        "vehicle_not_on_layout": "This consist is not on the layout.",
+        "dcc_bus_unavailable": "The DCC bus is unavailable."
       }
     },
     "takeover": {
@@ -76,7 +89,11 @@
       "releaseTrain": "Release consist",
       "stopBeforeClose": "Stop the consist (speed 0) before releasing control.",
       "leaseRemaining": "Lease: {{time}}",
-      "noDccTarget": "This consist has no DCC address assigned."
+      "noDccTarget": "This consist has no DCC address assigned.",
+      "waitingTitle": "Waiting for locomotive takeover…",
+      "waitingMessage": "Takeover request sent. The driver has {{seconds}} s to reject it. After that, control is taken over automatically.",
+      "waitingCancel": "Cancel request",
+      "rejectedToast": "The driver rejected the takeover request."
     },
     "actions": {
       "occupy": "Occupy interlocking",

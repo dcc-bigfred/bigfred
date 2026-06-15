@@ -113,13 +113,14 @@ type AckPayload struct {
 // Frame type catalogue. Kept as a const block so callers cannot
 // drift from the wire spec by typo.
 const (
-	TypePing         = "ping"
-	TypePong         = "pong"
-	TypeLocoSubscribe   = "loco.subscribe"
-	TypeLocoSetSpeed    = "loco.setSpeed"
-	TypeLocoSetFunction = "loco.setFunction"
-	TypeSystemEStop     = "system.estop"
-	TypeSystemRadioStop = "system.radioStop"
+	TypePing              = "ping"
+	TypePong              = "pong"
+	TypeLocoSubscribe     = "loco.subscribe"
+	TypeLocoSetSpeed      = "loco.setSpeed"
+	TypeLocoSetFunction   = "loco.setFunction"
+	TypeSystemEStop       = "system.estop"
+	TypeSystemRadioStop   = "system.radioStop"
+	TypeSystemEStopTarget = "system.estopTarget"
 
 	TypeDccBusOpened = "dcc-bus.opened"
 	TypeLocoState    = "loco.state"

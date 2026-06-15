@@ -71,9 +71,6 @@ func (s *EStopTargetService) Trigger(
 	if err != nil {
 		return false, estopTargetDeniedCode(err)
 	}
-	if len(resolved.addrs) == 0 {
-		return false, "vehicle_is_dummy"
-	}
 
 	eff, err := s.effectiveRoles(ctx, sess.UserID, sess.LayoutID)
 	if err != nil {
@@ -85,8 +82,14 @@ func (s *EStopTargetService) Trigger(
 		s.log.WithError(err).Warn("estop target: occupant check")
 		return false, "not_authorized_to_stop"
 	}
+	// Authorize before revealing whether the target is drivable: a
+	// caller who may not stop the target gets a uniform denial rather
+	// than a "dummy" hint.
 	if d := s.sec.CanStop(eff, sess.UserID, occupant, resolved.ownerID, resolved.controllerUserIDs); !d.Allowed {
 		return false, d.Reason
+	}
+	if len(resolved.addrs) == 0 {
+		return false, "vehicle_is_dummy"
 	}
 
 	csIDs, err := s.layouts.CommandStationIDsForLayout(ctx, sess.LayoutID)
@@ -99,21 +102,14 @@ func (s *EStopTargetService) Trigger(
 	}
 
 	for _, csID := range csIDs {
-		for _, addr := range resolved.addrs {
-			payload := contract.LocoSetSpeedWire{
-				Address:   addr,
-				Speed:     1,
-				Forward:   true,
-				Emergency: true,
-			}
-			if err := s.dccBus.PublishCommand(ctx, sess.LayoutID, csID, protocol.TypeLocoSetSpeed, payload); err != nil {
-				s.log.WithError(err).WithFields(logrus.Fields{
-					"layoutId":         sess.LayoutID,
-					"commandStationId": csID,
-					"addr":             addr,
-				}).Warn("estop target: publish")
-				return false, "dcc_bus_unavailable"
-			}
+		payload := contract.EStopTargetCommandWire{Addresses: resolved.addrs}
+		if err := s.dccBus.PublishCommand(ctx, sess.LayoutID, csID, protocol.TypeSystemEStopTarget, payload); err != nil {
+			s.log.WithError(err).WithFields(logrus.Fields{
+				"layoutId":         sess.LayoutID,
+				"commandStationId": csID,
+				"addrs":            resolved.addrs,
+			}).Warn("estop target: publish")
+			return false, "dcc_bus_unavailable"
 		}
 	}
 

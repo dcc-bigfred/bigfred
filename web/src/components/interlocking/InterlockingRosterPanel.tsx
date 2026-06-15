@@ -1,9 +1,17 @@
 import { useMemo, useState } from "react";
 import {
   Box,
+  Button,
   Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
   IconButton,
   Paper,
+  Snackbar,
+  Alert,
   Stack,
   Table,
   TableBody,
@@ -105,6 +113,13 @@ export default function InterlockingRosterPanel({
   const vehicles = useLayoutVehicles(layoutId).data ?? [];
   const trains = useLayoutTrains(layoutId).data ?? [];
   const [query, setQuery] = useState("");
+  const [stopConfirm, setStopConfirm] = useState<{
+    target: "vehicle" | "train";
+    targetId: number;
+    label: string;
+  } | null>(null);
+  const [stopBusy, setStopBusy] = useState(false);
+  const [stopError, setStopError] = useState<string | null>(null);
   const [radioTarget, setRadioTarget] = useState<{
     to: RadioSendTarget;
     context: RadioSendContext;
@@ -233,10 +248,11 @@ export default function InterlockingRosterPanel({
                           color="error"
                           aria-label={t("view.roster.actions.stop")}
                           onClick={() =>
-                            void estopTarget(
-                              row.kind === "vehicle" ? "vehicle" : "train",
-                              row.entityId,
-                            )
+                            setStopConfirm({
+                              target: row.kind === "vehicle" ? "vehicle" : "train",
+                              targetId: row.entityId,
+                              label: `(${row.login}) ${row.name}`,
+                            })
                           }
                         >
                           <StopCircleOutlinedIcon fontSize="small" />
@@ -274,6 +290,56 @@ export default function InterlockingRosterPanel({
           contextLabel={radioTarget.contextLabel}
         />
       )}
+      <Dialog open={stopConfirm != null} onClose={() => setStopConfirm(null)}>
+        <DialogTitle>{t("view.roster.stopConfirm.title")}</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            {t("view.roster.stopConfirm.message", { target: stopConfirm?.label ?? "" })}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button color="inherit" onClick={() => setStopConfirm(null)} disabled={stopBusy}>
+            {t("view.roster.stopConfirm.cancel")}
+          </Button>
+          <Button
+            color="error"
+            variant="contained"
+            disabled={stopBusy}
+            onClick={() => {
+              if (!stopConfirm) {
+                return;
+              }
+              const req = stopConfirm;
+              setStopBusy(true);
+              void estopTarget(req.target, req.targetId)
+                .then((ack) => {
+                  if (!ack.ok) {
+                    setStopError(ack.error ?? "error");
+                  }
+                })
+                .catch(() => setStopError("error"))
+                .finally(() => {
+                  setStopBusy(false);
+                  setStopConfirm(null);
+                });
+            }}
+          >
+            {t("view.roster.stopConfirm.confirm")}
+          </Button>
+        </DialogActions>
+      </Dialog>
+      <Snackbar
+        open={stopError != null}
+        autoHideDuration={5000}
+        onClose={() => setStopError(null)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert severity="error" onClose={() => setStopError(null)} variant="filled">
+          {t(`view.roster.stopError.${stopError ?? "error"}`, {
+            defaultValue: t("view.roster.stopError.error"),
+          })}
+        </Alert>
+      </Snackbar>
     </Paper>
   );
 }

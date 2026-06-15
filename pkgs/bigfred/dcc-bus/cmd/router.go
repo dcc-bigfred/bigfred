@@ -383,6 +383,13 @@ func (r *Router) HandleControlCommand(ctx context.Context, raw []byte) {
 
 	case protocol.TypeSystemRadioStop:
 		r.HandleRadioStop(ctx)
+
+	case protocol.TypeSystemEStopTarget:
+		var p contract.EStopTargetCommandWire
+		if err := json.Unmarshal(env.Payload, &p); err != nil {
+			return
+		}
+		r.applyEStopTarget(ctx, p.Addresses)
 	}
 }
 

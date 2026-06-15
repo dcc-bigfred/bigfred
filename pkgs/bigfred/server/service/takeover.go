@@ -211,13 +211,18 @@ func (s *TakeoverService) Request(
 	}
 
 	signalmanUser, _ := s.users.FindByID(ctx, signalman.ID)
-	s.hub.BroadcastToUserInLayout(layoutID, driverID, contract.TypeTakeoverRequested, contract.TakeoverRequestedWire{
+	requested := contract.TakeoverRequestedWire{
 		RequestID:   row.ID,
 		Signalman:   contract.TakeoverUserWire{UserID: signalman.ID, Login: signalmanUser.Login},
 		Target:      target,
 		TargetID:    targetID,
 		AutoGrantAt: row.AutoGrantAt.UnixMilli(),
-	})
+	}
+	s.hub.BroadcastToUserInLayout(layoutID, driverID, contract.TypeTakeoverRequested, requested)
+	// Echo to the requesting signalman so their interlocking view can
+	// show the "waiting for takeover" dialog with the same countdown
+	// and a cancel action while the driver's 15 s window runs.
+	s.hub.BroadcastToUserInLayout(layoutID, signalman.ID, contract.TypeTakeoverRequested, requested)
 
 	s.scheduleAutoGrant(row.ID, domain.TakeoverWindow)
 	return row, nil

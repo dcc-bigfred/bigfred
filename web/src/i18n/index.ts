@@ -22,6 +22,7 @@ import plRole from "./locales/pl/role.json";
 import plHome from "./locales/pl/home.json";
 import plLayout from "./locales/pl/layout.json";
 import plInterlocking from "./locales/pl/interlocking.json";
+import plRadio from "./locales/pl/radio.json";
 import plVehicle from "./locales/pl/vehicle.json";
 import plUser from "./locales/pl/user.json";
 import plSudo from "./locales/pl/sudo.json";
@@ -37,6 +38,7 @@ import enRole from "./locales/en/role.json";
 import enHome from "./locales/en/home.json";
 import enLayout from "./locales/en/layout.json";
 import enInterlocking from "./locales/en/interlocking.json";
+import enRadio from "./locales/en/radio.json";
 import enVehicle from "./locales/en/vehicle.json";
 import enUser from "./locales/en/user.json";
 import enSudo from "./locales/en/sudo.json";
@@ -65,6 +67,7 @@ export const resources = {
     home: plHome,
     layout: plLayout,
     interlocking: plInterlocking,
+    radio: plRadio,
     vehicle: plVehicle,
     user: plUser,
     sudo: plSudo,
@@ -81,6 +84,7 @@ export const resources = {
     home: enHome,
     layout: enLayout,
     interlocking: enInterlocking,
+    radio: enRadio,
     vehicle: enVehicle,
     user: enUser,
     sudo: enSudo,
@@ -104,7 +108,7 @@ void i18n
     fallbackLng: "pl",
     supportedLngs: SUPPORTED_LOCALES as unknown as string[],
     defaultNS: "common",
-    ns: ["common", "auth", "errors", "role", "home", "layout", "interlocking", "vehicle", "user", "sudo", "throttle", "commandStation", "diagnostics", "function"],
+    ns: ["common", "auth", "errors", "role", "home", "layout", "interlocking", "radio", "vehicle", "user", "sudo", "throttle", "commandStation", "diagnostics", "function"],
     interpolation: {
       // React already escapes everything; double-escaping inside
       // i18next would mangle apostrophes and quotes.

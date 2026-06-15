@@ -32,6 +32,7 @@ type rosterVehicleResponse struct {
 	vehicleResponse
 	OwnerLogin string    `json:"ownerLogin"`
 	AddedAt    time.Time `json:"addedAt"`
+	CanDrive   bool      `json:"canDrive"`
 }
 
 // rosterTrainResponse is the train-shaped sibling.
@@ -44,11 +45,12 @@ type rosterTrainResponse struct {
 	Members    []trainMemberResponse `json:"members"`
 }
 
-func toRosterVehicleResponse(e service.RosterVehicleEntry) rosterVehicleResponse {
+func toRosterVehicleResponse(e service.RosterVehicleEntry, canDrive bool) rosterVehicleResponse {
 	return rosterVehicleResponse{
 		vehicleResponse: toVehicleResponse(e.Vehicle),
 		OwnerLogin:      e.OwnerLogin,
 		AddedAt:         e.AddedAt,
+		CanDrive:        canDrive,
 	}
 }
 
@@ -107,7 +109,7 @@ func (h *LayoutRosterHandler) actorEffectiveRoles(r *http.Request, actor service
 
 // ListVehicles handles GET /api/v1/layouts/{id}/vehicles.
 func (h *LayoutRosterHandler) ListVehicles(w http.ResponseWriter, r *http.Request) {
-	layoutID, _, ok := requireOwnLayout(w, r)
+	layoutID, actor, ok := requireOwnLayout(w, r)
 	if !ok {
 		return
 	}
@@ -116,9 +118,20 @@ func (h *LayoutRosterHandler) ListVehicles(w http.ResponseWriter, r *http.Reques
 		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 		return
 	}
+	trains, err := h.svc.ListTrains(r.Context(), layoutID)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	lessees, err := h.svc.LesseesByVehicle(r.Context(), layoutID, rows, trains)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
 	out := make([]rosterVehicleResponse, 0, len(rows))
 	for _, e := range rows {
-		out = append(out, toRosterVehicleResponse(e))
+		canDrive := service.UserCanDriveWithLessees(actor.User.ID, e.Vehicle.OwnerUserID, lessees[e.Vehicle.ID])
+		out = append(out, toRosterVehicleResponse(e, canDrive))
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(out)
@@ -169,7 +182,7 @@ func (h *LayoutRosterHandler) AddVehicle(w http.ResponseWriter, r *http.Request)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(toRosterVehicleResponse(entry))
+	_ = json.NewEncoder(w).Encode(toRosterVehicleResponse(entry, true))
 }
 
 // RemoveVehicle handles DELETE /api/v1/layouts/{id}/vehicles/{vehicleId}.

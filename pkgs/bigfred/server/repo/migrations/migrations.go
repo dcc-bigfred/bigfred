@@ -62,6 +62,7 @@ func register(m *migrator.Migrator) {
 	m.Register(20260608_000016, seedPikoXpEt21TemplateUp, seedPikoXpEt21TemplateDown)
 	m.Register(20260615_000001, createVehicleLeasesUp, createVehicleLeasesDown)
 	m.Register(20260615_000002, createTrainLeasesUp, createTrainLeasesDown)
+	m.Register(20260615_000003, createTakeoverRequestsUp, createTakeoverRequestsDown)
 }
 
 // createCommandStationsUp installs the `command_stations` catalogue
@@ -567,4 +568,28 @@ func createTrainLeasesUp(s *rel.Schema) {
 
 func createTrainLeasesDown(s *rel.Schema) {
 	s.DropTable("train_leases")
+}
+
+func createTakeoverRequestsUp(s *rel.Schema) {
+	s.CreateTable("takeover_requests", func(t *rel.Table) {
+		t.ID("id")
+		t.Int("layout_id", rel.Unsigned(true))
+		t.Int("interlocking_id", rel.Unsigned(true))
+		t.Int("signalman_user_id", rel.Unsigned(true))
+		t.Int("driver_user_id", rel.Unsigned(true))
+		t.String("target")
+		t.Int("target_id", rel.Unsigned(true))
+		t.DateTime("requested_at")
+		t.DateTime("decision_at", rel.Required(false))
+		t.DateTime("auto_grant_at")
+		t.Int("granted_lease_id", rel.Unsigned(true), rel.Required(false))
+		t.DateTime("released_at", rel.Required(false))
+		t.String("state")
+	})
+	s.Exec(rel.Raw(`CREATE INDEX takeover_requests_state_auto_grant_at ON takeover_requests(state, auto_grant_at)`))
+	s.Exec(rel.Raw(`CREATE INDEX takeover_requests_signalman_state ON takeover_requests(signalman_user_id, state)`))
+}
+
+func createTakeoverRequestsDown(s *rel.Schema) {
+	s.DropTable("takeover_requests")
 }

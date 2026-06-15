@@ -1,0 +1,19 @@
+{
+  "phrase": {
+    "STOPPED_AT_SIGNAL_READY_TO_ENTER": "Zatrzymałem się na sygnale, gotowy do wjazdu",
+    "ENTRY_PERMITTED": "Wjazd dozwolony",
+    "CANCEL_ROUTE": "Anuluj trasę",
+    "ROUTE_SET": "Trasa ustawiona",
+    "ACK": "Przyjąłem",
+    "STOP_IMMEDIATELY": "Natychmiast zatrzymaj się",
+    "READY_TO_DEPART": "Gotowy do odjazdu",
+    "DEPARTURE_CLEARED": "Odjazd dozwolony"
+  },
+  "picker": {
+    "title": "Wyślij komunikat radiowy",
+    "search": "Szukaj frazy…",
+    "note": "Notatka (opcjonalnie)",
+    "send": "Wyślij",
+    "cancel": "Anuluj"
+  }
+}

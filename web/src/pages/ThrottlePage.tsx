@@ -32,6 +32,13 @@ import { useRadioStopSound } from "../hooks/useRadioStopSound";
 import { useThrottleSpeedOverride } from "../hooks/useThrottleSpeedOverride";
 import { useThrottleCommandStationSelection } from "../hooks/useThrottleCommandStationSelection";
 import { useThrottleVehicleSelection } from "../hooks/useThrottleVehicleSelection";
+import { useDriverRadioInbound } from "../hooks/useDriverRadioInbound";
+import { buildThrottleRadioHeader } from "../hooks/useThrottleRadioChat";
+import type { DriverRadioInbound } from "../hooks/useDriverRadioInbound";
+import {
+  TakeoverDriverDialog,
+  useTakeoverDriverSession,
+} from "../components/throttle/TakeoverDriverDialog";
 
 function translateErrorCode(
   t: (k: string, opts?: { defaultValue?: string }) => string,
@@ -70,6 +77,8 @@ export default function ThrottlePage() {
 
   const layoutID = me?.layoutId ?? null;
   useRadioStopSound();
+  const driverRadio = useDriverRadioInbound();
+  const takeoverDriver = useTakeoverDriverSession(layoutID);
   const stations = session?.availableCommandStations ?? [];
   const sessionCommandStationId =
     session?.currentSession?.commandStationId ?? 0;
@@ -260,6 +269,17 @@ export default function ThrottlePage() {
 
   return (
     <Box sx={pageSx}>
+      {driverRadio.alertNode}
+      {driverRadio.overlay}
+      <TakeoverDriverDialog
+        pending={takeoverDriver.pending}
+        onDismiss={takeoverDriver.dismissPending}
+      />
+      {takeoverDriver.evictionToast && (
+        <AutoDismissAlert severity="warning" resetKey="takeover-eviction">
+          {t("throttle:takeover.evicted")}
+        </AutoDismissAlert>
+      )}
       <ThrottleSetupDialog open={setupOpen} onClose={closeSetup}>
         {setupPanel}
         <SetupDataPlaneSection />
@@ -272,10 +292,15 @@ export default function ThrottlePage() {
               layoutID={layoutID}
               speedSteps={activeStation?.speedSteps ?? 128}
               onOpenSetup={openSetup}
+              driverRadio={driverRadio}
             />
           </DccBusProvider>
         ) : (
-          <IdleThrottle layoutID={layoutID} onOpenSetup={openSetup} />
+          <IdleThrottle
+            layoutID={layoutID}
+            onOpenSetup={openSetup}
+            driverRadio={driverRadio}
+          />
         )}
       </Box>
     </Box>
@@ -330,7 +355,7 @@ function useCockpitVehicles(layoutID: number) {
   return useMemo(
     () =>
       roster
-        .filter((v) => v.dccAddress != null)
+        .filter((v) => v.dccAddress != null && v.canDrive !== false)
         .map((v) => ({
           id: v.id,
           name: v.name,
@@ -362,12 +387,29 @@ function useCockpitConfiguredFunctions(
   );
 }
 
+function useSelectedDriveContext(
+  layoutID: number,
+  selectedAddr: number | null,
+): { vehicleId: number | null; vehicleName: string | null } {
+  const roster = useLayoutVehicles(layoutID).data ?? [];
+  const vehicle =
+    selectedAddr != null
+      ? roster.find((v) => v.dccAddress === selectedAddr)
+      : undefined;
+  return {
+    vehicleId: vehicle?.id ?? null,
+    vehicleName: vehicle?.name ?? null,
+  };
+}
+
 function IdleThrottle({
   layoutID,
   onOpenSetup,
+  driverRadio,
 }: {
   layoutID: number;
   onOpenSetup: () => void;
+  driverRadio: DriverRadioInbound;
 }) {
   const vehicles = useCockpitVehicles(layoutID);
   const { selectedAddr, selectAddress } = useThrottleVehicleSelection(
@@ -378,6 +420,13 @@ function IdleThrottle({
     vehicles,
     selectedAddr,
   );
+  const drive = useSelectedDriveContext(layoutID, selectedAddr);
+  const headerExtra = buildThrottleRadioHeader({
+    layoutId: layoutID,
+    vehicleId: drive.vehicleId,
+    vehicleName: drive.vehicleName,
+    radio: driverRadio,
+  });
 
   return (
     <Box sx={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
@@ -393,6 +442,7 @@ function IdleThrottle({
         functions={[]}
         configuredFunctions={configuredFunctions}
         disabled
+        headerExtra={headerExtra}
         onSpeedChange={() => {}}
         onDirectionChange={() => {}}
         onFunctionToggle={() => {}}
@@ -406,10 +456,12 @@ function ConnectedThrottle({
   layoutID,
   speedSteps: sessionSpeedSteps,
   onOpenSetup,
+  driverRadio,
 }: {
   layoutID: number;
   speedSteps: number;
   onOpenSetup: () => void;
+  driverRadio: DriverRadioInbound;
 }) {
   const vehicles = useCockpitVehicles(layoutID);
   const { selectedAddr, selectAddress } = useThrottleVehicleSelection(
@@ -483,6 +535,14 @@ function ConnectedThrottle({
     await setSpeed(selectedAddr, 0, forward, true);
   }, [selectedAddr, flush, noteUserSpeed, setSpeed, forward]);
 
+  const drive = useSelectedDriveContext(layoutID, selectedAddr);
+  const headerExtra = buildThrottleRadioHeader({
+    layoutId: layoutID,
+    vehicleId: drive.vehicleId,
+    vehicleName: drive.vehicleName,
+    radio: driverRadio,
+  });
+
   return (
     <Box
       sx={{
@@ -509,6 +569,7 @@ function ConnectedThrottle({
         functions={functions}
         configuredFunctions={configuredFunctions}
         disabled={selectedAddr == null}
+        headerExtra={headerExtra}
         onSpeedChange={handleSpeed}
         onDirectionChange={handleDir}
         onFunctionToggle={handleFn}

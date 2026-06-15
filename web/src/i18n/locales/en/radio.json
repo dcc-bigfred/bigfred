@@ -1,0 +1,19 @@
+{
+  "phrase": {
+    "STOPPED_AT_SIGNAL_READY_TO_ENTER": "Stopped at signal, ready to enter",
+    "ENTRY_PERMITTED": "Entry permitted",
+    "CANCEL_ROUTE": "Cancel route",
+    "ROUTE_SET": "Route set",
+    "ACK": "Acknowledged",
+    "STOP_IMMEDIATELY": "Stop immediately",
+    "READY_TO_DEPART": "Ready to depart",
+    "DEPARTURE_CLEARED": "Departure cleared"
+  },
+  "picker": {
+    "title": "Send radio message",
+    "search": "Search phrases…",
+    "note": "Note (optional)",
+    "send": "Send",
+    "cancel": "Cancel"
+  }
+}

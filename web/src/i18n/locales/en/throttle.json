@@ -17,6 +17,21 @@
     "cancel": "Cancel",
     "toast": "Radio stop — triggered by {{login}}"
   },
+  "radio": {
+    "open": "Radio to interlocking",
+    "chat": "My radio",
+    "chatEmpty": "No radio messages yet.",
+    "pickInterlocking": "Pick an interlocking",
+    "searchInterlocking": "Search interlockings…",
+    "noInterlockings": "No interlockings assigned to this layout."
+  },
+  "takeover": {
+    "requestedTitle": "Takeover request",
+    "requestedMessage": "Signalman {{login}} wants to take over your consist ({{target}}).",
+    "reject": "Reject",
+    "countdown": "Auto-grant in {{seconds}} s",
+    "evicted": "Your throttle session ended because the consist was taken over."
+  },
   "commandStation": "Command station",
   "selectCommandStation": "Select a command station",
   "noCommandStations": "No command station is attached to this layout.",

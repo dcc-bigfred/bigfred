@@ -17,6 +17,21 @@
     "cancel": "Anuluj",
     "toast": "Radiostop — uruchomiony przez {{login}}"
   },
+  "radio": {
+    "open": "Radio do nastawni",
+    "chat": "Moje radio",
+    "chatEmpty": "Brak wiadomości radiowych.",
+    "pickInterlocking": "Wybierz nastawnię",
+    "searchInterlocking": "Szukaj nastawni…",
+    "noInterlockings": "Brak nastawni przypisanych do makiety."
+  },
+  "takeover": {
+    "requestedTitle": "Prośba o przejęcie składu",
+    "requestedMessage": "Nastawniczy {{login}} chce przejąć sterowanie ({{target}}).",
+    "reject": "Odrzuć",
+    "countdown": "Auto-przyznanie za {{seconds}} s",
+    "evicted": "Twoja sesja Throttle zakończyła się z powodu przejęcia składu."
+  },
   "commandStation": "Centralka",
   "selectCommandStation": "Wybierz centralkę",
   "noCommandStations": "Do tej makiety nie podpięto żadnej centralki.",

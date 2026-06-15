@@ -34,6 +34,7 @@ type RouterConfig struct {
 	Diagnostics      *service.DiagnosticsService
 	Hub              *ws.Hub
 	DccBus           *service.DccBusService
+	Radio            *service.RadioService
 
 	// AllowedOrigins is forwarded verbatim to the CORS middleware.
 	// In development the Vite dev server lives on a different port
@@ -79,6 +80,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	sudoH := NewSudoHandler(cfg.Sudo, cfg.Auth, cfg.Users, cfg.Presence)
 	commandStationH := NewCommandStationHandler(cfg.CommandStations, cfg.Auth)
 	diagnosticsH := NewDiagnosticsHandler(cfg.Diagnostics)
+	radioH := NewRadioHandler(cfg.Radio)
 
 	r.Route("/api/v1", func(r chi.Router) {
 		// WebSocket upgrade — auth reads cookie / ?token= inline.
@@ -153,6 +155,9 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			r.Get("/interlockings/{id}", interlockingH.Get)
 			r.Post("/interlockings/{id}/join", interlockingH.Join)
 			r.Post("/interlockings/{id}/leave", interlockingH.Leave)
+
+			r.Get("/interlockings/{id}/radio", radioH.ReplayInterlocking)
+			r.Get("/radio/mine", radioH.ReplayMine)
 
 			r.Get("/layouts/{id}/presence", presenceH.List)
 

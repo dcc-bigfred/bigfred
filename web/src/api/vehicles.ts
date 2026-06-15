@@ -275,6 +275,7 @@ export function useDeleteTrain() {
 export interface RosterVehicle extends Vehicle {
   ownerLogin: string;
   addedAt: string;
+  canDrive?: boolean;
 }
 
 export interface RosterTrain {

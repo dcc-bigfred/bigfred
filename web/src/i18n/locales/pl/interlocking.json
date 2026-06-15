@@ -50,7 +50,8 @@
     },
     "chat": {
       "title": "Radio nastawni",
-      "placeholder": "Czat grupowy nastawniczych pojawi się w kolejnym etapie (M5)."
+      "empty": "Brak wiadomości radiowych.",
+      "reply": "Odpowiedz"
     },
     "roster": {
       "title": "Składy na makiecie",
@@ -66,6 +67,15 @@
         "stop": "Zatrzymaj skład",
         "takeover": "Przejęcie"
       }
+    },
+    "takeover": {
+      "overlayTitle": "Przejęcie sterowania",
+      "close": "Zamknij",
+      "releaseVehicle": "Oddaj pojazd",
+      "releaseTrain": "Oddaj skład",
+      "stopBeforeClose": "Zatrzymaj skład (prędkość 0), aby oddać sterowanie.",
+      "leaseRemaining": "Lease: {{time}}",
+      "noDccTarget": "Ten skład nie ma przypisanego adresu DCC."
     },
     "actions": {
       "occupy": "Obsadź nastawnię",

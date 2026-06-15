@@ -177,9 +177,12 @@ func (r *Router) applyObservation(ctx context.Context, o commandstation.LocoObse
 	}
 
 	changed := false
-	if o.HasSpeed && snap.Speed != o.Speed {
-		snap.Speed = o.Speed
-		changed = true
+	if o.HasSpeed {
+		observed := uiSpeedFromWire(o.Speed)
+		if snap.Speed != observed {
+			snap.Speed = observed
+			changed = true
+		}
 	}
 	if o.HasForward && snap.Forward != o.Forward {
 		snap.Forward = o.Forward

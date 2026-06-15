@@ -4,18 +4,65 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "./client";
 import { useSocket } from "../context/SocketContext";
 
-export const RADIO_PHRASES = [
-  "STOPPED_AT_SIGNAL_READY_TO_ENTER",
-  "ENTRY_PERMITTED",
-  "CANCEL_ROUTE",
-  "ROUTE_SET",
+// Driver phrases — ordered: acks/entry/departure, then shunting, then other.
+export const RADIO_PHRASES_DRIVER = [
   "ACK",
-  "STOP_IMMEDIATELY",
+  "STOPPED_AT_SIGNAL_READY_TO_ENTER",
   "READY_TO_DEPART",
-  "DEPARTURE_CLEARED",
+  "ACCEPTED_DEPARTURE_ON_REPLACEMENT_SIGNAL",
+  "ACCEPTED_HELPER_DETACH_AT_STATION",
+  "ACCEPTED_WAITING_FOR_OPPOSITE_TRAIN",
+  "TRAIN_ARRIVED_COMPLETE_AT_STATION",
+  "LOCO_READY_FOR_RUN_AROUND",
+  "ACCEPTED_CROSSINGS_EXTRA_CAUTION",
+  "ACCEPTED_PUSHING_BEYOND_POINTS",
+  "ACCEPTED_STOPPING_SHUNTING",
+  "RADIO_LINK_RESTORED",
+  "LEVEL_CROSSING_GATES_OPEN",
 ] as const;
 
-export type RadioPhrase = (typeof RADIO_PHRASES)[number];
+// Signalman phrases — ordered: acks/entry/departure, then shunting, then other.
+export const RADIO_PHRASES_SIGNALMAN = [
+  "ACK",
+  "AGREED",
+  "REPORT_ACKNOWLEDGED",
+  "REPETITION_CORRECT",
+  "ENTRY_PERMITTED",
+  "DEPARTURE_CLEARED",
+  "DEPARTURE_ON_REPLACEMENT_SIGNAL",
+  "ROUTE_SET",
+  "ARRIVAL_COMPLETE_ACKNOWLEDGED",
+  "TRAIN_TRACK_1_FREE_RECEIVE_TRACK_1",
+  "TRAIN_TRACK_2_FREE_RECEIVE_TRACK_2",
+  "TRAIN_TRACK_3_FREE_RECEIVE_TRACK_3",
+  "TRAIN_TRACK_4_FREE_RECEIVE_TRACK_4",
+  "TRAIN_TRACK_5_FREE_RECEIVE_TRACK_5",
+  "TRAIN_TRACK_6_FREE_RECEIVE_TRACK_6",
+  "TRAIN_TRACK_7_FREE_RECEIVE_TRACK_7",
+  "TRAIN_TRACK_8_FREE_RECEIVE_TRACK_8",
+  "WRONG_ROAD_FROM_POST_TO_STATION",
+  "ACCEPTED_WRONG_ROAD_FROM_POST_TO_STATION",
+  "CANCEL_ROUTE",
+  "SHUNTING_EXTRA_CAUTION_THROUGH_POINTS",
+  "RUN_AROUND_PERMITTED",
+  "PUSHING_BEYOND_POINTS_PERMITTED",
+  "STOP_SHUNTING_IMMEDIATELY",
+  "HELPER_LOCO_WILL_DETACH_AT_STATION",
+  "STOP_IMMEDIATELY",
+  "ACCEPTED_NOTIFYING_GATEKEEPER_AND_NEIGHBORS",
+  "TRAIN_WAITING_FOR_OPPOSITE",
+  "STAFF_ON_TRACK_CAUTION_SIGNAL",
+] as const;
+
+export type RadioPhrase =
+  | (typeof RADIO_PHRASES_DRIVER)[number]
+  | (typeof RADIO_PHRASES_SIGNALMAN)[number];
+
+export type RadioPhraseSide = "driver" | "signalman";
+
+export function radioPhrasesForSide(side: RadioPhraseSide): readonly RadioPhrase[] {
+  return side === "driver" ? RADIO_PHRASES_DRIVER : RADIO_PHRASES_SIGNALMAN;
+}
 
 export interface RadioUser {
   userId: number;
@@ -213,6 +260,23 @@ export function contextLabel(msg: RadioMessage): string {
   return "";
 }
 
+// driverChatInterlockingLabel returns the interlocking name for a line in
+// the driver's personal radio history (inbound fromInterlocking or outbound
+// to.interlockingId resolved against the layout catalogue).
+export function driverChatInterlockingLabel(
+  msg: RadioMessage,
+  interlockingNames: ReadonlyMap<number, string>,
+): string {
+  if (msg.fromInterlocking?.name) {
+    return msg.fromInterlocking.name;
+  }
+  const toId = msg.to.interlockingId;
+  if (toId != null) {
+    return interlockingNames.get(toId) ?? "";
+  }
+  return "";
+}
+
 export function radioSenderLabel(msg: RadioMessage): string {
   if (msg.fromInterlocking?.name) {
     return msg.fromInterlocking.name;
@@ -236,9 +300,52 @@ export function formatRadioMessageTime(sentAtMs: number): string {
   return `${hh}:${mm}:${ss}`;
 }
 
-export function formatRadioChatLine(msg: RadioMessage, phraseLabel: string): string {
-  const body = `(${msg.from.login}) ${contextLabel(msg)}: ${phraseLabel}`;
+export function radioFromLabel(
+  msg: RadioMessage,
+  options?: { viewerUserId?: number; selfLabel?: string },
+): string {
+  if (
+    options?.viewerUserId != null &&
+    msg.from.userId === options.viewerUserId &&
+    options.selfLabel
+  ) {
+    return options.selfLabel;
+  }
+  return msg.from.login;
+}
+
+export function isRadioSelfMessage(msg: RadioMessage, viewerUserId?: number): boolean {
+  return viewerUserId != null && msg.from.userId === viewerUserId;
+}
+
+export function formatRadioChatLine(
+  msg: RadioMessage,
+  phraseLabel: string,
+  options?: { viewerUserId?: number; selfLabel?: string },
+): string {
+  const fromLabel = radioFromLabel(msg, options);
+  const body = `(${fromLabel}) ${contextLabel(msg)}: ${phraseLabel}`;
   return `${formatRadioMessageTime(msg.sentAt)} ${body}`;
+}
+
+export function radioMessagesNewestFirst(messages: RadioMessage[]): RadioMessage[] {
+  return [...messages].sort((a, b) => b.sentAt - a.sentAt);
+}
+
+// radioMessageOpacity fades chat lines as they age: full strength for
+// the first 5 minutes, then lightly at 5+, more at 10+, half at 30+.
+export function radioMessageOpacity(sentAtMs: number, nowMs: number): number {
+  const ageMs = nowMs - sentAtMs;
+  if (ageMs <= 5 * 60_000) {
+    return 1;
+  }
+  if (ageMs <= 10 * 60_000) {
+    return 0.92;
+  }
+  if (ageMs <= 30 * 60_000) {
+    return 0.72;
+  }
+  return 0.5;
 }
 
 export function radioContextFromMessage(msg: RadioMessage): RadioSendContext {
@@ -249,6 +356,54 @@ export function radioContextFromMessage(msg: RadioMessage): RadioSendContext {
     return { trainId: msg.context.train.id };
   }
   return {};
+}
+
+export interface DriverRadioReplyTarget {
+  to: RadioSendTarget;
+  context: RadioSendContext;
+  targetLabel: string;
+  contextLabel: string;
+}
+
+// driverReplyTargetFromInbound builds a radio.send target for replying
+// to a signalman message on throttle (interlocking + same context).
+export function driverReplyTargetFromInbound(
+  msg: RadioMessage,
+): DriverRadioReplyTarget | null {
+  const ilk = msg.fromInterlocking;
+  if (ilk?.id == null) {
+    return null;
+  }
+  const context = radioContextFromMessage(msg);
+  if (context.vehicleId == null && context.trainId == null) {
+    return null;
+  }
+  return {
+    to: { interlockingId: ilk.id },
+    context,
+    targetLabel: ilk.name,
+    contextLabel: contextLabel(msg),
+  };
+}
+
+// signalmanReplyTargetFromInbound builds a radio.send target for replying
+// to a driver message in the interlocking view (driver + same context).
+export function signalmanReplyTargetFromInbound(
+  msg: RadioMessage,
+): DriverRadioReplyTarget | null {
+  if (msg.to.interlockingId == null) {
+    return null;
+  }
+  const context = radioContextFromMessage(msg);
+  if (context.vehicleId == null && context.trainId == null) {
+    return null;
+  }
+  return {
+    to: { userId: msg.from.userId },
+    context,
+    targetLabel: msg.from.login,
+    contextLabel: contextLabel(msg),
+  };
 }
 
 // isInboundRadioForDriver reports whether a radio.message push should

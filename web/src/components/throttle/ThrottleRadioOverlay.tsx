@@ -52,6 +52,7 @@ export default function ThrottleRadioOverlay({
         onClose={onClose}
         to={{ interlockingId: picked.id }}
         context={{ vehicleId }}
+        side="driver"
         targetLabel={picked.name}
         contextLabel={vehicleName}
       />

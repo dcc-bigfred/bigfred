@@ -9,6 +9,15 @@ import (
 
 const brakeRetryCount = 5
 
+// uiSpeedFromWire maps a command-station speed reading to the UI snapshot
+// value. Wire speed 1 is DCC EMG-stop; halted locos are always exposed as 0.
+func uiSpeedFromWire(wire uint8) uint8 {
+	if wire == 1 {
+		return 0
+	}
+	return wire
+}
+
 // stationSetSpeed sends one SetSpeed to the command station. When payloadSpeed
 // is 0 or emergency is true, a failed call is retried up to speedRetryCount
 // times in a background goroutine.

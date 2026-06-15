@@ -3,11 +3,14 @@ import { useTranslation } from "react-i18next";
 
 import { useMe } from "../api/auth";
 import {
+  driverReplyTargetFromInbound,
   formatRadioAlertLine,
   isInboundRadioForDriver,
+  type DriverRadioReplyTarget,
   type RadioMessage,
 } from "../api/radio";
 import RadioInboundAlert from "../components/radio/RadioInboundAlert";
+import RadioPhrasePickerDialog from "../components/interlocking/RadioPhrasePickerDialog";
 import ThrottleChatOverlay from "../components/throttle/ThrottleChatOverlay";
 import { useSocket } from "../context/SocketContext";
 import { useRadioInboundSound } from "./useRadioInboundSound";
@@ -24,11 +27,12 @@ export interface DriverRadioInbound {
 export function useDriverRadioInbound(): DriverRadioInbound {
   const me = useMe().data;
   const { subscribe } = useSocket();
-  const { t } = useTranslation("radio");
+  const { t } = useTranslation(["radio", "throttle"]);
   const playSound = useRadioInboundSound();
   const [unreadCount, setUnreadCount] = useState(0);
   const [chatOpen, setChatOpen] = useState(false);
   const [alert, setAlert] = useState<RadioMessage | null>(null);
+  const [replyTarget, setReplyTarget] = useState<DriverRadioReplyTarget | null>(null);
   const chatOpenRef = useRef(chatOpen);
   chatOpenRef.current = chatOpen;
 
@@ -51,21 +55,51 @@ export function useDriverRadioInbound(): DriverRadioInbound {
     setUnreadCount(0);
   }, []);
 
+  const handleReply = useCallback(() => {
+    if (alert == null) {
+      return;
+    }
+    const target = driverReplyTargetFromInbound(alert);
+    if (target == null) {
+      return;
+    }
+    setAlert(null);
+    setReplyTarget(target);
+  }, [alert]);
+
+  const replyAvailable =
+    alert != null && driverReplyTargetFromInbound(alert) != null;
+
   const alertNode: ReactNode = (
     <RadioInboundAlert
       message={alert}
       text={
         alert != null
-          ? formatRadioAlertLine(alert, t(`phrase.${alert.phrase}` as const))
+          ? formatRadioAlertLine(alert, t(`radio:phrase.${alert.phrase}` as const))
           : ""
       }
       onDismiss={() => setAlert(null)}
+      replyLabel={t("throttle:radio.reply")}
+      onReply={replyAvailable ? handleReply : undefined}
     />
   );
 
-  const overlay: ReactNode = chatOpen ? (
-    <ThrottleChatOverlay onClose={() => setChatOpen(false)} />
-  ) : null;
+  const overlay: ReactNode = (
+    <>
+      {chatOpen ? <ThrottleChatOverlay onClose={() => setChatOpen(false)} /> : null}
+      {replyTarget ? (
+        <RadioPhrasePickerDialog
+          open
+          onClose={() => setReplyTarget(null)}
+          to={replyTarget.to}
+          context={replyTarget.context}
+          side="driver"
+          targetLabel={replyTarget.targetLabel}
+          contextLabel={replyTarget.contextLabel}
+        />
+      ) : null}
+    </>
+  );
 
   return { unreadCount, openChat, overlay, alertNode };
 }

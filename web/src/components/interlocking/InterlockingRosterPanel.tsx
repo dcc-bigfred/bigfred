@@ -286,6 +286,7 @@ export default function InterlockingRosterPanel({
           onClose={() => setRadioTarget(null)}
           to={radioTarget.to}
           context={radioTarget.context}
+          side="signalman"
           targetLabel={radioTarget.targetLabel}
           contextLabel={radioTarget.contextLabel}
         />

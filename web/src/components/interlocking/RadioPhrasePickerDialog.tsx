@@ -18,9 +18,10 @@ import {
 import { useTranslation } from "react-i18next";
 
 import {
-  RADIO_PHRASES,
+  radioPhrasesForSide,
   useSendRadio,
   type RadioPhrase,
+  type RadioPhraseSide,
   type RadioSendContext,
   type RadioSendTarget,
 } from "../../api/radio";
@@ -31,6 +32,7 @@ export interface RadioPhrasePickerDialogProps {
   onClose: () => void;
   to: RadioSendTarget;
   context: RadioSendContext;
+  side: RadioPhraseSide;
   targetLabel?: string;
   contextLabel?: string;
 }
@@ -42,6 +44,7 @@ export default function RadioPhrasePickerDialog({
   onClose,
   to,
   context,
+  side,
   targetLabel,
   contextLabel,
 }: RadioPhrasePickerDialogProps) {
@@ -52,14 +55,15 @@ export default function RadioPhrasePickerDialog({
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const vocabulary = radioPhrasesForSide(side);
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return RADIO_PHRASES.filter((phrase) => {
+    return vocabulary.filter((phrase) => {
       const label = t(`radio:phrase.${phrase}`).toLowerCase();
       return !q || label.includes(q) || phrase.toLowerCase().includes(q);
     });
-  }, [query, t]);
+  }, [query, t, vocabulary]);
 
   const handleSend = async (phrase: RadioPhrase) => {
     setBusy(true);

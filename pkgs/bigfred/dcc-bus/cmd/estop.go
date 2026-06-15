@@ -112,6 +112,49 @@ func (r *Router) applyDeadManSwitchForLoco(ctx context.Context, addr uint16, use
 	}
 }
 
+// applyEStopTarget brakes a specific set of roster addresses (one
+// vehicle or train) on this command station. Like applyEStopAll it
+// stores the cached speed as 0 so the UI's in-motion indicator clears
+// once the target halts, and publishes a scoped audit record (§4.2,
+// §6.3d — „Zatrzymaj skład"). Addresses not allowed on this layout are
+// skipped so a stray command cannot brake foreign locos.
+func (r *Router) applyEStopTarget(ctx context.Context, addrs []uint16) {
+	affected := make([]uint16, 0, len(addrs))
+	for _, addr := range addrs {
+		if !r.roster.IsLocoAllowedOnLayout(addr) {
+			continue
+		}
+		if err := r.station.SetSpeed(commandstation.LocoAddr(addr), 1, true, uint8(r.speedSteps)); err != nil {
+			r.log.WithError(err).WithField("addr", addr).Warn("dcc-bus estop target failed")
+			continue
+		}
+		affected = append(affected, addr)
+		snap := contract.LocoStateWire{
+			Address: addr,
+			Speed:   0,
+			Forward: true,
+			Source:  "estop",
+			At:      time.Now().UTC().UnixMilli(),
+		}
+		if cached, ok, err := r.redis.LoadState(ctx, addr); err == nil && ok {
+			snap.Functions = cached.Functions
+			snap.Forward = cached.Forward
+			snap.ControlledByUserID = cached.ControlledByUserID
+		}
+		_ = r.redis.StoreState(ctx, snap, stateTTL)
+		r.broadcastLocoStateToObservers(ctx, snap)
+	}
+	if len(affected) == 0 {
+		return
+	}
+	_ = r.redis.Publish(ctx, "system.estop.audit", map[string]any{
+		"reason": "estop_target",
+		"scope":  "target",
+		"addrs":  affected,
+		"at":     time.Now().UTC().UnixMilli(),
+	})
+}
+
 // applyEStopAll brakes every roster locomotive on this command station.
 // Returns the roster addresses included in the halt (for audit ack).
 func (r *Router) applyEStopAll(ctx context.Context, reason string) []uint16 {

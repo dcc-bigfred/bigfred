@@ -44,6 +44,7 @@ import {
 } from "../api/interlockings";
 import { useLayoutVehicles } from "../api/vehicles";
 import TakeoverThrottleOverlay, {
+  TakeoverWaitingDialog,
   useTakeoverSignalmanSession,
 } from "../components/interlocking/TakeoverThrottleOverlay";
 import InterlockingChatPanel from "../components/interlocking/InterlockingChatPanel";
@@ -488,7 +489,14 @@ function InterlockingStaffedWorkArea({
   const activeWsUrl =
     stations.find((s) => s.id === selectedCS)?.wsUrl ?? null;
   const [tab, setTab] = useState(0);
-  const { grant, clearGrant } = useTakeoverSignalmanSession(layoutId);
+  const {
+    grant,
+    clearGrant,
+    pending: takeoverPending,
+    clearPending: clearTakeoverPending,
+    rejected: takeoverRejected,
+    clearRejected: clearTakeoverRejected,
+  } = useTakeoverSignalmanSession(layoutId);
   const chatVisible = !narrow || tab === 0;
   const radioInbound = useInterlockingRadioInbound(interlockingId, chatVisible);
 
@@ -527,6 +535,21 @@ function InterlockingStaffedWorkArea({
   return (
     <Stack spacing={2}>
       {radioInbound.alertNode}
+      {takeoverRejected && (
+        <AutoDismissAlert
+          severity="warning"
+          resetKey="takeover-rejected"
+          onClose={clearTakeoverRejected}
+        >
+          {t("view.takeover.rejectedToast")}
+        </AutoDismissAlert>
+      )}
+      {takeoverPending && !grant && (
+        <TakeoverWaitingDialog
+          pending={takeoverPending}
+          onCancel={clearTakeoverPending}
+        />
+      )}
       <RadioStopButton layoutId={layoutId} variant="bar" />
       {grant && activeWsUrl && (
         <TakeoverThrottleOverlay

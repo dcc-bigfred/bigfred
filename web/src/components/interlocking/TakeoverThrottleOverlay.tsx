@@ -7,16 +7,19 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  IconButton,
+  LinearProgress,
   Stack,
   Typography,
 } from "@mui/material";
-import CloseIcon from "@mui/icons-material/Close";
 import { useTranslation } from "react-i18next";
 
 import { useMe } from "../../api/auth";
 import { useVehicleFunctions } from "../../api/functions";
-import { useTakeoverActions, type TakeoverGrantedEvent } from "../../api/takeover";
+import {
+  useTakeoverActions,
+  type TakeoverGrantedEvent,
+  type TakeoverRequestedEvent,
+} from "../../api/takeover";
 import { useLayoutTrains, useLayoutVehicles } from "../../api/vehicles";
 import { DccBusProvider, useDccBus } from "../../context/DccBusContext";
 import { useSocket } from "../../context/SocketContext";
@@ -192,35 +195,40 @@ function TakeoverOverlayBody({
 
   return (
     <Dialog open fullWidth maxWidth="md" onClose={handleDialogClose}>
-      <DialogTitle sx={{ pr: 6 }}>
-        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+      <DialogTitle>
+        <Stack
+          direction="row"
+          spacing={1}
+          alignItems="center"
+          justifyContent="space-between"
+          flexWrap="wrap"
+          useFlexGap
+        >
           <Typography variant="h6" component="span">
             {t("interlocking:view.takeover.overlayTitle")} — {drive.name}
           </Typography>
-          <Chip
-            size="small"
-            color="warning"
-            label={t("interlocking:view.takeover.leaseRemaining", {
-              time: leaseRemaining,
-            })}
-          />
+          <Stack direction="row" spacing={1} alignItems="center">
+            <Chip
+              size="small"
+              color="warning"
+              label={t("interlocking:view.takeover.leaseRemaining", {
+                time: leaseRemaining,
+              })}
+            />
+            <Button
+              variant="contained"
+              color="warning"
+              size="small"
+              onClick={() => void handleRelease()}
+              disabled={!canClose || releasing}
+            >
+              {releaseLabel}
+            </Button>
+          </Stack>
         </Stack>
-        <IconButton
-          aria-label={releaseLabel}
-          onClick={() => void handleRelease()}
-          disabled={!canClose || releasing}
-          sx={{ position: "absolute", right: 8, top: 8 }}
-        >
-          <CloseIcon />
-        </IconButton>
       </DialogTitle>
       <DialogContent sx={{ p: 0, height: "min(80vh, 640px)" }}>
         <Box sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
-          {!canClose && (
-            <Typography variant="body2" color="warning.main" sx={{ px: 2, py: 1 }}>
-              {t("interlocking:view.takeover.stopBeforeClose")}
-            </Typography>
-          )}
           <ThrottleCockpit
             layoutId={layoutId}
             onOpenSetup={() => {}}
@@ -249,16 +257,6 @@ function TakeoverOverlayBody({
           />
         </Box>
       </DialogContent>
-      <DialogActions sx={{ px: 2, py: 1.5 }}>
-        <Button
-          variant="contained"
-          color="warning"
-          onClick={() => void handleRelease()}
-          disabled={!canClose || releasing}
-        >
-          {releaseLabel}
-        </Button>
-      </DialogActions>
     </Dialog>
   );
 }
@@ -279,6 +277,19 @@ export function useTakeoverSignalmanSession(layoutId: number) {
   const me = useMe().data;
   const { subscribe } = useSocket();
   const [grant, setGrant] = useState<TakeoverGrantedEvent | null>(null);
+  const [pending, setPending] = useState<TakeoverRequestedEvent | null>(null);
+  const [rejected, setRejected] = useState(false);
+
+  useEffect(() => {
+    return subscribe("takeover.requested", (payload) => {
+      const data = payload as TakeoverRequestedEvent;
+      if (me && data.signalman.userId !== me.id) {
+        return;
+      }
+      setRejected(false);
+      setPending(data);
+    });
+  }, [subscribe, me]);
 
   useEffect(() => {
     return subscribe("takeover.granted", (payload) => {
@@ -286,9 +297,17 @@ export function useTakeoverSignalmanSession(layoutId: number) {
       if (me && data.signalman.userId !== me.id) {
         return;
       }
+      setPending(null);
       setGrant(data);
     });
   }, [subscribe, me]);
+
+  useEffect(() => {
+    return subscribe("takeover.rejected", () => {
+      setPending(null);
+      setRejected(true);
+    });
+  }, [subscribe]);
 
   useEffect(() => {
     return subscribe("takeover.released", (payload) => {
@@ -300,6 +319,68 @@ export function useTakeoverSignalmanSession(layoutId: number) {
   }, [subscribe]);
 
   const clearGrant = useCallback(() => setGrant(null), []);
+  const clearPending = useCallback(() => setPending(null), []);
+  const clearRejected = useCallback(() => setRejected(false), []);
 
-  return { grant, clearGrant, layoutId };
+  return {
+    grant,
+    clearGrant,
+    pending,
+    clearPending,
+    rejected,
+    clearRejected,
+    layoutId,
+  };
+}
+
+// TakeoverWaitingDialog shows the signalman a "waiting for takeover"
+// countdown while the driver's 15 s reject window runs, with a cancel
+// action. It closes when the takeover is granted or rejected.
+export function TakeoverWaitingDialog({
+  pending,
+  onCancel,
+}: {
+  pending: TakeoverRequestedEvent;
+  onCancel: () => void;
+}) {
+  const { t } = useTranslation(["interlocking", "throttle"]);
+  const { cancelTakeover } = useTakeoverActions();
+  const [busy, setBusy] = useState(false);
+  const remaining = useWaitCountdown(pending.autoGrantAt);
+
+  return (
+    <Dialog open onClose={() => {}} maxWidth="xs" fullWidth>
+      <DialogTitle>{t("interlocking:view.takeover.waitingTitle")}</DialogTitle>
+      <DialogContent>
+        <Typography variant="body2" color="text.secondary">
+          {t("interlocking:view.takeover.waitingMessage", { seconds: remaining })}
+        </Typography>
+        <LinearProgress sx={{ mt: 2 }} />
+      </DialogContent>
+      <DialogActions>
+        <Button
+          color="inherit"
+          disabled={busy}
+          onClick={() => {
+            setBusy(true);
+            void cancelTakeover(pending.requestId).finally(() => {
+              setBusy(false);
+              onCancel();
+            });
+          }}
+        >
+          {t("interlocking:view.takeover.waitingCancel")}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+function useWaitCountdown(autoGrantAtMs: number): number {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 250);
+    return () => window.clearInterval(id);
+  }, []);
+  return Math.max(0, Math.ceil((autoGrantAtMs - now) / 1000));
 }

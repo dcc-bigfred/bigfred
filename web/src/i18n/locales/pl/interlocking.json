@@ -67,6 +67,19 @@
         "stop": "Zatrzymaj skład",
         "stopHint": "Zatrzymaj tylko ten skład (nie całą makietę)",
         "takeover": "Przejęcie"
+      },
+      "stopConfirm": {
+        "title": "Zatrzymać skład?",
+        "message": "Czy na pewno chcesz awaryjnie zatrzymać {{target}}? Zatrzymany zostanie tylko ten skład.",
+        "confirm": "Zatrzymaj",
+        "cancel": "Anuluj"
+      },
+      "stopError": {
+        "error": "Nie udało się zatrzymać składu.",
+        "not_authorized_to_stop": "Nie masz uprawnień, aby zatrzymać ten skład.",
+        "vehicle_is_dummy": "Ten skład nie ma przypisanego adresu DCC.",
+        "vehicle_not_on_layout": "Ten skład nie znajduje się na makiecie.",
+        "dcc_bus_unavailable": "Magistrala DCC jest niedostępna."
       }
     },
     "takeover": {
@@ -76,7 +89,11 @@
       "releaseTrain": "Oddaj skład",
       "stopBeforeClose": "Zatrzymaj skład (prędkość 0), aby oddać sterowanie.",
       "leaseRemaining": "Lease: {{time}}",
-      "noDccTarget": "Ten skład nie ma przypisanego adresu DCC."
+      "noDccTarget": "Ten skład nie ma przypisanego adresu DCC.",
+      "waitingTitle": "Czekam na przejęcie lokomotywy…",
+      "waitingMessage": "Wysłano prośbę o przejęcie. Maszynista ma {{seconds}} s na ewentualne odrzucenie. Po tym czasie sterowanie zostanie przejęte automatycznie.",
+      "waitingCancel": "Anuluj prośbę",
+      "rejectedToast": "Maszynista odrzucił prośbę o przejęcie."
     },
     "actions": {
       "occupy": "Obsadź nastawnię",

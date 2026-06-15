@@ -124,7 +124,7 @@ func (s *Manager) Start(ctx context.Context) error {
 		return err
 	}
 	if s.cfg.Telemetry.Enable {
-		if err := PrepareAlloyTelemetry(s.cfg.ConfigDir, s.cfg.Telemetry); err != nil {
+		if err := PrepareAlloyTelemetry(s.cfg.Telemetry); err != nil {
 			return fmt.Errorf("prepare alloy telemetry config: %w", err)
 		}
 	}

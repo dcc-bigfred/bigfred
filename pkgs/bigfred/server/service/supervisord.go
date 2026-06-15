@@ -41,10 +41,10 @@ func AlloyRunConfigPath(cfg TelemetryConfig) string {
 	return supervisord.AlloyRunConfigPath(cfg)
 }
 
-// BigFredAlloyGeneratedPath returns the path of the templated BigFred OTLP
-// receiver block after alloy telemetry is prepared.
-func BigFredAlloyGeneratedPath(configDir string, cfg TelemetryConfig) string {
-	return supervisord.BigFredAlloyGeneratedPath(configDir, cfg)
+// BigFredAlloyGeneratedPath returns the path the BigFred Alloy config is
+// written to before Alloy starts.
+func BigFredAlloyGeneratedPath(cfg TelemetryConfig) string {
+	return supervisord.BigFredAlloyGeneratedPath(cfg)
 }
 
 // SupervisordConfig configures the managed supervisord instance plus the

@@ -14,7 +14,8 @@ import { type TopBarMenuItem, TopBarMenuListContent } from "./TopBarMenu";
 
 export interface MobileNavSection {
   id: string;
-  label: string;
+  /** Omit for a flat list without a section heading. */
+  label?: string;
   caption?: string;
   items: TopBarMenuItem[];
 }
@@ -29,10 +30,10 @@ interface MobileNavDrawerProps {
   identityLine?: string;
 }
 
-// MobileNavDrawer is the slide-out navigation used below the `md`
-// breakpoint. It mirrors the three TopBarMenu dropdowns (My,
-// Administration, Account) as stacked sections so nothing is lost on
-// narrow screens.
+// MobileNavDrawer is the slide-out navigation opened from the AppBar
+// menu button. It mirrors the TopBarMenu dropdowns (My, Administration,
+// Account) as stacked sections so navigation stays reachable on every
+// screen width.
 export default function MobileNavDrawer({
   open,
   onClose,
@@ -88,20 +89,22 @@ export default function MobileNavDrawer({
             key={section.id}
             dense={false}
             subheader={
-              <ListSubheader component="div" disableSticky>
-                {section.label}
-                {section.caption && (
-                  <Typography
-                    component="span"
-                    variant="caption"
-                    display="block"
-                    color="text.secondary"
-                    sx={{ fontWeight: 400, lineHeight: 1.4 }}
-                  >
-                    {section.caption}
-                  </Typography>
-                )}
-              </ListSubheader>
+              section.label ? (
+                <ListSubheader component="div" disableSticky>
+                  {section.label}
+                  {section.caption && (
+                    <Typography
+                      component="span"
+                      variant="caption"
+                      display="block"
+                      color="text.secondary"
+                      sx={{ fontWeight: 400, lineHeight: 1.4 }}
+                    >
+                      {section.caption}
+                    </Typography>
+                  )}
+                </ListSubheader>
+              ) : undefined
             }
           >
             <TopBarMenuListContent

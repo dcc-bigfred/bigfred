@@ -1,5 +1,4 @@
-import { useState } from "react";
-import { Badge, IconButton, Tooltip } from "@mui/material";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 import LockIcon from "@mui/icons-material/Lock";
 import LockOpenIcon from "@mui/icons-material/LockOpen";
 import EngineeringIcon from "@mui/icons-material/Engineering";
@@ -13,152 +12,145 @@ import {
 } from "../hooks/useElevation";
 import { useCountdown } from "../hooks/useCountdown";
 import SudoPinDialog from "./SudoPinDialog";
+import { type TopBarMenuItem } from "./TopBarMenu";
 
-// AdminSudoIndicator drives the AppBar padlock — temporary admin
-// elevation that auto-expires after the configured TTL (default
-// 2 min). The countdown is rendered as a Badge overlay so the lock
-// glyph stays prominent. Click idle → open PIN dialog; click active
-// → revoke immediately.
-function AdminSudoIndicator() {
+function useAdminSudoControl() {
   const { active, expiresAt, request, revoke, isPending } = useSudoElevation();
   const remaining = useCountdown(expiresAt);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const { t } = useTranslation("sudo");
 
-  const tooltip = active
-    ? t("tooltip.admin.active", { remaining: remaining ?? "00:00" })
-    : t("tooltip.admin.idle");
-  const ariaLabel = active
-    ? t("aria.admin.active")
-    : t("aria.admin.idle");
-
-  const handleClick = () => {
+  const activate = useCallback(() => {
     if (isPending) return;
     if (active) {
       void revoke();
     } else {
       setDialogOpen(true);
     }
-  };
+  }, [active, isPending, revoke]);
 
-  const handleSubmit = async (pin: string) => {
-    await request(pin);
-    setDialogOpen(false);
-  };
-
-  return (
-    <>
-      <Tooltip title={tooltip}>
-        <span>
-          <IconButton
-            color={active ? "warning" : "inherit"}
-            aria-pressed={active}
-            aria-label={ariaLabel}
-            onClick={handleClick}
-            disabled={isPending}
-            size="small"
-            sx={{ color: "inherit" }}
-          >
-            {active && remaining ? (
-              <Badge
-                badgeContent={remaining}
-                color="warning"
-                slotProps={{
-                  badge: {
-                    style: { fontVariantNumeric: "tabular-nums", fontSize: 10 },
-                  },
-                }}
-                overlap="circular"
-              >
-                <LockOpenIcon fontSize="small" />
-              </Badge>
-            ) : active ? (
-              <LockOpenIcon fontSize="small" />
-            ) : (
-              <LockIcon fontSize="small" />
-            )}
-          </IconButton>
-        </span>
-      </Tooltip>
-      <SudoPinDialog
-        open={dialogOpen}
-        target="admin"
-        onCancel={() => setDialogOpen(false)}
-        onSubmit={handleSubmit}
-      />
-    </>
+  const handleSubmit = useCallback(
+    async (pin: string) => {
+      await request(pin);
+      setDialogOpen(false);
+    },
+    [request],
   );
+
+  return {
+    active,
+    remaining,
+    isPending,
+    dialogOpen,
+    setDialogOpen,
+    activate,
+    handleSubmit,
+  };
 }
 
-// SignalmanIndicator drives the engineer's-cap icon — a permanent
-// layout-scoped self-grant of the signalman role. There is no
-// countdown; the icon simply reflects the persisted membership.
-function SignalmanIndicator() {
+function useSignalmanSudoControl() {
   const { active, request, revoke, isPending } = useSignalmanGrant();
   const [dialogOpen, setDialogOpen] = useState(false);
-  const { t } = useTranslation("sudo");
 
-  const tooltip = active
-    ? t("tooltip.signalman.active")
-    : t("tooltip.signalman.idle");
-  const ariaLabel = active
-    ? t("aria.signalman.active")
-    : t("aria.signalman.idle");
-
-  const handleClick = () => {
+  const activate = useCallback(() => {
     if (isPending) return;
     if (active) {
       void revoke();
     } else {
       setDialogOpen(true);
     }
-  };
+  }, [active, isPending, revoke]);
 
-  const handleSubmit = async (pin: string) => {
-    await request(pin);
-    setDialogOpen(false);
-  };
+  const handleSubmit = useCallback(
+    async (pin: string) => {
+      await request(pin);
+      setDialogOpen(false);
+    },
+    [request],
+  );
 
-  return (
+  return {
+    active,
+    isPending,
+    dialogOpen,
+    setDialogOpen,
+    activate,
+    handleSubmit,
+  };
+}
+
+/** Sudo elevation entries for the mobile nav drawer. */
+export function useSudoMobileMenuItems(): {
+  items: TopBarMenuItem[];
+  dialogs: ReactNode;
+} {
+  useElevationListener();
+  const { t } = useTranslation("sudo");
+  const admin = useAdminSudoControl();
+  const signalman = useSignalmanSudoControl();
+
+  const items = useMemo((): TopBarMenuItem[] => {
+    const adminTooltip = admin.active
+      ? t("tooltip.admin.active", { remaining: admin.remaining ?? "00:00" })
+      : undefined;
+    const signalmanTooltip = signalman.active
+      ? t("tooltip.signalman.active")
+      : undefined;
+
+    return [
+      {
+        id: "sudo-admin",
+        label: admin.active ? t("nav.revokeAdmin") : t("nav.elevateAdmin"),
+        icon: admin.active ? (
+          <LockOpenIcon fontSize="small" color="warning" />
+        ) : (
+          <LockIcon fontSize="small" />
+        ),
+        onClick: admin.activate,
+        disabled: admin.isPending,
+        tooltip: adminTooltip,
+      },
+      {
+        id: "sudo-signalman",
+        label: signalman.active
+          ? t("nav.revokeSignalman")
+          : t("nav.becomeSignalman"),
+        icon: signalman.active ? (
+          <EngineeringIcon fontSize="small" color="warning" />
+        ) : (
+          <EngineeringOutlinedIcon fontSize="small" />
+        ),
+        onClick: signalman.activate,
+        disabled: signalman.isPending,
+        tooltip: signalmanTooltip,
+      },
+    ];
+  }, [
+    admin.active,
+    admin.remaining,
+    admin.isPending,
+    admin.activate,
+    signalman.active,
+    signalman.isPending,
+    signalman.activate,
+    t,
+  ]);
+
+  const dialogs = (
     <>
-      <Tooltip title={tooltip}>
-        <span>
-          <IconButton
-            color={active ? "warning" : "inherit"}
-            aria-pressed={active}
-            aria-label={ariaLabel}
-            onClick={handleClick}
-            disabled={isPending}
-            size="small"
-            sx={{ color: "inherit" }}
-          >
-            {active ? (
-              <EngineeringIcon fontSize="small" />
-            ) : (
-              <EngineeringOutlinedIcon fontSize="small" />
-            )}
-          </IconButton>
-        </span>
-      </Tooltip>
       <SudoPinDialog
-        open={dialogOpen}
+        open={admin.dialogOpen}
+        target="admin"
+        onCancel={() => admin.setDialogOpen(false)}
+        onSubmit={admin.handleSubmit}
+      />
+      <SudoPinDialog
+        open={signalman.dialogOpen}
         target="signalman"
-        onCancel={() => setDialogOpen(false)}
-        onSubmit={handleSubmit}
+        onCancel={() => signalman.setDialogOpen(false)}
+        onSubmit={signalman.handleSubmit}
       />
     </>
   );
-}
 
-// SudoIndicators renders both AppBar entrypoints — the padlock
-// (admin sudo) and the engineer's cap (permanent signalman
-// self-grant). Mounted once in AppShell.
-export default function SudoIndicators() {
-  useElevationListener();
-  return (
-    <>
-      <AdminSudoIndicator />
-      <SignalmanIndicator />
-    </>
-  );
+  return { items, dialogs };
 }

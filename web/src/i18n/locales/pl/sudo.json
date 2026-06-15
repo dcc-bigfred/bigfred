@@ -19,6 +19,12 @@
       "active": "Zrezygnuj z roli nastawniczego"
     }
   },
+  "nav": {
+    "elevateAdmin": "Podnieś uprawnienia",
+    "revokeAdmin": "Odejmij podniesione uprawnienia",
+    "becomeSignalman": "Zostań dyżurnym ruchu",
+    "revokeSignalman": "Zrezygnuj z roli dyżurnego ruchu"
+  },
   "dialog": {
     "title": {
       "admin": "PIN administratora makiety",

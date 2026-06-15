@@ -4,10 +4,18 @@ import FullscreenExitIcon from "@mui/icons-material/FullscreenExit";
 import { useTranslation } from "react-i18next";
 
 import { useFullscreen } from "../../hooks/useFullscreen";
-import { cockpit } from "./throttleCockpitTheme";
 
-// FullscreenToggleButton requests browser fullscreen for the throttle view.
-export default function FullscreenToggleButton() {
+interface FullscreenToggleButtonProps {
+  /** MUI IconButton color; defaults to inherit for the app bar. */
+  color?: "inherit" | "default";
+  size?: "small" | "medium";
+}
+
+// FullscreenToggleButton requests browser fullscreen for the app shell.
+export default function FullscreenToggleButton({
+  color = "inherit",
+  size = "medium",
+}: FullscreenToggleButtonProps) {
   const { t } = useTranslation("throttle");
   const { active, toggle, supported } = useFullscreen();
 
@@ -20,12 +28,12 @@ export default function FullscreenToggleButton() {
   return (
     <Tooltip title={label}>
       <IconButton
-        size="small"
+        color={color}
+        size={size}
         onClick={() => void toggle()}
         aria-label={label}
-        sx={{ color: cockpit.text }}
       >
-        {active ? <FullscreenExitIcon fontSize="small" /> : <FullscreenIcon fontSize="small" />}
+        {active ? <FullscreenExitIcon /> : <FullscreenIcon />}
       </IconButton>
     </Tooltip>
   );

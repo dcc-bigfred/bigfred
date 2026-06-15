@@ -22,6 +22,8 @@
     }
   },
   "nav": {
+    "goToDashboard": "Go to dashboard",
+    "dashboard": "Dashboard",
     "openMenu": "Open menu",
     "closeMenu": "Close menu",
     "drawerTitle": "Menu",

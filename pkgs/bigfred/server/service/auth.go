@@ -260,6 +260,16 @@ func (s *AuthService) Effective(ctx context.Context, user domain.User, layoutID 
 	return domain.NewEffectiveRoles(roles...), nil
 }
 
+// EffectiveForUserID loads the user and computes layout-scoped roles.
+// Used by WS handlers that only carry a user id (e.g. Radio Stop).
+func (s *AuthService) EffectiveForUserID(ctx context.Context, userID, layoutID uint) (domain.EffectiveRoles, error) {
+	user, err := s.users.FindByID(ctx, userID)
+	if err != nil {
+		return domain.EffectiveRoles{}, err
+	}
+	return s.Effective(ctx, user, layoutID)
+}
+
 // EffectiveDisplayRole returns the single role label shown on the
 // dashboard (§6.3c): admin beats signalman beats driver. Sudo
 // elevations count — a sudo admin shows as "admin" until the

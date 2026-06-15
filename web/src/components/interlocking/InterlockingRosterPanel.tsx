@@ -1,0 +1,210 @@
+import { useMemo, useState } from "react";
+import {
+  Box,
+  Chip,
+  IconButton,
+  Paper,
+  Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TextField,
+  Tooltip,
+  Typography,
+} from "@mui/material";
+import SettingsInputAntennaIcon from "@mui/icons-material/SettingsInputAntenna";
+import StopCircleOutlinedIcon from "@mui/icons-material/StopCircleOutlined";
+import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
+import { useTranslation } from "react-i18next";
+
+import {
+  useLayoutTrains,
+  useLayoutVehicles,
+  type RosterTrain,
+  type RosterVehicle,
+} from "../../api/vehicles";
+import { useDccBusOptional } from "../../context/DccBusContext";
+
+interface InterlockingRosterPanelProps {
+  layoutId: number;
+}
+
+type RosterRow =
+  | { kind: "vehicle"; key: string; login: string; name: string; addresses: number[] }
+  | { kind: "train"; key: string; login: string; name: string; addresses: number[] };
+
+function vehicleRow(v: RosterVehicle): RosterRow | null {
+  if (v.dccAddress == null) {
+    return null;
+  }
+  return {
+    kind: "vehicle",
+    key: `v-${v.id}`,
+    login: v.ownerLogin,
+    name: v.name,
+    addresses: [v.dccAddress],
+  };
+}
+
+function trainRow(
+  t: RosterTrain,
+  addrByVehicle: Map<number, number>,
+): RosterRow {
+  const addresses: number[] = [];
+  for (const m of t.members) {
+    const addr = addrByVehicle.get(m.vehicleId);
+    if (addr != null) {
+      addresses.push(addr);
+    }
+  }
+  return {
+    kind: "train",
+    key: `t-${t.id}`,
+    login: t.ownerLogin,
+    name: t.name,
+    addresses,
+  };
+}
+
+// InterlockingRosterPanel lists layout vehicles and trains with a
+// client-side search filter and in-motion chips from dcc-bus state.
+export default function InterlockingRosterPanel({
+  layoutId,
+}: InterlockingRosterPanelProps) {
+  const { t } = useTranslation("interlocking");
+  const dcc = useDccBusOptional();
+  const vehicles = useLayoutVehicles(layoutId).data ?? [];
+  const trains = useLayoutTrains(layoutId).data ?? [];
+  const [query, setQuery] = useState("");
+
+  const rows = useMemo(() => {
+    const addrByVehicle = new Map<number, number>();
+    for (const v of vehicles) {
+      if (v.dccAddress != null) {
+        addrByVehicle.set(v.id, v.dccAddress);
+      }
+    }
+    const out: RosterRow[] = [];
+    for (const v of vehicles) {
+      const row = vehicleRow(v);
+      if (row) {
+        out.push(row);
+      }
+    }
+    for (const tr of trains) {
+      out.push(trainRow(tr, addrByVehicle));
+    }
+    const q = query.trim().toLowerCase();
+    if (!q) {
+      return out;
+    }
+    return out.filter((row) => {
+      const label = `(${row.login}) ${row.name}`.toLowerCase();
+      return label.includes(q);
+    });
+  }, [vehicles, trains, query]);
+
+  const isInMotion = (addresses: number[]) => {
+    if (!dcc || addresses.length === 0) {
+      return false;
+    }
+    return addresses.some((addr) => (dcc.states.get(addr)?.speed ?? 0) !== 0);
+  };
+
+  return (
+    <Paper
+      variant="outlined"
+      sx={{
+        display: "flex",
+        flexDirection: "column",
+        minHeight: 320,
+        maxHeight: "min(70vh, 640px)",
+        width: "100%",
+      }}
+    >
+      <Box sx={{ p: 2, borderBottom: 1, borderColor: "divider" }}>
+        <Typography variant="subtitle1" gutterBottom>
+          {t("view.roster.title")}
+        </Typography>
+        <TextField
+          size="small"
+          fullWidth
+          placeholder={t("view.roster.search")}
+          value={query}
+          onChange={(ev) => setQuery(ev.target.value)}
+          aria-label={t("view.roster.search")}
+        />
+      </Box>
+      <TableContainer sx={{ flex: 1 }}>
+        <Table size="small" stickyHeader>
+          <TableHead>
+            <TableRow>
+              <TableCell>{t("view.roster.columns.consist")}</TableCell>
+              <TableCell align="right" width={120}>
+                {t("view.roster.columns.actions")}
+              </TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {rows.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={2}>
+                  <Typography variant="body2" color="text.secondary">
+                    {t("view.roster.empty")}
+                  </Typography>
+                </TableCell>
+              </TableRow>
+            ) : (
+              rows.map((row) => (
+                <TableRow key={row.key} hover>
+                  <TableCell>
+                    <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                      <Typography variant="body2">
+                        ({row.login}) {row.name}
+                      </Typography>
+                      {isInMotion(row.addresses) && (
+                        <Chip
+                          size="small"
+                          color="warning"
+                          label={t("view.roster.inMotion")}
+                        />
+                      )}
+                    </Stack>
+                  </TableCell>
+                  <TableCell align="right">
+                    <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                      <Tooltip title={t("view.roster.actions.radio")}>
+                        <span>
+                          <IconButton size="small" disabled aria-label={t("view.roster.actions.radio")}>
+                            <SettingsInputAntennaIcon fontSize="small" />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                      <Tooltip title={t("view.roster.actions.stop")}>
+                        <span>
+                          <IconButton size="small" disabled aria-label={t("view.roster.actions.stop")}>
+                            <StopCircleOutlinedIcon fontSize="small" />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                      <Tooltip title={t("view.roster.actions.takeover")}>
+                        <span>
+                          <IconButton size="small" disabled aria-label={t("view.roster.actions.takeover")}>
+                            <SwapHorizIcon fontSize="small" />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                    </Stack>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </TableContainer>
+    </Paper>
+  );
+}

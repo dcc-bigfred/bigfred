@@ -38,8 +38,35 @@
     "occupant": "Obstawia {{login}}",
     "occupantSelf": "Obstawiasz tę nastawnię ({{login}})",
     "signalmanOnlyHint": "Obsadzanie i opuszczanie nastawni jest dostępne tylko dla nastawniczych tej makiety.",
-    "radioTitle": "Radio",
-    "radioComingSoon": "Panel radia pojawi się razem z funkcją przejmowania pojazdów w kolejnym etapie.",
+    "radioStop": {
+      "barLabel": "Radiostop"
+    },
+    "setup": {
+      "selectCommandStation": "Wybierz centralkę, aby zobaczyć status „w ruchu” na składzie."
+    },
+    "panels": {
+      "chat": "Radio",
+      "roster": "Składy"
+    },
+    "chat": {
+      "title": "Radio nastawni",
+      "placeholder": "Czat grupowy nastawniczych pojawi się w kolejnym etapie (M5)."
+    },
+    "roster": {
+      "title": "Składy na makiecie",
+      "search": "Szukaj składu…",
+      "empty": "Brak pojazdów ani składów na makiecie.",
+      "inMotion": "w ruchu",
+      "columns": {
+        "consist": "Skład",
+        "actions": "Akcje"
+      },
+      "actions": {
+        "radio": "Radio",
+        "stop": "Zatrzymaj skład",
+        "takeover": "Przejęcie"
+      }
+    },
     "actions": {
       "occupy": "Obsadź nastawnię",
       "leave": "Opuść nastawnię"

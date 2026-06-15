@@ -4,10 +4,6 @@ import {
   Box,
   Button,
   Chip,
-  FormControl,
-  InputLabel,
-  MenuItem,
-  Select,
   Stack,
 } from "@mui/material";
 import { useTranslation } from "react-i18next";
@@ -30,6 +26,7 @@ import AutoDismissAlert from "../components/AutoDismissAlert";
 import ThrottleCockpit from "../components/throttle/ThrottleCockpit";
 import ThrottleNavigationGuard from "../components/throttle/ThrottleNavigationGuard";
 import ThrottleSetupDialog from "../components/throttle/ThrottleSetupDialog";
+import CommandStationPicker from "../components/throttle/CommandStationPicker";
 import { useDebouncedSpeedSend } from "../hooks/useDebouncedSpeedSend";
 import { useRadioStopSound } from "../hooks/useRadioStopSound";
 import { useThrottleSpeedOverride } from "../hooks/useThrottleSpeedOverride";
@@ -185,6 +182,7 @@ export default function ThrottlePage() {
         stations={stations}
         currentID={selectedCS}
         disabled={selecting}
+        allowClear
         onChange={handlePickerChange}
       />
 
@@ -325,51 +323,6 @@ function DataPlaneStatusChip({ status }: { status: DataPlaneStatus }) {
     default:
       return <Chip label={t("dataPlane.offline")} />;
   }
-}
-
-function CommandStationPicker({
-  stations,
-  currentID,
-  disabled,
-  onChange,
-}: {
-  stations: { id: number; name: string; kind: string }[];
-  currentID: number;
-  disabled?: boolean;
-  onChange: (id: number) => void;
-}) {
-  const { t } = useTranslation("throttle");
-  if (stations.length === 0) return null;
-  return (
-    <FormControl fullWidth disabled={disabled}>
-      <InputLabel id="command-station-label">{t("commandStation")}</InputLabel>
-      <Select
-        labelId="command-station-label"
-        value={currentID > 0 ? String(currentID) : ""}
-        label={t("commandStation")}
-        onChange={(ev) => {
-          const raw = ev.target.value;
-          if (raw === "") {
-            onChange(0);
-            return;
-          }
-          const csID = Number(raw);
-          if (Number.isFinite(csID) && csID > 0) {
-            onChange(csID);
-          }
-        }}
-      >
-        <MenuItem value="">
-          <em>—</em>
-        </MenuItem>
-        {stations.map((s) => (
-          <MenuItem key={s.id} value={String(s.id)}>
-            {s.name} ({s.kind})
-          </MenuItem>
-        ))}
-      </Select>
-    </FormControl>
-  );
 }
 
 function useCockpitVehicles(layoutID: number) {

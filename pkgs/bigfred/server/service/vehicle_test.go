@@ -42,6 +42,8 @@ func freshRepo(t *testing.T) (repo.UsersBundle, func()) {
 		CommandStations:       repo.NewCommandStations(r),
 		LayoutCommandStations: repo.NewLayoutCommandStations(r),
 		SudoElevations:        repo.NewSudoElevations(r),
+		VehicleLeases:         repo.NewVehicleLeases(r),
+		TrainLeases:           repo.NewTrainLeases(r),
 	}
 	cleanup := func() {
 		_ = db.Close()

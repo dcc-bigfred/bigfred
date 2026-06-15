@@ -8,6 +8,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/keskad/loco/pkgs/bigfred/contract"
+	"github.com/keskad/loco/pkgs/bigfred/server/domain"
 	"github.com/keskad/loco/pkgs/bigfred/server/security"
 	"github.com/keskad/loco/pkgs/bigfred/server/ws"
 )
@@ -16,11 +17,12 @@ const radioStopDebounce = 2 * time.Second
 
 // RadioStopService orchestrates layout-wide Radio Stop (§4.6).
 type RadioStopService struct {
-	hub   *ws.Hub
-	redis *RedisService
+	hub    *ws.Hub
+	redis  *RedisService
 	roster *LayoutVehicleService
-	log   *logrus.Logger
-	sec   security.RadioStopSecurityContext
+	auth   *AuthService
+	log    *logrus.Logger
+	sec    security.RadioStopSecurityContext
 
 	mu          sync.Mutex
 	lastTrigger map[uint]time.Time
@@ -31,6 +33,7 @@ type RadioStopConfig struct {
 	Hub    *ws.Hub
 	Redis  *RedisService
 	Roster *LayoutVehicleService
+	Auth   *AuthService
 	Log    *logrus.Logger
 }
 
@@ -45,6 +48,7 @@ func NewRadioStopService(cfg RadioStopConfig) *RadioStopService {
 		hub:         cfg.Hub,
 		redis:       cfg.Redis,
 		roster:      cfg.Roster,
+		auth:        cfg.Auth,
 		log:         log,
 		lastTrigger: make(map[uint]time.Time, 4),
 	}
@@ -63,7 +67,12 @@ func (s *RadioStopService) Trigger(ctx context.Context, sess *ws.DriveSession) (
 		return false, "dcc_bus_unavailable"
 	}
 
-	if d := s.sec.CanTrigger(sess.UserID, roster); !d.Allowed {
+	eff, err := s.effectiveRoles(ctx, sess.UserID, sess.LayoutID)
+	if err != nil {
+		s.log.WithError(err).Warn("radio stop: effective roles")
+		return false, "not_authorized_to_drive"
+	}
+	if d := s.sec.CanTrigger(eff, sess.UserID, roster); !d.Allowed {
 		return false, d.Reason
 	}
 
@@ -94,6 +103,13 @@ func (s *RadioStopService) Trigger(ctx context.Context, sess *ws.DriveSession) (
 	}).Info("radio stop triggered")
 
 	return true, ""
+}
+
+func (s *RadioStopService) effectiveRoles(ctx context.Context, userID, layoutID uint) (domain.EffectiveRoles, error) {
+	if s.auth == nil {
+		return domain.NewEffectiveRoles(), nil
+	}
+	return s.auth.EffectiveForUserID(ctx, userID, layoutID)
 }
 
 func (s *RadioStopService) loadRoster(ctx context.Context, layoutID uint) (contract.AllowedVehicles, error) {

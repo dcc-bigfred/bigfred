@@ -39,7 +39,7 @@ func alloyProgramSpec(cfg TelemetryConfig) ProgramSpec {
 	if storagePath == "" {
 		storagePath = DefaultAlloyStoragePath
 	}
-	cmd := fmt.Sprintf("%s run --storage.path=%s %s", bin, storagePath, alloyRunConfigPath(cfg))
+	cmd := fmt.Sprintf("%s run --storage.path=%s %s", bin, storagePath, resolveTelemetryConfigPath(cfg))
 	return ProgramSpec{
 		Name:         "alloy",
 		Command:      cmd,

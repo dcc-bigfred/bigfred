@@ -205,10 +205,9 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 			return fmt.Errorf("supervisord paths: %w", err)
 		}
 		telemetryCfg := service.TelemetryConfig{
-			Enable:               f.EnableTelemetry,
-			ConfigPath:           f.TelemetryConfig,
-			OTLPEndpoint:         service.DefaultOTLPEndpoint,
-			SupervisordConfigDir: supPaths.ConfigDir,
+			Enable:       f.EnableTelemetry,
+			ConfigPath:   f.TelemetryConfig,
+			OTLPEndpoint: service.DefaultOTLPEndpoint,
 		}
 		initial := service.DefaultInfraProcesses(service.InfraConfig{
 			Redis: service.RedisConfig{
@@ -241,7 +240,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 			log.WithFields(logrus.Fields{
 				"config":    f.TelemetryConfig,
 				"alloy_run": service.AlloyRunConfigPath(telemetryCfg),
-				"generated": service.BigFredAlloyGeneratedPath(supPaths.ConfigDir, telemetryCfg),
+				"generated": service.BigFredAlloyGeneratedPath(telemetryCfg),
 			}).Info("telemetry enabled: supervisord will manage alloy")
 		}
 		supSvc.RunHealthLoop(ctx, 5*time.Second, func(states []service.ProgramState) {

@@ -9,6 +9,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/keskad/loco/pkgs/bigfred/contract"
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
 	"github.com/keskad/loco/pkgs/bigfred/server/repo"
 	"github.com/keskad/loco/pkgs/bigfred/server/ws"
@@ -19,10 +20,11 @@ import (
 // session-scoped command-station selection, the lazy-spawn handshake
 // with DccBusService and the session.opened payload (§7e.6).
 type SessionControlService struct {
-	log        *logrus.Logger
-	dccBus     *DccBusService
-	radioStop  *RadioStopService
-	cs         *repo.CommandStations
+	log         *logrus.Logger
+	dccBus      *DccBusService
+	radioStop   *RadioStopService
+	estopTarget *EStopTargetService
+	cs          *repo.CommandStations
 	layoutCS   *repo.LayoutCommandStations
 	layoutRows *repo.Layouts
 
@@ -39,6 +41,7 @@ type SessionControlConfig struct {
 	Log         *logrus.Logger
 	DccBus      *DccBusService
 	RadioStop   *RadioStopService
+	EStopTarget *EStopTargetService
 	CommandStns *repo.CommandStations
 	LayoutCS    *repo.LayoutCommandStations
 	Layouts     *repo.Layouts
@@ -53,10 +56,11 @@ func NewSessionControlService(cfg SessionControlConfig) *SessionControlService {
 		log = logrus.New()
 	}
 	return &SessionControlService{
-		log:        log,
-		dccBus:     cfg.DccBus,
-		radioStop:  cfg.RadioStop,
-		cs:         cfg.CommandStns,
+		log:         log,
+		dccBus:      cfg.DccBus,
+		radioStop:   cfg.RadioStop,
+		estopTarget: cfg.EStopTarget,
+		cs:          cfg.CommandStns,
 		layoutCS:   cfg.LayoutCS,
 		layoutRows: cfg.Layouts,
 		proxyPathFn: defaultProxyPath,
@@ -116,6 +120,19 @@ func (s *SessionControlService) HandleEnvelope(ctx context.Context, c *ws.Client
 			return
 		}
 		ok, code := s.radioStop.Trigger(ctx, c.Session())
+		c.SendAck(env.ID, ok, code)
+
+	case ws.TypeSystemEStopTarget:
+		if s.estopTarget == nil {
+			c.SendAck(env.ID, false, "dcc_bus_not_configured")
+			return
+		}
+		var p contract.EStopTargetPayload
+		if err := json.Unmarshal(env.Payload, &p); err != nil {
+			c.SendAck(env.ID, false, "bad_payload")
+			return
+		}
+		ok, code := s.estopTarget.Trigger(ctx, c.Session(), p.Target, p.TargetID)
 		c.SendAck(env.ID, ok, code)
 	}
 }

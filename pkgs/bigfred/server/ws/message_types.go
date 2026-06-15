@@ -5,4 +5,5 @@ package ws
 const (
 	TypeSessionSetCommandStation = "session.setCommandStation"
 	TypeSystemRadioStop          = "system.radioStop"
+	TypeSystemEStopTarget        = "system.estopTarget"
 )

@@ -65,6 +65,7 @@
       "actions": {
         "radio": "Radio",
         "stop": "Stop consist",
+        "stopHint": "Stop this consist only (not the whole layout)",
         "takeover": "Takeover"
       }
     },

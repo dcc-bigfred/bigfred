@@ -28,6 +28,7 @@ import {
 } from "../../api/vehicles";
 import type { RadioSendContext, RadioSendTarget } from "../../api/radio";
 import { useTakeoverActions } from "../../api/takeover";
+import { useEstopTargetActions } from "../../api/estop";
 import { useDccBusOptional } from "../../context/DccBusContext";
 import RadioPhrasePickerDialog from "./RadioPhrasePickerDialog";
 
@@ -99,6 +100,7 @@ export default function InterlockingRosterPanel({
 }: InterlockingRosterPanelProps) {
   const { t } = useTranslation("interlocking");
   const { requestTakeover } = useTakeoverActions();
+  const { estopTarget } = useEstopTargetActions();
   const dcc = useDccBusOptional();
   const vehicles = useLayoutVehicles(layoutId).data ?? [];
   const trains = useLayoutTrains(layoutId).data ?? [];
@@ -225,12 +227,20 @@ export default function InterlockingRosterPanel({
                           <SettingsInputAntennaIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
-                      <Tooltip title={t("view.roster.actions.stop")}>
-                        <span>
-                          <IconButton size="small" disabled aria-label={t("view.roster.actions.stop")}>
-                            <StopCircleOutlinedIcon fontSize="small" />
-                          </IconButton>
-                        </span>
+                      <Tooltip title={t("view.roster.actions.stopHint")}>
+                        <IconButton
+                          size="small"
+                          color="error"
+                          aria-label={t("view.roster.actions.stop")}
+                          onClick={() =>
+                            void estopTarget(
+                              row.kind === "vehicle" ? "vehicle" : "train",
+                              row.entityId,
+                            )
+                          }
+                        >
+                          <StopCircleOutlinedIcon fontSize="small" />
+                        </IconButton>
                       </Tooltip>
                       <Tooltip title={t("view.roster.actions.takeover")}>
                         <IconButton

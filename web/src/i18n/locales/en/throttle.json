@@ -72,7 +72,10 @@
   "dataPlane": {
     "online": "DCC bus: online",
     "offline": "DCC bus: offline",
-    "connecting": "DCC bus: connecting…"
+    "connecting": "DCC bus: connecting…",
+    "ping": "Ping",
+    "pingMs": "{{ms}} ms",
+    "pingMeasuring": "measuring…"
   },
   "reconnecting": "Lost connection to the command station, retrying every 2s…",
   "errors": {

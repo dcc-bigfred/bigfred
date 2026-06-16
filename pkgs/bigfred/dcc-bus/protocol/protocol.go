@@ -48,9 +48,13 @@ func FrameWithID(eventType, id string, payload any) (contract.EnvelopeWire, erro
 // -------- Client → Server frames --------
 
 // PingPayload is sent by the client every Heartbeat interval to
-// satisfy the per-daemon dead-man's switch (§7e.5). The body is
-// empty on purpose — the act of receiving the frame is the signal.
-type PingPayload struct{}
+// satisfy the per-daemon dead-man's switch (§7e.5). The act of
+// receiving the frame is the signal; LastPingLatencyMs optionally
+// piggybacks the previous ping/pong RTT measured in the browser so
+// the daemon can export client-visible latency without browser OTLP.
+type PingPayload struct {
+	LastPingLatencyMs float64 `json:"lastPingLatencyMs,omitempty"`
+}
 
 // LocoSubscribePayload tells the daemon to start pushing
 // `loco.state` updates for the listed locomotive addresses. The

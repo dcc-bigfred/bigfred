@@ -72,7 +72,10 @@
   "dataPlane": {
     "online": "Centralka: online",
     "offline": "Centralka: offline",
-    "connecting": "Centralka: łączenie…"
+    "connecting": "Centralka: łączenie…",
+    "ping": "Ping",
+    "pingMs": "{{ms}} ms",
+    "pingMeasuring": "mierzenie…"
   },
   "reconnecting": "Utracono połączenie z centralką, ponawiam próbę połączenia co 2s…",
   "errors": {

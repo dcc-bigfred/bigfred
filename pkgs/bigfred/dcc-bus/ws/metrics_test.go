@@ -100,9 +100,47 @@ func TestMetrics_sessionLifecycle(t *testing.T) {
 	}
 }
 
+func TestMetrics_recordsClientPingRTT(t *testing.T) {
+	reader := metric.NewManualReader()
+	m, err := NewMetrics(MetricsConfig{
+		Enabled:          true,
+		LayoutID:         3,
+		CommandStationID: 9,
+		Meter:            metric.NewMeterProvider(metric.WithReader(reader)).Meter("test"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.RecordClientPingRTT("alice", 12.5)
+	m.RecordClientPingRTT("alice", 0)
+	m.RecordClientPingRTT("alice", maxClientPingRTTMs+1)
+
+	var rm metricdata.ResourceMetrics
+	if err := reader.Collect(t.Context(), &rm); err != nil {
+		t.Fatal(err)
+	}
+	var hist metricdata.Histogram[float64]
+	for _, sm := range rm.ScopeMetrics[0].Metrics {
+		if sm.Name == histogramWSClientPingRTT {
+			hist = sm.Data.(metricdata.Histogram[float64])
+			break
+		}
+	}
+	if len(hist.DataPoints) != 1 || hist.DataPoints[0].Count != 1 {
+		t.Fatalf("client ping rtt datapoints: %+v", hist.DataPoints)
+	}
+	if got := hist.DataPoints[0].Sum; got < 0.012 || got > 0.013 {
+		t.Fatalf("sum = %v, want ~0.0125", got)
+	}
+	if v, ok := hist.DataPoints[0].Attributes.Value(attribute.Key("user.login")); !ok || v.AsString() != "alice" {
+		t.Fatalf("user.login attr: %+v ok=%v", v, ok)
+	}
+}
+
 func TestMetrics_nilReceiverNoop(t *testing.T) {
 	var m *Metrics
 	m.Record("ping", OK(), time.Millisecond)
+	m.RecordClientPingRTT("bob", 10)
 	m.RecordInvalidEnvelope()
 	m.RecordSessionOpened()
 	m.RecordSessionClosed("ws_closed")

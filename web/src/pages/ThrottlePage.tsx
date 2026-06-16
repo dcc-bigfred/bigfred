@@ -5,6 +5,7 @@ import {
   Button,
   Chip,
   Stack,
+  Typography,
 } from "@mui/material";
 import { useTranslation } from "react-i18next";
 
@@ -246,6 +247,13 @@ export default function ThrottlePage() {
   const closeSetup = () => setSetupOpen(false);
   const openSetup = () => setSetupOpen(true);
 
+  const setupDialog = (
+    <ThrottleSetupDialog open={setupOpen} onClose={closeSetup}>
+      {setupPanel}
+      <SetupDataPlaneSection />
+    </ThrottleSetupDialog>
+  );
+
   const pageSx = {
     flex: 1,
     display: "flex",
@@ -280,14 +288,10 @@ export default function ThrottlePage() {
           {t("throttle:takeover.evicted")}
         </AutoDismissAlert>
       )}
-      <ThrottleSetupDialog open={setupOpen} onClose={closeSetup}>
-        {setupPanel}
-        <SetupDataPlaneSection />
-      </ThrottleSetupDialog>
-
       <Box sx={cockpitAreaSx}>
         {activeWsUrl ? (
           <DccBusProvider wsUrl={activeWsUrl}>
+            {setupDialog}
             <ConnectedThrottle
               layoutID={layoutID}
               speedSteps={activeStation?.speedSteps ?? 128}
@@ -296,11 +300,14 @@ export default function ThrottlePage() {
             />
           </DccBusProvider>
         ) : (
-          <IdleThrottle
-            layoutID={layoutID}
-            onOpenSetup={openSetup}
-            driverRadio={driverRadio}
-          />
+          <>
+            {setupDialog}
+            <IdleThrottle
+              layoutID={layoutID}
+              onOpenSetup={openSetup}
+              driverRadio={driverRadio}
+            />
+          </>
         )}
       </Box>
     </Box>
@@ -316,6 +323,14 @@ function SetupDataPlaneSection() {
       <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
         <DataPlaneStatusChip status={dcc?.status ?? "idle"} />
       </Stack>
+      {dcc?.status === "open" && (
+        <Typography variant="body2" color="text.secondary">
+          {t("dataPlane.ping")}:{" "}
+          {dcc.pingLatencyMs != null
+            ? t("dataPlane.pingMs", { ms: Math.round(dcc.pingLatencyMs) })
+            : t("dataPlane.pingMeasuring")}
+        </Typography>
+      )}
       {dcc?.reconnecting && (
         <AutoDismissAlert severity="warning" resetKey="dcc-reconnecting">
           {t("reconnecting")}

@@ -15,7 +15,7 @@
       }
     ]
   },
-  "description": "dcc-bus OTLP metrics with latency SLOs: driver 10 ms, WebSocket 50 ms. Import into Grafana Cloud and pick a Prometheus/Mimir datasource fed by Alloy.",
+  "description": "dcc-bus OTLP metrics with latency SLOs: driver 10 ms, WebSocket handler 50 ms, throttle E2E p50 100 ms / p95 200 ms / p99 300 ms. Import into Grafana Cloud and pick a Prometheus/Mimir datasource fed by Alloy.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -1285,6 +1285,742 @@
     {
       "collapsed": false,
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 72 },
+      "id": 250,
+      "panels": [],
+      "title": "Throttle — end-to-end latency (SLO p50 100 ms / p95 200 ms / p99 300 ms)",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Client-reported ping/pong RTT samples per second (piggybacked on heartbeat pings from the throttle UI). One sample per active session per heartbeat interval.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "decimals": 3,
+          "mappings": [],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 73 },
+      "id": 251,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "sum(rate(bigfred_dcc_bus_ws_client_ping_rtt_seconds_count{service_name=\"dcc-bus\", layout_id=~\"$layout_id\", command_station_id=~\"$command_station_id\", user_login=~\"$user_login\"}[$__rate_interval]))",
+          "legendFormat": "samples/s",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Throttle ping samples / s",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Browser → proxy → dcc-bus → browser round-trip measured on the throttle client. SLO: 100 ms.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "decimals": 1,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 0.1 }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 73 },
+      "id": 252,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.50, sum(rate(bigfred_dcc_bus_ws_client_ping_rtt_seconds_bucket{service_name=\"dcc-bus\", layout_id=~\"$layout_id\", command_station_id=~\"$command_station_id\", user_login=~\"$user_login\"}[$__rate_interval])) by (le))",
+          "legendFormat": "p50",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Throttle E2E p50",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Browser → proxy → dcc-bus → browser round-trip measured on the throttle client. SLO: 200 ms.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "decimals": 1,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 0.2 }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 73 },
+      "id": 253,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum(rate(bigfred_dcc_bus_ws_client_ping_rtt_seconds_bucket{service_name=\"dcc-bus\", layout_id=~\"$layout_id\", command_station_id=~\"$command_station_id\", user_login=~\"$user_login\"}[$__rate_interval])) by (le))",
+          "legendFormat": "p95",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Throttle E2E p95",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Browser → proxy → dcc-bus → browser round-trip measured on the throttle client. SLO: 300 ms.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "decimals": 1,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 0.3 }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 73 },
+      "id": 254,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.99, sum(rate(bigfred_dcc_bus_ws_client_ping_rtt_seconds_bucket{service_name=\"dcc-bus\", layout_id=~\"$layout_id\", command_station_id=~\"$command_station_id\", user_login=~\"$user_login\"}[$__rate_interval])) by (le))",
+          "legendFormat": "p99",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Throttle E2E p99",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Client-reported throttle ping/pong RTT over time (browser → dcc-bus → browser). SLO lines: p50 100 ms, p95 200 ms, p99 300 ms.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "insertNulls": false,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": { "type": "linear" },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": { "group": "A", "mode": "none" },
+            "thresholdsStyle": { "mode": "off" }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "green", "value": null }]
+          },
+          "unit": "s"
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "p50" },
+            "properties": [
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "green", "value": null },
+                    { "color": "red", "value": 0.1 }
+                  ]
+                }
+              },
+              { "id": "custom.thresholdsStyle", "value": { "mode": "line" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "p95" },
+            "properties": [
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "green", "value": null },
+                    { "color": "red", "value": 0.2 }
+                  ]
+                }
+              },
+              { "id": "custom.thresholdsStyle", "value": { "mode": "line" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "p99" },
+            "properties": [
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "green", "value": null },
+                    { "color": "red", "value": 0.3 }
+                  ]
+                }
+              },
+              { "id": "custom.thresholdsStyle", "value": { "mode": "line" } }
+            ]
+          }
+        ]
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 77 },
+      "id": 255,
+      "options": {
+        "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.50, sum(rate(bigfred_dcc_bus_ws_client_ping_rtt_seconds_bucket{service_name=\"dcc-bus\", layout_id=~\"$layout_id\", command_station_id=~\"$command_station_id\", user_login=~\"$user_login\"}[$__rate_interval])) by (le))",
+          "legendFormat": "p50",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum(rate(bigfred_dcc_bus_ws_client_ping_rtt_seconds_bucket{service_name=\"dcc-bus\", layout_id=~\"$layout_id\", command_station_id=~\"$command_station_id\", user_login=~\"$user_login\"}[$__rate_interval])) by (le))",
+          "legendFormat": "p95",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.99, sum(rate(bigfred_dcc_bus_ws_client_ping_rtt_seconds_bucket{service_name=\"dcc-bus\", layout_id=~\"$layout_id\", command_station_id=~\"$command_station_id\", user_login=~\"$user_login\"}[$__rate_interval])) by (le))",
+          "legendFormat": "p99",
+          "range": true,
+          "refId": "C"
+        }
+      ],
+      "title": "Throttle E2E latency percentiles",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Distribution of client-reported throttle ping/pong RTT samples.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "scaleDistribution": { "type": "linear" }
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 77 },
+      "id": 256,
+      "options": {
+        "calculate": false,
+        "cellGap": 1,
+        "color": { "exponent": 0.5, "fill": "dark-orange", "mode": "scheme", "reverse": false, "scale": "exponential", "scheme": "Spectral", "steps": 64 },
+        "exemplars": { "color": "rgba(255,0,255,0.7)" },
+        "filterValues": { "le": 1e-9 },
+        "legend": { "show": true },
+        "rowsFrame": { "layout": "auto" },
+        "tooltip": { "mode": "single", "showColorScale": false, "yHistogram": false },
+        "yAxis": { "axisPlacement": "left", "reverse": false, "unit": "s" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "sum(rate(bigfred_dcc_bus_ws_client_ping_rtt_seconds_bucket{service_name=\"dcc-bus\", layout_id=~\"$layout_id\", command_station_id=~\"$command_station_id\", user_login=~\"$user_login\"}[$__rate_interval])) by (le)",
+          "format": "heatmap",
+          "legendFormat": "{{le}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Throttle E2E latency heatmap",
+      "type": "heatmap"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "p95 throttle ping/pong RTT split by layout and command station. SLO: 200 ms.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "insertNulls": false,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": { "type": "linear" },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": { "group": "A", "mode": "none" },
+            "thresholdsStyle": { "mode": "line" }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 0.2 }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 85 },
+      "id": 257,
+      "options": {
+        "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum(rate(bigfred_dcc_bus_ws_client_ping_rtt_seconds_bucket{service_name=\"dcc-bus\", layout_id=~\"$layout_id\", command_station_id=~\"$command_station_id\", user_login=~\"$user_login\"}[$__rate_interval])) by (le, layout_id, command_station_id))",
+          "legendFormat": "layout {{layout_id}} / cs {{command_station_id}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Throttle E2E p95 by layout & command station",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Per layout / command station breakdown of throttle ping/pong RTT reported by connected browsers.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "custom": {
+            "align": "auto",
+            "cellOptions": { "type": "auto" },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "samples/s" },
+            "properties": [{ "id": "decimals", "value": 3 }, { "id": "unit", "value": "ops" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "p50 (s)" },
+            "properties": [
+              { "id": "decimals", "value": 4 },
+              { "id": "unit", "value": "s" },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "green", "value": null },
+                    { "color": "red", "value": 0.1 }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "p95 (s)" },
+            "properties": [
+              { "id": "decimals", "value": 4 },
+              { "id": "unit", "value": "s" },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "green", "value": null },
+                    { "color": "red", "value": 0.2 }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "p99 (s)" },
+            "properties": [
+              { "id": "decimals", "value": 4 },
+              { "id": "unit", "value": "s" },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "green", "value": null },
+                    { "color": "red", "value": 0.3 }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 85 },
+      "id": 258,
+      "options": {
+        "cellHeight": "sm",
+        "footer": { "countRows": false, "fields": "", "reducer": ["sum"], "show": false },
+        "showHeader": true,
+        "sortBy": [{ "desc": true, "displayName": "p95 (s)" }]
+      },
+      "pluginVersion": "11.0.0",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "sum(rate(bigfred_dcc_bus_ws_client_ping_rtt_seconds_count{service_name=\"dcc-bus\", layout_id=~\"$layout_id\", command_station_id=~\"$command_station_id\", user_login=~\"$user_login\"}[$__rate_interval])) by (layout_id, command_station_id)",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "__auto",
+          "range": false,
+          "refId": "ops"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.50, sum(rate(bigfred_dcc_bus_ws_client_ping_rtt_seconds_bucket{service_name=\"dcc-bus\", layout_id=~\"$layout_id\", command_station_id=~\"$command_station_id\", user_login=~\"$user_login\"}[$__rate_interval])) by (le, layout_id, command_station_id))",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "__auto",
+          "range": false,
+          "refId": "p50"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum(rate(bigfred_dcc_bus_ws_client_ping_rtt_seconds_bucket{service_name=\"dcc-bus\", layout_id=~\"$layout_id\", command_station_id=~\"$command_station_id\", user_login=~\"$user_login\"}[$__rate_interval])) by (le, layout_id, command_station_id))",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "__auto",
+          "range": false,
+          "refId": "p95"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.99, sum(rate(bigfred_dcc_bus_ws_client_ping_rtt_seconds_bucket{service_name=\"dcc-bus\", layout_id=~\"$layout_id\", command_station_id=~\"$command_station_id\", user_login=~\"$user_login\"}[$__rate_interval])) by (le, layout_id, command_station_id))",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "__auto",
+          "range": false,
+          "refId": "p99"
+        }
+      ],
+      "title": "Throttle E2E summary",
+      "transformations": [
+        { "id": "merge", "options": {} },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "le": true
+            },
+            "renameByName": {
+              "Value #ops": "samples/s",
+              "Value #p50": "p50 (s)",
+              "Value #p95": "p95 (s)",
+              "Value #p99": "p99 (s)",
+              "command_station_id": "command station",
+              "layout_id": "layout"
+            }
+          }
+        }
+      ],
+      "type": "table"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "p95 throttle ping/pong RTT per logged-in user (from the verified WS session JWT). SLO: 200 ms.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "insertNulls": false,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": { "type": "linear" },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": { "group": "A", "mode": "none" },
+            "thresholdsStyle": { "mode": "line" }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 0.2 }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 93 },
+      "id": 259,
+      "options": {
+        "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum(rate(bigfred_dcc_bus_ws_client_ping_rtt_seconds_bucket{service_name=\"dcc-bus\", layout_id=~\"$layout_id\", command_station_id=~\"$command_station_id\", user_login=~\"$user_login\"}[$__rate_interval])) by (le, user_login))",
+          "legendFormat": "{{user_login}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Throttle E2E p95 by user",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Per-user throttle ping/pong RTT breakdown. Sort by p95 to find operators with poor E2E connectivity.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "custom": {
+            "align": "auto",
+            "cellOptions": { "type": "auto" },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "samples/s" },
+            "properties": [{ "id": "decimals", "value": 3 }, { "id": "unit", "value": "ops" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "p50 (s)" },
+            "properties": [
+              { "id": "decimals", "value": 4 },
+              { "id": "unit", "value": "s" },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "green", "value": null },
+                    { "color": "red", "value": 0.1 }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "p95 (s)" },
+            "properties": [
+              { "id": "decimals", "value": 4 },
+              { "id": "unit", "value": "s" },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "green", "value": null },
+                    { "color": "red", "value": 0.2 }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "p99 (s)" },
+            "properties": [
+              { "id": "decimals", "value": 4 },
+              { "id": "unit", "value": "s" },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "green", "value": null },
+                    { "color": "red", "value": 0.3 }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 101 },
+      "id": 260,
+      "options": {
+        "cellHeight": "sm",
+        "footer": { "countRows": false, "fields": "", "reducer": ["sum"], "show": false },
+        "showHeader": true,
+        "sortBy": [{ "desc": true, "displayName": "p95 (s)" }]
+      },
+      "pluginVersion": "11.0.0",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "sum(rate(bigfred_dcc_bus_ws_client_ping_rtt_seconds_count{service_name=\"dcc-bus\", layout_id=~\"$layout_id\", command_station_id=~\"$command_station_id\", user_login=~\"$user_login\"}[$__rate_interval])) by (user_login)",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "__auto",
+          "range": false,
+          "refId": "ops"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.50, sum(rate(bigfred_dcc_bus_ws_client_ping_rtt_seconds_bucket{service_name=\"dcc-bus\", layout_id=~\"$layout_id\", command_station_id=~\"$command_station_id\", user_login=~\"$user_login\"}[$__rate_interval])) by (le, user_login))",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "__auto",
+          "range": false,
+          "refId": "p50"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum(rate(bigfred_dcc_bus_ws_client_ping_rtt_seconds_bucket{service_name=\"dcc-bus\", layout_id=~\"$layout_id\", command_station_id=~\"$command_station_id\", user_login=~\"$user_login\"}[$__rate_interval])) by (le, user_login))",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "__auto",
+          "range": false,
+          "refId": "p95"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.99, sum(rate(bigfred_dcc_bus_ws_client_ping_rtt_seconds_bucket{service_name=\"dcc-bus\", layout_id=~\"$layout_id\", command_station_id=~\"$command_station_id\", user_login=~\"$user_login\"}[$__rate_interval])) by (le, user_login))",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "__auto",
+          "range": false,
+          "refId": "p99"
+        }
+      ],
+      "title": "Throttle E2E by user",
+      "transformations": [
+        { "id": "merge", "options": {} },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "le": true
+            },
+            "renameByName": {
+              "Value #ops": "samples/s",
+              "Value #p50": "p50 (s)",
+              "Value #p95": "p95 (s)",
+              "Value #p99": "p99 (s)",
+              "user_login": "user"
+            }
+          }
+        }
+      ],
+      "type": "table"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 109 },
       "id": 300,
       "panels": [],
       "title": "WebSocket — sessions",
@@ -1309,7 +2045,7 @@
         },
         "overrides": []
       },
-      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 73 },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 110 },
       "id": 301,
       "options": {
         "colorMode": "value",
@@ -1345,7 +2081,7 @@
         },
         "overrides": []
       },
-      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 73 },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 110 },
       "id": 302,
       "options": {
         "colorMode": "value",
@@ -1388,7 +2124,7 @@
         },
         "overrides": []
       },
-      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 73 },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 110 },
       "id": 303,
       "options": {
         "colorMode": "value",
@@ -1431,7 +2167,7 @@
         },
         "overrides": []
       },
-      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 73 },
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 110 },
       "id": 304,
       "options": {
         "colorMode": "value",
@@ -1486,7 +2222,7 @@
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 77 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 115 },
       "id": 305,
       "options": {
         "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true },
@@ -1542,7 +2278,7 @@
           }
         ]
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 77 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 115 },
       "id": 306,
       "options": {
         "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true },
@@ -1593,7 +2329,7 @@
         },
         "overrides": []
       },
-      "gridPos": { "h": 7, "w": 24, "x": 0, "y": 85 },
+      "gridPos": { "h": 7, "w": 24, "x": 0, "y": 123 },
       "id": 307,
       "options": {
         "legend": { "calcs": ["mean", "sum"], "displayMode": "table", "placement": "bottom", "showLegend": true },
@@ -1747,6 +2483,28 @@
         "allValue": ".*",
         "current": { "selected": true, "text": "All", "value": "$__all" },
         "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "definition": "label_values(bigfred_dcc_bus_ws_client_ping_rtt_seconds_count{service_name=\"dcc-bus\"}, user_login)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "User login",
+        "multi": true,
+        "name": "user_login",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(bigfred_dcc_bus_ws_client_ping_rtt_seconds_count{service_name=\"dcc-bus\"}, user_login)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "allValue": ".*",
+        "current": { "selected": true, "text": "All", "value": "$__all" },
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
         "definition": "label_values(bigfred_dcc_bus_ws_sessions_closed_total{service_name=\"dcc-bus\"}, reason)",
         "hide": 0,
         "includeAll": true,
@@ -1772,6 +2530,6 @@
   "timezone": "browser",
   "title": "BigFred / dcc-bus",
   "uid": "bigfred-dcc-bus",
-  "version": 4,
+  "version": 8,
   "weekStart": ""
 }

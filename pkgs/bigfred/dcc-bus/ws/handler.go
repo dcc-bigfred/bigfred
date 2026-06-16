@@ -248,6 +248,13 @@ func (s *Server) dispatch(ctx context.Context, sess *Session, env contract.Envel
 
 	switch env.Type {
 	case protocol.TypePing:
+		var p protocol.PingPayload
+		if env.Payload != nil {
+			_ = json.Unmarshal(env.Payload, &p)
+		}
+		if s.metrics != nil {
+			s.metrics.RecordClientPingRTT(sess.Login, p.LastPingLatencyMs)
+		}
 		out = s.handlePing(ctx, sess)
 
 	case protocol.TypeLocoSubscribe:

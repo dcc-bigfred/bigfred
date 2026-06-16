@@ -63,6 +63,7 @@ func register(m *migrator.Migrator) {
 	m.Register(20260615_000001, createVehicleLeasesUp, createVehicleLeasesDown)
 	m.Register(20260615_000002, createTrainLeasesUp, createTrainLeasesDown)
 	m.Register(20260615_000003, createTakeoverRequestsUp, createTakeoverRequestsDown)
+	m.Register(20260615_000004, seedSchlesienModelleDcc24EsuEp07V3TemplateUp, seedSchlesienModelleDcc24EsuEp07V3TemplateDown)
 }
 
 // createCommandStationsUp installs the `command_stations` catalogue

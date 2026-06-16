@@ -44,6 +44,8 @@ interface DccBusContextValue {
   status: DataPlaneStatus;
   reconnecting: boolean;
   speedSteps: number | null;
+  /** Last measured ping/pong RTT in ms, or null before the first sample. */
+  pingLatencyMs: number | null;
   states: Map<number, LocoState>;
   subscribe: (addresses: number[]) => Promise<{ ok: boolean; error?: string }>;
   setSpeed: (
@@ -91,6 +93,7 @@ export function DccBusProvider({
   const [status, setStatus] = useState<DataPlaneStatus>("idle");
   const [reconnecting, setReconnecting] = useState(false);
   const [speedSteps, setSpeedSteps] = useState<number | null>(null);
+  const [pingLatencyMs, setPingLatencyMs] = useState<number | null>(null);
   const [states, setStates] = useState<Map<number, LocoState>>(new Map());
   const [lastError, setLastError] = useState<string | null>(null);
 
@@ -101,12 +104,15 @@ export function DccBusProvider({
   const pending = useRef<
     Map<string, (ack: { ok: boolean; error?: string }) => void>
   >(new Map());
+  const pingSentAtRef = useRef<number | null>(null);
+  const lastPingRttMsRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!wsUrl) {
       setStatus("idle");
       setReconnecting(false);
       setSpeedSteps(null);
+      setPingLatencyMs(null);
       setStates(new Map());
       hadOpenedRef.current = false;
       return;
@@ -136,6 +142,9 @@ export function DccBusProvider({
       const gen = ++connectGenRef.current;
       setStatus("connecting");
       setLastError(null);
+      setPingLatencyMs(null);
+      pingSentAtRef.current = null;
+      lastPingRttMsRef.current = null;
       if (hadOpenedRef.current) {
         setReconnecting(true);
       }
@@ -237,6 +246,17 @@ export function DccBusProvider({
             }
             break;
           }
+          case "pong": {
+            const sentAt = pingSentAtRef.current;
+            if (sentAt == null) {
+              break;
+            }
+            pingSentAtRef.current = null;
+            const rttMs = performance.now() - sentAt;
+            lastPingRttMsRef.current = rttMs;
+            setPingLatencyMs(rttMs);
+            break;
+          }
           case "dcc-bus.opened": {
             const opened = msg.payload as DccBusOpenedPayload;
             if (opened.speedSteps > 0) {
@@ -248,9 +268,15 @@ export function DccBusProvider({
       };
 
       const heartbeat = window.setInterval(() => {
-        if (sock.readyState === WebSocket.OPEN) {
-          sock.send(JSON.stringify({ type: "ping" }));
+        if (sock.readyState !== WebSocket.OPEN) {
+          return;
         }
+        const payload =
+          lastPingRttMsRef.current != null
+            ? { lastPingLatencyMs: lastPingRttMsRef.current }
+            : {};
+        pingSentAtRef.current = performance.now();
+        sock.send(JSON.stringify({ type: "ping", payload }));
       }, heartbeatSecs * 1000);
 
       activeCleanup = () => {
@@ -282,6 +308,7 @@ export function DccBusProvider({
       hadOpenedRef.current = false;
       setReconnecting(false);
       setSpeedSteps(null);
+      setPingLatencyMs(null);
       setStates(new Map());
       setStatus("idle");
     };
@@ -331,6 +358,7 @@ export function DccBusProvider({
       status,
       reconnecting,
       speedSteps,
+      pingLatencyMs,
       states,
       subscribe,
       setSpeed,
@@ -342,6 +370,7 @@ export function DccBusProvider({
       status,
       reconnecting,
       speedSteps,
+      pingLatencyMs,
       states,
       subscribe,
       setSpeed,

@@ -19,15 +19,23 @@ var (
 	ErrTrainNoMembers     = errors.New("train_no_members")
 	ErrTrainMemberNotOwned = errors.New("train_member_not_owned")
 	ErrTrainMemberMissing  = errors.New("train_member_missing")
-	ErrTrainNotOwned       = errors.New("train_not_owned")
+	ErrTrainNotOwned                    = errors.New("train_not_owned")
+	ErrTrainMemberMultiplierRange      = errors.New("train_member_multiplier_range")
+	ErrTrainLeadingMultiplierImmutable = errors.New("train_leading_multiplier_immutable")
+)
+
+const (
+	defaultSpeedMultiplier = 1.0
+	maxSpeedMultiplier     = 4.0
 )
 
 const maxTrainNameLen = 64
 
 // TrainMemberInput is the validated payload of one TrainMember row.
 type TrainMemberInput struct {
-	VehicleID uint
-	Reversed  bool
+	VehicleID       uint
+	Reversed        bool
+	SpeedMultiplier float64 // 0 → default 1.0
 }
 
 // TrainCreateInput is the validated payload of TrainService.Create.
@@ -277,17 +285,101 @@ func (s *TrainService) replaceMembers(ctx context.Context, trainID uint, members
 		return err
 	}
 	for i, m := range members {
+		mult := m.SpeedMultiplier
+		if mult == 0 {
+			mult = defaultSpeedMultiplier
+		}
+		if err := validateSpeedMultiplier(mult); err != nil {
+			return err
+		}
 		row := domain.TrainMember{
-			TrainID:   trainID,
-			VehicleID: m.VehicleID,
-			Position:  i,
-			Reversed:  m.Reversed,
+			TrainID:         trainID,
+			VehicleID:       m.VehicleID,
+			Position:        i,
+			Reversed:        m.Reversed,
+			SpeedMultiplier: mult,
 		}
 		if err := s.members.Insert(ctx, &row); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func validateSpeedMultiplier(v float64) error {
+	if v <= 0 || v > maxSpeedMultiplier {
+		return ErrTrainMemberMultiplierRange
+	}
+	return nil
+}
+
+// UpdateMemberMultiplier sets speedMultiplier on one member row.
+// The leading member's multiplier is immutable (always 1.0 at fan-out).
+func (s *TrainService) UpdateMemberMultiplier(
+	ctx context.Context,
+	actorID, trainID, memberID uint,
+	eff domain.EffectiveRoles,
+	multiplier float64,
+) (domain.TrainMember, error) {
+	if err := validateSpeedMultiplier(multiplier); err != nil {
+		return domain.TrainMember{}, err
+	}
+	tr, err := s.trains.FindByID(ctx, trainID)
+	if err != nil {
+		if errors.Is(err, repo.ErrTrainNotFound) {
+			return domain.TrainMember{}, ErrTrainNotFound
+		}
+		return domain.TrainMember{}, err
+	}
+	if err := s.checkTrainMutate(eff, actorID, tr.OwnerUserID); err != nil {
+		return domain.TrainMember{}, err
+	}
+	member, err := s.members.FindByID(ctx, memberID)
+	if err != nil {
+		if errors.Is(err, repo.ErrTrainMemberNotFound) {
+			return domain.TrainMember{}, ErrTrainMemberMissing
+		}
+		return domain.TrainMember{}, err
+	}
+	if member.TrainID != trainID {
+		return domain.TrainMember{}, ErrTrainMemberMissing
+	}
+	allMembers, err := s.members.ListByTrain(ctx, trainID)
+	if err != nil {
+		return domain.TrainMember{}, err
+	}
+	vehicleIDs := make([]uint, 0, len(allMembers))
+	for _, m := range allMembers {
+		vehicleIDs = append(vehicleIDs, m.VehicleID)
+	}
+	vehicles, err := s.vehicles.ListByIDs(ctx, vehicleIDs)
+	if err != nil {
+		return domain.TrainMember{}, err
+	}
+	byID := make(map[uint]domain.Vehicle, len(vehicles))
+	for _, v := range vehicles {
+		byID[v.ID] = v
+	}
+	if leading, ok := LeadingMember(allMembers, byID); ok && leading.ID == memberID {
+		return domain.TrainMember{}, ErrTrainLeadingMultiplierImmutable
+	}
+	member.SpeedMultiplier = multiplier
+	if err := s.members.Update(ctx, &member); err != nil {
+		return domain.TrainMember{}, err
+	}
+	return member, nil
+}
+
+// LeadingMember returns the first member with a DCC address in Position
+// order, plus whether one was found.
+func LeadingMember(members []domain.TrainMember, vehicles map[uint]domain.Vehicle) (domain.TrainMember, bool) {
+	for _, m := range members {
+		v, ok := vehicles[m.VehicleID]
+		if ok && v.DCCAddress != nil {
+			return m, true
+		}
+	}
+	return domain.TrainMember{}, false
 }
 
 func sanitiseTrainName(raw string) (string, error) {

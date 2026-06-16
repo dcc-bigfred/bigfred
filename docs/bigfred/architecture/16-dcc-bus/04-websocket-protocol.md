@@ -49,6 +49,12 @@ Throttle traffic only — every other WS action stays on
   Authorization via `LocoSecurityContext.CanDriveLoco` (§7a.3.2).
 - `loco.toggleFn` `{ addr, fn, on }` — toggle a function. Authorization
   via `FunctionSecurityContext.CanInvokeFunction` (§7a.3).
+- `train.setSpeed` `{ trainId, speed, forward }` — drive an entire
+  train on this command station. The daemon reads the cached
+  `defined_trains` snapshot, authorizes against the train's
+  `controllerUserIds`, fans out per-member writes (leading multiplier
+  forced to `1.0`, `Reversed` flip, clamp to max speed), and returns
+  an aggregate ack with per-member outcomes. See §4.2.
 - `system.estop` `{}` — **emergency stop, scoped to THIS daemon's
   command station**. Sets the user's `DriveTargets` to speed 0; does
   **not** cut track power. Available to any authenticated session of
@@ -60,16 +66,9 @@ Throttle traffic only — every other WS action stays on
 
 Notably **absent** from the daemon:
 
-- `train.subscribe` / `train.setSpeed` / `train.unsubscribe` —
-  train-level orchestration stays on `loco-server` because:
-  - a train may have members on different command stations,
-  - the per-member `Reversed` fan-out logic lives in `TrainService`
-    on the server (§4.2 train.setSpeed),
-  - `loco-server` then publishes the per-member commands onto the
-    appropriate `dcc-bus:cmd:<L>:<C>` channel (§7e.3 command channel),
-    so the daemons execute them as if a frontend had issued them.
-  The frontend therefore continues to send `train.*` to `loco-server`
-  exclusively; the daemons never see train messages.
+- `train.subscribe` / `train.unsubscribe` — dropped. The frontend
+  `loco.subscribe`s every powered member address directly; no
+  train-level subscribe frame is needed.
 - `takeover.*`, `radio.*`, `script.*`, `interlocking.*`, `session.*`,
   `auth.*`, `layout.*` — all control-plane traffic stays on
   `loco-server`.
@@ -127,12 +126,9 @@ Notably **absent** from the daemon:
    loco.unsubscribe           dcc-bus:<L>:<C>
    loco.setSpeed              dcc-bus:<L>:<C>
    loco.toggleFn              dcc-bus:<L>:<C>
+   train.setSpeed             dcc-bus:<L>:<C>
    system.estop               dcc-bus:<L>:<C>   (scoped to this command station)
    ping                       both endpoints (independent heartbeats)
-   --
-   train.subscribe            loco-server /api/v1/ws  (fans out to dcc-bus:cmd)
-   train.unsubscribe          loco-server /api/v1/ws
-   train.setSpeed             loco-server /api/v1/ws  (fans out to dcc-bus:cmd)
    --
    session.setCommandStation  loco-server /api/v1/ws  (triggers dcc-bus spawn
                                                        and dcc-bus.opened)

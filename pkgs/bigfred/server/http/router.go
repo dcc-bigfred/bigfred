@@ -141,6 +141,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			r.Get("/trains", trainH.List)
 			r.Post("/trains", trainH.Create)
 			r.Put("/trains/{id}", trainH.Update)
+			r.Patch("/trains/{id}/members/{memberId}", trainH.PatchMember)
 			r.Delete("/trains/{id}", trainH.Delete)
 
 			// Layout vehicle / train roster (dashboard data sources).

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
+	"github.com/keskad/loco/pkgs/bigfred/server/security"
 	"github.com/keskad/loco/pkgs/bigfred/server/service"
 )
 
@@ -42,6 +43,7 @@ type rosterTrainResponse struct {
 	OwnerID    uint                  `json:"ownerId"`
 	OwnerLogin string                `json:"ownerLogin"`
 	AddedAt    time.Time             `json:"addedAt"`
+	CanDrive   bool                  `json:"canDrive"`
 	Members    []trainMemberResponse `json:"members"`
 }
 
@@ -54,14 +56,19 @@ func toRosterVehicleResponse(e service.RosterVehicleEntry, canDrive bool) roster
 	}
 }
 
-func toRosterTrainResponse(e service.RosterTrainEntry) rosterTrainResponse {
+func toRosterTrainResponse(e service.RosterTrainEntry, canDrive bool) rosterTrainResponse {
 	members := make([]trainMemberResponse, 0, len(e.Members))
 	for _, m := range e.Members {
+		mult := m.SpeedMultiplier
+		if mult <= 0 {
+			mult = 1.0
+		}
 		members = append(members, trainMemberResponse{
-			ID:        m.ID,
-			VehicleID: m.VehicleID,
-			Position:  m.Position,
-			Reversed:  m.Reversed,
+			ID:              m.ID,
+			VehicleID:       m.VehicleID,
+			Position:        m.Position,
+			Reversed:        m.Reversed,
+			SpeedMultiplier: mult,
 		})
 	}
 	return rosterTrainResponse{
@@ -70,6 +77,7 @@ func toRosterTrainResponse(e service.RosterTrainEntry) rosterTrainResponse {
 		OwnerID:    e.Train.OwnerUserID,
 		OwnerLogin: e.OwnerLogin,
 		AddedAt:    e.AddedAt,
+		CanDrive:   canDrive,
 		Members:    members,
 	}
 }
@@ -130,7 +138,7 @@ func (h *LayoutRosterHandler) ListVehicles(w http.ResponseWriter, r *http.Reques
 	}
 	out := make([]rosterVehicleResponse, 0, len(rows))
 	for _, e := range rows {
-		canDrive := service.UserCanDriveWithLessees(actor.User.ID, e.Vehicle.OwnerUserID, lessees[e.Vehicle.ID])
+		canDrive := (security.DriveSecurityContext{}).CanDrive(actor.User, e.Vehicle.OwnerUserID, lessees[e.Vehicle.ID]).Allowed
 		out = append(out, toRosterVehicleResponse(e, canDrive))
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -139,7 +147,7 @@ func (h *LayoutRosterHandler) ListVehicles(w http.ResponseWriter, r *http.Reques
 
 // ListTrains handles GET /api/v1/layouts/{id}/trains.
 func (h *LayoutRosterHandler) ListTrains(w http.ResponseWriter, r *http.Request) {
-	layoutID, _, ok := requireOwnLayout(w, r)
+	layoutID, actor, ok := requireOwnLayout(w, r)
 	if !ok {
 		return
 	}
@@ -148,9 +156,15 @@ func (h *LayoutRosterHandler) ListTrains(w http.ResponseWriter, r *http.Request)
 		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 		return
 	}
+	lessees, err := h.svc.LesseesByTrain(r.Context(), layoutID, rows)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
 	out := make([]rosterTrainResponse, 0, len(rows))
 	for _, e := range rows {
-		out = append(out, toRosterTrainResponse(e))
+		canDrive := (security.DriveSecurityContext{}).CanDrive(actor.User, e.Train.OwnerUserID, domain.TrainLesseeUserIDs(lessees[e.Train.ID])).Allowed
+		out = append(out, toRosterTrainResponse(e, canDrive))
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(out)
@@ -234,7 +248,7 @@ func (h *LayoutRosterHandler) AddTrain(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(toRosterTrainResponse(entry))
+	_ = json.NewEncoder(w).Encode(toRosterTrainResponse(entry, true))
 }
 
 // RemoveTrain handles DELETE /api/v1/layouts/{id}/trains/{trainId}.

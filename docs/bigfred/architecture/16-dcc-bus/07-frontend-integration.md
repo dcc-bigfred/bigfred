@@ -16,7 +16,8 @@ real-time data from, not the visual surface.
    │
    └── ws://host:<port>/ws?token=<jwt> (dcc-bus, picked cs)
          - dcc-bus.opened             (sessionId, sharedBus, layoutId, csId)
-         - loco.subscribe / unsubscribe / setSpeed / toggleFn / system.estop / ping
+         - loco.subscribe / unsubscribe / setSpeed / toggleFn /
+           train.setSpeed / system.estop / ping
          - loco.state, loco.error, vehicle.functionsChanged, system.status,
            session.warning, session.emergencyExecuted, pong, ack
 ```
@@ -122,12 +123,18 @@ strip of vehicle cards. Tapping a card subscribes to that addr on
 `dccBusWs` (lazy — only the currently-focused vehicle is subscribed,
 others are unsubscribed to keep the poller's working set small).
 
-Trains: the strip also lists trains the user has authority on. Tapping
-a train subscribes to **every member's** addr via `train.subscribe`
-on `controlWs` (the server fans the per-member subscribes onto the
-appropriate dcc-bus command channels). The slider in train mode
-emits `train.setSpeed` on `controlWs`, not on `dccBusWs`, because
-train fan-out is server-side (§7e.4).
+Trains: the picker also lists trains the user has authority on
+(`GET /api/v1/layouts/{id}/trains`, `canDrive: true`). Selecting a
+train:
+
+- subscribes to **every powered member's** DCC address via
+  `loco.subscribe` on `dccBusWs` (no `train.subscribe`);
+- drives the consist via `train.setSpeed` on **`dccBusWs`** (data
+  plane), debounced like `loco.setSpeed`;
+- reads speed/direction from the **leading member's** `loco.state`;
+- renders per-member function toggles as collapsible accordions
+  (`TrainFunctionAccordions`, §6.3a); each toggle is still
+  `loco.toggleFn` on `dccBusWs`.
 
 #### Throttle component tree
 

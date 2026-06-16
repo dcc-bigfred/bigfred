@@ -3,6 +3,7 @@ import {
   Box,
   FormControl,
   IconButton,
+  ListSubheader,
   MenuItem,
   Select,
   Typography,
@@ -15,6 +16,7 @@ import TuneIcon from "@mui/icons-material/Tune";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 
+import type { ThrottleTarget } from "../../hooks/useThrottleTargetSelection";
 import {
   cockpit,
   FUNCTION_BUTTON_GRID_GAP_PX,
@@ -37,18 +39,30 @@ export interface ThrottleCockpitVehicle {
   dccAddress: number;
 }
 
+export interface ThrottleCockpitTrain {
+  id: number;
+  name: string;
+}
+
 export interface ThrottleCockpitProps {
   layoutId: number;
   onOpenSetup: () => void;
   vehicles: ThrottleCockpitVehicle[];
-  selectedAddress: number | null;
-  onSelectAddress: (address: number) => void;
+  /** When omitted, vehicle-only picker mode (legacy). */
+  trains?: ThrottleCockpitTrain[];
+  selectedTarget?: ThrottleTarget | null;
+  onSelectTarget?: (target: ThrottleTarget) => void;
+  /** Legacy vehicle-only selection — used when selectedTarget is not provided. */
+  selectedAddress?: number | null;
+  onSelectAddress?: (address: number) => void;
+  witnessLabel?: string;
   speed: number;
   maxSpeed: number;
   forward: boolean;
   functions: boolean[];
-  /** Defined DCC functions for the selected vehicle (order = throttle grid). */
   configuredFunctions: ThrottleCockpitFunction[];
+  /** Replaces the flat function grid (train accordion mode). */
+  functionPanel?: ReactNode;
   disabled?: boolean;
   onSpeedChange: (speed: number) => void;
   onDirectionChange: (forward: boolean) => void;
@@ -57,20 +71,29 @@ export interface ThrottleCockpitProps {
   headerExtra?: ReactNode;
 }
 
-// ThrottleCockpit is the locomotive-control surface: function grid on
-// the left, vertical throttle + stop on the right, direction bar full
-// width at the bottom.
+function targetKey(target: ThrottleTarget | null): string {
+  if (target == null) return "";
+  return target.kind === "vehicle"
+    ? `v:${target.dccAddress}`
+    : `t:${target.trainId}`;
+}
+
 export default function ThrottleCockpit({
   layoutId,
   onOpenSetup,
   vehicles,
-  selectedAddress,
+  trains = [],
+  selectedTarget,
+  onSelectTarget,
+  selectedAddress = null,
   onSelectAddress,
+  witnessLabel,
   speed,
   maxSpeed,
   forward,
   functions,
   configuredFunctions,
+  functionPanel,
   disabled = false,
   onSpeedChange,
   onDirectionChange,
@@ -81,18 +104,57 @@ export default function ThrottleCockpit({
   const { t } = useTranslation("throttle");
   const navigate = useNavigate();
 
-  const selectedVehicle = useMemo(
-    () => vehicles.find((v) => v.dccAddress === selectedAddress),
-    [vehicles, selectedAddress],
-  );
+  const effectiveTarget: ThrottleTarget | null = useMemo(() => {
+    if (selectedTarget != null) return selectedTarget;
+    if (selectedAddress != null) {
+      return { kind: "vehicle", dccAddress: selectedAddress };
+    }
+    return null;
+  }, [selectedTarget, selectedAddress]);
+
+  const selectedVehicle = useMemo(() => {
+    if (effectiveTarget?.kind !== "vehicle") return undefined;
+    return vehicles.find((v) => v.dccAddress === effectiveTarget.dccAddress);
+  }, [vehicles, effectiveTarget]);
+
+  const selectedTrain = useMemo(() => {
+    if (effectiveTarget?.kind !== "train") return undefined;
+    return trains.find((tr) => tr.id === effectiveTarget.trainId);
+  }, [trains, effectiveTarget]);
+
+  const pickerLabel =
+    witnessLabel ??
+    selectedTrain?.name ??
+    selectedVehicle?.name ??
+    t("vehicle");
+
+  const hasSelection = effectiveTarget != null;
+  const dualPicker = onSelectTarget != null && trains.length >= 0;
 
   const speedPercent =
     maxSpeed > 0 ? Math.round((speed / maxSpeed) * 100) : 0;
 
-  const handleVehicleChange = (ev: SelectChangeEvent<string>) => {
-    const addr = Number(ev.target.value);
-    if (Number.isFinite(addr) && addr > 0) {
-      onSelectAddress(addr);
+  const handlePickerChange = (ev: SelectChangeEvent<string>) => {
+    const raw = ev.target.value;
+    if (!onSelectTarget) {
+      const addr = Number(raw);
+      if (Number.isFinite(addr) && addr > 0) {
+        onSelectAddress?.(addr);
+      }
+      return;
+    }
+    if (raw.startsWith("v:")) {
+      const addr = Number(raw.slice(2));
+      if (Number.isFinite(addr) && addr > 0) {
+        onSelectTarget({ kind: "vehicle", dccAddress: addr });
+      }
+      return;
+    }
+    if (raw.startsWith("t:")) {
+      const trainId = Number(raw.slice(2));
+      if (Number.isFinite(trainId) && trainId > 0) {
+        onSelectTarget({ kind: "train", trainId });
+      }
     }
   };
 
@@ -128,7 +190,10 @@ export default function ThrottleCockpit({
 
         <FormControl
           size="small"
-          disabled={disabled || vehicles.length === 0}
+          disabled={
+            disabled ||
+            (vehicles.length === 0 && trains.length === 0)
+          }
           sx={{
             flex: 1,
             minWidth: 0,
@@ -144,22 +209,32 @@ export default function ThrottleCockpit({
           }}
         >
           <Select
-            value={
-              selectedAddress != null ? String(selectedAddress) : ""
-            }
+            value={targetKey(effectiveTarget)}
             displayEmpty
-            onChange={handleVehicleChange}
-            renderValue={() =>
-              selectedVehicle?.name ??
-              t("vehicle")
-            }
+            onChange={handlePickerChange}
+            renderValue={() => pickerLabel}
             aria-label={t("vehicle")}
           >
+            {dualPicker && vehicles.length > 0 && (
+              <ListSubheader>{t("vehicle")}</ListSubheader>
+            )}
             {vehicles.map((v) => (
-              <MenuItem key={v.id} value={String(v.dccAddress)}>
+              <MenuItem
+                key={v.id}
+                value={dualPicker ? `v:${v.dccAddress}` : String(v.dccAddress)}
+              >
                 {v.name} ({v.dccAddress})
               </MenuItem>
             ))}
+            {dualPicker && trains.length > 0 && (
+              <ListSubheader>{t("train.picker")}</ListSubheader>
+            )}
+            {dualPicker &&
+              trains.map((tr) => (
+                <MenuItem key={tr.id} value={`t:${tr.id}`}>
+                  {tr.name}
+                </MenuItem>
+              ))}
           </Select>
         </FormControl>
 
@@ -210,27 +285,29 @@ export default function ThrottleCockpit({
             bgcolor: cockpit.bgPanel,
           }}
         >
-          <Box
-            sx={{
-              display: "grid",
-              width: "100%",
-              gridTemplateColumns: `repeat(auto-fill, ${FUNCTION_BUTTON_SIZE_PX}px)`,
-              gap: `${FUNCTION_BUTTON_GRID_GAP_PX}px`,
-              justifyContent: "start",
-            }}
-          >
-            {configuredFunctions.map((fn) => (
-              <FunctionGridButton
-                key={fn.num}
-                fnCode={t("fnLabel", { n: fn.num })}
-                label={fn.label}
-                icon={fn.icon}
-                active={Boolean(functions[fn.num])}
-                disabled={disabled || selectedAddress == null}
-                onClick={() => onFunctionToggle(fn.num)}
-              />
-            ))}
-          </Box>
+          {functionPanel ?? (
+            <Box
+              sx={{
+                display: "grid",
+                width: "100%",
+                gridTemplateColumns: `repeat(auto-fill, ${FUNCTION_BUTTON_SIZE_PX}px)`,
+                gap: `${FUNCTION_BUTTON_GRID_GAP_PX}px`,
+                justifyContent: "start",
+              }}
+            >
+              {configuredFunctions.map((fn) => (
+                <FunctionGridButton
+                  key={fn.num}
+                  fnCode={t("fnLabel", { n: fn.num })}
+                  label={fn.label}
+                  icon={fn.icon}
+                  active={Boolean(functions[fn.num])}
+                  disabled={disabled || !hasSelection}
+                  onClick={() => onFunctionToggle(fn.num)}
+                />
+              ))}
+            </Box>
+          )}
         </Box>
 
         <Box
@@ -265,7 +342,7 @@ export default function ThrottleCockpit({
             <VerticalThrottle
               value={speed}
               max={maxSpeed}
-              disabled={disabled || selectedAddress == null}
+              disabled={disabled || !hasSelection}
               onChange={onSpeedChange}
             />
             <Box
@@ -289,7 +366,7 @@ export default function ThrottleCockpit({
             <Box
               component="button"
               type="button"
-              disabled={disabled || selectedAddress == null}
+              disabled={disabled || !hasSelection}
               onClick={onStop}
               sx={{
                 width: "100%",
@@ -336,7 +413,7 @@ export default function ThrottleCockpit({
       >
         <Box sx={{ flex: 1, display: "flex", justifyContent: "flex-start" }}>
           <IconButton
-            disabled={disabled || selectedAddress == null}
+            disabled={disabled || !hasSelection}
             onClick={() => onDirectionChange(false)}
             aria-label={t("direction.reverse")}
             sx={{
@@ -367,7 +444,7 @@ export default function ThrottleCockpit({
 
         <Box sx={{ flex: 1, display: "flex", justifyContent: "flex-end" }}>
           <IconButton
-            disabled={disabled || selectedAddress == null}
+            disabled={disabled || !hasSelection}
             onClick={() => onDirectionChange(true)}
             aria-label={t("direction.forward")}
             sx={{

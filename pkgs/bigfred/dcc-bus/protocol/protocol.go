@@ -104,12 +104,20 @@ type LocoErrorPayload struct {
 	Detail  string `json:"detail,omitempty"`
 }
 
+// TrainSetSpeedMemberAck is one member result inside a train.setSpeed ack.
+type TrainSetSpeedMemberAck struct {
+	Addr  uint16 `json:"addr"`
+	OK    bool   `json:"ok"`
+	Error string `json:"error,omitempty"`
+}
+
 // AckPayload is the standard reply to any client request that
 // expected confirmation. `Ok` is true on success; `Error` is the
 // machine-readable failure code when `Ok` is false.
 type AckPayload struct {
-	OK    bool   `json:"ok"`
-	Error string `json:"error,omitempty"`
+	OK      bool                   `json:"ok"`
+	Error   string                 `json:"error,omitempty"`
+	Members []TrainSetSpeedMemberAck `json:"members,omitempty"`
 }
 
 // -------- Frame type catalogue --------
@@ -121,6 +129,7 @@ const (
 	TypePong              = "pong"
 	TypeLocoSubscribe     = "loco.subscribe"
 	TypeLocoSetSpeed      = "loco.setSpeed"
+	TypeTrainSetSpeed     = "train.setSpeed"
 	TypeLocoSetFunction   = "loco.setFunction"
 	TypeSystemEStop       = "system.estop"
 	TypeSystemRadioStop   = "system.radioStop"

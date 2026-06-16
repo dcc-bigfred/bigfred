@@ -54,6 +54,11 @@ interface DccBusContextValue {
     forward: boolean,
     emergency?: boolean,
   ) => Promise<{ ok: boolean; error?: string }>;
+  setTrainSpeed: (
+    trainId: number,
+    speed: number,
+    forward: boolean,
+  ) => Promise<{ ok: boolean; error?: string }>;
   setFunction: (
     address: number,
     fn: number,
@@ -343,6 +348,11 @@ export function DccBusProvider({
       send("loco.setSpeed", { address, speed, forward, emergency }),
     [send],
   );
+  const setTrainSpeed = useCallback(
+    (trainId: number, speed: number, forward: boolean) =>
+      send("train.setSpeed", { trainId, speed, forward }),
+    [send],
+  );
   const setFunction = useCallback(
     (address: number, fn: number, on: boolean) =>
       send("loco.setFunction", { address, function: fn, on }),
@@ -362,6 +372,7 @@ export function DccBusProvider({
       states,
       subscribe,
       setSpeed,
+      setTrainSpeed,
       setFunction,
       emergencyStop,
       lastError,
@@ -374,6 +385,7 @@ export function DccBusProvider({
       states,
       subscribe,
       setSpeed,
+      setTrainSpeed,
       setFunction,
       emergencyStop,
       lastError,

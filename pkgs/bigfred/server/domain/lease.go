@@ -48,3 +48,23 @@ func (l VehicleLease) IsActive(now time.Time) bool {
 func (l TrainLease) IsActive(now time.Time) bool {
 	return l.RevokedAt == nil && now.Before(l.ExpiresAt)
 }
+
+// TrainLessee is an active lease holder in a train-scoped drive
+// projection (§4.3). It is the value stored in per-train lessee maps
+// returned by layout roster resolution.
+type TrainLessee struct {
+	TrainID  uint
+	ToUserID uint
+}
+
+// TrainLesseeUserIDs extracts ToUserID from a train-lessee slice.
+func TrainLesseeUserIDs(lessees []TrainLessee) []uint {
+	if len(lessees) == 0 {
+		return nil
+	}
+	out := make([]uint, len(lessees))
+	for i, l := range lessees {
+		out[i] = l.ToUserID
+	}
+	return out
+}

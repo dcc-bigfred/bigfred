@@ -76,15 +76,21 @@ type DefinedTrains struct {
 type DefinedTrain struct {
 	TrainID     uint                 `json:"trainId"`
 	OwnerUserID uint                 `json:"ownerUserId"`
-	Members     []DefinedTrainMember `json:"members"`
+
+	// ControllerUserIDs is the flat set of user ids allowed to drive
+	// this train right now (owner + active train lessees).
+	ControllerUserIDs []uint `json:"controllerUserIds"`
+
+	Members []DefinedTrainMember `json:"members"`
 }
 
 // DefinedTrainMember is one vehicle in consist order.
 type DefinedTrainMember struct {
 	VehicleID uint    `json:"vehicleId"`
 	Position  int     `json:"position"`
-	Reversed  bool    `json:"reversed"`
-	Addr      *uint16 `json:"addr,omitempty"`
+	Reversed        bool    `json:"reversed"`
+	SpeedMultiplier float64 `json:"speedMultiplier"`
+	Addr            *uint16 `json:"addr,omitempty"`
 }
 
 // Marshal encodes a snapshot for Redis SET/PUBLISH.

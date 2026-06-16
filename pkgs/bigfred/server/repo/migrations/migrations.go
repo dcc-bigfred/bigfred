@@ -64,6 +64,7 @@ func register(m *migrator.Migrator) {
 	m.Register(20260615_000002, createTrainLeasesUp, createTrainLeasesDown)
 	m.Register(20260615_000003, createTakeoverRequestsUp, createTakeoverRequestsDown)
 	m.Register(20260615_000004, seedSchlesienModelleDcc24EsuEp07V3TemplateUp, seedSchlesienModelleDcc24EsuEp07V3TemplateDown)
+	m.Register(20260616_000001, addTrainMemberSpeedMultiplierUp, addTrainMemberSpeedMultiplierDown)
 }
 
 // createCommandStationsUp installs the `command_stations` catalogue
@@ -593,4 +594,14 @@ func createTakeoverRequestsUp(s *rel.Schema) {
 
 func createTakeoverRequestsDown(s *rel.Schema) {
 	s.DropTable("takeover_requests")
+}
+
+// addTrainMemberSpeedMultiplierUp adds per-member speed calibration for
+// train throttle fan-out (leading vehicle × multiplier).
+func addTrainMemberSpeedMultiplierUp(s *rel.Schema) {
+	s.Exec(rel.Raw(`ALTER TABLE train_members ADD COLUMN speed_multiplier REAL NOT NULL DEFAULT 1.0`))
+}
+
+func addTrainMemberSpeedMultiplierDown(s *rel.Schema) {
+	// SQLite cannot DROP COLUMN in older schemas; leave column in place.
 }

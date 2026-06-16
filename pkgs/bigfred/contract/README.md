@@ -13,6 +13,7 @@ and wire-format bytes from primitive Go values.
 | File | Responsibility |
 |------|----------------|
 | [`allowedvehicles.go`](allowedvehicles.go) | Layout roster keys, snapshot types (`AllowedVehicles`, `DefinedTrains`, …), `Marshal` / `Unmarshal*`, and payload builders. |
+| [`trains.go`](trains.go) | Train driving helpers (`LeadingMember`, `CanDrive`, `EffectiveMemberSpeed`, `MaxSpeedForSpeedSteps`, `TrainSetSpeedWire`). |
 | [`locostate.go`](locostate.go) | Per-loco state key (`loco:state`), `LocoStateWire`, and `BuildLocoStatePayload`. |
 | [`dccbus.go`](dccbus.go) | Command/event channels, port-pool hash, `EnvelopeWire`, command intents (`LocoSetSpeedWire`, `LocoSetFunctionWire`), and envelope/port builders. |
 
@@ -60,9 +61,11 @@ snap, err := contract.UnmarshalAllowedVehicles(msg.Payload)
 
 Command intents carried on `dcc-bus:cmd:*` (server → daemon) — `LocoSetSpeedWire`
 and `LocoSetFunctionWire` — live here because they are part of the cross-process
-contract; the dcc-bus WebSocket reuses the same structs for the client → daemon
-direction. State snapshots (`LocoStateWire`) and roster snapshots are the other
-payload families defined in this package. Frames that never leave the dcc-bus
+contract; the dcc-bus WebSocket reuses the same structs for client → daemon
+`loco.setSpeed` / `loco.toggleFn`, and additionally hosts `train.setSpeed` via
+`TrainSetSpeedWire` (daemon-side fan-out only — not on the command channel).
+State snapshots (`LocoStateWire`) and roster snapshots are the other payload
+families defined in this package. Frames that never leave the dcc-bus
 WebSocket (subscribe, ack, errors, the welcome frame) stay in
 `pkgs/bigfred/dcc-bus/protocol`.
 

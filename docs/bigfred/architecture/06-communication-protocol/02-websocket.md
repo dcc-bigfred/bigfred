@@ -6,7 +6,7 @@ authoritative scopes (§7e splits the data plane out of `loco-server`):
 | Endpoint | Process | Scope |
 |---|---|---|
 | `GET /api/v1/ws` | `loco-server` | **Control plane** — sessions, takeover, radio, scripts, presence, sudo elevation, layout / command-station picker. Always open while the user is logged in. |
-| `GET ws://host:<port>/ws?token=<jwt>` | `dcc-bus` (one process per `(layoutId, commandStationId)` pair, §7e) | **Data plane** — throttle traffic (`loco.subscribe`, `loco.setSpeed`, `loco.toggleFn`, `system.estop`, `ping`). Opened when the user picks a command station, re-opened against a different daemon when the user switches command stations. |
+| `GET ws://host:<port>/ws?token=<jwt>` | `dcc-bus` (one process per `(layoutId, commandStationId)` pair, §7e) | **Data plane** — throttle traffic (`loco.subscribe`, `loco.setSpeed`, `loco.toggleFn`, `train.setSpeed`, `system.estop`, `ping`). Opened when the user picks a command station, re-opened against a different daemon when the user switches command stations. |
 
 The frontend therefore holds **two** WebSocket connections in
 throttle mode (§6.3b, §7e.7). The control plane carries everything
@@ -42,50 +42,41 @@ Throttle / locomotive control — **hosted by `dcc-bus`** (§7e.4) once
 - `loco.setSpeed` `{ addr, speed, forward }`.
 - `loco.toggleFn` `{ addr, fn, on }`.
 
-Train control — **stays on `loco-server`'s `/api/v1/ws`** even after
-§7e (a train may span multiple command stations; the server fans
-per-member writes onto the appropriate `dcc-bus:cmd:<L>:<C>`
-channels):
+Train control — **hosted by `dcc-bus`** on the data-plane WS (§7e.4).
+`loco-server` publishes the train roster to Redis (`defined_trains`) but
+does **not** mediate driving:
 
-- `train.subscribe` `{ trainId }` – convenience action: server expands
-  the train into its current member set and subscribes the caller to
-  every member's `loco.state` events in a single round trip. Sent by
-  the train control view on mount; superseded by per-member
-  `loco.subscribe` semantics under the hood (no new event channel).
-- `train.unsubscribe` `{ trainId }` – analogous teardown.
 - `train.setSpeed` `{ trainId, speed, forward }` – **drives the entire
-  train from a single slider**. The server:
-  1. resolves the train into its `TrainMember` rows (rejected with
-     `not_found` if the user lacks driving authority on the train);
-  2. for each member, **flips `forward` iff `member.Reversed == true`**
-     so a vehicle coupled the other way around runs in the opposite
-     DCC direction and the whole consist moves rigidly;
-  3. calls `Station.SetSpeed(member.DCCAddr, speed, effectiveForward)`
-     concurrently across members (each on the command station resolved from
-     `session.CommandStationID`, §3a.4 rule 3);
-  4. replies with a single `ack` that aggregates per-member outcomes:
-     `{ ok: true, trainSpeed: { trainId, speed, forward, members:[
-        { addr, ok: true | false, error? } ] } }`.
+  train from a single slider**. The **dcc-bus daemon** for the session's
+  picked command station:
+  1. looks up the train in its cached `defined_trains` snapshot
+     (`train_not_on_layout` when absent);
+  2. **authorizes** against the train's `controllerUserIds` (owner +
+     active train lessees + takeover self-lease — the same projection
+     REST uses for `UserCanDriveTrain`, not the leading member's
+     per-vehicle set);
+  3. resolves the **leading vehicle** — first member with a DCC address
+     in `Position` order (`train_no_powered_members` when none);
+  4. for each powered member, applies `speedMultiplier` (leading forced
+     to `1.0`), flips `forward` when `member.Reversed`, clamps to the
+     command-station max, and writes via `Station.SetSpeed`;
+  5. replies with `ack { ok, error?, members:[{ addr, ok, error? }] }`.
+     `partial_failure` when any member write fails.
+
+  There is **no** `train.subscribe` / `train.unsubscribe`. The frontend
+  issues ordinary `loco.subscribe` for every powered member address so
+  `loco.state` witnesses and per-member function toggles work unchanged.
+
   Semantics:
-  - **Best-effort, not transactional.** A DCC bus does not support a
-    multi-address atomic write, so a partial failure (one decoder
-    silent) leaves the rest of the train at the new speed. The UI is
-    expected to render an inline warning on the failing member's row
-    and the user decides whether to retry or `system.estop`.
-  - **Fan-out is single source of truth for `controlledBy`.** Every
-    affected member's broadcast `loco.state` event now carries
-    `controlledBy: { kind: "train", trainId, userId }` instead of
-    `kind: "driver"`. An individual `loco.setSpeed` from the same
-    user's other tab targeting one of those members detaches that
-    member from the train view (its `controlledBy` flips to
-    `"driver"`) and the train slider in the original tab visually
-    "loses" that member – it is grayed out with a re-attach button.
-  - **Lease / takeover rules are evaluated per member.** A train
-    leased to user B has the same per-member authority as
-    `loco.setSpeed { addr, ... }` would: if any single member is
-    currently under signalman takeover, the ack lists that member as
-    `{ ok:false, error:"taken_over" }`; the rest of the train is
-    driven normally.
+  - **Best-effort, not transactional.** Partial failure leaves the rest
+    of the consist at the new speed; the UI surfaces per-member errors
+    from the aggregate ack.
+  - **Fan-out source is `"train"`.** Each member's Redis snapshot and
+    broadcast `loco.state` carries `source: "train"` and
+    `controlledByUserId` of the driving session.
+  - **Single command station.** A train is driven on the session's
+    currently picked command station (§4.5); all members must be on
+    that station's layout roster.
 - `system.estop` `{}` – emergency stop. Hosted by `dcc-bus` once §7e
   ships; scope is the command station this `dcc-bus` owns (not a
   global track-power cut). On `loco-server`'s baseline WS the scope
@@ -302,6 +293,7 @@ Server → Client:
 The daemon also re-emits the existing throttle events
 (`loco.state`, `loco.error`, `vehicle.functionsChanged`,
 `system.status`, `session.warning`, `session.emergencyExecuted`,
-`pong`, `ack`) with semantics identical to those defined in this
-section, scoped to its `(layoutId, commandStationId)` slice. See
-§7e.4 for the full per-frame contract.
+`pong`, `ack`) and hosts **`train.setSpeed`** on the data plane with
+semantics identical to those defined in this section, scoped to its
+`(layoutId, commandStationId)` slice. See §7e.4 for the full per-frame
+contract.

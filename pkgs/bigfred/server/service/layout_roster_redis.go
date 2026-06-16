@@ -186,6 +186,35 @@ func (s *LayoutVehicleService) resolveLesseesByVehicle(
 	return lesseesByVehicle, nil
 }
 
+// resolveLesseesByTrain returns active lessees per train id on a layout
+// roster. Unlike resolveLesseesByVehicle this is train-scoped only: a
+// vehicle lease on a member does not appear here.
+func (s *LayoutVehicleService) resolveLesseesByTrain(
+	ctx context.Context,
+	trainEntries []RosterTrainEntry,
+	now time.Time,
+) (map[uint][]domain.TrainLessee, error) {
+	lesseesByTrain := make(map[uint][]domain.TrainLessee)
+	if s.trainLeases == nil || len(trainEntries) == 0 {
+		return lesseesByTrain, nil
+	}
+	trainIDs := make([]uint, 0, len(trainEntries))
+	for _, e := range trainEntries {
+		trainIDs = append(trainIDs, e.Train.ID)
+	}
+	rows, err := s.trainLeases.ListActive(ctx, trainIDs, now)
+	if err != nil {
+		return nil, err
+	}
+	for _, lease := range rows {
+		lesseesByTrain[lease.TrainID] = append(lesseesByTrain[lease.TrainID], domain.TrainLessee{
+			TrainID:  lease.TrainID,
+			ToUserID: lease.ToUserID,
+		})
+	}
+	return lesseesByTrain, nil
+}
+
 // buildDefinedTrainsSnapshot lists layout trains with member DCC
 // addresses hydrated from the vehicle catalogue.
 func (s *LayoutVehicleService) buildDefinedTrainsSnapshot(ctx context.Context, layoutID uint) (contract.DefinedTrains, error) {
@@ -210,6 +239,12 @@ func (s *LayoutVehicleService) buildDefinedTrainsSnapshot(ctx context.Context, l
 		}
 	}
 
+	now := time.Now().UTC()
+	trainLessees, err := s.resolveLesseesByTrain(ctx, entries, now)
+	if err != nil {
+		return contract.DefinedTrains{}, err
+	}
+
 	out := contract.DefinedTrains{
 		LayoutID:  layoutID,
 		UpdatedAt: contract.NowMS(),
@@ -217,15 +252,21 @@ func (s *LayoutVehicleService) buildDefinedTrainsSnapshot(ctx context.Context, l
 	}
 	for _, e := range entries {
 		dt := contract.DefinedTrain{
-			TrainID:     e.Train.ID,
-			OwnerUserID: e.Train.OwnerUserID,
-			Members:     make([]contract.DefinedTrainMember, 0, len(e.Members)),
+			TrainID:           e.Train.ID,
+			OwnerUserID:       e.Train.OwnerUserID,
+			ControllerUserIDs: helpers.MergeUserIDs(e.Train.OwnerUserID, domain.TrainLesseeUserIDs(trainLessees[e.Train.ID])...),
+			Members:           make([]contract.DefinedTrainMember, 0, len(e.Members)),
 		}
 		for _, m := range e.Members {
+			mult := m.SpeedMultiplier
+			if mult <= 0 {
+				mult = 1.0
+			}
 			member := contract.DefinedTrainMember{
-				VehicleID: m.VehicleID,
-				Position:  m.Position,
-				Reversed:  m.Reversed,
+				VehicleID:       m.VehicleID,
+				Position:        m.Position,
+				Reversed:        m.Reversed,
+				SpeedMultiplier: mult,
 			}
 			if v, ok := byVehicle[m.VehicleID]; ok && v.DCCAddress != nil {
 				addr := *v.DCCAddress

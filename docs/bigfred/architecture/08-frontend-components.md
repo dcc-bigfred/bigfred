@@ -145,80 +145,50 @@ function LocoControl({ addr }: { addr: number }) {
 }
 ```
 
-### 6.3a Train Control View – the same slider, one fan-out
+### 6.3a Train control in the Throttle overlay
 
-The train control view is intentionally the **single-vehicle view
-with a different command on the slider**. It mounts
-`<ThrottleSlider>` (same MUI `Slider` component, same range 0..126,
-same direction toggle), but its `onChange` dispatches
-`train.setSpeed` instead of `loco.setSpeed`, and it subscribes to
-member state via `train.subscribe`. Function buttons and scripts
-remain per-member: under the slider the page renders one
-`<FunctionButtons>` + `<ScriptButtons>` row **per member vehicle**,
-so the driver still controls horns, lights and shunting modes on
-each loco independently.
+Train driving is **not** a separate page. It lives inside the same
+full-screen Throttle overlay as single-vehicle control (`ThrottlePage` →
+`ThrottleCockpit`, §6.3b). The picker lists **vehicles and trains**
+together (`useThrottleTargetSelection` persists the last target in
+`localStorage`).
+
+When a **train** is selected:
+
+- the slider / direction / stop dispatch **`train.setSpeed` on the
+  data-plane WS** (`useDccBus().setTrainSpeed`, debounced via
+  `useDebouncedTrainSpeedSend`) — not on `loco-server`'s control plane;
+- speed and direction are read from the **leading member's**
+  `loco.state` (first powered member in `Position` order);
+- the client **`loco.subscribe`s every powered member address** on the
+  data plane (no `train.subscribe`);
+- the function area becomes `<TrainFunctionAccordions>` — one collapsed
+  accordion per powered member, leading first; each body is that
+  member's `<FunctionGridButton>` grid wired to `loco.toggleFn` on the
+  data plane;
+- the train owner sees a **cog** on non-leading members that opens
+  `<TrainMemberSettingsDialog>` and persists `speedMultiplier` via
+  `PATCH /api/v1/trains/{id}/members/{memberId}` (lessees: cog hidden).
 
 ```tsx
-function TrainControl({ trainId }: { trainId: number }) {
-  const { send } = useSocket(`ws://${location.host}/api/v1/ws`);
-  const train = useTrain(trainId);              // REST: train + members
-  const members = train.members ?? [];
-  const memberStates = useLocoStore((s) =>
-    members.map((m) => s.locos[m.vehicle.dccAddr]),
-  );
+// ThrottlePage.tsx (ConnectedThrottle, excerpt — train branch)
+const { setTrainSpeed, setFunction, subscribe, states } = useDccBus();
+const trainCtx = useSelectedTrainContext(layoutID, trainId);
 
-  // The slider shows the train speed; we use the first non-reversed
-  // member as the "speed witness" (members run in lock-step, modulo
-  // the Reversed flip the server applies on its side).
-  const witness = memberStates.find((_, i) => !members[i].reversed) ?? memberStates[0];
-  const speed   = witness?.speed   ?? 0;
-  const forward = witness?.forward ?? true;
+useEffect(() => {
+  void subscribe(trainCtx.poweredMembers.map((m) => m.dccAddress));
+}, [trainCtx.poweredMembers, subscribe]);
 
-  useEffect(() => {
-    send({ type: "train.subscribe",   payload: { trainId } });
-    return () => send({ type: "train.unsubscribe", payload: { trainId } });
-  }, [trainId, send]);
+const witness = states.get(trainCtx.leadingAddr);
+const { queueSpeed } = useDebouncedTrainSpeedSend(setTrainSpeed);
 
-  const onSpeedChange = (next: number) =>
-    send({ type: "train.setSpeed", payload: { trainId, speed: next, forward } });
-
-  const onDirectionChange = (nextForward: boolean) =>
-    send({ type: "train.setSpeed", payload: { trainId, speed, forward: nextForward } });
-
-  return (
-    <Card sx={{ maxWidth: 720, m: 2 }}>
-      <CardContent>
-        <Typography variant="h5">{train.name}</Typography>
-
-        {/* SAME slider component as LocoControl – this is the whole point. */}
-        <ThrottleSlider value={speed} forward={forward}
-                        onValueChange={onSpeedChange}
-                        onDirectionChange={onDirectionChange} />
-
-        {/* Per-member function / script rows below the shared slider. */}
-        <Stack spacing={1} sx={{ mt: 2 }}>
-          {members.map((m, i) => (
-            <Stack key={m.id} direction="row" alignItems="center" spacing={1}>
-              <Typography variant="body2" sx={{ minWidth: 96 }}>
-                {m.vehicle.name} {m.reversed && <Chip size="small" label="rev" />}
-              </Typography>
-              <FunctionButtons vehicle={m.vehicle} />
-              <ScriptButtons   vehicle={m.vehicle} />
-              {memberStates[i] === undefined && <Chip size="small" color="warning" label="offline" />}
-            </Stack>
-          ))}
-        </Stack>
-      </CardContent>
-    </Card>
-  );
-}
+// slider → queueSpeed(trainId, speed, forward)
+// accordions → setFunction(member.dccAddress, fn, on)
 ```
 
-The slider is **not duplicated**: `ThrottleSlider.tsx` is the same
-component used in `LocoControl`. The only thing that changes is the
-WS message the parent component dispatches, and that single decision
-keeps `LocoControlPage` and `TrainControlPage` visually identical
-from the driver's standpoint.
+Single-vehicle selection keeps the flat function grid and
+`loco.setSpeed` unchanged. `<TakeoverThrottleOverlay>` still drives one
+vehicle via the legacy `selectedAddress` props on `ThrottleCockpit`.
 
 ### 6.3b Throttle mode – full-screen overlay
 
@@ -263,9 +233,9 @@ can:
   halt with confirmation overlay and radiostop sound on every throttle
   session.
 
-Throttle commands (`loco.*`, `train.*`, `system.estop`) travel over
-the data-plane WebSocket once §7e ships; Radio Stop and other
-control-plane actions use `/api/v1/ws` (§4.2, §7e.7).
+Throttle commands (`loco.*`, `train.setSpeed`, `system.estop`) travel
+over the **data-plane** WebSocket to `dcc-bus` (§7e.4). Radio Stop and
+other control-plane actions use `/api/v1/ws` (§4.2, §7e.7).
 
 #### Left toolbar – Fullscreen and Radio Stop
 
@@ -452,7 +422,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 ```
 
 `ThrottleOverlay` hosts vehicle/train selection and mounts
-`LocoControlPage` / `TrainControlPage` content from §6.3 and §6.3a.
+`ThrottlePage` / `ThrottleCockpit` content from §6.3a and §6.3b.
 
 #### Dual-WebSocket model (after §7e ships)
 
@@ -461,25 +431,21 @@ connections (see §7e.7 for the full lifecycle):
 
 1. **Control-plane WS** to `loco-server` (`/api/v1/ws`) — already
    open since login. Carries `session.*`, `takeover.*`, `radio.*`,
-   `script.*`, `presence`, `auth.elevationChanged`, `train.*`, and
-   the command-station picker (`session.setCommandStation` /
+   `script.*`, `presence`, `auth.elevationChanged`, and the
+   command-station picker (`session.setCommandStation` /
    `session.commandStationChanged`).
 2. **Data-plane WS** to the picked `dcc-bus` daemon
    (`ws://host:<port>/ws?token=<jwt>`, returned via
    `session.opened.availableCommandStations[i].wsUrl`). Carries
    `loco.subscribe` / `loco.unsubscribe` / `loco.setSpeed` /
-   `loco.toggleFn` / `system.estop` / `ping` only. Re-opened when
-   the user switches command stations.
+   `loco.toggleFn` / `train.setSpeed` / `system.estop` / `ping`.
+   Re-opened when the user switches command stations.
 
-`<ThrottleSlider>` and `<FunctionButtons>` dispatch on the data
-plane via a `useDataPlane()` hook; `<ScriptButtons>`, the takeover
-banner and the radio panel keep using `useControlPlane()`. Selecting
+`<ThrottleCockpit>` slider and function toggles dispatch on the data
+plane via `useDccBus()`; `<ScriptButtons>`, the takeover banner and
+the radio panel keep using the control plane (`useSocket`). Selecting
 the right socket is encapsulated; component code does **not** know
-about ports. The Zustand store splits accordingly: a `dccBusUrl` /
-`dccBusOpened` slice for the daemon connection, the existing
-`session` slice for the server connection. Until §7e ships, both
-hooks resolve to the same control-plane connection (the M1 baseline
-is unchanged).
+about ports.
 
 The command-station dropdown inside `<ThrottleHeader>` renders
 `status` per row (`RUNNING` / `STOPPED` / `STARTING` / `DEGRADED`)
@@ -836,9 +802,9 @@ the Ogg file — no migration or admin UI required.
 When a takeover is **granted** (§4.3), the signalman does **not** leave
 the interlocking view. Instead a **closable throttle overlay**
 (`<TakeoverThrottleOverlay>`) opens **on top of** the interlocking view,
-hosting the same `LocoControlPage` / `TrainControlPage` driving surface
-(§6.3, §6.3a) for the taken-over target. The interlocking chat + roster
-stay mounted underneath.
+hosting the same `ThrottleCockpit` driving surface (§6.3a, §6.3b) for
+the taken-over vehicle. The interlocking chat + roster stay mounted
+underneath.
 
 - The overlay is driven by the **5-minute self-lease** created on grant;
   a small countdown badge shows the remaining lease time

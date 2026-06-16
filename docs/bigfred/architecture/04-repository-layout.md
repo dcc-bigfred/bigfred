@@ -221,8 +221,7 @@ web/                            # NEW – frontend
     │   ├── LocoListPage.tsx        # /vehicles – owner catalogue; row actions Edit + Edit functions (§6.3e)
     │   ├── VehicleEditPage.tsx     # /vehicles/:addr/edit
     │   ├── VehicleFunctionsPage.tsx # /vehicles/:addr/functions – F0–F31 editor, icon picker, reorder (§6.3e)
-    │   ├── LocoControlPage.tsx
-    │   ├── TrainControlPage.tsx # same ThrottleSlider as LocoControlPage; sends train.setSpeed
+    │   ├── ThrottlePage.tsx          # full-screen throttle overlay (§6.3b); vehicles + trains (§6.3a)
     │   └── ScriptsPage.tsx     # the "Scripts" tab: list, edit, attach
     └── styles/
 ```
@@ -238,6 +237,7 @@ runtime service, but the typed boundary both sides import:
 | Redis key / channel **templates** (`*Tmpl` constants with `%d` / `%s`) | [`redis.go`](../../../../pkgs/bigfred/contract/redis.go) |
 | **Builder functions** that turn layout ID, command-station ID, DCC address, … into a concrete key or channel string | same file (`AllowedVehiclesKey`, `DccBusEventChannel`, …) |
 | **JSON snapshot types** for roster data the server publishes and dcc-bus caches | [`allowedvehicles.go`](../../../../pkgs/bigfred/contract/allowedvehicles.go) |
+| **Train driving helpers** (`LeadingMember`, `EffectiveMemberSpeed`, `TrainSetSpeedWire`, …) shared by server snapshot builders and dcc-bus fan-out | [`trains.go`](../../../../pkgs/bigfred/contract/trains.go) |
 | **Payload helpers** — `Marshal` / `Unmarshal*` and `NowMS()` — that encode and decode wire bytes from plain Go values | same file |
 
 The server loads catalogue rows from SQLite, assembles `AllowedVehicles` /

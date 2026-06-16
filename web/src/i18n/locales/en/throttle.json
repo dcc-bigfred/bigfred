@@ -92,7 +92,24 @@
     "control_offline": "Control plane offline — refresh the page",
     "connection_error": "dcc-bus WebSocket error (not the physical command station) — check proxy/network",
     "command_station_error": "Command station rejected the DCC command — see dcc-bus logs",
-    "ack_timeout": "Server did not respond in time — try again"
+    "ack_timeout": "Server did not respond in time — try again",
+    "train_not_on_layout": "This train is not on the active layout",
+    "train_no_powered_members": "This train has no powered vehicles",
+    "partial_failure": "Some vehicles did not accept the command"
   },
-  "retry": "Try again"
+  "retry": "Try again",
+  "train": {
+    "picker": "Train",
+    "leading": "Leading",
+    "member": "Member",
+    "functions": "Functions",
+    "multiplier": {
+      "title": "Speed multiplier",
+      "field": "Multiplier",
+      "help": "Scales this vehicle relative to the leading one (0.05–4.0).",
+      "save": "Save",
+      "cancel": "Cancel",
+      "leadingFixed": "The leading vehicle always runs at multiplier 1.0."
+    }
+  }
 }

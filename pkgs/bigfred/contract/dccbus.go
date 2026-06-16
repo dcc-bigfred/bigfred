@@ -16,8 +16,8 @@ const (
 	DccBusEventChannelTmpl = "dcc-bus:evt:%d:%d"
 
 	// DccBusCommandChannelTmpl is the inverse of the event channel:
-	// loco-server publishes, the daemon subscribes (train.setSpeed
-	// fan-out, cross-process estop). Verbs: layoutID, commandStationID.
+	// loco-server publishes, the daemon subscribes (script writes,
+	// cross-process estop, dead-man fan-out). Verbs: layoutID, commandStationID.
 	DccBusCommandChannelTmpl = "dcc-bus:cmd:%d:%d"
 
 	// DccBusEventChannelPattern is the PSUBSCRIBE glob loco-server uses
@@ -106,7 +106,7 @@ func BuildEventPayload(eventType, id string, payload []byte) ([]byte, error) {
 
 // BuildCommandPayload wraps an already-encoded inner payload into the
 // envelope PUBLISHed on DccBusCommandChannel (server → daemon), e.g. a
-// train.setSpeed fan-out or a cross-process estop.
+// script-initiated write or a cross-process estop.
 func BuildCommandPayload(eventType, id string, payload []byte) ([]byte, error) {
 	return marshalEnvelope(eventType, id, payload)
 }

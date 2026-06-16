@@ -53,7 +53,7 @@ mirrors the same JSON on matching **pub/sub channels** (`SET` +
 | Key / channel | JSON root | Purpose |
 |---|---|---|
 | `bigfred:layout:<L>:allowed_vehicles` | `{ layoutId, updatedAt, vehicles[] }` | Drivable vehicles on the layout roster. Each entry: `vehicleId`, `addr`, `ownerUserId`, `controllerUserIds[]`, plus per-vehicle dead-man's switch catalogue: `rp1Function` (F0..F31, default F2), `emergencyLightsFunction` (default F0), `deadManSwitchOption` (`stop` \| `stop_horn` \| `stop_horn_emergency_lights`). Dummies (no DCC address) are omitted. |
-| `bigfred:layout:<L>:defined_trains` | `{ layoutId, updatedAt, trains[] }` | Trains on the layout roster with ordered `members[]` (`vehicleId`, `position`, `reversed`, optional `addr`). |
+| `bigfred:layout:<L>:defined_trains` | `{ layoutId, updatedAt, trains[] }` | Trains on the layout roster. Each train: `trainId`, `ownerUserId`, `controllerUserIds[]`, ordered `members[]` (`vehicleId`, `position`, `reversed`, `speedMultiplier`, optional `addr`). Dummies keep `addr == null`. |
 
 **Daemon boot:** `GET` both keys (may be missing → empty roster until
 the server publishes).
@@ -69,17 +69,14 @@ trains, train catalogue changes, and once per layout at
 
 `loco.subscribe` gates on membership in `allowed_vehicles`.
 `loco.setSpeed` / `loco.toggleFn` additionally require
-`session.userId ∈ controllerUserIds` for that address. The daemon has
-**no notion of leases or takeovers** — `controllerUserIds` is the flat,
-already-resolved set that `loco-server` computes from the catalogue:
-the **owner**, every **active lessee** (`VehicleLease` / `TrainLease`),
-and the **takeover self-lease holder** when a signalman has taken the
-target over (the 5-minute lease of §4.3 is just another lessee from the
-daemon's point of view). Whenever any of those change, `loco-server`
-republishes the `allowed_vehicles` snapshot and the daemon swaps its
-map before the next command. (The bootstrap implementation may publish
-just `[ownerUserId]` until the lease/takeover folding lands in M3/M5;
-the wire shape and the daemon's membership check do not change.)
+`session.userId ∈ controllerUserIds` for that address.
+`train.setSpeed` gates on `session.userId ∈ train.controllerUserIds`
+from the `defined_trains` snapshot. The daemon has **no notion of
+leases or takeovers** — both controller sets are flat, already-resolved
+projections that `loco-server` computes from the catalogue (owner,
+active lessees, takeover self-lease). Whenever any of those change,
+`loco-server` republishes the snapshots and the daemon swaps its
+maps before the next command.
 
 #### Per-vehicle invalidation channels (planned)
 
@@ -152,7 +149,7 @@ state, and explicit re-broadcasts from `loco-server` (see §7e.5).
 | `dcc-bus:ports` | hash | `loco-server` | `<layoutId>:<csId>` → `<port>` allocation table; persisted across server restarts. |
 | `dcc-bus:<L>:<C>:status` | string | `dcc-bus` | One of `starting` \| `running` \| `draining` \| `degraded`; consumed by `loco-server` for the `system.status` event. |
 | `dcc-bus:<L>:<C>:sessions` | hash | `dcc-bus` | `<sessionId>` → `<openedAt,unix>`; lets `loco-server` and the operator inspect active throttles per daemon. |
-| `dcc-bus:cmd:<L>:<C>` | pub/sub channel | `loco-server` publishes, `dcc-bus` consumes | Server-initiated DCC commands (scripts, dead-man, takeover-release fan-out, train-level fan-out). See "Command channel" below. |
+| `dcc-bus:cmd:<L>:<C>` | pub/sub channel | `loco-server` publishes, `dcc-bus` consumes | Server-initiated DCC commands (scripts, dead-man, takeover-release fan-out). **Not** used for frontend `train.setSpeed` — that action lives on the daemon WS. See "Command channel" below. |
 | `dcc-bus:evt:<L>:<C>` | pub/sub channel | `dcc-bus` publishes, `loco-server` consumes | Outbound throttle events that `loco-server` needs to mirror onto its own WS (cross-tab fan-out, audit fan-in). See "Event channel" below. |
 | `bigfred:layout:<L>:allowed_vehicles` | string + pub/sub | `loco-server` publishes | Full drivable-vehicle roster for layout `L`. |
 | `bigfred:layout:<L>:defined_trains` | string + pub/sub | `loco-server` publishes | Full train roster for layout `L`. |
@@ -181,10 +178,11 @@ This preserves §5.3's promise — "the UI doesn't wait for the poller"
 #### Command channel (server → daemon)
 
 Throttle write operations originated by frontends arrive directly on
-the daemon's WebSocket. Throttle operations originated by **anything
-else inside `loco-server`** (scripts, train-wide `train.setSpeed`,
-takeover release `SetSpeed(0)`, dead-man's switch fan-out) reach the
-daemon via the `dcc-bus:cmd:<L>:<C>` Redis pub/sub channel.
+the daemon's WebSocket (`loco.setSpeed`, `loco.toggleFn`,
+`train.setSpeed`, `system.estop`). Throttle operations originated by
+**anything else inside `loco-server`** (scripts, takeover-release
+`SetSpeed(0)`, dead-man's switch fan-out) reach the daemon via the
+`dcc-bus:cmd:<L>:<C>` Redis pub/sub channel.
 
 Payload envelope:
 
@@ -259,7 +257,7 @@ same cs), they both poll the bus and they both write to
 |---|---|---|
 | `allowed map[addr]` | `allowed_vehicles` snapshot | Gates `loco.subscribe` and estop-all scope. |
 | `byAddr map[addr] → AllowedVehicle` | same snapshot | `controllerUserIds` for drive commands. |
-| `trains []DefinedTrain` | `defined_trains` snapshot | Train fan-out / future `train.setSpeed` via server command channel. |
+| `trains []DefinedTrain` | `defined_trains` snapshot | `train.setSpeed` fan-out + drive gate (`controllerUserIds`, member `speedMultiplier` / `addr`). |
 | `fnCache` per `(addr, fn)` | local | Avoids duplicate DCC function packets. |
 | WS session | JWT at upgrade | `userId`, subscribed addresses, dead-man targets. |
 

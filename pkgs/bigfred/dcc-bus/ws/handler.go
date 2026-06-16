@@ -27,6 +27,8 @@ type Router interface {
 	HandleSubscribe(ctx context.Context, sess *Session, payload protocol.LocoSubscribePayload, requestID string) Outcome
 	// HandleSetSpeed handles a single throttle move.
 	HandleSetSpeed(ctx context.Context, sess *Session, payload contract.LocoSetSpeedWire, requestID string) Outcome
+	// HandleTrainSetSpeed fans a throttle move to every powered member.
+	HandleTrainSetSpeed(ctx context.Context, sess *Session, payload contract.TrainSetSpeedWire, requestID string) Outcome
 	// HandleSetFunction toggles one locomotive function.
 	HandleSetFunction(ctx context.Context, sess *Session, payload contract.LocoSetFunctionWire, requestID string) Outcome
 	// HandleEStop fires the data-plane emergency stop scoped to
@@ -272,6 +274,14 @@ func (s *Server) dispatch(ctx context.Context, sess *Session, env contract.Envel
 			break
 		}
 		out = s.router.HandleSetSpeed(ctx, sess, p, env.ID)
+
+	case protocol.TypeTrainSetSpeed:
+		var p contract.TrainSetSpeedWire
+		if err := json.Unmarshal(env.Payload, &p); err != nil {
+			out = s.ackOrFail(ctx, sess, env.ID, false, errors.WsCodeBadPayload)
+			break
+		}
+		out = s.router.HandleTrainSetSpeed(ctx, sess, p, env.ID)
 
 	case protocol.TypeLocoSetFunction:
 		var p contract.LocoSetFunctionWire

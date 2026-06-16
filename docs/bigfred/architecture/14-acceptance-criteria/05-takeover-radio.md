@@ -34,11 +34,12 @@
   **Leave the interlocking?**; confirming leaves the box, cancelling
   keeps the user on the page with the session intact.
 
-#### Interlocking two-panel view
+#### Interlocking three-panel view
 
-- The staffed interlocking view shows a **two-panel** work area: a
-  fixed-width, scrollable **radio chat** on the left and a fixed-width,
-  scrollable, **searchable vehicle/train roster** on the right.
+- The staffed interlocking view shows a **three-panel** work area: a
+  fixed-width, scrollable **radio chat** on the left, a fixed-width,
+  scrollable, **searchable vehicle/train roster** in the centre, and a
+  fixed-width, scrollable **train announcements** list on the right.
 - The chat shows every message exchanged with **every driver** in the
   layout (group-chat), ordered by time, each line formatted
   `({driverLogin}) {vehicle/train name}: {translated phrase}`.
@@ -56,9 +57,24 @@
   button** (same control as the throttle, §6.3b); a signalman must pick a
   command station before driving a taken-over target, and the pick fires
   `session.setCommandStation`.
-- A **Radio Stop** button is shown **above the two panels**, with the
+- A **Radio Stop** button is shown **above the panels**, with the
   same red radio-handset icon as the throttle plus the **text label
   „Radio stop"**; confirming dispatches `system.radioStop` (layout-wide).
+
+#### Train announcements (local PA playback)
+
+- The staffed interlocking view exposes a **Zapowiedzi pociągów** panel
+  (third column / third tab on narrow screens) listing announcements from
+  the static frontend manifest for that interlocking (fallback: `"default"`).
+- Clicking an entry plays `/sounds/train-announcements/{soundKey}.ogg`
+  **only on the device that clicked**; no other session hears it.
+- Starting a second announcement while one is playing replaces the
+  in-flight audio on that tab.
+- An interlocking whose name is absent from the manifest **and** has no
+  `"default"` fallback shows an empty-state hint instead of a blank panel.
+- Train announcements are **independent of radio**: they do not create
+  `radio.message` events, are not stored in Redis, and do not appear in
+  the chat panel.
 
 #### Takeover (15 s window → 5-min self-lease)
 

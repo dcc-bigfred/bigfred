@@ -49,6 +49,7 @@ import TakeoverThrottleOverlay, {
 } from "../components/interlocking/TakeoverThrottleOverlay";
 import InterlockingChatPanel from "../components/interlocking/InterlockingChatPanel";
 import InterlockingRosterPanel from "../components/interlocking/InterlockingRosterPanel";
+import InterlockingTrainAnnouncementsPanel from "../components/interlocking/InterlockingTrainAnnouncementsPanel";
 import CommandStationPicker from "../components/throttle/CommandStationPicker";
 import RadioStopButton from "../components/throttle/RadioStopButton";
 import ThrottleSetupDialog from "../components/throttle/ThrottleSetupDialog";
@@ -67,7 +68,7 @@ import { useInterlockingRadioInbound } from "../hooks/useInterlockingRadioInboun
 // InterlockingPage renders §6.3d: header with name/location/occupant,
 // signalman-only join/leave actions, displacement confirmation,
 // navigation guard while occupying, staffed work area (radio stop bar,
-// chat + roster panels) and command-station picker for in-motion chips.
+// chat + roster + train-announcements panels) and command-station picker for in-motion chips.
 export default function InterlockingPage() {
   const params = useParams<{ id: string }>();
   const idNum = Number(params.id);
@@ -295,6 +296,7 @@ export default function InterlockingPage() {
           <InterlockingStaffedWorkArea
             layoutId={layoutId}
             interlockingId={id}
+            interlockingName={row.name}
           />
         )}
       </Stack>
@@ -470,9 +472,11 @@ function InterlockingCommandStationDialog({
 function InterlockingStaffedWorkArea({
   layoutId,
   interlockingId,
+  interlockingName,
 }: {
   layoutId: number;
   interlockingId: number;
+  interlockingName: string;
 }) {
   const theme = useTheme();
   const narrow = useMediaQuery(theme.breakpoints.down("md"));
@@ -498,6 +502,8 @@ function InterlockingStaffedWorkArea({
     clearRejected: clearTakeoverRejected,
   } = useTakeoverSignalmanSession(layoutId);
   const chatVisible = !narrow || tab === 0;
+  const rosterVisible = !narrow || tab === 1;
+  const announcementsVisible = !narrow || tab === 2;
   const radioInbound = useInterlockingRadioInbound(interlockingId, chatVisible);
 
   const panels = (
@@ -507,7 +513,7 @@ function InterlockingStaffedWorkArea({
       alignItems="stretch"
       sx={{ minHeight: 320 }}
     >
-      {(narrow ? tab === 0 : true) && (
+      {chatVisible && (
         <Box sx={{ flex: narrow ? undefined : 1, minWidth: 0 }}>
           <InterlockingChatPanel
             interlockingId={interlockingId}
@@ -515,9 +521,14 @@ function InterlockingStaffedWorkArea({
           />
         </Box>
       )}
-      {(narrow ? tab === 1 : true) && (
+      {rosterVisible && (
         <Box sx={{ flex: narrow ? undefined : 1, minWidth: 0, maxWidth: narrow ? undefined : 480 }}>
           <InterlockingRosterPanel layoutId={layoutId} />
+        </Box>
+      )}
+      {announcementsVisible && (
+        <Box sx={{ flex: narrow ? undefined : 1, minWidth: 0, maxWidth: narrow ? undefined : 360 }}>
+          <InterlockingTrainAnnouncementsPanel interlockingName={interlockingName} />
         </Box>
       )}
     </Stack>
@@ -578,6 +589,7 @@ function InterlockingStaffedWorkArea({
             }
           />
           <Tab label={t("view.panels.roster")} />
+          <Tab label={t("view.panels.announcements")} />
         </Tabs>
       )}
       {body}

@@ -711,7 +711,7 @@ enabled only for users with the layout-scoped **signalman** role.
      `session.commandStationChanged` / `layout.commandStationsChanged` —
      exactly like the throttle picker. When the list has a single entry
      the UI MAY auto-pick it.
-3. **Radio Stop bar** – directly **above the two panels** the staffed box
+3. **Radio Stop bar** – directly **above the panels** the staffed box
    renders a **Radio Stop** button (`<RadioStopButton variant="bar">`).
    It uses the **same red radio-handset icon** as the throttle button
    (§6.3b) but, unlike the icon-only throttle control, it shows the
@@ -721,10 +721,11 @@ enabled only for users with the layout-scoped **signalman** role.
    It is shown to any **signalman** staffing the box (see the extended
    authorization in §4.6.2), independent of whether they currently hold a
    takeover.
-4. **Two-panel work area** – below the Radio Stop bar the staffed box
-   renders a **two-column layout**: a **radio chat** panel on the left and
-   a **vehicle/train roster** panel on the right (details below). On
-   narrow screens the two collapse into tabs.
+4. **Three-panel work area** – below the Radio Stop bar the staffed box
+   renders a **three-column layout**: a **radio chat** panel on the left,
+   a **vehicle/train roster** panel in the centre, and a **train
+   announcements** panel on the right (details below). On narrow screens
+   the three collapse into tabs (Radio | Składy | Zapowiedzi).
 
 ##### Left panel – radio chat (`<InterlockingChatPanel>`)
 
@@ -757,7 +758,7 @@ showing all traffic exchanged with all drivers (§4.4.3) ordered by time.
   and plays `/sounds/interlockings/radio-sent.ogg` on ack. An optional
   capped `note` field may accompany the phrase.
 
-##### Right panel – vehicle/train roster (`<InterlockingRosterPanel>`)
+##### Centre panel – vehicle/train roster (`<InterlockingRosterPanel>`)
 
 A **fixed-width, scrollable** table of the vehicles and trains on the
 current layout, with a **live "in motion" indicator** (derived from each
@@ -785,6 +786,50 @@ Action icons:
   (`takeover.request { target, targetId }`, §4.3). After the 15 s window
   grants the takeover, the signalman gets a closable throttle overlay
   (below) and the driver is evicted from their throttle.
+
+##### Right panel – train announcements (`<InterlockingTrainAnnouncementsPanel>`)
+
+A **fixed-width, scrollable** list of pre-configured station PA messages
+for the **current interlocking**. Each row shows a human-readable label
+(translated via i18n) and acts as a **play button** — there is no
+confirmation step.
+
+- **Data:** read from a **static TypeScript manifest**
+  (`web/src/config/trainAnnouncements.ts`). The manifest maps interlocking
+  **name** → ordered list of `{ soundKey, labelKey }` entries; a
+  `"default"` key supplies the fallback list when a box has no dedicated
+  catalogue. Labels resolve through the `trainAnnouncements` i18n
+  namespace (`labelKey` → `trainAnnouncements.{labelKey}`). **No backend
+  table, REST endpoint or WebSocket action** — editing the list is a
+  frontend code change (manifest + i18n + Ogg asset).
+- **Playback:** clicking a row plays
+  `/sounds/train-announcements/{soundKey}.ogg` **locally on the clicking
+  browser tab only** via `HTMLAudioElement` (same caching pattern as
+  `useRadioSounds`). No WebSocket frame is sent; other users (including
+  other signalmen staffing the same box from another device) do **not**
+  hear the announcement.
+- **Re-click:** starting a new announcement stops any in-flight
+  announcement on that tab (`audio.pause(); audio.currentTime = 0`) before
+  playing the newly selected file.
+- **Empty state:** when the interlocking has no configured announcements
+  the panel shows a short hint instead of an empty list.
+- **Visibility:** shown only in the staffed work area (same gate as the
+  chat and roster panels). Observers who have not occupied the box see the
+  header and occupation controls but not the three-panel work area.
+
+Example entries (labels in Polish; sound keys are kebab-case filenames
+without the `.ogg` extension):
+
+| Label (PL) | `soundKey` |
+|------------|------------|
+| Po torze 1 przejedzie pociąg towarowy | `track-1-freight` |
+| Odjazd pociągu do st. Głuszyca | `departure-gluszyca` |
+| Odjazd pociągu do st. Wrocław | `departure-wroclaw` |
+| Odjazd pociągu do st. Warszawa Centralna | `departure-warszawa-centralna` |
+
+Assets live under `web/public/sounds/train-announcements/`. To add or
+change announcements, edit the manifest, the matching i18n keys and drop
+the Ogg file — no migration or admin UI required.
 
 ##### Takeover throttle overlay (signalman drives without leaving the box)
 

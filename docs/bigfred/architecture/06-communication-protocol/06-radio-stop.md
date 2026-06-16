@@ -142,7 +142,7 @@ with the narrower per-vehicle estop control.
   **Throttle** toggle in §6.3b).
 
 **Second placement — interlocking view.** The staffed **interlocking
-view** (§6.3d) also surfaces Radio Stop, **above its two panels**, so a
+view** (§6.3d) also surfaces Radio Stop, **above its panels**, so a
 signalman can halt the layout without entering throttle mode. It reuses
 the same component and confirm overlay but renders the **icon together
 with the text label „Radio stop"** (the throttle placement is

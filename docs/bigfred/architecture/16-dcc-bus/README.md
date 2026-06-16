@@ -12,8 +12,10 @@ Until §7e is implemented, the throttle dispatch from §5.3 –
 scripts and presence. §7e **splits the data plane out of `loco-server`**
 into a per-`(layout, command_station)` daemon. Authorization rules,
 domain model, REST surface and security policies (§7a.3) are unchanged
-– `dcc-bus` re-uses `pkgs/bigfred/server/security` byte-for-byte; only the
-*location* of the DCC bus and the *delivery* of throttle traffic move.
+– `dcc-bus` carries its own throttle policy in `pkgs/bigfred/dcc-bus/security`
+(`DrivePolicy`, `TrainPolicy`); server-side §7a.3 policies stay on
+`loco-server`. Only the *location* of the DCC bus and the *delivery*
+of throttle traffic move.
 
 ## Subsections
 
@@ -31,9 +33,9 @@ domain model, REST surface and security policies (§7a.3) are unchanged
    relates to `loco-server`'s WS (`session.*`, `takeover.*`, `radio.*`,
    `script.*`).
 5. [Authorization & session awareness](./05-authorization.md) — JWT
-   validation in `dcc-bus`, re-use of `pkgs/bigfred/server/security`, takeover /
-   lease propagation via Redis pub/sub, dead-man's switch scoped to the
-   daemon.
+   validation in `dcc-bus`, `pkgs/bigfred/dcc-bus/security` drive policy,
+   takeover / lease propagation via Redis pub/sub, dead-man's switch scoped
+   to the daemon.
 6. [Server integration & orchestration](./06-server-integration.md) —
    how `loco-server` decides which `dcc-bus` programs must run, port
    assignment, hot reload via supervisord, server-initiated DCC
@@ -56,7 +58,7 @@ domain model, REST surface and security policies (§7a.3) are unchanged
 |---|---|
 | Process cardinality | **One `dcc-bus` per `(layoutId, commandStationId)` pair** that has at least one active drive session pinned to it. Lazy-started by `loco-server`; long-lived until shutdown. |
 | Binary | The `loco-server` Go binary exposes a `dcc-bus` cobra subcommand (single binary, multiple `main` entry points — same pattern as `scripts-executor` §7d). |
-| Imports | `pkgs/loco/commandstation` (DCC), `pkgs/bigfred/server/domain` (entities), `pkgs/bigfred/contract` (Redis key templates, key builders, roster snapshot types, `Marshal` / `Unmarshal*`), `pkgs/bigfred/dcc-bus/state` (Redis client). Does **not** import `pkgs/bigfred/server/repo`, `pkgs/bigfred/server/http`, or open SQLite. |
+| Imports | `pkgs/loco/commandstation` (DCC), `pkgs/bigfred/server/domain` (entities), `pkgs/bigfred/contract` (Redis wire types), `pkgs/bigfred/dcc-bus/{state,cmd,service,security,…}` — see [§3.0 / repository tree](../04-repository-layout.md#30-directory-roles-layering-glossary). Does **not** import `pkgs/bigfred/server/repo`, `pkgs/bigfred/server/http`, `pkgs/bigfred/server/ws`, or open SQLite. `cmd` does **not** import `dcc-bus/ws` (adapter lives in `ws`). |
 | Listener | Plain `http.Server` upgraded with `coder/websocket` on the CLI-supplied port. Binds to `127.0.0.1` by default; `loco-server` may reverse-proxy it. |
 | Authentication | JWT issued by `loco-server` (shared secret); `?token=` query parameter on the WS upgrade, identical to §7a.1. Verifies that the JWT's `layoutId` matches the daemon's `--layout-id`. |
 | Authorization | Drive commands are gated by in-memory roster snapshots from Redis (`allowed_vehicles` → `controllerUserIds` per DCC address). Lease / takeover expansion of `controllerUserIds` is planned; today the server publishes the vehicle owner. |

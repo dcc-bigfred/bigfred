@@ -16,8 +16,11 @@ var Allow = Decision{Allowed: true}
 // Machine-readable denial reasons forwarded in WS ack and loco.error
 // payloads. Keep in sync with web/src/i18n throttle error keys.
 const (
-	ReasonVehicleNotOnLayout = "vehicle_not_on_layout"
-	ReasonNotAuthorized      = "not_authorized"
+	ReasonVehicleNotOnLayout    = "vehicle_not_on_layout"
+	ReasonNotAuthorized         = "not_authorized"
+	ReasonTrainNotOnLayout      = "train_not_on_layout"
+	ReasonTrainNoPoweredMembers = "train_no_powered_members"
+	ReasonNotAuthorizedToDrive  = "not_authorized_to_drive"
 )
 
 // Deny constructs a negative Decision with a machine-readable reason.

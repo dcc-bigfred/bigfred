@@ -56,7 +56,7 @@ manual before pointing BigFred at it.
 | URI | `udp://192.168.1.50:21105` (host = RB1110 IP; port optional) |
 | Speed steps | `128` (match decoder / central settings) |
 
-Parser ([`driver.go`](../../pkgs/bigfred/dcc-bus/station/driver.go)): `udp://host:port` or
+Parser ([`driver.go`](../../pkgs/bigfred/dcc-bus/service/station/driver.go)): `udp://host:port` or
 `host:port`; port defaults to **21105**.
 
 Example admin name: `RB1110 (Z21)`.

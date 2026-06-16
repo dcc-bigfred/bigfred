@@ -30,7 +30,7 @@ machine and the dead-man's switch. See `LocoServiceDriver` below.
 
 `DccBusService.buildProgramSpec` loads the `CommandStation` row from
 SQLite (`CommandStationsRepo.FindByID`) and appends the shared CLI
-flags via `pkgs/bigfred/dcc-bus/cliargs.AppendStationFlags` (`--station-name`,
+flags via `pkgs/bigfred/dcc-bus/cli.AppendStationFlags` (`--station-name`,
 `--station-kind`, `--station-uri`, `--speed-steps`). The daemon never
 opens the database.
 

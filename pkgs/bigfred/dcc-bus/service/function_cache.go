@@ -1,10 +1,12 @@
-package cmd
+package service
 
 import "sync"
 
-// fnKey identifies one DCC function bit tracked in FunctionsCache and
+const maxDCCFunctionNum = 31
+
+// FnKey identifies one DCC function bit tracked in FunctionsCache and
 // timed-pulse state.
-type fnKey struct {
+type FnKey struct {
 	Addr uint16
 	Fn   uint8
 }
@@ -13,12 +15,12 @@ type fnKey struct {
 // rapid toggle does not reissue the same DCC packet.
 type FunctionsCache struct {
 	mu      sync.Mutex
-	entries map[fnKey]bool
+	entries map[FnKey]bool
 }
 
 // NewFunctionsCache returns an empty function dedup cache.
 func NewFunctionsCache() *FunctionsCache {
-	return &FunctionsCache{entries: make(map[fnKey]bool, 32)}
+	return &FunctionsCache{entries: make(map[FnKey]bool, 32)}
 }
 
 // Seed aligns the cache with an authoritative function vector (e.g. a
@@ -30,17 +32,8 @@ func (c *FunctionsCache) Seed(addr uint16, functions []bool) {
 		if fn > maxDCCFunctionNum {
 			break
 		}
-		c.entries[fnKey{Addr: addr, Fn: uint8(fn)}] = on
+		c.entries[FnKey{Addr: addr, Fn: uint8(fn)}] = on
 	}
-}
-
-// Get reports the cached on/off state for one function. ok is false when
-// the entry is absent.
-func (c *FunctionsCache) Get(addr uint16, fn uint8) (on bool, ok bool) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	on, ok = c.entries[fnKey{Addr: addr, Fn: fn}]
-	return on, ok
 }
 
 // Matches reports whether the cache alone believes addr/fn is already on.
@@ -54,7 +47,7 @@ func (c *FunctionsCache) Matches(addr uint16, fn uint8, on bool) bool {
 func (c *FunctionsCache) Stage(addr uint16, fn uint8, on bool) (previous bool, hadPrev bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	key := fnKey{Addr: addr, Fn: fn}
+	key := FnKey{Addr: addr, Fn: fn}
 	previous, hadPrev = c.entries[key]
 	c.entries[key] = on
 	return previous, hadPrev
@@ -64,7 +57,7 @@ func (c *FunctionsCache) Stage(addr uint16, fn uint8, on bool) (previous bool, h
 func (c *FunctionsCache) Rollback(addr uint16, fn uint8, previous bool, hadPrev bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	key := fnKey{Addr: addr, Fn: fn}
+	key := FnKey{Addr: addr, Fn: fn}
 	if hadPrev {
 		c.entries[key] = previous
 	} else {
@@ -75,7 +68,7 @@ func (c *FunctionsCache) Rollback(addr uint16, fn uint8, previous bool, hadPrev 
 // Set unconditionally records one function bit.
 func (c *FunctionsCache) Set(addr uint16, fn uint8, on bool) {
 	c.mu.Lock()
-	c.entries[fnKey{Addr: addr, Fn: fn}] = on
+	c.entries[FnKey{Addr: addr, Fn: fn}] = on
 	c.mu.Unlock()
 }
 
@@ -91,6 +84,9 @@ func (c *FunctionsCache) ClearAddr(addr uint16) {
 }
 
 func (c *FunctionsCache) getLocked(addr uint16, fn uint8) (on bool, ok bool) {
-	on, ok = c.entries[fnKey{Addr: addr, Fn: fn}]
+	on, ok = c.entries[FnKey{Addr: addr, Fn: fn}]
 	return on, ok
 }
+
+// MaxDCCFunctionNum is the highest function index the cache tracks.
+func MaxDCCFunctionNum() uint8 { return maxDCCFunctionNum }

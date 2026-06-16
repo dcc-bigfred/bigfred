@@ -10,9 +10,7 @@ import (
 	"github.com/keskad/loco/pkgs/bigfred/contract"
 )
 
-// HandleRadioStop runs the hybrid halt (§4.6.1a): roster-wide DCC
-// emergency stop on this command station, then each connected driver's
-// dead-man's-switch plan against their drive targets on this daemon.
+// HandleRadioStop runs the hybrid halt (§4.6.1a).
 func (r *Router) HandleRadioStop(ctx context.Context) {
 	addrs := r.applyEStopAll(ctx, "radio_stop")
 
@@ -36,17 +34,16 @@ func (r *Router) HandleRadioStop(ctx context.Context) {
 	})
 }
 
-// HandleLayoutRadioStopMessage decodes a payload from the layout-wide
-// radio_stop pub/sub channel and runs the local halt.
+// HandleLayoutRadioStopMessage decodes a layout-wide radio_stop pub/sub payload.
 func (r *Router) HandleLayoutRadioStopMessage(ctx context.Context, raw []byte) {
-	var cmd contract.RadioStopCommandWire
-	if err := json.Unmarshal(raw, &cmd); err != nil {
+	var cmdWire contract.RadioStopCommandWire
+	if err := json.Unmarshal(raw, &cmdWire); err != nil {
 		r.log.WithError(err).Debug("dcc-bus radio stop: bad payload")
 		return
 	}
 	r.log.WithFields(logrus.Fields{
-		"triggeredByUserId": cmd.TriggeredByUserID,
-		"triggeredByLogin":  cmd.TriggeredByLogin,
+		"triggeredByUserId": cmdWire.TriggeredByUserID,
+		"triggeredByLogin":  cmdWire.TriggeredByLogin,
 	}).Info("dcc-bus radio stop received")
 	r.HandleRadioStop(ctx)
 }

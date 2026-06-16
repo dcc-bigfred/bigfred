@@ -6,6 +6,7 @@ const (
 	WsCodeBadEnvelope  = "bad_envelope"
 	WsCodeUnknownFrame = "unknown_frame"
 	WsCodeBadPayload   = "bad_payload"
+	WsCodeSendFailed   = "send_failed"
 )
 
 // Session close reasons passed to Session.Close and HandleSessionClose.

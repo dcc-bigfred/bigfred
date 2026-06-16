@@ -23,7 +23,7 @@ to group **`dialout`**.
 
 ## 5.2 LocoNet serial — connection URI
 
-[`pkgs/bigfred/dcc-bus/station/driver.go`](../../pkgs/bigfred/dcc-bus/station/driver.go):
+[`pkgs/bigfred/dcc-bus/service/station/driver.go`](../../pkgs/bigfred/dcc-bus/service/station/driver.go):
 
 | Field | Value |
 |-------|-------|

@@ -7,17 +7,13 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/keskad/loco/pkgs/bigfred/contract"
+	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/service"
 	"github.com/keskad/loco/pkgs/loco/commandstation"
 )
 
-const (
-	// pulseRetryInterval is the pause between timed-pulse SendFn retries.
-	pulseRetryInterval = 100 * time.Millisecond
-)
+const pulseRetryInterval = 100 * time.Millisecond
 
-// markTimedFunctionStarted marks a timed function pulse as in-flight. false means
-// another pulse for the same (addr, fn) is still running.
-func (r *Router) markTimedFunctionStarted(key fnKey) bool {
+func (r *Router) markTimedFunctionStarted(key service.FnKey) bool {
 	r.pulseMu.Lock()
 	defer r.pulseMu.Unlock()
 	active := r.pulseActive[key]
@@ -25,15 +21,12 @@ func (r *Router) markTimedFunctionStarted(key fnKey) bool {
 	return !active
 }
 
-// markTimedFunctionStopped marks a timed function pulse as completed.
-func (r *Router) markTimedFunctionStopped(key fnKey) {
+func (r *Router) markTimedFunctionStopped(key service.FnKey) {
 	r.pulseMu.Lock()
 	delete(r.pulseActive, key)
 	r.pulseMu.Unlock()
 }
 
-// setLocoFunctionWithRetry calls setLocoFunction up to retry+1 times.
-// retry 0 means a single attempt.
 func (r *Router) setLocoFunctionWithRetry(ctx context.Context, addr uint16, userID uint, fn uint8, on bool, source string, retry int) error {
 	attempts := retry + 1
 	var last error
@@ -49,21 +42,18 @@ func (r *Router) setLocoFunctionWithRetry(ctx context.Context, addr uint16, user
 	return last
 }
 
-// setLocoFunction issues one DCC function command and mirrors the
-// result in Redis. Used by the throttle and the dead-man's switch.
 func (r *Router) setLocoFunction(ctx context.Context, addr uint16, userID uint, fn uint8, on bool, source string) error {
-	unchanged := r.checkFnStateMatches(ctx, addr, fn, on)
-	if unchanged {
+	if r.checkFnStateMatches(ctx, addr, fn, on) {
 		return nil
 	}
-	previous, hadPrev := r.fnCache.Stage(addr, fn, on)
+	previous, hadPrev := r.cache.Stage(addr, fn, on)
 	if err := r.station.SendFn(commandstation.MainTrackMode, commandstation.LocoAddr(addr), commandstation.FuncNum(fn), on); err != nil {
 		fields := r.stationLogFields()
 		fields["addr"] = addr
 		fields["function"] = fn
 		fields["on"] = on
 		r.log.WithError(err).WithFields(fields).Warn("dcc-bus command station SendFn failed")
-		r.fnCache.Rollback(addr, fn, previous, hadPrev)
+		r.cache.Rollback(addr, fn, previous, hadPrev)
 		return err
 	}
 
@@ -76,26 +66,21 @@ func (r *Router) setLocoFunction(ctx context.Context, addr uint16, userID uint, 
 	if env, ok, err := r.redis.LoadState(ctx, addr); err == nil && ok {
 		snap.Speed = env.Speed
 		snap.Forward = env.Forward
-		snap.Functions = make([]bool, max(len(env.Functions), int(fn)+1))
+		snap.Functions = make([]bool, maxInt(len(env.Functions), int(fn)+1))
 		copy(snap.Functions, env.Functions)
 	} else {
 		snap.Functions = make([]bool, int(fn)+1)
 	}
 	snap.Functions[fn] = on
-	if err := r.redis.StoreState(ctx, snap, stateTTL); err != nil {
+	if err := r.redis.StoreState(ctx, snap, StateTTL); err != nil {
 		r.log.WithError(err).Debug("dcc-bus redis store")
 	}
-	r.broadcastLocoStateToObservers(ctx, snap)
+	service.BroadcastLocoState(ctx, r.hub, snap)
 	return nil
 }
 
-// setTimedLocoFunctionWithRetry turns fn on, then off after duration.
-// source is recorded in Redis state snapshots (e.g. "deadman", "script").
-// Overlapping calls for the same (addr, fn) are ignored until the
-// previous pulse completes (including the off phase). retry is the
-// number of extra attempts after the first on each phase (0 = none).
 func (r *Router) setTimedLocoFunctionWithRetry(addr uint16, userID uint, fn uint8, duration time.Duration, source string, retry int) {
-	key := fnKey{Addr: addr, Fn: fn}
+	key := service.FnKey{Addr: addr, Fn: fn}
 	if !r.markTimedFunctionStarted(key) {
 		r.log.WithFields(logrus.Fields{
 			"addr":     addr,
@@ -129,4 +114,18 @@ func (r *Router) setTimedLocoFunctionWithRetry(addr uint16, userID uint, fn uint
 			}
 		})
 	}()
+}
+
+func (r *Router) checkFnStateMatches(ctx context.Context, addr uint16, fn uint8, on bool) bool {
+	if !r.cache.Matches(addr, fn, on) {
+		return false
+	}
+	env, ok, err := r.redis.LoadState(ctx, addr)
+	if err != nil || !ok {
+		return false
+	}
+	if int(fn) >= len(env.Functions) {
+		return !on
+	}
+	return env.Functions[fn] == on
 }

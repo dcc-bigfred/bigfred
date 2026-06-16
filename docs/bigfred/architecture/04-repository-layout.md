@@ -3,11 +3,92 @@
 The web layer is added next to the existing packages, the existing code is
 reused, not duplicated.
 
+### 3.0 Directory roles (layering glossary)
+
+Every application (an *app* is the root of any deliverable — `dcc-bus`,
+`server`, `scripts-executor`) is organised from the same set of
+single-responsibility directories. Read `<app>/` below as "relative to that
+app's root" (e.g. `server/repo`, `dcc-bus/state`). This glossary is the
+**target convention**; where existing code does not yet match it, the
+mismatch is called out as *legacy* and is expected to migrate.
+
+| Directory | Responsibility |
+|-----------|----------------|
+| **`<app>/domain`** | Domain objects — `struct` and `interface` types that represent data structures: an entity loaded from the database (e.g. `User`), or any structured value returned from a method (not necessarily DB-backed). No persistence, transport, or policy logic. |
+| **`<app>/repo`** | Repository pattern — the data **persistence** layer. Read/write methods that operate on the **database** (not Redis), accept/return `domain.*` objects, and contain no business or transport logic. |
+| **`contract`** | Like `domain`, but strictly the data structures exchanged **over Redis** between `server`, `dcc-bus`, and `scripts-executor`. Shared, cross-process, and (unlike the others) lives once at `pkgs/bigfred/contract` rather than per-app — see §3.2. |
+| **`<app>/validation`** | **Stateless** input validators, e.g. `UsersValidator.IsValidUserId()`. They answer "is this input well-formed?" and hold no state. |
+| **`<app>/ws`** | Client communication over **WebSockets**. Handlers accept external data, run input validation (from `validation`), invoke the matching action handler in `cmd` to perform the work, and map the `cmd` result onto a WebSocket response. Thin adapter — no business logic. |
+| **`<app>/http`** | Same as `ws`, but for **HTTP**: parse request → validate → call `cmd` → map result/sentinel errors to an HTTP response. |
+| **`<app>/cmd`** | **Actions** to perform — the use-case layer: e.g. "Add a new user", "Add a vehicle to the layout", "Set speed". A `cmd` handler orchestrates `validation`, `security`, `repo`/`state`, `service`, and other actions. (In `dcc-bus`, `cmd` is also where the inbound `loco.*` dispatch/router lives.) |
+| **`<app>/service`** | Miscellaneous helper **structs** that do not belong anywhere else and are reused from `cmd`, `ws`, etc.: conversions, calculations, `supervisord` management, the Redis driver wiring, joining or filtering data, and similar. Not the use-case layer. |
+| **`<app>/helpers`** | Simple, standalone **functions** too small to justify a `service` struct. |
+| **`<app>/errors`** | **Named constants** for machine-readable error codes returned on the wire (REST, WS ack, `loco.error`, session close reasons). No logic — see [§3.0 Typing conventions](#typing-conventions) below. |
+| **`<app>/auth`** | Authentication concerns: token verification, encryption, credential/session handling. |
+| **`<app>/security`** | **Stateless** policy structs that answer a simple "may this actor do X?" question and return a `Decision` — `Allow` or `Deny("reason")` with a machine-readable reason (see `decision.go` / `drive.go`). Pure functions over already-loaded `domain.*` values; no SQL, Redis, or transport (§7a.3). |
+| **`<app>/state`** | Reading from and writing to **Redis**: GET/SET, subscriptions, and the corresponding responses. (Mirrors `repo`, but for Redis instead of the database.) |
+| **`<app>/protocol`** | The `Payload` and `Response` types for `ws`/`http`, plus helper functions in the area of communication and sending data over `ws`/`http`. |
+| **`<app>/cli`** | Command-line configuration (cobra subcommand + flags). |
+
+**Layered flow (request → action):**
+`http`/`ws` (transport) → `validation` (well-formed input) → `cmd`
+(action/use-case) → `security` (may the actor?) + `repo`/`state`
+(persistence) + `service`/`helpers` (support) → result mapped back to a
+`protocol` response.
+
+#### Typing conventions
+
+Every machine-readable string that crosses a process or client boundary
+must be a **named constant**, never an inline string literal at the call
+site. This keeps the wire contract grep-able, prevents typos, and gives
+the frontend a stable `errors:<code>` key for i18n (§7c).
+
+| Kind of code | Where it lives | Go identifier prefix | Example |
+|--------------|----------------|----------------------|---------|
+| REST / WS / ack error codes | **`<app>/errors`** | `Code…`, `WsCode…` | `errors.WsCodeBadPayload` |
+| Authorization denial reasons | **`<app>/security`** | `Reason…` | `security.ReasonNotAuthorized` |
+| WS / HTTP payloads & responses | **`<app>/protocol`** | typed `struct`s | `protocol.LocoSubscribePayload` |
+| Redis wire snapshots & commands | **`contract`** | typed `struct`s + builders | `contract.AllowedVehicles` |
+
+Rules:
+
+1. **Error codes are constants.** Declare them once in `<app>/errors`
+   (transport/command failures) or as `Reason*` in `<app>/security`
+   (policy denials returned via `Deny(Reason…)`). String values use
+   `snake_case`. Do not write `Deny("forbidden")` or
+   `ack{error: "bad_payload"}` inline — reference a `const` instead.
+   Reference implementation: `pkgs/bigfred/dcc-bus/errors/`,
+   `pkgs/bigfred/dcc-bus/security/decision.go`.
+2. **Prefer typed structs over loose maps.** `domain`, `protocol`, and
+   `contract` carry structured data; avoid `map[string]any` or ad-hoc
+   JSON shapes on the wire.
+3. **Add i18n keys in the same change.** Every new error or denial code
+   shipped to the UI needs a matching `errors:<code>` entry in the
+   frontend catalogues (§7c).
+
+> **Legacy note (typing).** `pkgs/bigfred/server/security` still contains
+> inline `Deny("forbidden")` string literals. Migrate those to named
+> `Reason*` constants when touching the affected files.
+
+> **Legacy note.** Today the server's use-case logic lives in
+> `pkgs/bigfred/server/service/` (validation + `security` + orchestration +
+> `repo` access, ~20 `*Service` files — see §3.1 and §5). Under this
+> convention that logic belongs in `cmd`, and `service` narrows to the
+> "miscellaneous helper structs" role above. Existing `service/*.go`
+> use-cases are therefore **legacy to migrate into `cmd`**; treat the
+> descriptions in §3.1/§5 as the current (pre-migration) shape.
+
 ### 3.1 Backend layer responsibilities
 
 Three packages under `pkgs/bigfred/server/` form the main backend stack. Keep
 business rules out of `http` / `ws`; keep authorization policy out of
 `service` (delegate to `security` instead of inlining role checks).
+
+> The table below describes the **current** server shape, where `service`
+> still hosts the use-case layer. The target directory roles (use-cases in
+> `cmd`, `service` narrowed to helper structs) are defined in
+> [§3.0 Directory roles](#30-directory-roles-layering-glossary); the
+> `service` → `cmd` split is *legacy to migrate*.
 
 | Package | Role |
 |--------|------|
@@ -156,19 +237,63 @@ pkgs/scripts-executor/          # NEW – sandbox process for user JS
 # (layout × command_station) pair (§7e). Reuses pkgs/loco/commandstation
 # (DCC), pkgs/bigfred/server/domain (entities), pkgs/bigfred/contract (Redis key
 # templates, builders, snapshot types, Marshal/Unmarshal — see §3.2),
-# pkgs/bigfred/dcc-bus/state (Redis client). Does NOT import pkgs/bigfred/server/repo or SQLite.
+# pkgs/bigfred/dcc-bus/state (Redis client). Does NOT import
+# pkgs/bigfred/server/repo, pkgs/bigfred/server/http, or ws. Layering
+# follows [§3.0 Directory roles](#30-directory-roles-layering-glossary):
+# ws → validation → cmd → security + service + state.
 # Exposes WebSocket on --port for throttle traffic.
 pkgs/bigfred/dcc-bus/                   # throttle data-plane daemon
-├── daemon.go                   # assembly: Redis, Station, Router, WS server
-├── cli/cli.go                  # cobra subcommand + flags
-├── cliargs/station.go          # shared --station-* flag builders (server + daemon)
-├── cmd/router.go               # loco.* dispatch, roster cache, DCC I/O
-├── state/redis.go              # loco:state keys, cmd/evt pub/sub
-├── state/roster.go             # GET/SUBSCRIBE allowed_vehicles & defined_trains
-├── ws/                         # Hub, JWT upgrade, frame routing
-├── auth/jwt.go                 # JWT verification
-├── station/                    # commandstation driver wiring
-└── protocol/                   # WS envelope types
+├── daemon.go                   # assembly: Redis, station driver, Router, WS server
+├── cli/
+│   ├── cli.go                  # cobra subcommand + flags
+│   └── station.go              # shared --station-* flag builders (server + daemon)
+├── auth/
+│   └── jwt.go                  # JWT verification on WS upgrade
+├── errors/
+│   ├── codes.go                # command / train error codes (Code*)
+│   └── ws.go                   # transport error codes (WsCode*)
+├── validation/
+│   └── ws.go                   # stateless payload validators (subscribe, setSpeed, …)
+├── protocol/                   # WS-only payloads + Frame helpers (§7e.4)
+├── ws/                         # transport adapter — validate → cmd via adapter
+│   ├── handler.go              # upgrade, read loop, dispatch, deadman
+│   ├── adapter.go              # RouterAdapter: cmd.Result → ack / Outcome
+│   ├── responder.go            # Session → cmd.Responder
+│   ├── hub_port.go             # Hub → cmd.HubPort
+│   ├── hub.go                  # live session registry + broadcast
+│   ├── session.go              # per-connection reader/writer
+│   └── metrics.go              # WS command latency + session gauges
+├── cmd/                        # use-case layer — one file per action
+│   ├── router.go               # Router facade, roster/train cache wiring
+│   ├── port.go                 # Actor, Responder, HubPort interfaces
+│   ├── result.go               # action Result (OK / Code / Members)
+│   ├── subscribe.go            # HandleSubscribe
+│   ├── set_speed.go            # HandleSetSpeed
+│   ├── train_set_speed.go      # HandleTrainSetSpeed
+│   ├── set_function.go         # HandleSetFunction
+│   ├── estop.go                # HandleEStop + emergency-stop helpers
+│   ├── session.go              # HandleSessionClose (dead-man)
+│   ├── radio_stop.go           # HandleRadioStop + layout pub/sub
+│   ├── roster_retire.go        # retire locos falling off roster
+│   ├── functions.go            # DCC function I/O + timed pulses
+│   └── control_redis.go        # HandleControlCommand (dcc-bus:cmd channel)
+├── security/                   # stateless policy — Decision / Reason*
+│   ├── decision.go             # Allow / Deny helpers
+│   └── drive.go                # DrivePolicy, TrainPolicy
+├── service/                    # helper structs (not use-case layer)
+│   ├── roster.go               # in-memory allowed_vehicles cache
+│   ├── function_cache.go       # per-(addr, fn) dedup cache
+│   ├── speed.go                # DCCWriter (SetSpeed + retries)
+│   ├── loco_state.go           # BroadcastLocoState
+│   ├── state_feed.go           # external-throttle observer / poller
+│   └── station/                # commandstation driver wiring
+│       ├── driver.go           # Open Z21 / LocoNet from domain.CommandStation
+│       ├── describe.go         # log-safe connection summary
+│       ├── unwrap.go           # AsStateObserver / AsLocoInfoSubscriber
+│       └── instrumented.go     # OTLP latency wrapper
+└── state/                      # Redis GET/SET + pub/sub
+    ├── redis.go                # loco:state keys, cmd/evt channels
+    └── roster.go               # GET/SUBSCRIBE allowed_vehicles & defined_trains
 
 web/                            # NEW – frontend
 ├── package.json

@@ -76,7 +76,7 @@ flowchart LR
 
 - Drivers: [`loconet_serial.go`](../../pkgs/loco/commandstation/loconet_serial.go),
   [`z21.go`](../../pkgs/loco/commandstation/z21.go),
-  [`driver.go`](../../pkgs/bigfred/dcc-bus/station/driver.go).
+  [`driver.go`](../../pkgs/bigfred/dcc-bus/service/station/driver.go).
 - Z21 protocol: [`docs/bigfred/protos/z21.md`](../bigfred/protos/z21.md).
 - LocoNet protocol: [`docs/bigfred/protos/loconet.md`](../bigfred/protos/loconet.md).
 - DCC bus: [`16-dcc-bus/`](../bigfred/architecture/16-dcc-bus/README.md).

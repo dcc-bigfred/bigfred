@@ -6,6 +6,14 @@ Layering under `pkgs/bigfred/server/` is defined in
 validation, permission checks via `security`, orchestration, and
 repositories.
 
+> **Pre-migration shape.** This whole section describes the **current**
+> server, where `service` (`LocoService`, the poller, etc.) still hosts the
+> use-case layer. Under the target directory-role convention
+> ([§3.0 Directory roles](./04-repository-layout.md#30-directory-roles-layering-glossary))
+> that action logic belongs in `cmd`, and `service` narrows to miscellaneous
+> helper structs. Treat the `*Service` types below as *legacy to migrate
+> into `cmd`*.
+
 > §7e supersedes the DCC dispatch parts of this section. The
 > `LocoService.SetSpeed` and background poller described in §5.4 and
 > §5.5 still describe the **M1 baseline**, but in the §7e milestone

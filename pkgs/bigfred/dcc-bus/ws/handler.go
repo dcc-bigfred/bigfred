@@ -13,6 +13,7 @@ import (
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/auth"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/errors"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/protocol"
+	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/validation"
 )
 
 // Router is the abstraction the WS handler relies on to dispatch a
@@ -265,11 +266,19 @@ func (s *Server) dispatch(ctx context.Context, sess *Session, env contract.Envel
 			out = s.ackOrFail(ctx, sess, env.ID, false, errors.WsCodeBadPayload)
 			break
 		}
+		if !(validation.LocoSubscribe{}).Valid(p) {
+			out = s.ackOrFail(ctx, sess, env.ID, false, errors.WsCodeBadPayload)
+			break
+		}
 		out = s.router.HandleSubscribe(ctx, sess, p, env.ID)
 
 	case protocol.TypeLocoSetSpeed:
 		var p contract.LocoSetSpeedWire
 		if err := json.Unmarshal(env.Payload, &p); err != nil {
+			out = s.ackOrFail(ctx, sess, env.ID, false, errors.WsCodeBadPayload)
+			break
+		}
+		if !(validation.SetSpeed{SpeedSteps: s.speedSteps}).Valid(p) {
 			out = s.ackOrFail(ctx, sess, env.ID, false, errors.WsCodeBadPayload)
 			break
 		}
@@ -281,11 +290,19 @@ func (s *Server) dispatch(ctx context.Context, sess *Session, env contract.Envel
 			out = s.ackOrFail(ctx, sess, env.ID, false, errors.WsCodeBadPayload)
 			break
 		}
+		if !(validation.TrainSetSpeed{SpeedSteps: s.speedSteps}).Valid(p) {
+			out = s.ackOrFail(ctx, sess, env.ID, false, errors.WsCodeBadPayload)
+			break
+		}
 		out = s.router.HandleTrainSetSpeed(ctx, sess, p, env.ID)
 
 	case protocol.TypeLocoSetFunction:
 		var p contract.LocoSetFunctionWire
 		if err := json.Unmarshal(env.Payload, &p); err != nil {
+			out = s.ackOrFail(ctx, sess, env.ID, false, errors.WsCodeBadPayload)
+			break
+		}
+		if !(validation.SetFunction{}).Valid(p) {
 			out = s.ackOrFail(ctx, sess, env.ID, false, errors.WsCodeBadPayload)
 			break
 		}
@@ -309,7 +326,7 @@ func (s *Server) dispatch(ctx context.Context, sess *Session, env contract.Envel
 
 func (s *Server) handlePing(ctx context.Context, sess *Session) Outcome {
 	if err := sess.SendTyped(ctx, protocol.TypePong, nil); err != nil {
-		return Fail(ErrorCodeSendFailed)
+		return Fail(errors.WsCodeSendFailed)
 	}
 	return OK()
 }
@@ -319,7 +336,7 @@ func (s *Server) handleUnknown(ctx context.Context, sess *Session, frameType str
 		Code:   errors.WsCodeUnknownFrame,
 		Detail: frameType,
 	}); err != nil {
-		return Fail(ErrorCodeSendFailed)
+		return Fail(errors.WsCodeSendFailed)
 	}
 	return Fail(errors.WsCodeUnknownFrame)
 }
@@ -332,7 +349,7 @@ func (s *Server) ackOrFail(ctx context.Context, sess *Session, requestID string,
 		return Fail(errCode)
 	}
 	if err := sess.SendAck(ctx, requestID, ok, errCode); err != nil {
-		return Fail(ErrorCodeSendFailed)
+		return Fail(errors.WsCodeSendFailed)
 	}
 	if ok {
 		return OK()

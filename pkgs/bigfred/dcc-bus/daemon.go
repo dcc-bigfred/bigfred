@@ -21,7 +21,7 @@ import (
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/auth"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/cmd"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/state"
-	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/station"
+	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/service/station"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/ws"
 	bfotel "github.com/keskad/loco/pkgs/bigfred/otel"
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
@@ -191,7 +191,7 @@ func New(ctx context.Context, log *logrus.Logger, cfg Config) (*Daemon, error) {
 
 	router, err := cmd.NewRouter(ctx, cmd.Config{
 		Station:          st,
-		Hub:              hub,
+		Hub:              ws.HubPort(hub),
 		Redis:            red,
 		Log:              log,
 		LayoutID:         cfg.LayoutID,
@@ -234,7 +234,7 @@ func New(ctx context.Context, log *logrus.Logger, cfg Config) (*Daemon, error) {
 	wsSrv := ws.NewServer(ws.ServerConfig{
 		Verifier:       verifier,
 		Hub:            hub,
-		Router:         router,
+		Router:         ws.NewRouterAdapter(router),
 		Log:            log,
 		LayoutID:       cfg.LayoutID,
 		CommandStation: cfg.CommandStationID,

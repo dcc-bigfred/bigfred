@@ -19,7 +19,6 @@ const (
 	counterWSDeadmanTriggered    = "bigfred.dcc_bus.ws.deadman.triggered"
 	upDownWSSessionsActive       = "bigfred.dcc_bus.ws.sessions.active"
 	commandInvalidEnvelope       = "envelope.invalid"
-	ErrorCodeSendFailed          = "send_failed"
 	maxClientPingRTTMs           = 30_000
 )
 

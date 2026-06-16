@@ -1,11 +1,15 @@
 package cmd
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/service"
+)
 
 func TestPulseOverlapRejectedUntilEnd(t *testing.T) {
 	t.Parallel()
-	r := &Router{pulseActive: make(map[fnKey]bool)}
-	key := fnKey{Addr: 31, Fn: 2}
+	r := &Router{pulseActive: make(map[service.FnKey]bool)}
+	key := service.FnKey{Addr: 31, Fn: 2}
 
 	if !r.markTimedFunctionStarted(key) {
 		t.Fatal("expected first pulse to begin")
@@ -22,11 +26,11 @@ func TestPulseOverlapRejectedUntilEnd(t *testing.T) {
 
 func TestPulseDifferentFunctionsIndependent(t *testing.T) {
 	t.Parallel()
-	r := &Router{pulseActive: make(map[fnKey]bool)}
-	if !r.markTimedFunctionStarted(fnKey{Addr: 31, Fn: 0}) {
+	r := &Router{pulseActive: make(map[service.FnKey]bool)}
+	if !r.markTimedFunctionStarted(service.FnKey{Addr: 31, Fn: 0}) {
 		t.Fatal("F0 pulse")
 	}
-	if !r.markTimedFunctionStarted(fnKey{Addr: 31, Fn: 1}) {
+	if !r.markTimedFunctionStarted(service.FnKey{Addr: 31, Fn: 1}) {
 		t.Fatal("F1 pulse should not block F0")
 	}
 }

@@ -47,3 +47,4 @@ permission checks via **`security`**; see
 Task-scoped implementation plans live under [`./plans/`](./plans/):
 
 - [M5 – Interlocking view, radio & takeover](./plans/m5-interlocking-radio-takeover.md)
+- [M5.1 – Train announcements panel](./plans/train-announcements-panel.md)

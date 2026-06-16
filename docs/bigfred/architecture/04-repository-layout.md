@@ -176,11 +176,14 @@ web/                            # NEW – frontend
 ├── index.html
 ├── public/
 │   └── sounds/
-│       └── radiostop.ogg       # radiostop alarm, served at /sounds/radiostop.ogg (§4.6.3)
+│       ├── radiostop.ogg       # radiostop alarm, served at /sounds/radiostop.ogg (§4.6.3)
+│       └── train-announcements/ # PA Ogg files, served at /sounds/train-announcements/{name}.ogg (§6.3d)
 └── src/
     ├── main.tsx
     ├── App.tsx
     ├── theme.ts                # MUI ThemeProvider configuration (palette, breakpoints)
+    ├── config/
+    │   └── trainAnnouncements.ts # static PA catalogue keyed by interlocking name (§6.3d)
     ├── api/
     │   ├── client.ts           # fetch wrapper
     │   └── locos.ts            # REST endpoints + TanStack Query hooks
@@ -210,6 +213,7 @@ web/                            # NEW – frontend
     │   ├── OnlineUsersTable.tsx
     │   ├── InterlockingsTable.tsx
     │   ├── InterlockingRadioPanel.tsx
+    │   ├── InterlockingTrainAnnouncementsPanel.tsx # train PA list (§6.3d)
     │   └── LeaveInterlockingDialog.tsx
     ├── pages/
     │   ├── HomePage.tsx        # layout dashboard (§6.3c)

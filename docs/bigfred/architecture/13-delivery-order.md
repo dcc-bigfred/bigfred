@@ -240,9 +240,9 @@ sibling daemon supervised by §7d (`SupervisordService`).
     `session.emergency_executed` emitted by the dead-man's switch handler
     in the Hub.
 18. Add the **layout dashboard** (`HomePage.tsx` – three live tables,
-    §6.3c) and the **two-panel interlocking view** (`InterlockingPage.tsx`
+    §6.3c) and the **three-panel interlocking view** (`InterlockingPage.tsx`
     – occupy / leave with displacement confirm, navigation guard, left
-    **radio chat** panel + right **searchable vehicle/train roster** with
+    **radio chat** panel + centre **searchable vehicle/train roster** with
     per-row Radio / Stop / Takeover actions, the **searchable phrase
     table** popup, and the **closable takeover throttle overlay** gated on
     speed 0, §6.3d). Add the driver-side throttle **radio** and **chat**
@@ -251,6 +251,15 @@ sibling daemon supervised by §7d (`SupervisordService`).
     `useRadioSounds()` hook (`radio-sent.ogg` / `{phrase}.ogg` under
     `web/public/sounds/interlockings/`). Add `layout_vehicles` table and
     presence tracking in the Hub.
+
+**M5.1 – Train announcements panel (post-M5 slice, frontend-only).**
+
+18a. Ship the third interlocking panel
+    (`<InterlockingTrainAnnouncementsPanel>`), a static manifest
+    (`web/src/config/trainAnnouncements.ts`), the `useTrainAnnouncementSound`
+    hook, i18n labels, and Ogg assets under
+    `web/public/sounds/train-announcements/` (§6.3d). No backend changes;
+    playback is client-local only.
 
 **M6 – API keys + built-in MCP server.**
 

@@ -46,12 +46,17 @@
     },
     "panels": {
       "chat": "Radio",
-      "roster": "Consists"
+      "roster": "Consists",
+      "announcements": "Announcements"
     },
     "chat": {
       "title": "Interlocking radio",
       "empty": "No radio messages yet.",
       "reply": "Reply"
+    },
+    "announcements": {
+      "title": "Train announcements",
+      "empty": "No announcements configured for this interlocking."
     },
     "roster": {
       "title": "Layout consists",

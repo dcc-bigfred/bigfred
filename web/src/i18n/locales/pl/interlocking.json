@@ -46,12 +46,17 @@
     },
     "panels": {
       "chat": "Radio",
-      "roster": "Składy"
+      "roster": "Składy",
+      "announcements": "Zapowiedzi"
     },
     "chat": {
       "title": "Radio nastawni",
       "empty": "Brak wiadomości radiowych.",
       "reply": "Odpowiedz"
+    },
+    "announcements": {
+      "title": "Zapowiedzi pociągów",
+      "empty": "Brak skonfigurowanych zapowiedzi dla tej nastawni."
     },
     "roster": {
       "title": "Składy na makiecie",

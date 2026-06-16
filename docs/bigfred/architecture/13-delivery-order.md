@@ -28,12 +28,11 @@ Implemented in milestones; each milestone is independently shippable.
 7. Add `vehicles`, `trains`, `vehicle_leases`, `train_leases`
    tables and the corresponding services. Plug `RequireVehicleDrive` /
    `RequireVehicleEdit` middleware into the existing throttle endpoints.
-   Implement `TrainService.SetSpeed` (lock-step fan-out across
-   `TrainMember`s, `Reversed`-flip, per-member ack) and the matching
-   `train.setSpeed` / `train.subscribe` WS actions (§4.2). Ship
-   `TrainControlPage.tsx` that **reuses `ThrottleSlider.tsx`
-   unchanged** and renders per-member function/script rows below the
-   shared slider.
+   Implement train driving in the Throttle overlay (`train.setSpeed`
+   on the dcc-bus data plane, per-member `loco.subscribe`, function
+   accordions, owner-only `speedMultiplier` edit — §6.3a). Ship
+   `ThrottlePage` / `ThrottleCockpit` with a unified vehicle + train
+   picker reusing the same vertical throttle surface.
 8. Add `vehicle_templates` and unified `dcc_functions` table
    (`vehicle_id` XOR `template_id`), `FunctionService` (with
    `EnsureDetached` copy-on-write), `TemplateService`,

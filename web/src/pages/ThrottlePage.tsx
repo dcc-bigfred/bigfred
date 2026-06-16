@@ -21,10 +21,17 @@ import {
 } from "../context/DccBusContext";
 import { useMe } from "../api/auth";
 import { useVehicleFunctions } from "../api/functions";
-import { useLayoutVehicles } from "../api/vehicles";
+import {
+  useLayoutTrains,
+  useLayoutVehicles,
+  usePatchTrainMemberMultiplier,
+  type RosterTrain,
+} from "../api/vehicles";
 import type { ThrottleCockpitFunction } from "../components/throttle/ThrottleCockpit";
 import AutoDismissAlert from "../components/AutoDismissAlert";
 import ThrottleCockpit from "../components/throttle/ThrottleCockpit";
+import TrainFunctionAccordions from "../components/throttle/TrainFunctionAccordions";
+import TrainMemberSettingsDialog from "../components/throttle/TrainMemberSettingsDialog";
 import ThrottleNavigationGuard from "../components/throttle/ThrottleNavigationGuard";
 import ThrottleSetupDialog from "../components/throttle/ThrottleSetupDialog";
 import CommandStationPicker from "../components/throttle/CommandStationPicker";
@@ -32,7 +39,9 @@ import { useDebouncedSpeedSend } from "../hooks/useDebouncedSpeedSend";
 import { useRadioStopSound } from "../hooks/useRadioStopSound";
 import { useThrottleSpeedOverride } from "../hooks/useThrottleSpeedOverride";
 import { useThrottleCommandStationSelection } from "../hooks/useThrottleCommandStationSelection";
-import { useThrottleVehicleSelection } from "../hooks/useThrottleVehicleSelection";
+import { useDebouncedTrainSpeedSend } from "../hooks/useDebouncedTrainSpeedSend";
+import { useThrottleTargetSelection } from "../hooks/useThrottleTargetSelection";
+import { useTrainAccordionExpanded } from "../hooks/useTrainAccordionExpanded";
 import { useDriverRadioInbound } from "../hooks/useDriverRadioInbound";
 import { buildThrottleRadioHeader } from "../hooks/useThrottleRadioChat";
 import type { DriverRadioInbound } from "../hooks/useDriverRadioInbound";
@@ -417,6 +426,87 @@ function useSelectedDriveContext(
   };
 }
 
+
+function useCockpitTrains(layoutID: number) {
+  const roster = useLayoutTrains(layoutID).data ?? [];
+  return useMemo(
+    () =>
+      roster
+        .filter((tr) => tr.canDrive !== false)
+        .map((tr) => ({ id: tr.id, name: tr.name })),
+    [roster],
+  );
+}
+
+function findLeadingMember(train: RosterTrain, vehiclesById: Map<number, { name: string; dccAddress: number | null }>) {
+  const sorted = [...train.members].sort((a, b) => a.position - b.position);
+  for (const m of sorted) {
+    const v = vehiclesById.get(m.vehicleId);
+    if (v?.dccAddress != null) {
+      return { member: m, vehicle: v, dccAddress: v.dccAddress };
+    }
+  }
+  return null;
+}
+
+function useSelectedTrainContext(layoutID: number, trainId: number | null) {
+  const trains = useLayoutTrains(layoutID).data ?? [];
+  const vehicles = useLayoutVehicles(layoutID).data ?? [];
+  return useMemo(() => {
+    if (trainId == null) {
+      return {
+        train: null as RosterTrain | null,
+        leadingAddr: null as number | null,
+        leadingName: null as string | null,
+        poweredMembers: [] as Array<{
+          memberId: number;
+          vehicleId: number;
+          name: string;
+          dccAddress: number;
+          isLeading: boolean;
+          speedMultiplier: number;
+        }>,
+      };
+    }
+    const train = trains.find((tr) => tr.id === trainId) ?? null;
+    if (!train) {
+      return {
+        train: null,
+        leadingAddr: null,
+        leadingName: null,
+        poweredMembers: [],
+      };
+    }
+    const byId = new Map(
+      vehicles.map((v) => [v.id, { name: v.name, dccAddress: v.dccAddress }]),
+    );
+    const leading = findLeadingMember(train, byId);
+    const sorted = [...train.members].sort((a, b) => a.position - b.position);
+    const poweredMembers = sorted.flatMap((m) => {
+      const v = byId.get(m.vehicleId);
+      if (v?.dccAddress == null) return [];
+      const mult = m.speedMultiplier > 0 ? m.speedMultiplier : 1;
+      return [
+        {
+          memberId: m.id,
+          vehicleId: m.vehicleId,
+          name: v.name,
+          dccAddress: v.dccAddress,
+          isLeading: leading?.member.id === m.id,
+          speedMultiplier: mult,
+        },
+      ];
+    });
+    return {
+      train,
+      leadingAddr: leading?.dccAddress ?? null,
+      leadingName: leading?.vehicle.name ?? null,
+      poweredMembers,
+    };
+  }, [trainId, trains, vehicles]);
+}
+
+
 function IdleThrottle({
   layoutID,
   onOpenSetup,
@@ -427,10 +517,14 @@ function IdleThrottle({
   driverRadio: DriverRadioInbound;
 }) {
   const vehicles = useCockpitVehicles(layoutID);
-  const { selectedAddr, selectAddress } = useThrottleVehicleSelection(
+  const trains = useCockpitTrains(layoutID);
+  const { selectedTarget, selectTarget } = useThrottleTargetSelection(
     layoutID,
-    vehicles,
+    vehicles.map((v) => v.dccAddress),
+    trains.map((tr) => tr.id),
   );
+  const selectedAddr =
+    selectedTarget?.kind === "vehicle" ? selectedTarget.dccAddress : null;
   const configuredFunctions = useCockpitConfiguredFunctions(
     vehicles,
     selectedAddr,
@@ -449,8 +543,9 @@ function IdleThrottle({
         layoutId={layoutID}
         onOpenSetup={onOpenSetup}
         vehicles={vehicles}
-        selectedAddress={selectedAddr}
-        onSelectAddress={selectAddress}
+        trains={trains}
+        selectedTarget={selectedTarget}
+        onSelectTarget={selectTarget}
         speed={0}
         maxSpeed={127}
         forward
@@ -478,10 +573,20 @@ function ConnectedThrottle({
   onOpenSetup: () => void;
   driverRadio: DriverRadioInbound;
 }) {
+  const me = useMe().data;
   const vehicles = useCockpitVehicles(layoutID);
-  const { selectedAddr, selectAddress } = useThrottleVehicleSelection(
+  const trains = useCockpitTrains(layoutID);
+  const { selectedTarget, selectTarget } = useThrottleTargetSelection(
     layoutID,
-    vehicles,
+    vehicles.map((v) => v.dccAddress),
+    trains.map((tr) => tr.id),
+  );
+  const isTrainMode = selectedTarget?.kind === "train";
+  const selectedAddr =
+    selectedTarget?.kind === "vehicle" ? selectedTarget.dccAddress : null;
+  const trainCtx = useSelectedTrainContext(
+    layoutID,
+    isTrainMode ? selectedTarget.trainId : null,
   );
   const configuredFunctions = useCockpitConfiguredFunctions(
     vehicles,
@@ -493,6 +598,7 @@ function ConnectedThrottle({
     states,
     lastError,
     setSpeed,
+    setTrainSpeed,
     setFunction,
     speedSteps: busSpeedSteps,
   } = useDccBus();
@@ -500,34 +606,60 @@ function ConnectedThrottle({
   const speedSteps = busSpeedSteps ?? sessionSpeedSteps;
   const maxSpeed = maxSpeedValue(speedSteps);
 
-  const rosterAddrKey = vehicles.map((v) => v.dccAddress).join(",");
-  useEffect(() => {
-    if (selectedAddr == null || status !== "open") {
-      return;
+  const subscribeAddrs = useMemo(() => {
+    if (isTrainMode) {
+      return trainCtx.poweredMembers.map((m) => m.dccAddress);
     }
-    void subscribe([selectedAddr]);
-  }, [selectedAddr, subscribe, rosterAddrKey, status]);
+    if (selectedAddr != null) return [selectedAddr];
+    return [];
+  }, [isTrainMode, trainCtx.poweredMembers, selectedAddr]);
 
-  const state =
-    selectedAddr != null ? states.get(selectedAddr) : undefined;
+  const rosterAddrKey = subscribeAddrs.join(",");
+  useEffect(() => {
+    if (subscribeAddrs.length === 0 || status !== "open") return;
+    void subscribe(subscribeAddrs);
+  }, [subscribeAddrs, subscribe, rosterAddrKey, status]);
+
+  const witnessAddr = isTrainMode ? trainCtx.leadingAddr : selectedAddr;
+  const state = witnessAddr != null ? states.get(witnessAddr) : undefined;
   const serverSpeed = state?.speed ?? 0;
   const forward = state?.forward ?? true;
   const functions = state?.functions ?? [];
 
   const { displaySpeed, noteUserSpeed } = useThrottleSpeedOverride(
     serverSpeed,
-    selectedAddr,
+    witnessAddr,
   );
   const cockpitSpeed = Math.min(displaySpeed, maxSpeed);
   const { queueSpeed, sendSpeedNow, flush } = useDebouncedSpeedSend(setSpeed);
-  const isMoving = cockpitSpeed > 0 && selectedAddr != null;
+  const {
+    queueSpeed: queueTrainSpeed,
+    sendSpeedNow: sendTrainSpeedNow,
+    flush: flushTrain,
+  } = useDebouncedTrainSpeedSend(setTrainSpeed);
+  const isMoving = cockpitSpeed > 0 && witnessAddr != null;
+
+  const [settingsMemberId, setSettingsMemberId] = useState<number | null>(null);
+  const patchMultiplier = usePatchTrainMemberMultiplier();
+  const { expandedMemberIds, toggleMember } = useTrainAccordionExpanded(
+    isTrainMode ? selectedTarget.trainId : null,
+  );
 
   const handleSpeed = (next: number) => {
+    if (isTrainMode) {
+      noteUserSpeed(next);
+      queueTrainSpeed(selectedTarget.trainId, next, forward);
+      return;
+    }
     if (selectedAddr == null) return;
     noteUserSpeed(next);
     queueSpeed(selectedAddr, next, forward);
   };
   const handleDir = (fwd: boolean) => {
+    if (isTrainMode) {
+      sendTrainSpeedNow(selectedTarget.trainId, cockpitSpeed, fwd);
+      return;
+    }
     if (selectedAddr == null) return;
     sendSpeedNow(selectedAddr, cockpitSpeed, fwd);
   };
@@ -535,28 +667,70 @@ function ConnectedThrottle({
     if (selectedAddr == null) return;
     void setFunction(selectedAddr, n, !(functions[n] ?? false));
   };
+  const handleTrainFn = (memberId: number, fn: number) => {
+    const member = trainCtx.poweredMembers.find((m) => m.memberId === memberId);
+    if (!member) return;
+    const memberState = states.get(member.dccAddress);
+    const memberFns = memberState?.functions ?? [];
+    void setFunction(member.dccAddress, fn, !(memberFns[fn] ?? false));
+  };
   const handleStop = () => {
-    if (selectedAddr == null) return;
     noteUserSpeed(0);
+    if (isTrainMode) {
+      sendTrainSpeedNow(selectedTarget.trainId, 0, forward);
+      return;
+    }
+    if (selectedAddr == null) return;
     sendSpeedNow(selectedAddr, 0, forward);
   };
 
   const handleLeaveConfirm = useCallback(async () => {
-    if (selectedAddr == null) {
+    flush();
+    flushTrain();
+    noteUserSpeed(0);
+    if (isTrainMode) {
+      await setTrainSpeed(selectedTarget.trainId, 0, forward);
       return;
     }
-    flush();
-    noteUserSpeed(0);
+    if (selectedAddr == null) return;
     await setSpeed(selectedAddr, 0, forward, true);
-  }, [selectedAddr, flush, noteUserSpeed, setSpeed, forward]);
+  }, [
+    isTrainMode,
+    selectedTarget,
+    selectedAddr,
+    flush,
+    flushTrain,
+    noteUserSpeed,
+    setSpeed,
+    setTrainSpeed,
+    forward,
+  ]);
 
-  const drive = useSelectedDriveContext(layoutID, selectedAddr);
+  const drive = useSelectedDriveContext(layoutID, witnessAddr);
   const headerExtra = buildThrottleRadioHeader({
     layoutId: layoutID,
     vehicleId: drive.vehicleId,
-    vehicleName: drive.vehicleName,
+    vehicleName: drive.vehicleName ?? trainCtx.leadingName,
     radio: driverRadio,
   });
+
+  const settingsMember =
+    settingsMemberId != null
+      ? trainCtx.poweredMembers.find((m) => m.memberId === settingsMemberId)
+      : undefined;
+
+  const trainAccordion = isTrainMode ? (
+    <TrainFunctionAccordions
+      members={trainCtx.poweredMembers}
+      states={states}
+      expandedMemberIds={expandedMemberIds}
+      onToggleExpanded={toggleMember}
+      onFunctionToggle={handleTrainFn}
+      onOpenSettings={setSettingsMemberId}
+      showMultiplierCog={trainCtx.train?.ownerId === me?.id}
+      disabled={trainCtx.poweredMembers.length === 0}
+    />
+  ) : undefined;
 
   return (
     <Box
@@ -572,18 +746,43 @@ function ConnectedThrottle({
         active={isMoving}
         onLeaveConfirm={handleLeaveConfirm}
       />
+      <TrainMemberSettingsDialog
+        open={settingsMember != null}
+        memberName={settingsMember?.name ?? ""}
+        isLeading={settingsMember?.isLeading ?? false}
+        initialMultiplier={settingsMember?.speedMultiplier ?? 1}
+        saving={patchMultiplier.isPending}
+        onClose={() => setSettingsMemberId(null)}
+        onSave={(multiplier) => {
+          if (!isTrainMode || settingsMember == null) return;
+          void patchMultiplier
+            .mutateAsync({
+              trainId: selectedTarget.trainId,
+              memberId: settingsMember.memberId,
+              speedMultiplier: multiplier,
+            })
+            .then(() => {
+              setSettingsMemberId(null);
+            });
+        }}
+      />
       <ThrottleCockpit
         layoutId={layoutID}
         onOpenSetup={onOpenSetup}
         vehicles={vehicles}
-        selectedAddress={selectedAddr}
-        onSelectAddress={selectAddress}
+        trains={trains}
+        selectedTarget={selectedTarget}
+        onSelectTarget={selectTarget}
+        witnessLabel={
+          isTrainMode ? trainCtx.leadingName ?? undefined : undefined
+        }
         speed={cockpitSpeed}
         maxSpeed={maxSpeed}
         forward={forward}
         functions={functions}
         configuredFunctions={configuredFunctions}
-        disabled={selectedAddr == null}
+        functionPanel={trainAccordion}
+        disabled={witnessAddr == null}
         headerExtra={headerExtra}
         onSpeedChange={handleSpeed}
         onDirectionChange={handleDir}

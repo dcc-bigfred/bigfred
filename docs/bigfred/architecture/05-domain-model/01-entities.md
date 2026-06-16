@@ -132,8 +132,9 @@ type TrainMember struct {
     ID         uint
     TrainID    uint
     VehicleID  uint
-    Position   int  // ordering inside the train
-    Reversed   bool // vehicle coupled the other way around
+    Position   int     // ordering inside the train
+    Reversed   bool    // vehicle coupled the other way around
+    SpeedMultiplier float64 // scales non-leading members at train.setSpeed fan-out (default 1.0; leading forced to 1.0)
 }
 ```
 

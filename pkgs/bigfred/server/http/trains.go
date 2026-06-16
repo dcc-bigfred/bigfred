@@ -26,15 +26,17 @@ func NewTrainHandler(
 }
 
 type trainMemberRequest struct {
-	VehicleID uint `json:"vehicleId"`
-	Reversed  bool `json:"reversed"`
+	VehicleID       uint    `json:"vehicleId"`
+	Reversed        bool    `json:"reversed"`
+	SpeedMultiplier float64 `json:"speedMultiplier,omitempty"`
 }
 
 type trainMemberResponse struct {
-	ID        uint `json:"id"`
-	VehicleID uint `json:"vehicleId"`
-	Position  int  `json:"position"`
-	Reversed  bool `json:"reversed"`
+	ID              uint    `json:"id"`
+	VehicleID       uint    `json:"vehicleId"`
+	Position        int     `json:"position"`
+	Reversed        bool    `json:"reversed"`
+	SpeedMultiplier float64 `json:"speedMultiplier"`
 }
 
 type trainResponse struct {
@@ -47,11 +49,16 @@ type trainResponse struct {
 func toTrainResponse(d service.TrainDetail) trainResponse {
 	members := make([]trainMemberResponse, 0, len(d.Members))
 	for _, m := range d.Members {
+		mult := m.SpeedMultiplier
+		if mult <= 0 {
+			mult = 1.0
+		}
 		members = append(members, trainMemberResponse{
-			ID:        m.ID,
-			VehicleID: m.VehicleID,
-			Position:  m.Position,
-			Reversed:  m.Reversed,
+			ID:              m.ID,
+			VehicleID:       m.VehicleID,
+			Position:        m.Position,
+			Reversed:        m.Reversed,
+			SpeedMultiplier: mult,
 		})
 	}
 	return trainResponse{
@@ -102,8 +109,9 @@ func (h *TrainHandler) Create(w http.ResponseWriter, r *http.Request) {
 	members := make([]service.TrainMemberInput, 0, len(req.Members))
 	for _, m := range req.Members {
 		members = append(members, service.TrainMemberInput{
-			VehicleID: m.VehicleID,
-			Reversed:  m.Reversed,
+			VehicleID:       m.VehicleID,
+			Reversed:        m.Reversed,
+			SpeedMultiplier: m.SpeedMultiplier,
 		})
 	}
 	d, err := h.svc.Create(r.Context(), service.TrainCreateInput{
@@ -206,6 +214,61 @@ func (h *TrainHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+
+type trainMemberPatchRequest struct {
+	SpeedMultiplier float64 `json:"speedMultiplier"`
+}
+
+// PatchMember handles PATCH /api/v1/trains/{id}/members/{memberId}.
+func (h *TrainHandler) PatchMember(w http.ResponseWriter, r *http.Request) {
+	trainID, ok := parseUintParam(r, "id")
+	if !ok {
+		writeJSONError(w, http.StatusBadRequest, "invalid_id")
+		return
+	}
+	memberID, ok := parseUintParam(r, "memberId")
+	if !ok {
+		writeJSONError(w, http.StatusBadRequest, "invalid_id")
+		return
+	}
+	actor, ok := IdentityFromContext(r.Context())
+	if !ok {
+		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	var req trainMemberPatchRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid_body")
+		return
+	}
+	eff, err := h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	member, err := h.svc.UpdateMemberMultiplier(r.Context(), actor.User.ID, trainID, memberID, eff, req.SpeedMultiplier)
+	if err != nil {
+		writeTrainError(w, err)
+		return
+	}
+	if err := h.layoutTrains.BroadcastTrainUpdated(r.Context(), trainID); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	mult := member.SpeedMultiplier
+	if mult <= 0 {
+		mult = 1.0
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(trainMemberResponse{
+		ID:              member.ID,
+		VehicleID:       member.VehicleID,
+		Position:        member.Position,
+		Reversed:        member.Reversed,
+		SpeedMultiplier: mult,
+	})
+}
+
 // writeTrainError maps service sentinels to status codes.
 func writeTrainError(w http.ResponseWriter, err error) {
 	switch {
@@ -223,6 +286,10 @@ func writeTrainError(w http.ResponseWriter, err error) {
 		writeJSONError(w, http.StatusUnprocessableEntity, "train_member_missing")
 	case errors.Is(err, service.ErrTrainNotOwned):
 		writeJSONError(w, http.StatusForbidden, "train_not_owned")
+	case errors.Is(err, service.ErrTrainMemberMultiplierRange):
+		writeJSONError(w, http.StatusUnprocessableEntity, "train_member_multiplier_range")
+	case errors.Is(err, service.ErrTrainLeadingMultiplierImmutable):
+		writeJSONError(w, http.StatusUnprocessableEntity, "train_leading_multiplier_immutable")
 	default:
 		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 	}

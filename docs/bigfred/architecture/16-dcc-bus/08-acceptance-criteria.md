@@ -70,11 +70,11 @@ scheduled.
     `dcc-bus`. If the user's lease has just expired, both denials
     fire and the script receives the same `not_authorized_to_drive`
     error it would have received pre-daemon.
-13. **Train fan-out.** `train.setSpeed` on `loco-server`'s WS
-    produces one publish on each affected member's `(L, C)`
-    command channel; daemons write each member sequentially per
-    Reversed-flip rules (§4.2); the consolidated WS `ack` aggregates
-    per-member outcomes exactly as before.
+13. **Train fan-out.** `train.setSpeed` on the **dcc-bus data-plane
+    WS** fans out to every powered member on the picked command
+    station; leading multiplier forced to `1.0`, non-leading members
+    scaled by `speedMultiplier`, `Reversed` flip applied; aggregate
+    `ack` lists per-member outcomes (§4.2).
 14. **Roster invalidation.** Adding a vehicle to the layout's
     roster (`POST /api/v1/layouts/{id}/vehicles`) publishes
     `bigfred:layout:<L>:vehicles`; within 100 ms the daemon's

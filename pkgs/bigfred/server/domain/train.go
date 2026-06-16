@@ -32,6 +32,7 @@ type TrainMember struct {
 	VehicleID uint `db:"vehicle_id"`
 	Position  int
 	Reversed  bool
+	SpeedMultiplier float64 `db:"speed_multiplier"`
 }
 
 // Table tells REL which physical table backs this struct.

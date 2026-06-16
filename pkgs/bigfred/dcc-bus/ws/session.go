@@ -127,7 +127,12 @@ func (s *Session) SendTyped(ctx context.Context, eventType string, payload any) 
 
 // SendAck emits an ack frame correlated with the request ID.
 func (s *Session) SendAck(ctx context.Context, requestID string, ok bool, errCode string) error {
-	env, err := protocol.FrameWithID(protocol.TypeAck, requestID, protocol.AckPayload{OK: ok, Error: errCode})
+	return s.SendAckData(ctx, requestID, protocol.AckPayload{OK: ok, Error: errCode})
+}
+
+// SendAckData emits an ack frame with a full payload body.
+func (s *Session) SendAckData(ctx context.Context, requestID string, payload protocol.AckPayload) error {
+	env, err := protocol.FrameWithID(protocol.TypeAck, requestID, payload)
 	if err != nil {
 		return err
 	}

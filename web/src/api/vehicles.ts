@@ -187,6 +187,7 @@ export interface TrainMember {
   vehicleId: number;
   position: number;
   reversed: boolean;
+  speedMultiplier: number;
 }
 
 export interface Train {
@@ -209,6 +210,7 @@ export function useMyTrains() {
 export interface TrainMemberInput {
   vehicleId: number;
   reversed: boolean;
+  speedMultiplier?: number;
 }
 
 export interface TrainCreateBody {
@@ -284,6 +286,7 @@ export interface RosterTrain {
   ownerId: number;
   ownerLogin: string;
   addedAt: string;
+  canDrive?: boolean;
   members: TrainMember[];
 }
 
@@ -414,6 +417,33 @@ export function useRemoveTrainFromRoster() {
       void qc.invalidateQueries({
         queryKey: layoutTrainsQueryKey(args.layoutId),
       });
+    },
+  });
+}
+
+
+export function usePatchTrainMemberMultiplier() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      trainId,
+      memberId,
+      speedMultiplier,
+    }: {
+      trainId: number;
+      memberId: number;
+      speedMultiplier: number;
+    }) =>
+      apiFetch<TrainMember>(
+        `/api/v1/trains/${trainId}/members/${memberId}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ speedMultiplier }),
+        },
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: trainsQueryKey });
+      void qc.invalidateQueries({ queryKey: ["layouts"] });
     },
   });
 }

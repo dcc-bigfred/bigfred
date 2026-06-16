@@ -234,13 +234,7 @@ func (r *Router) HandleSetSpeed(ctx context.Context, sess *ws.Session, p contrac
 	if reason := r.roster.DenyDriveCommand(sess.UserID, p.Address); reason != "" {
 		return r.ackOutcome(ctx, sess, requestID, false, reason)
 	}
-	if err := r.stationSetSpeed(p.Address, p.Speed, p.Forward, p.Emergency); err != nil {
-		fields := r.stationLogFields()
-		fields["addr"] = p.Address
-		fields["speed"] = p.Speed
-		fields["forward"] = p.Forward
-		fields["emergency"] = p.Emergency
-		r.log.WithError(err).WithFields(fields).Warn("dcc-bus command station SetSpeed failed")
+	if err := r.applyMemberSetSpeed(ctx, sess, p.Address, p.Speed, p.Forward, p.Emergency, "throttle"); err != nil {
 		_ = sess.SendTyped(ctx, protocol.TypeLocoError, protocol.LocoErrorPayload{
 			Address: p.Address,
 			Code:    errors.CodeCommandStationError,
@@ -248,27 +242,122 @@ func (r *Router) HandleSetSpeed(ctx context.Context, sess *ws.Session, p contrac
 		})
 		return r.ackOutcome(ctx, sess, requestID, false, errors.CodeCommandStationError)
 	}
+	return r.ackOutcome(ctx, sess, requestID, true, "")
+}
+
+func (r *Router) applyMemberSetSpeed(
+	ctx context.Context,
+	sess *ws.Session,
+	addr uint16,
+	speed uint8,
+	forward bool,
+	emergency bool,
+	source string,
+) error {
+	if err := r.stationSetSpeed(addr, speed, forward, emergency); err != nil {
+		fields := r.stationLogFields()
+		fields["addr"] = addr
+		fields["speed"] = speed
+		fields["forward"] = forward
+		fields["emergency"] = emergency
+		r.log.WithError(err).WithFields(fields).Warn("dcc-bus command station SetSpeed failed")
+		return err
+	}
 	r.log.WithFields(logrus.Fields{
-		"addr":    p.Address,
-		"speed":   p.Speed,
-		"forward": p.Forward,
+		"addr":    addr,
+		"speed":   speed,
+		"forward": forward,
 	}).Debug("dcc-bus command station SetSpeed ok")
 	snap := contract.LocoStateWire{
-		Address:            p.Address,
-		Speed:              p.Speed,
-		Forward:            p.Forward,
+		Address:            addr,
+		Speed:              speed,
+		Forward:            forward,
 		ControlledByUserID: sess.UserID,
-		Source:             "throttle",
+		Source:             source,
 		At:                 time.Now().UTC().UnixMilli(),
 	}
-	if env, ok, err := r.redis.LoadState(ctx, p.Address); err == nil && ok {
+	if env, ok, err := r.redis.LoadState(ctx, addr); err == nil && ok {
 		snap.Functions = env.Functions
 	}
 	if err := r.redis.StoreState(ctx, snap, stateTTL); err != nil {
 		r.log.WithError(err).Debug("dcc-bus redis store")
 	}
 	r.broadcastLocoStateToObservers(ctx, snap)
-	return r.ackOutcome(ctx, sess, requestID, true, "")
+	return nil
+}
+
+const (
+	trainNotOnLayoutCode        = "train_not_on_layout"
+	trainNoPoweredMembersCode   = "train_no_powered_members"
+	notAuthorizedToDriveCode    = "not_authorized_to_drive"
+	trainPartialFailureCode     = "partial_failure"
+)
+
+func (r *Router) findDefinedTrain(trainID uint) (contract.DefinedTrain, bool) {
+	r.trainsMu.RLock()
+	defer r.trainsMu.RUnlock()
+	for _, t := range r.trains {
+		if t.TrainID == trainID {
+			return t, true
+		}
+	}
+	return contract.DefinedTrain{}, false
+}
+
+// HandleTrainSetSpeed fans a throttle move to every powered member of
+// a train on this layout roster.
+func (r *Router) HandleTrainSetSpeed(ctx context.Context, sess *ws.Session, p contract.TrainSetSpeedWire, requestID string) ws.Outcome {
+	train, ok := r.findDefinedTrain(p.TrainID)
+	if !ok {
+		return r.ackOutcome(ctx, sess, requestID, false, trainNotOnLayoutCode)
+	}
+	leading, hasLeading := train.LeadingMember()
+	if !hasLeading {
+		return r.ackOutcome(ctx, sess, requestID, false, trainNoPoweredMembersCode)
+	}
+	if !train.CanDrive(sess.UserID) {
+		return r.ackOutcome(ctx, sess, requestID, false, notAuthorizedToDriveCode)
+	}
+	maxSpeed := contract.MaxSpeedForSpeedSteps(r.speedSteps)
+	acks := make([]protocol.TrainSetSpeedMemberAck, 0, len(train.Members))
+	allOK := true
+	for _, m := range train.Members {
+		if m.Addr == nil {
+			continue
+		}
+		mult := m.SpeedMultiplier
+		if m.VehicleID == leading.VehicleID && m.Position == leading.Position {
+			mult = 1.0
+		}
+		speed := contract.EffectiveMemberSpeed(p.Speed, mult, maxSpeed)
+		forward := p.Forward
+		if m.Reversed {
+			forward = !forward
+		}
+if err := r.applyMemberSetSpeed(ctx, sess, *m.Addr, speed, forward, false, "train"); err != nil {
+			allOK = false
+			acks = append(acks, protocol.TrainSetSpeedMemberAck{Addr: *m.Addr, OK: false, Error: errors.CodeCommandStationError})
+			continue
+		}
+		acks = append(acks, protocol.TrainSetSpeedMemberAck{Addr: *m.Addr, OK: true})
+	}
+	if requestID != "" {
+		ack := protocol.AckPayload{OK: allOK, Members: acks}
+		if !allOK {
+			ack.Error = trainPartialFailureCode
+		}
+		if err := sess.SendAckData(ctx, requestID, ack); err != nil {
+			return ws.Fail(ws.ErrorCodeSendFailed)
+		}
+		if !allOK {
+			return ws.Fail(trainPartialFailureCode)
+		}
+		return ws.OK()
+	}
+	if !allOK {
+		return ws.Fail(trainPartialFailureCode)
+	}
+	return ws.OK()
 }
 
 // HandleSetFunction sets a single function on or off. The desired

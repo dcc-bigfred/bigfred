@@ -142,6 +142,27 @@ func (m *TrainMembers) ListByVehicle(ctx context.Context, vehicleID uint) ([]dom
 	return rows, nil
 }
 
+// ErrTrainMemberNotFound is returned when no train_members row matches.
+var ErrTrainMemberNotFound = errors.New("train member not found")
+
+// FindByID looks up one train member row.
+func (m *TrainMembers) FindByID(ctx context.Context, id uint) (domain.TrainMember, error) {
+	var row domain.TrainMember
+	err := m.repo.Find(ctx, &row, where.Eq("id", id))
+	if err != nil {
+		if errors.Is(err, rel.ErrNotFound) {
+			return domain.TrainMember{}, ErrTrainMemberNotFound
+		}
+		return domain.TrainMember{}, err
+	}
+	return row, nil
+}
+
+// Update persists changes to an existing member row.
+func (m *TrainMembers) Update(ctx context.Context, row *domain.TrainMember) error {
+	return m.repo.Update(ctx, row)
+}
+
 // CountReferencingVehicle is used by VehicleService.Delete to refuse
 // deleting a vehicle that is still part of any train.
 func (m *TrainMembers) CountReferencingVehicle(ctx context.Context, vehicleID uint) (int, error) {

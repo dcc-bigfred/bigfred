@@ -83,5 +83,7 @@
   "function_name_required": "Wpisz tytuł funkcji.",
   "vehicle_template_not_found": "Szablon nie istnieje.",
   "vehicle_template_name_required": "Wpisz nazwę szablonu.",
-  "vehicle_template_name_taken": "Szablon o tej nazwie już istnieje."
+  "vehicle_template_name_taken": "Szablon o tej nazwie już istnieje.",
+  "train_member_multiplier_range": "Mnożnik musi być między 0 a 4.",
+  "train_leading_multiplier_immutable": "Mnożnika pojazdu prowadzącego nie można zmienić."
 }

@@ -17,8 +17,8 @@ Re-read targeted sections when the task touches terminology, REST/WebSocket prot
 
 ## Workflow
 
-1. **Discover** — List `docs/` and open the entry points below.
-2. **Orient** — Read `docs/bigfred/README.md` and skim `docs/bigfred/architecture/README.md` for the table of contents.
+1. **Discover** — List `docs/content/` and open the entry points below.
+2. **Orient** — Read `docs/content/bigfred/README.md` and skim `docs/content/bigfred/architecture/README.md` for the table of contents.
 3. **Focus** — Read section READMEs and files that match the user's first message (do not read all 60+ files unless the task is broad).
 4. **Apply** — Use terminology, invariants, and protocols from the docs; treat them as authoritative for intended behavior.
 5. **Reconcile** — When something does not line up, stop and ask the user how to proceed (do not guess):
@@ -29,18 +29,19 @@ Re-read targeted sections when the task touches terminology, REST/WebSocket prot
 
 | Purpose | Path |
 |--------|------|
-| Project overview & full TOC | `docs/bigfred/README.md` |
-| Architecture index | `docs/bigfred/architecture/README.md` |
-| Terminology (required vocabulary) | `docs/bigfred/architecture/00-terminology.md` |
-| Repository layout | `docs/bigfred/architecture/04-repository-layout.md` |
-| REST + WebSocket | `docs/bigfred/architecture/06-communication-protocol/README.md` |
-| Backend / frontend components | `docs/bigfred/architecture/07-backend-components.md`, `08-frontend-components.md` |
-| Auth & permissions | `docs/bigfred/architecture/10-authn-authz/README.md` |
-| Milestones & acceptance criteria | `docs/bigfred/architecture/13-delivery-order.md`, `14-acceptance-criteria/README.md` |
-| DCC bus daemon | `docs/bigfred/architecture/16-dcc-bus/README.md` |
-| Supervisord | `docs/bigfred/architecture/15-supervisord/README.md` |
+| Project overview & full TOC | `docs/content/bigfred/README.md` |
+| Architecture index | `docs/content/bigfred/architecture/README.md` |
+| Terminology (required vocabulary) | `docs/content/bigfred/architecture/00-terminology.md` |
+| Repository layout | `docs/content/bigfred/architecture/04-repository-layout.md` |
+| REST + WebSocket | `docs/content/bigfred/architecture/06-communication-protocol/README.md` |
+| Backend / frontend components | `docs/content/bigfred/architecture/07-backend-components.md`, `08-frontend-components.md` |
+| Auth & permissions | `docs/content/bigfred/architecture/10-authn-authz/README.md` |
+| Milestones & acceptance criteria | `docs/content/bigfred/architecture/13-delivery-order.md`, `14-acceptance-criteria/README.md` |
+| DCC bus daemon | `docs/content/bigfred/architecture/16-dcc-bus/README.md` |
+| Supervisord | `docs/content/bigfred/architecture/15-supervisord/README.md` |
+| Published site | https://dcc-bigfred.github.io/docs/ |
 
-Nested topics live in subfolders under `docs/bigfred/architecture/`; each subfolder has its own `README.md` with a local table of contents.
+Nested topics live in subfolders under `docs/content/bigfred/architecture/`; each subfolder has its own `README.md` with a local table of contents.
 
 ## Rules
 

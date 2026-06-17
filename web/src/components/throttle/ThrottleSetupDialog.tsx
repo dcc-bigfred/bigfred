@@ -32,7 +32,13 @@ export default function ThrottleSetupDialog({
       maxWidth="sm"
       fullWidth
       slotProps={{
-        paper: { sx: { userSelect: "none", WebkitUserSelect: "none" } },
+        paper: {
+          sx: {
+            userSelect: "none",
+            WebkitUserSelect: "none",
+            overflowX: "hidden",
+          },
+        },
       }}
     >
       <DialogTitle
@@ -54,8 +60,23 @@ export default function ThrottleSetupDialog({
           <CloseIcon />
         </IconButton>
       </DialogTitle>
-      <DialogContent dividers>
-        <Stack spacing={2.5}>{children}</Stack>
+      <DialogContent dividers sx={{ overflowX: "hidden" }}>
+        <Stack
+          spacing={2.5}
+          sx={{
+            minWidth: 0,
+            "& .MuiAlert-root": {
+              width: "100%",
+              boxSizing: "border-box",
+            },
+            "& .MuiAlert-message": {
+              minWidth: 0,
+              overflowWrap: "anywhere",
+            },
+          }}
+        >
+          {children}
+        </Stack>
       </DialogContent>
     </Dialog>
   );

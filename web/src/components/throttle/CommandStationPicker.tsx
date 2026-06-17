@@ -1,8 +1,11 @@
 import {
+  Button,
   FormControl,
   InputLabel,
   MenuItem,
   Select,
+  Stack,
+  Typography,
 } from "@mui/material";
 import { useTranslation } from "react-i18next";
 
@@ -18,6 +21,8 @@ interface CommandStationPickerProps {
   disabled?: boolean;
   allowClear?: boolean;
   onChange: (id: number) => void;
+  onRefresh?: () => void;
+  refreshDisabled?: boolean;
 }
 
 // CommandStationPicker is the shared layout command-station dropdown
@@ -28,13 +33,37 @@ export default function CommandStationPicker({
   disabled,
   allowClear,
   onChange,
+  onRefresh,
+  refreshDisabled,
 }: CommandStationPickerProps) {
   const { t } = useTranslation("throttle");
   if (stations.length === 0) {
-    return null;
+    if (!onRefresh) {
+      return null;
+    }
+    return (
+      <Stack spacing={1.5} sx={{ minWidth: 0 }}>
+        <Typography
+          variant="body2"
+          color="text.secondary"
+          sx={{ overflowWrap: "anywhere" }}
+        >
+          {t("waitingForCommandStations")}
+        </Typography>
+        <Button
+          variant="outlined"
+          size="small"
+          onClick={onRefresh}
+          disabled={refreshDisabled}
+          sx={{ alignSelf: "flex-start" }}
+        >
+          {t("refreshCommandStations")}
+        </Button>
+      </Stack>
+    );
   }
   return (
-    <FormControl fullWidth disabled={disabled}>
+    <FormControl fullWidth disabled={disabled} sx={{ minWidth: 0 }}>
       <InputLabel id="command-station-label">{t("commandStation")}</InputLabel>
       <Select
         labelId="command-station-label"

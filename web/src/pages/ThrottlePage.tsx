@@ -72,8 +72,14 @@ function maxSpeedValue(speedSteps: number): number {
 }
 
 export default function ThrottlePage() {
-  const { session, setCommandStation, connected, reconnecting, subscribe } =
-    useSocket();
+  const {
+    session,
+    setCommandStation,
+    connected,
+    reconnecting,
+    subscribe,
+    refreshSession,
+  } = useSocket();
   const me = useMe().data;
   const { t } = useTranslation(["throttle", "common", "errors"]);
 
@@ -203,6 +209,8 @@ export default function ThrottlePage() {
         disabled={selecting}
         allowClear
         onChange={handlePickerChange}
+        onRefresh={refreshSession}
+        refreshDisabled={!connected || reconnecting}
       />
 
       {spawnError && (
@@ -227,14 +235,9 @@ export default function ThrottlePage() {
         </Alert>
       )}
 
-      {selectedCS === 0 && (
-        <AutoDismissAlert
-          severity="info"
-          resetKey={`select-cs-${stations.length}`}
-        >
-          {stations.length === 0
-            ? t("throttle:noCommandStations")
-            : t("throttle:selectCommandStation")}
+      {selectedCS === 0 && stations.length > 0 && (
+        <AutoDismissAlert severity="info" resetKey="select-cs">
+          {t("throttle:selectCommandStation")}
         </AutoDismissAlert>
       )}
 

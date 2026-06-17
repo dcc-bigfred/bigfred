@@ -36,6 +36,8 @@
   "commandStation": "Command station",
   "selectCommandStation": "Select a command station",
   "noCommandStations": "No command station is attached to this layout.",
+  "waitingForCommandStations": "Please wait while the command station connection starts…",
+  "refreshCommandStations": "Refresh command station list",
   "vehicle": "Vehicle",
   "speed": "Speed",
   "direction": {

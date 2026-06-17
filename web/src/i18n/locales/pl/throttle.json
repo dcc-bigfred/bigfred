@@ -36,6 +36,8 @@
   "commandStation": "Centralka",
   "selectCommandStation": "Wybierz centralkę",
   "noCommandStations": "Do tej makiety nie podpięto żadnej centralki.",
+  "waitingForCommandStations": "Poczekaj, kiedy połączenie do centralki się uruchamia...",
+  "refreshCommandStations": "Odśwież listę centralek",
   "vehicle": "Pojazd",
   "speed": "Prędkość",
   "direction": {

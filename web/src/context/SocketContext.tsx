@@ -85,6 +85,7 @@ interface SocketContextValue {
   reconnecting: boolean;
   session: SessionOpenedPayload | null;
   setCommandStation: (csID: number) => Promise<{ ok: boolean; error?: string }>;
+  refreshSession: () => void;
 }
 
 const SocketContext = createContext<SocketContextValue | null>(null);
@@ -159,6 +160,7 @@ export function SocketProvider({
   const [connected, setConnected] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
   const [session, setSession] = useState<SessionOpenedPayload | null>(null);
+  const [sessionRefreshKey, setSessionRefreshKey] = useState(0);
 
   const subscribe = useCallback((eventType: string, handler: EventHandler) => {
     let set = handlers.current.get(eventType);
@@ -212,6 +214,10 @@ export function SocketProvider({
       ),
     [sendOnControlSocket],
   );
+
+  const refreshSession = useCallback(() => {
+    setSessionRefreshKey((k) => k + 1);
+  }, []);
 
   useEffect(() => {
     if (!enabled) {
@@ -429,7 +435,7 @@ export function SocketProvider({
       setReconnecting(false);
       setSession(null);
     };
-  }, [enabled]);
+  }, [enabled, sessionRefreshKey]);
 
   const value = useMemo<SocketContextValue>(
     () => ({
@@ -439,8 +445,17 @@ export function SocketProvider({
       reconnecting,
       session,
       setCommandStation,
+      refreshSession,
     }),
-    [subscribe, sendAction, connected, reconnecting, session, setCommandStation],
+    [
+      subscribe,
+      sendAction,
+      connected,
+      reconnecting,
+      session,
+      setCommandStation,
+      refreshSession,
+    ],
   );
 
   return (

@@ -30,7 +30,7 @@ jobs:
         run: go test -count=1 ./...
 
   build:
-    name: Build (linux/amd64)
+    name: Build (linux/amd64, linux/arm64, linux/armv7)
     needs: test
     runs-on: ubuntu-latest
     steps:
@@ -46,10 +46,21 @@ jobs:
       - name: Build binaries
         run: |
           set -euo pipefail
-          mkdir -p dist/linux-amd64
-          CGO_ENABLED=0 go build -o dist/linux-amd64/loco-server ./pkgs/bigfred/server
-          CGO_ENABLED=0 go build -o dist/linux-amd64/loco ./pkgs/loco
-          go build -o dist/linux-amd64/rb ./pkgs/rb/main.go
+          mkdir -p dist/linux-amd64 dist/linux-arm64 dist/linux-armv7
+
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o dist/linux-amd64/loco-server ./pkgs/bigfred/server
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o dist/linux-amd64/loco ./pkgs/loco
+          GOOS=linux GOARCH=amd64 go build -o dist/linux-amd64/rb ./pkgs/rb/main.go
+
+          # Raspberry Pi 5 (BCM2712, Cortex-A76) — linux/arm64
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o dist/linux-arm64/loco-server ./pkgs/bigfred/server
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o dist/linux-arm64/loco ./pkgs/loco
+          GOOS=linux GOARCH=arm64 go build -o dist/linux-arm64/rb ./pkgs/rb/main.go
+
+          # Raspberry Pi 2 (BCM2836, Cortex-A7) — linux/arm, GOARM=7
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -o dist/linux-armv7/loco-server ./pkgs/bigfred/server
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -o dist/linux-armv7/loco ./pkgs/loco
+          GOOS=linux GOARCH=arm GOARM=7 go build -o dist/linux-armv7/rb ./pkgs/rb/main.go
 
       - name: Upload binaries
         uses: actions/upload-artifact@v4

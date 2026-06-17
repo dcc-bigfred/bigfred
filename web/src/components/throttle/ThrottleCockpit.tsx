@@ -55,7 +55,6 @@ export interface ThrottleCockpitProps {
   /** Legacy vehicle-only selection — used when selectedTarget is not provided. */
   selectedAddress?: number | null;
   onSelectAddress?: (address: number) => void;
-  witnessLabel?: string;
   speed: number;
   maxSpeed: number;
   forward: boolean;
@@ -87,7 +86,6 @@ export default function ThrottleCockpit({
   onSelectTarget,
   selectedAddress = null,
   onSelectAddress,
-  witnessLabel,
   speed,
   maxSpeed,
   forward,
@@ -123,10 +121,7 @@ export default function ThrottleCockpit({
   }, [trains, effectiveTarget]);
 
   const pickerLabel =
-    witnessLabel ??
-    selectedTrain?.name ??
-    selectedVehicle?.name ??
-    t("vehicle");
+    selectedTrain?.name ?? selectedVehicle?.name ?? t("vehicle");
 
   const hasSelection = effectiveTarget != null;
   const dualPicker = onSelectTarget != null && trains.length >= 0;

@@ -3,10 +3,7 @@ package service
 import (
 	"context"
 
-	"github.com/go-rel/rel"
-
 	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
-	"github.com/keskad/loco/pkgs/bigfred/server/domain"
 	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
 	"github.com/keskad/loco/pkgs/bigfred/server/repo"
 	"github.com/keskad/loco/pkgs/bigfred/server/ws"
@@ -25,10 +22,9 @@ var (
 )
 
 type TakeoverConfig struct {
-	DB            rel.Repository
-	Requests      *repo.TakeoverRequests
-	VehicleLeases repo.Leases[domain.VehicleLease]
-	TrainLeases   repo.Leases[domain.TrainLease]
+	Requests      repo.TakeoverRequestStore
+	VehicleLeases repo.VehicleLeaseStore
+	TrainLeases   repo.TrainLeaseStore
 	Vehicles      *repo.Vehicles
 	Trains        *repo.Trains
 	TrainMembers  *repo.TrainMembers
@@ -54,7 +50,6 @@ func NewTakeoverService(cfg TakeoverConfig) *TakeoverService {
 		hub = takeoverHub{hub: cfg.Hub}
 	}
 	return &TakeoverService{Takeover: cmd.NewTakeover(cmd.TakeoverConfig{
-		DB:            cfg.DB,
 		Requests:      cfg.Requests,
 		VehicleLeases: cfg.VehicleLeases,
 		TrainLeases:   cfg.TrainLeases,

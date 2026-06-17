@@ -1,7 +1,5 @@
 package repo
 
-import "github.com/keskad/loco/pkgs/bigfred/server/domain"
-
 // UsersBundle is a convenience struct that wires every repository
 // the service-level tests need. Production code wires each repo
 // individually in `cli/root.go`; the bundle is intentionally test-
@@ -22,6 +20,6 @@ type UsersBundle struct {
 	CommandStations       *CommandStations
 	LayoutCommandStations *LayoutCommandStations
 	SudoElevations        *SudoElevations
-	VehicleLeases         Leases[domain.VehicleLease]
-	TrainLeases           Leases[domain.TrainLease]
+	VehicleLeases         VehicleLeaseStore
+	TrainLeases           TrainLeaseStore
 }

@@ -2,7 +2,7 @@
 // (§7a.7). It owns:
 //
 //   - the in-memory rate-limiter that throttles PIN attempts,
-//   - the upsert / delete loop against repo.SudoElevations (admin
+//   - the upsert / delete loop against SudoElevationStore (admin
 //     elevation) and repo.LayoutSignalmen (permanent signalman
 //     self-grant — the engineer's-cap icon next to the padlock),
 //   - the broadcast of `auth.elevationChanged` to every WS session
@@ -58,15 +58,16 @@ var DefaultSudoConfig = SudoConfig{
 // Sudo implements the elevation surface. The struct is safe
 // for concurrent use — every shared field is guarded by `mu`.
 type Sudo struct {
-	elevations *repo.SudoElevations
+	elevations repo.SudoElevationStore
 	signalmen  *repo.LayoutSignalmen
 	layouts    *Layout
 	hub        SudoHubPort
 	cfg        SudoConfig
 
-	mu       sync.Mutex
-	failures map[failureKey][]time.Time // (userID, layoutID) → recent failure stamps
-	locks    map[failureKey]time.Time   // (userID, layoutID) → unlock-not-before
+	mu            sync.Mutex
+	failures      map[failureKey][]time.Time // (userID, layoutID) → recent failure stamps
+	locks         map[failureKey]time.Time   // (userID, layoutID) → unlock-not-before
+	expiryTimers  map[failureKey]*time.Timer   // WS fan-out when Redis TTL / grant ends
 }
 
 type failureKey struct {
@@ -77,14 +78,14 @@ type failureKey struct {
 // NewSudo constructs a Sudo. `cfg` may be the zero
 // value — every field falls back to DefaultSudoConfig when unset.
 func NewSudo(
-	elevations *repo.SudoElevations,
+	elevations repo.SudoElevationStore,
 	signalmen *repo.LayoutSignalmen,
 	layouts *Layout,
 	hub SudoHubPort,
 	cfg SudoConfig,
 ) *Sudo {
 	if elevations == nil {
-		panic("service.NewSudo: SudoElevations must not be nil")
+		panic("service.NewSudo: SudoElevationStore must not be nil")
 	}
 	if signalmen == nil {
 		panic("service.NewSudo: LayoutSignalmen must not be nil")
@@ -94,13 +95,14 @@ func NewSudo(
 	}
 	cfg = mergeSudoConfig(cfg)
 	return &Sudo{
-		elevations: elevations,
-		signalmen:  signalmen,
-		layouts:    layouts,
-		hub:        hub,
-		cfg:        cfg,
-		failures:   make(map[failureKey][]time.Time),
-		locks:      make(map[failureKey]time.Time),
+		elevations:   elevations,
+		signalmen:    signalmen,
+		layouts:      layouts,
+		hub:          hub,
+		cfg:          cfg,
+		failures:     make(map[failureKey][]time.Time),
+		locks:        make(map[failureKey]time.Time),
+		expiryTimers: make(map[failureKey]*time.Timer),
 	}
 }
 
@@ -157,6 +159,8 @@ func (s *Sudo) Sudo(ctx context.Context, userID, layoutID uint, pin string) (dom
 	if err := s.elevations.Upsert(ctx, &row); err != nil {
 		return domain.SudoElevation{}, err
 	}
+	key := failureKey{UserID: userID, LayoutID: layoutID}
+	s.scheduleExpiryBroadcast(key, row.ExpiresAt)
 	s.broadcastElevationChanged(userID, layoutID)
 	return row, nil
 }
@@ -165,6 +169,8 @@ func (s *Sudo) Sudo(ctx context.Context, userID, layoutID uint, pin string) (dom
 // Idempotent — a missing row returns nil so the UI's "lock the lock"
 // button never surfaces a 404.
 func (s *Sudo) Revoke(ctx context.Context, userID, layoutID uint) error {
+	key := failureKey{UserID: userID, LayoutID: layoutID}
+	s.cancelExpiryBroadcast(key)
 	if err := s.elevations.Delete(ctx, userID, layoutID); err != nil {
 		return err
 	}
@@ -308,6 +314,35 @@ func (s *Sudo) broadcastElevationChanged(userID, layoutID uint) {
 		return
 	}
 	s.hub.BroadcastElevationChanged(layoutID, userID)
+}
+
+func (s *Sudo) scheduleExpiryBroadcast(key failureKey, expiresAt time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if t, ok := s.expiryTimers[key]; ok {
+		t.Stop()
+	}
+	delay := time.Until(expiresAt)
+	fire := func() {
+		s.broadcastElevationChanged(key.UserID, key.LayoutID)
+		s.mu.Lock()
+		delete(s.expiryTimers, key)
+		s.mu.Unlock()
+	}
+	if delay <= 0 {
+		go fire()
+		return
+	}
+	s.expiryTimers[key] = time.AfterFunc(delay, fire)
+}
+
+func (s *Sudo) cancelExpiryBroadcast(key failureKey) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if t, ok := s.expiryTimers[key]; ok {
+		t.Stop()
+		delete(s.expiryTimers, key)
+	}
 }
 
 // recordFailure appends the failure stamp and arms a lockout when

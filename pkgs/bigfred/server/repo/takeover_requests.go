@@ -23,6 +23,11 @@ func NewTakeoverRequests(r rel.Repository) *TakeoverRequests {
 	return &TakeoverRequests{repo: r}
 }
 
+var _ TakeoverRequestStore = (*TakeoverRequests)(nil)
+
+// RequiresJanitor implements TakeoverRequestStore.
+func (t *TakeoverRequests) RequiresJanitor() bool { return true }
+
 func (t *TakeoverRequests) Insert(ctx context.Context, row *domain.TakeoverRequest) error {
 	return t.repo.Insert(ctx, row)
 }

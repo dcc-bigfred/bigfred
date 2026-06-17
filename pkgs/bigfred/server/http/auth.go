@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
 	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
@@ -135,20 +134,16 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 // false, sudo := nil), so a transient repository hiccup never
 // breaks the cookie hand-off.
 func (h *AuthHandler) buildMeResponse(r *http.Request, id cmd.Identity) protocol.MeResponse {
-	effectiveRole, err := h.auth.EffectiveDisplayRole(r.Context(), id.User, id.Layout.ID)
-	if err != nil {
-		effectiveRole = id.User.Role
-	}
-	isSignalman, err := h.auth.IsEffectiveSignalman(r.Context(), id.User, id.Layout.ID)
-	if err != nil {
-		isSignalman = false
-	}
+	effectiveRole := id.User.Role
+	isSignalman := false
 	var sudo *protocol.SudoElevationResponse
-	if h.sudo != nil {
-		if row, err := h.sudo.FindActive(r.Context(), id.User.ID, id.Layout.ID, time.Now().UTC()); err == nil && row != nil {
+	if snap, err := h.auth.EffectiveSnapshot(r.Context(), id.User, id.Layout.ID); err == nil {
+		effectiveRole = snap.DisplayRole()
+		isSignalman = snap.IsSignalman()
+		if snap.Sudo != nil {
 			sudo = &protocol.SudoElevationResponse{
-				GrantedAt: row.GrantedAt,
-				ExpiresAt: row.ExpiresAt,
+				GrantedAt: snap.Sudo.GrantedAt,
+				ExpiresAt: snap.Sudo.ExpiresAt,
 			}
 		}
 	}

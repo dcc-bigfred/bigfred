@@ -6,8 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-rel/rel"
-
 	"github.com/keskad/loco/pkgs/bigfred/contract"
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
 	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
@@ -29,10 +27,9 @@ var (
 
 // Takeover implements the takeover state machine (§4.3).
 type Takeover struct {
-	db            rel.Repository
-	requests      *repo.TakeoverRequests
-	vehicleLeases repo.Leases[domain.VehicleLease]
-	trainLeases   repo.Leases[domain.TrainLease]
+	requests      repo.TakeoverRequestStore
+	vehicleLeases repo.VehicleLeaseStore
+	trainLeases   repo.TrainLeaseStore
 	vehicles      *repo.Vehicles
 	trains        *repo.Trains
 	members       *repo.TrainMembers
@@ -43,8 +40,9 @@ type Takeover struct {
 	hub           TakeoverHubPort
 	sec           security.TakeoverSecurityContext
 
-	mu     sync.Mutex
-	timers map[uint]*time.Timer
+	mu             sync.Mutex
+	grantTimers    map[uint]*time.Timer
+	releaseTimers  map[uint]*time.Timer
 }
 
 type TakeoverRosterPort interface {
@@ -63,10 +61,9 @@ type TakeoverHubPort interface {
 
 // TakeoverConfig wires Takeover dependencies.
 type TakeoverConfig struct {
-	DB            rel.Repository
-	Requests      *repo.TakeoverRequests
-	VehicleLeases repo.Leases[domain.VehicleLease]
-	TrainLeases   repo.Leases[domain.TrainLease]
+	Requests      repo.TakeoverRequestStore
+	VehicleLeases repo.VehicleLeaseStore
+	TrainLeases   repo.TrainLeaseStore
 	Vehicles      *repo.Vehicles
 	Trains        *repo.Trains
 	TrainMembers  *repo.TrainMembers
@@ -80,7 +77,6 @@ type TakeoverConfig struct {
 // NewTakeover returns a ready orchestrator.
 func NewTakeover(cfg TakeoverConfig) *Takeover {
 	return &Takeover{
-		db:            cfg.DB,
 		requests:      cfg.Requests,
 		vehicleLeases: cfg.VehicleLeases,
 		trainLeases:   cfg.TrainLeases,
@@ -92,7 +88,8 @@ func NewTakeover(cfg TakeoverConfig) *Takeover {
 		roster:        cfg.Roster,
 		auth:          cfg.Auth,
 		hub:           cfg.Hub,
-		timers:        make(map[uint]*time.Timer),
+		grantTimers:   make(map[uint]*time.Timer),
+		releaseTimers: make(map[uint]*time.Timer),
 	}
 }
 
@@ -118,9 +115,10 @@ func (s *Takeover) RecoverPending(ctx context.Context) error {
 	return nil
 }
 
-// RunJanitor revokes expired takeover leases and emits release events.
+// RunJanitor revokes expired takeover leases when the store requires
+// polling (SQLite fallback). Redis uses per-request release timers.
 func (s *Takeover) RunJanitor(ctx context.Context) {
-	if s.requests == nil {
+	if s.requests == nil || !s.requests.RequiresJanitor() {
 		return
 	}
 	ticker := time.NewTicker(15 * time.Second)
@@ -142,11 +140,7 @@ func (s *Takeover) runJanitorOnce(ctx context.Context) {
 	}
 	now := time.Now().UTC()
 	for _, row := range rows {
-		if row.GrantedLeaseID == nil {
-			continue
-		}
-		expired, err := s.leaseExpired(ctx, row, now)
-		if err != nil || !expired {
+		if !s.grantLeaseExpired(ctx, row, now) {
 			continue
 		}
 		_ = s.release(ctx, row, now, "lease_expired")
@@ -178,19 +172,26 @@ func (s *Takeover) userLogin(ctx context.Context, userID uint) string {
 	return user.Login
 }
 
-func (s *Takeover) leaseExpired(ctx context.Context, row domain.TakeoverRequest, now time.Time) (bool, error) {
-	if row.Target == domain.TakeoverTargetVehicle {
-		lease, err := repo.FindVehicleLeaseByID(ctx, s.db, *row.GrantedLeaseID)
-		if err != nil {
-			return true, nil
+func (s *Takeover) grantLeaseExpired(ctx context.Context, row domain.TakeoverRequest, now time.Time) bool {
+	if row.State != domain.TakeoverStateGranted {
+		return false
+	}
+	switch row.Target {
+	case domain.TakeoverTargetVehicle:
+		rows, err := s.vehicleLeases.ListActive(ctx, []uint{row.TargetID}, now)
+		if err != nil || len(rows) == 0 {
+			return true
 		}
-		return !lease.IsActive(now), nil
+		return !rows[0].IsActive(now)
+	case domain.TakeoverTargetTrain:
+		rows, err := s.trainLeases.ListActive(ctx, []uint{row.TargetID}, now)
+		if err != nil || len(rows) == 0 {
+			return true
+		}
+		return !rows[0].IsActive(now)
+	default:
+		return true
 	}
-	lease, err := repo.FindTrainLeaseByID(ctx, s.db, *row.GrantedLeaseID)
-	if err != nil {
-		return true, nil
-	}
-	return !lease.IsActive(now), nil
 }
 
 // Request starts a pending takeover for a roster target.
@@ -281,7 +282,7 @@ func (s *Takeover) Reject(ctx context.Context, requestID, driverID uint) error {
 	if err := s.requests.Update(ctx, &row); err != nil {
 		return err
 	}
-	s.cancelTimer(requestID)
+	s.cancelGrantTimer(requestID)
 	s.broadcast(row.LayoutID, row.SignalmanUserID, contract.TypeTakeoverRejected, contract.TakeoverRejectedWire{RequestID: requestID})
 	return nil
 }
@@ -300,7 +301,7 @@ func (s *Takeover) Cancel(ctx context.Context, requestID, signalmanID uint) erro
 	if err := s.requests.Update(ctx, &row); err != nil {
 		return err
 	}
-	s.cancelTimer(requestID)
+	s.cancelGrantTimer(requestID)
 	s.broadcast(row.LayoutID, row.DriverUserID, contract.TypeTakeoverCancelled, contract.TakeoverCancelledWire{RequestID: requestID})
 	return nil
 }
@@ -337,11 +338,14 @@ func (s *Takeover) ReleaseAllForSignalman(ctx context.Context, signalmanID uint,
 }
 
 func (s *Takeover) release(ctx context.Context, row domain.TakeoverRequest, now time.Time, reason string) error {
-	if row.GrantedLeaseID != nil {
-		if row.Target == domain.TakeoverTargetVehicle {
-			_ = repo.RevokeVehicleLease(ctx, s.db, *row.GrantedLeaseID, now)
-		} else {
-			_ = repo.RevokeTrainLease(ctx, s.db, *row.GrantedLeaseID, now)
+	s.cancelGrantTimer(row.ID)
+	s.cancelReleaseTimer(row.ID)
+	if row.State == domain.TakeoverStateGranted {
+		switch row.Target {
+		case domain.TakeoverTargetVehicle:
+			_ = s.vehicleLeases.Revoke(ctx, row.TargetID, now)
+		case domain.TakeoverTargetTrain:
+			_ = s.trainLeases.Revoke(ctx, row.TargetID, now)
 		}
 	}
 	row.State = domain.TakeoverStateReleased
@@ -377,7 +381,6 @@ func (s *Takeover) autoGrant(ctx context.Context, requestID uint) error {
 	now := time.Now().UTC()
 	expires := now.Add(domain.TakeoverLeaseDuration)
 
-	var leaseID uint
 	switch row.Target {
 	case domain.TakeoverTargetVehicle:
 		ownerID, err := s.vehicleOwnerID(ctx, row.TargetID)
@@ -394,7 +397,6 @@ func (s *Takeover) autoGrant(ctx context.Context, requestID uint) error {
 		if err := s.vehicleLeases.Insert(ctx, &lease); err != nil {
 			return err
 		}
-		leaseID = lease.ID
 	case domain.TakeoverTargetTrain:
 		ownerID, err := s.trainOwnerID(ctx, row.TargetID)
 		if err != nil {
@@ -410,13 +412,13 @@ func (s *Takeover) autoGrant(ctx context.Context, requestID uint) error {
 		if err := s.trainLeases.Insert(ctx, &lease); err != nil {
 			return err
 		}
-		leaseID = lease.ID
 	default:
 		return ErrTakeoverInvalidState
 	}
 
 	row.State = domain.TakeoverStateGranted
 	row.DecisionAt = &now
+	leaseID := row.TargetID
 	row.GrantedLeaseID = &leaseID
 	if err := s.requests.Update(ctx, &row); err != nil {
 		return err
@@ -424,6 +426,8 @@ func (s *Takeover) autoGrant(ctx context.Context, requestID uint) error {
 	if s.roster != nil {
 		_ = s.roster.SyncLayoutRoster(ctx, row.LayoutID)
 	}
+
+	s.scheduleLeaseRelease(row.ID, expires)
 
 	signalmanLogin := s.userLogin(ctx, row.SignalmanUserID)
 	granted := contract.TakeoverGrantedWire{
@@ -441,24 +445,57 @@ func (s *Takeover) autoGrant(ctx context.Context, requestID uint) error {
 func (s *Takeover) scheduleAutoGrant(requestID uint, delay time.Duration) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if t, ok := s.timers[requestID]; ok {
+	if t, ok := s.grantTimers[requestID]; ok {
 		t.Stop()
 	}
 	timer := time.AfterFunc(delay, func() {
 		_ = s.autoGrant(context.Background(), requestID)
 		s.mu.Lock()
-		delete(s.timers, requestID)
+		delete(s.grantTimers, requestID)
 		s.mu.Unlock()
 	})
-	s.timers[requestID] = timer
+	s.grantTimers[requestID] = timer
 }
 
-func (s *Takeover) cancelTimer(requestID uint) {
+func (s *Takeover) scheduleLeaseRelease(requestID uint, expiresAt time.Time) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if t, ok := s.timers[requestID]; ok {
+	if t, ok := s.releaseTimers[requestID]; ok {
 		t.Stop()
-		delete(s.timers, requestID)
+	}
+	delay := time.Until(expiresAt)
+	fire := func() {
+		row, err := s.requests.FindByID(context.Background(), requestID)
+		if err != nil || row.State != domain.TakeoverStateGranted {
+			return
+		}
+		_ = s.release(context.Background(), row, time.Now().UTC(), "lease_expired")
+		s.mu.Lock()
+		delete(s.releaseTimers, requestID)
+		s.mu.Unlock()
+	}
+	if delay <= 0 {
+		go fire()
+		return
+	}
+	s.releaseTimers[requestID] = time.AfterFunc(delay, fire)
+}
+
+func (s *Takeover) cancelGrantTimer(requestID uint) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if t, ok := s.grantTimers[requestID]; ok {
+		t.Stop()
+		delete(s.grantTimers, requestID)
+	}
+}
+
+func (s *Takeover) cancelReleaseTimer(requestID uint) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if t, ok := s.releaseTimers[requestID]; ok {
+		t.Stop()
+		delete(s.releaseTimers, requestID)
 	}
 }
 

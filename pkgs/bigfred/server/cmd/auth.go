@@ -41,14 +41,14 @@ type Auth struct {
 	users        *repo.Users
 	layouts      *Layout
 	signalmen    *repo.LayoutSignalmen
-	elevations   *repo.SudoElevations
+	elevations   repo.SudoElevationStore
 	jwtSecret    []byte
 	sessionTTL   time.Duration
 	cookieDomain string
 }
 
 // NewAuth returns a ready-to-use Auth use-case handler.
-func NewAuth(users *repo.Users, layouts *Layout, signalmen *repo.LayoutSignalmen, elevations *repo.SudoElevations, cfg AuthConfig) *Auth {
+func NewAuth(users *repo.Users, layouts *Layout, signalmen *repo.LayoutSignalmen, elevations repo.SudoElevationStore, cfg AuthConfig) *Auth {
 	if len(cfg.JWTSecret) == 0 {
 		panic("cmd.NewAuth: JWTSecret must not be empty")
 	}
@@ -100,24 +100,69 @@ func (a *Auth) Login(ctx context.Context, login, pin string, layoutID uint) (Ide
 	return Identity{User: user, Layout: layout}, nil
 }
 
+// EffectiveSnapshot is the outcome of one layout-scoped role resolution
+// pass. Sudo is non-nil when an active sudo_elevations row contributed
+// admin authority (permanent admins do not populate it).
+type EffectiveSnapshot struct {
+	Roles domain.EffectiveRoles
+	Sudo  *domain.SudoElevation
+}
+
+// DisplayRole returns the single role label shown on the dashboard.
+func (s EffectiveSnapshot) DisplayRole() domain.Role {
+	if s.Roles.Has(domain.RoleAdmin) {
+		return domain.RoleAdmin
+	}
+	if s.Roles.Has(domain.RoleSignalman) {
+		return domain.RoleSignalman
+	}
+	return domain.RoleDriver
+}
+
+// IsSignalman reports whether the user may operate as a signalman.
+func (s EffectiveSnapshot) IsSignalman() bool {
+	return s.Roles.Has(domain.RoleSignalman) || s.Roles.Has(domain.RoleAdmin)
+}
+
 // Effective computes flat role membership for (user, layout).
 func (a *Auth) Effective(ctx context.Context, user domain.User, layoutID uint) (domain.EffectiveRoles, error) {
+	snap, err := a.resolveEffective(ctx, user, layoutID)
+	if err != nil {
+		return domain.EffectiveRoles{}, err
+	}
+	return snap.Roles, nil
+}
+
+// EffectiveSnapshot resolves roles and the active sudo grant (if any)
+// in one repository pass. Use it when the caller needs both effective
+// membership and sudo timestamps (e.g. GET /auth/me).
+func (a *Auth) EffectiveSnapshot(ctx context.Context, user domain.User, layoutID uint) (EffectiveSnapshot, error) {
+	return a.resolveEffective(ctx, user, layoutID)
+}
+
+func (a *Auth) resolveEffective(ctx context.Context, user domain.User, layoutID uint) (EffectiveSnapshot, error) {
 	roles := []domain.Role{user.Role}
 	now := time.Now().UTC()
+	var sudo *domain.SudoElevation
 
 	if hasGrant, err := a.signalmen.HasActiveGrant(ctx, layoutID, user.ID, now); err != nil {
-		return domain.EffectiveRoles{}, err
+		return EffectiveSnapshot{}, err
 	} else if hasGrant {
 		roles = append(roles, domain.RoleSignalman)
 	}
 	if a.elevations != nil {
-		if _, err := a.elevations.FindActive(ctx, user.ID, layoutID, now); err == nil {
+		row, err := a.elevations.FindActive(ctx, user.ID, layoutID, now)
+		if err == nil {
 			roles = append(roles, domain.RoleAdmin)
+			sudo = &row
 		} else if !errors.Is(err, repo.ErrSudoElevationNotFound) {
-			return domain.EffectiveRoles{}, err
+			return EffectiveSnapshot{}, err
 		}
 	}
-	return domain.NewEffectiveRoles(roles...), nil
+	return EffectiveSnapshot{
+		Roles: domain.NewEffectiveRoles(roles...),
+		Sudo:  sudo,
+	}, nil
 }
 
 // EffectiveForUserID loads the user and computes layout-scoped roles.
@@ -131,26 +176,20 @@ func (a *Auth) EffectiveForUserID(ctx context.Context, userID, layoutID uint) (d
 
 // EffectiveDisplayRole returns the single role label shown on the dashboard.
 func (a *Auth) EffectiveDisplayRole(ctx context.Context, user domain.User, layoutID uint) (domain.Role, error) {
-	roles, err := a.Effective(ctx, user, layoutID)
+	snap, err := a.resolveEffective(ctx, user, layoutID)
 	if err != nil {
 		return "", err
 	}
-	if roles.Has(domain.RoleAdmin) {
-		return domain.RoleAdmin, nil
-	}
-	if roles.Has(domain.RoleSignalman) {
-		return domain.RoleSignalman, nil
-	}
-	return domain.RoleDriver, nil
+	return snap.DisplayRole(), nil
 }
 
 // IsEffectiveSignalman reports whether the user may operate as a signalman.
 func (a *Auth) IsEffectiveSignalman(ctx context.Context, user domain.User, layoutID uint) (bool, error) {
-	roles, err := a.Effective(ctx, user, layoutID)
+	snap, err := a.resolveEffective(ctx, user, layoutID)
 	if err != nil {
 		return false, err
 	}
-	return roles.Has(domain.RoleSignalman) || roles.Has(domain.RoleAdmin), nil
+	return snap.IsSignalman(), nil
 }
 
 type sessionClaims struct {

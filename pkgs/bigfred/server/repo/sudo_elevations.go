@@ -22,11 +22,16 @@ type SudoElevations struct {
 	repo rel.Repository
 }
 
+var _ SudoElevationStore = (*SudoElevations)(nil)
+
 // NewSudoElevations returns a SudoElevations repository bound to the
 // given REL instance.
 func NewSudoElevations(r rel.Repository) *SudoElevations {
 	return &SudoElevations{repo: r}
 }
+
+// RequiresJanitor implements SudoElevationStore.
+func (s *SudoElevations) RequiresJanitor() bool { return true }
 
 // FindActive returns the active grant for (userID, layoutID) at
 // `now`. Returns ErrSudoElevationNotFound when absent or expired.

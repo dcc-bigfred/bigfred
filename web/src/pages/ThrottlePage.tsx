@@ -773,9 +773,6 @@ function ConnectedThrottle({
         trains={trains}
         selectedTarget={selectedTarget}
         onSelectTarget={selectTarget}
-        witnessLabel={
-          isTrainMode ? trainCtx.leadingName ?? undefined : undefined
-        }
         speed={cockpitSpeed}
         maxSpeed={maxSpeed}
         forward={forward}

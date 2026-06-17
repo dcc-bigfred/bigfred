@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
-	"github.com/keskad/loco/pkgs/bigfred/server/domain"
 	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
 	"github.com/keskad/loco/pkgs/bigfred/server/protocol"
 	"github.com/keskad/loco/pkgs/bigfred/server/repo"
@@ -51,8 +50,8 @@ func NewLayoutVehicleService(
 	vehicles *repo.Vehicles,
 	trains *repo.Trains,
 	members *repo.TrainMembers,
-	vehicleLeases repo.Leases[domain.VehicleLease],
-	trainLeases repo.Leases[domain.TrainLease],
+	vehicleLeases repo.VehicleLeaseStore,
+	trainLeases repo.TrainLeaseStore,
 	users *repo.Users,
 	hub *ws.Hub,
 ) *LayoutVehicleService {

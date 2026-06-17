@@ -14,12 +14,10 @@ import (
 // vehicle and train lease repositories. T is the concrete lease row
 // type (domain.VehicleLease or domain.TrainLease); the repositories
 // differ only in the owning foreign-key column they filter on.
+//
+// Deprecated: prefer VehicleLeaseStore / TrainLeaseStore.
 type Leases[T domain.Lease] interface {
-	// ListActive returns every active (non-revoked, unexpired) lease
-	// for the supplied owning ids at `now`. An empty id slice yields
-	// nil without hitting the DB.
 	ListActive(ctx context.Context, keyIDs []uint, now time.Time) ([]T, error)
-	// Insert persists a new lease row. Timestamps are caller-owned.
 	Insert(ctx context.Context, row *T) error
 }
 
@@ -32,12 +30,12 @@ type leaseRepo[T domain.Lease] struct {
 }
 
 // NewVehicleLeases returns the vehicle lease repository.
-func NewVehicleLeases(r rel.Repository) Leases[domain.VehicleLease] {
+func NewVehicleLeases(r rel.Repository) VehicleLeaseStore {
 	return &leaseRepo[domain.VehicleLease]{repo: r, keyColumn: "vehicle_id"}
 }
 
 // NewTrainLeases returns the train lease repository.
-func NewTrainLeases(r rel.Repository) Leases[domain.TrainLease] {
+func NewTrainLeases(r rel.Repository) TrainLeaseStore {
 	return &leaseRepo[domain.TrainLease]{repo: r, keyColumn: "train_id"}
 }
 
@@ -65,3 +63,35 @@ func (l *leaseRepo[T]) ListActive(ctx context.Context, keyIDs []uint, now time.T
 func (l *leaseRepo[T]) Insert(ctx context.Context, row *T) error {
 	return l.repo.Insert(ctx, row)
 }
+
+func (l *leaseRepo[T]) RequiresJanitor() bool { return true }
+
+func (l *leaseRepo[T]) Revoke(ctx context.Context, keyID uint, now time.Time) error {
+	var rows []T
+	if err := l.repo.FindAll(ctx, &rows, where.Eq(l.keyColumn, keyID)); err != nil {
+		return err
+	}
+	for i := range rows {
+		if !rows[i].IsActive(now) {
+			continue
+		}
+		switch row := any(&rows[i]).(type) {
+		case *domain.VehicleLease:
+			row.RevokedAt = &now
+			if err := l.repo.Update(ctx, row); err != nil {
+				return err
+			}
+		case *domain.TrainLease:
+			row.RevokedAt = &now
+			if err := l.repo.Update(ctx, row); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+var (
+	_ VehicleLeaseStore = (*leaseRepo[domain.VehicleLease])(nil)
+	_ TrainLeaseStore   = (*leaseRepo[domain.TrainLease])(nil)
+)

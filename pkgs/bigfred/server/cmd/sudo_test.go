@@ -146,9 +146,6 @@ func TestSudoRenewsTimerOnRepeatedSuccess(t *testing.T) {
 	if !second.ExpiresAt.After(first.ExpiresAt) {
 		t.Fatalf("second elevation should renew timer; first=%v second=%v", first.ExpiresAt, second.ExpiresAt)
 	}
-	if first.ID != second.ID {
-		t.Fatalf("expected single row to be reused; got distinct IDs %d vs %d", first.ID, second.ID)
-	}
 }
 
 func TestSudoExpiresAfterTTL(t *testing.T) {

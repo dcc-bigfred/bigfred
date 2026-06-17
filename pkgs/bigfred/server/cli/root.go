@@ -145,7 +145,6 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	interlockings := repo.NewInterlockings(repository)
 	layoutInterlockings := repo.NewLayoutInterlockings(repository)
 	layoutSignalmen := repo.NewLayoutSignalmen(repository)
-	sudoElevations := repo.NewSudoElevations(repository)
 	interlockingSessions := repo.NewInterlockingSessions(repository)
 	dccPools := repo.NewDCCAddressRanges(repository)
 	vehicles := repo.NewVehicles(repository)
@@ -155,9 +154,9 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	trainMembers := repo.NewTrainMembers(repository)
 	layoutVehicles := repo.NewLayoutVehicles(repository)
 	layoutTrains := repo.NewLayoutTrains(repository)
-	vehicleLeases := repo.NewVehicleLeases(repository)
-	trainLeases := repo.NewTrainLeases(repository)
-	takeoverRequests := repo.NewTakeoverRequests(repository)
+	vehicleLeasesRepo := repo.NewVehicleLeases(repository)
+	trainLeasesRepo := repo.NewTrainLeases(repository)
+	takeoverRequestsRepo := repo.NewTakeoverRequests(repository)
 	commandStations := repo.NewCommandStations(repository)
 	layoutCommandStations := repo.NewLayoutCommandStations(repository)
 	_ = layoutTrains
@@ -165,7 +164,6 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	layoutSvc := cmd.NewLayout(layouts, interlockings, layoutInterlockings, commandStations, layoutCommandStations)
 	commandStationSvc := cmd.NewCommandStation(commandStations, layoutCommandStations, layouts)
 	interlockingSvc := cmd.NewInterlocking(interlockings, layoutInterlockings)
-	authSvc := cmd.NewAuth(users, layoutSvc, layoutSignalmen, sudoElevations, cmd.AuthConfig{JWTSecret: secret})
 	dccPoolSvc := cmd.NewDCCPool(dccPools)
 	vehicleSvc := cmd.NewVehicle(vehicles, dccPoolSvc, trainMembers)
 	functionSvc := cmd.NewFunction(dccFunctions, vehicles, vehicleTemplates, users)
@@ -173,31 +171,12 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	trainSvc := cmd.NewTrain(trains, trainMembers, vehicles)
 	userSvc := cmd.NewUser(users, vehicles, trains, dccPoolSvc)
 
-	hub := ws.NewHub()
-	sudoSvc := cmd.NewSudo(sudoElevations, layoutSignalmen, layoutSvc, hub, cmd.DefaultSudoConfig)
-	presenceSvc := service.NewPresenceService(hub, authSvc, users, interlockingSessions, interlockings, layoutInterlockings)
-	hub.SetPresenceRefresher(presenceSvc)
-	occupancySvc := service.NewInterlockingOccupancyService(
-		interlockings, layoutInterlockings, interlockingSessions, users,
-		authSvc, hub, presenceSvc,
-	)
-	layoutVehicleSvc := service.NewLayoutVehicleService(
-		layoutVehicles, layoutTrains, vehicles, trains, trainMembers,
-		vehicleLeases, trainLeases, users, hub,
-	)
-
-	go hub.Run(ctx)
-	// Janitor for expired sudo elevations (§7a.7). Runs in its own
-	// goroutine so a slow SQLite write doesn't block the WS hub.
-	go sudoSvc.RunJanitor(ctx)
-
 	redisAddr := f.RedisAddr
 	if redisAddr == "" {
 		redisAddr = fmt.Sprintf("%s:%d", f.RedisBindAddr, f.RedisPort)
 	}
 	redisSvc := service.NewRedisService(service.RedisServiceConfig{Addr: redisAddr})
 	defer func() { _ = redisSvc.Close() }()
-	layoutVehicleSvc.SetRedisRosterPublisher(redisSvc)
 
 	var supSvc service.Supervisor
 	if !f.NoSupervisor {
@@ -271,6 +250,48 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		}
 	}
 
+	var sudoElevations repo.SudoElevationStore
+	if redisReady {
+		sudoElevations = repo.NewRedisSudoElevations(redisSvc.Client())
+		log.Info("sudo elevations stored in Redis")
+	} else {
+		sudoElevations = repo.NewSudoElevations(repository)
+		log.Warn("redis unavailable; sudo elevations stored in SQLite")
+	}
+
+	var vehicleLeases repo.VehicleLeaseStore = vehicleLeasesRepo
+	var trainLeases repo.TrainLeaseStore = trainLeasesRepo
+	var takeoverRequests repo.TakeoverRequestStore = takeoverRequestsRepo
+	if redisReady {
+		vehicleLeases = repo.NewRedisVehicleLeases(redisSvc.Client())
+		trainLeases = repo.NewRedisTrainLeases(redisSvc.Client())
+		takeoverRequests = repo.NewRedisTakeoverRequests(redisSvc.Client())
+		log.Info("takeover requests and drive leases stored in Redis")
+	} else {
+		log.Warn("redis unavailable; takeover requests and leases stored in SQLite")
+	}
+
+	authSvc := cmd.NewAuth(users, layoutSvc, layoutSignalmen, sudoElevations, cmd.AuthConfig{JWTSecret: secret})
+
+	hub := ws.NewHub()
+	sudoSvc := cmd.NewSudo(sudoElevations, layoutSignalmen, layoutSvc, hub, cmd.DefaultSudoConfig)
+	presenceSvc := service.NewPresenceService(hub, authSvc, users, interlockingSessions, interlockings, layoutInterlockings)
+	hub.SetPresenceRefresher(presenceSvc)
+	occupancySvc := service.NewInterlockingOccupancyService(
+		interlockings, layoutInterlockings, interlockingSessions, users,
+		authSvc, hub, presenceSvc,
+	)
+	layoutVehicleSvc := service.NewLayoutVehicleService(
+		layoutVehicles, layoutTrains, vehicles, trains, trainMembers,
+		vehicleLeases, trainLeases, users, hub,
+	)
+	layoutVehicleSvc.SetRedisRosterPublisher(redisSvc)
+
+	go hub.Run(ctx)
+	if sudoElevations.RequiresJanitor() {
+		go sudoSvc.RunJanitor(ctx)
+	}
+
 	// dcc-bus orchestrator. Disabled when supervisord / redis are
 	// off-line because both are hard dependencies.
 	var dccBusSvc *service.DccBusService
@@ -341,7 +362,6 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 			Interlockings: interlockings,
 		})
 		takeoverSvc = service.NewTakeoverService(service.TakeoverConfig{
-			DB:            repository,
 			Requests:      takeoverRequests,
 			VehicleLeases: vehicleLeases,
 			TrainLeases:   trainLeases,
@@ -358,7 +378,9 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		if err := takeoverSvc.RecoverPending(ctx); err != nil {
 			log.WithError(err).Warn("takeover recover pending")
 		}
-		go takeoverSvc.RunJanitor(ctx)
+		if takeoverRequests.RequiresJanitor() {
+			go takeoverSvc.RunJanitor(ctx)
+		}
 		hub.SetControlHandler(service.NewCompositeControlHandler(
 			sessionCtl,
 			service.NewRadioControlService(radioSvc),

@@ -22,8 +22,8 @@ type LayoutRosterSnapshot struct {
 	layoutTrains  *repo.LayoutTrains
 	vehicles      *repo.Vehicles
 	members       *repo.TrainMembers
-	vehicleLeases repo.Leases[domain.VehicleLease]
-	trainLeases   repo.Leases[domain.TrainLease]
+	vehicleLeases repo.VehicleLeaseStore
+	trainLeases   repo.TrainLeaseStore
 	publisher     LayoutRosterSnapshotPublisher
 }
 
@@ -32,8 +32,8 @@ func NewLayoutRosterSnapshot(
 	layoutTrains *repo.LayoutTrains,
 	vehicles *repo.Vehicles,
 	members *repo.TrainMembers,
-	vehicleLeases repo.Leases[domain.VehicleLease],
-	trainLeases repo.Leases[domain.TrainLease],
+	vehicleLeases repo.VehicleLeaseStore,
+	trainLeases repo.TrainLeaseStore,
 	publisher LayoutRosterSnapshotPublisher,
 ) *LayoutRosterSnapshot {
 	return &LayoutRosterSnapshot{
@@ -253,10 +253,16 @@ func (s *LayoutRosterSnapshot) BuildDefinedTrainsSnapshot(ctx context.Context, l
 				mult = 1.0
 			}
 			member := contract.DefinedTrainMember{
-				VehicleID:       m.VehicleID,
-				Position:        m.Position,
-				Reversed:        m.Reversed,
-				SpeedMultiplier: mult,
+				VehicleID:        m.VehicleID,
+				Position:         m.Position,
+				Reversed:         m.Reversed,
+				SpeedMultiplier:  mult,
+				ExcludeFromSpeed: m.ExcludeFromSpeed,
+				StartDelayMs:          m.StartDelayMs,
+				AccelRampMs:           m.AccelRampMs,
+				AccelRampMaxSteps:     m.AccelRampMaxSteps,
+				BrakeRampMs:           m.BrakeRampMs,
+				BrakeRampMaxSteps:     m.BrakeRampMaxSteps,
 			}
 			if v, ok := byVehicle[m.VehicleID]; ok && v.DCCAddress != nil {
 				addr := *v.DCCAddress

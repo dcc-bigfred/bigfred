@@ -65,6 +65,10 @@ func register(m *migrator.Migrator) {
 	m.Register(20260615_000003, createTakeoverRequestsUp, createTakeoverRequestsDown)
 	m.Register(20260615_000004, seedSchlesienModelleDcc24EsuEp07V3TemplateUp, seedSchlesienModelleDcc24EsuEp07V3TemplateDown)
 	m.Register(20260616_000001, addTrainMemberSpeedMultiplierUp, addTrainMemberSpeedMultiplierDown)
+	m.Register(20260617_000001, addTrainMemberExcludeFromSpeedUp, addTrainMemberExcludeFromSpeedDown)
+	m.Register(20260617_000002, addTrainMemberStartDelayMsUp, addTrainMemberStartDelayMsDown)
+	m.Register(20260617_000003, addTrainMemberAccelRampUp, addTrainMemberAccelRampDown)
+	m.Register(20260617_000004, addTrainMemberBrakeRampUp, addTrainMemberBrakeRampDown)
 }
 
 // createCommandStationsUp installs the `command_stations` catalogue
@@ -604,4 +608,43 @@ func addTrainMemberSpeedMultiplierUp(s *rel.Schema) {
 
 func addTrainMemberSpeedMultiplierDown(s *rel.Schema) {
 	// SQLite cannot DROP COLUMN in older schemas; leave column in place.
+}
+
+// addTrainMemberExcludeFromSpeedUp lets a consist member opt out of
+// train.setSpeed fan-out while remaining available for function control.
+func addTrainMemberExcludeFromSpeedUp(s *rel.Schema) {
+	s.Exec(rel.Raw(`ALTER TABLE train_members ADD COLUMN exclude_from_speed INTEGER NOT NULL DEFAULT 0`))
+}
+
+func addTrainMemberExcludeFromSpeedDown(s *rel.Schema) {
+	// SQLite cannot DROP COLUMN in older schemas; leave column in place.
+}
+
+// addTrainMemberStartDelayMsUp stores per-member consist start delay.
+func addTrainMemberStartDelayMsUp(s *rel.Schema) {
+	s.Exec(rel.Raw(`ALTER TABLE train_members ADD COLUMN start_delay_ms INTEGER NOT NULL DEFAULT 0`))
+}
+
+func addTrainMemberStartDelayMsDown(s *rel.Schema) {
+	// SQLite cannot DROP COLUMN in older schemas; leave column in place.
+}
+
+// addTrainMemberAccelRampUp stores per-member consist acceleration ramp.
+func addTrainMemberAccelRampUp(s *rel.Schema) {
+	s.Exec(rel.Raw(`ALTER TABLE train_members ADD COLUMN accel_ramp_ms INTEGER NOT NULL DEFAULT 0`))
+	s.Exec(rel.Raw(`ALTER TABLE train_members ADD COLUMN accel_ramp_max_steps INTEGER NOT NULL DEFAULT 1`))
+}
+
+func addTrainMemberAccelRampDown(s *rel.Schema) {
+	// SQLite cannot DROP COLUMN in older schemas; leave columns in place.
+}
+
+// addTrainMemberBrakeRampUp stores per-member consist braking ramp.
+func addTrainMemberBrakeRampUp(s *rel.Schema) {
+	s.Exec(rel.Raw(`ALTER TABLE train_members ADD COLUMN brake_ramp_ms INTEGER NOT NULL DEFAULT 0`))
+	s.Exec(rel.Raw(`ALTER TABLE train_members ADD COLUMN brake_ramp_max_steps INTEGER NOT NULL DEFAULT 1`))
+}
+
+func addTrainMemberBrakeRampDown(s *rel.Schema) {
+	// SQLite cannot DROP COLUMN in older schemas; leave columns in place.
 }

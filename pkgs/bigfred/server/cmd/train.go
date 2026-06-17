@@ -14,9 +14,26 @@ import (
 
 // TrainMemberInput is the validated payload of one TrainMember row.
 type TrainMemberInput struct {
-	VehicleID       uint
-	Reversed        bool
-	SpeedMultiplier float64 // 0 → default 1.0
+	VehicleID        uint
+	Reversed         bool
+	SpeedMultiplier  float64 // 0 → default 1.0
+	ExcludeFromSpeed      bool
+	StartDelayMs          int
+	AccelRampMs           int
+	AccelRampMaxSteps     int
+	BrakeRampMs           int
+	BrakeRampMaxSteps     int
+}
+
+// TrainMemberPatchInput is the validated PATCH payload for one member.
+type TrainMemberPatchInput struct {
+	SpeedMultiplier       *float64
+	ExcludeFromSpeed      *bool
+	StartDelayMs          *int
+	AccelRampMs           *int
+	AccelRampMaxSteps     *int
+	BrakeRampMs           *int
+	BrakeRampMaxSteps     *int
 }
 
 // TrainCreateInput is the validated payload of Train.Create.
@@ -209,16 +226,18 @@ func (t *Train) Delete(ctx context.Context, actorID, trainID uint, eff domain.Ef
 	return tr, nil
 }
 
-// UpdateMemberMultiplier sets speedMultiplier on one member row.
-// The leading member's multiplier is immutable (always 1.0 at fan-out).
-func (t *Train) UpdateMemberMultiplier(
+// UpdateMember patches member consist settings.
+// The leading member's multiplier and speed-control participation are immutable.
+func (t *Train) UpdateMember(
 	ctx context.Context,
 	actorID, trainID, memberID uint,
 	eff domain.EffectiveRoles,
-	multiplier float64,
+	patch TrainMemberPatchInput,
 ) (domain.TrainMember, error) {
-	if err := validation.ValidateSpeedMultiplier(multiplier); err != nil {
-		return domain.TrainMember{}, err
+	if patch.SpeedMultiplier == nil && patch.ExcludeFromSpeed == nil &&
+		patch.StartDelayMs == nil && patch.AccelRampMs == nil && patch.AccelRampMaxSteps == nil &&
+		patch.BrakeRampMs == nil && patch.BrakeRampMaxSteps == nil {
+		return domain.TrainMember{}, svcerrors.ErrTrainMemberPatchEmpty
 	}
 	tr, err := t.trains.FindByID(ctx, trainID)
 	if err != nil {
@@ -256,14 +275,71 @@ func (t *Train) UpdateMemberMultiplier(
 	for _, v := range vehicles {
 		byID[v.ID] = v
 	}
-	if leading, ok := leadingMember(allMembers, byID); ok && leading.ID == memberID {
-		return domain.TrainMember{}, svcerrors.ErrTrainLeadingMultiplierImmutable
+	leading, isLeading := leadingMember(allMembers, byID)
+	if isLeading && leading.ID == memberID {
+		if patch.SpeedMultiplier != nil {
+			return domain.TrainMember{}, svcerrors.ErrTrainLeadingMultiplierImmutable
+		}
+		if patch.ExcludeFromSpeed != nil && *patch.ExcludeFromSpeed {
+			return domain.TrainMember{}, svcerrors.ErrTrainLeadingSpeedControlImmutable
+		}
 	}
-	member.SpeedMultiplier = multiplier
+	if patch.SpeedMultiplier != nil {
+		if err := validation.ValidateSpeedMultiplier(*patch.SpeedMultiplier); err != nil {
+			return domain.TrainMember{}, err
+		}
+		member.SpeedMultiplier = *patch.SpeedMultiplier
+	}
+	if patch.ExcludeFromSpeed != nil {
+		member.ExcludeFromSpeed = *patch.ExcludeFromSpeed
+	}
+	if patch.StartDelayMs != nil {
+		if err := validation.ValidateStartDelayMs(*patch.StartDelayMs); err != nil {
+			return domain.TrainMember{}, err
+		}
+		member.StartDelayMs = *patch.StartDelayMs
+	}
+	if patch.AccelRampMs != nil {
+		if err := validation.ValidateAccelRampMs(*patch.AccelRampMs); err != nil {
+			return domain.TrainMember{}, err
+		}
+		member.AccelRampMs = *patch.AccelRampMs
+	}
+	if patch.AccelRampMaxSteps != nil {
+		if err := validation.ValidateAccelRampMaxSteps(*patch.AccelRampMaxSteps); err != nil {
+			return domain.TrainMember{}, err
+		}
+		member.AccelRampMaxSteps = *patch.AccelRampMaxSteps
+	}
+	if patch.BrakeRampMs != nil {
+		if err := validation.ValidateBrakeRampMs(*patch.BrakeRampMs); err != nil {
+			return domain.TrainMember{}, err
+		}
+		member.BrakeRampMs = *patch.BrakeRampMs
+	}
+	if patch.BrakeRampMaxSteps != nil {
+		if err := validation.ValidateBrakeRampMaxSteps(*patch.BrakeRampMaxSteps); err != nil {
+			return domain.TrainMember{}, err
+		}
+		member.BrakeRampMaxSteps = *patch.BrakeRampMaxSteps
+	}
 	if err := t.members.Update(ctx, &member); err != nil {
 		return domain.TrainMember{}, err
 	}
 	return member, nil
+}
+
+// UpdateMemberMultiplier sets speedMultiplier on one member row.
+// Deprecated: use UpdateMember. Kept for tests and internal callers.
+func (t *Train) UpdateMemberMultiplier(
+	ctx context.Context,
+	actorID, trainID, memberID uint,
+	eff domain.EffectiveRoles,
+	multiplier float64,
+) (domain.TrainMember, error) {
+	return t.UpdateMember(ctx, actorID, trainID, memberID, eff, TrainMemberPatchInput{
+		SpeedMultiplier: &multiplier,
+	})
 }
 
 func (t *Train) checkTrainMutate(eff domain.EffectiveRoles, actorID, ownerUserID uint) error {
@@ -316,12 +392,41 @@ func (t *Train) replaceMembers(ctx context.Context, trainID uint, members []Trai
 		if err := validation.ValidateSpeedMultiplier(mult); err != nil {
 			return err
 		}
+		if err := validation.ValidateStartDelayMs(m.StartDelayMs); err != nil {
+			return err
+		}
+		maxSteps := m.AccelRampMaxSteps
+		if maxSteps == 0 {
+			maxSteps = validation.DefaultAccelRampMaxSteps
+		}
+		brakeSteps := m.BrakeRampMaxSteps
+		if brakeSteps == 0 {
+			brakeSteps = validation.DefaultBrakeRampMaxSteps
+		}
+		if err := validation.ValidateAccelRampMs(m.AccelRampMs); err != nil {
+			return err
+		}
+		if err := validation.ValidateAccelRampMaxSteps(maxSteps); err != nil {
+			return err
+		}
+		if err := validation.ValidateBrakeRampMs(m.BrakeRampMs); err != nil {
+			return err
+		}
+		if err := validation.ValidateBrakeRampMaxSteps(brakeSteps); err != nil {
+			return err
+		}
 		row := domain.TrainMember{
-			TrainID:         trainID,
-			VehicleID:       m.VehicleID,
-			Position:        i,
-			Reversed:        m.Reversed,
-			SpeedMultiplier: mult,
+			TrainID:            trainID,
+			VehicleID:          m.VehicleID,
+			Position:           i,
+			Reversed:           m.Reversed,
+			SpeedMultiplier:    mult,
+			ExcludeFromSpeed:   m.ExcludeFromSpeed,
+			StartDelayMs:       m.StartDelayMs,
+			AccelRampMs:        m.AccelRampMs,
+			AccelRampMaxSteps:  maxSteps,
+			BrakeRampMs:        m.BrakeRampMs,
+			BrakeRampMaxSteps:  brakeSteps,
 		}
 		if err := t.members.Insert(ctx, &row); err != nil {
 			return err
@@ -339,7 +444,7 @@ func LeadingMember(members []domain.TrainMember, vehicles map[uint]domain.Vehicl
 func leadingMember(members []domain.TrainMember, vehicles map[uint]domain.Vehicle) (domain.TrainMember, bool) {
 	for _, m := range members {
 		v, ok := vehicles[m.VehicleID]
-		if ok && v.DCCAddress != nil {
+		if ok && v.DCCAddress != nil && !m.ExcludeFromSpeed {
 			return m, true
 		}
 	}

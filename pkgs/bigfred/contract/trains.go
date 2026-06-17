@@ -14,11 +14,16 @@ type TrainSetSpeedWire struct {
 // order, plus whether one was found.
 func (t DefinedTrain) LeadingMember() (DefinedTrainMember, bool) {
 	for _, m := range t.Members {
-		if m.Addr != nil {
+		if m.Addr != nil && !m.ExcludeFromSpeed {
 			return m, true
 		}
 	}
 	return DefinedTrainMember{}, false
+}
+
+// IsLeading reports whether m is the same consist row as leading.
+func (m DefinedTrainMember) IsLeading(leading DefinedTrainMember) bool {
+	return m.VehicleID == leading.VehicleID && m.Position == leading.Position
 }
 
 // CanDrive reports whether userID may drive this train using the

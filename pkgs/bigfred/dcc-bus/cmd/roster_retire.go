@@ -52,7 +52,7 @@ func (r *Router) retireRemovedLoco(ctx context.Context, addr uint16) {
 		At:        time.Now().UTC().UnixMilli(),
 	}
 	if r.redis != nil {
-		if err := r.redis.StoreState(ctx, snap, StateTTL); err != nil {
+		if err := r.redis.StoreLocoCurrentState(ctx, snap, StateTTL); err != nil {
 			r.log.WithError(err).WithField("addr", addr).Debug("dcc-bus roster retire redis store")
 		}
 	}

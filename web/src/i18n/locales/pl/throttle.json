@@ -104,6 +104,7 @@
     "picker": "Skład",
     "leading": "Prowadzący",
     "member": "Pojazd",
+    "memberSpeed": "Prędkość {{speed}}",
     "functions": "Funkcje",
     "multiplier": {
       "title": "Mnożnik prędkości",
@@ -112,6 +113,23 @@
       "save": "Zapisz",
       "cancel": "Anuluj",
       "leadingFixed": "Pojazd prowadzący ma zawsze mnożnik 1,0."
+    },
+    "memberSettings": {
+      "title": "Ustawienia pojazdu w składzie",
+      "leadingFixed": "Pojazd prowadzący jest zawsze sterowany prędkością składu (mnożnik 1,0).",
+      "leadingMultiplierFixed": "Pojazd prowadzący ma zawsze mnożnik 1,0.",
+      "excludeFromSpeed": "Wyłącz ze sterowania prędkością",
+      "startDelay": "Opóźnienie startu",
+      "startDelayNone": "Wyłączone",
+      "startDelayMs": "{{ms}} ms",
+      "accelRampDuration": "Opóźnienie przyspieszania",
+      "accelRampOff": "Wyłączone",
+      "accelRampSeconds": "{{seconds}} s",
+      "accelRampMaxSteps": "Maks. liczba kroków",
+      "brakeRampDuration": "Opóźnienie hamowania",
+      "brakeRampOff": "Wyłączone",
+      "brakeRampSeconds": "{{seconds}} s",
+      "brakeRampMaxSteps": "Maks. liczba kroków"
     }
   }
 }

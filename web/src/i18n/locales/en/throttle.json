@@ -104,6 +104,7 @@
     "picker": "Train",
     "leading": "Leading",
     "member": "Member",
+    "memberSpeed": "Speed {{speed}}",
     "functions": "Functions",
     "multiplier": {
       "title": "Speed multiplier",
@@ -112,6 +113,23 @@
       "save": "Save",
       "cancel": "Cancel",
       "leadingFixed": "The leading vehicle always runs at multiplier 1.0."
+    },
+    "memberSettings": {
+      "title": "Consist member settings",
+      "leadingFixed": "The leading vehicle is always included in consist speed control (multiplier 1.0).",
+      "leadingMultiplierFixed": "The leading vehicle always runs at multiplier 1.0.",
+      "excludeFromSpeed": "Exclude from speed control",
+      "startDelay": "Start delay",
+      "startDelayNone": "Off",
+      "startDelayMs": "{{ms}} ms",
+      "accelRampDuration": "Acceleration ramp",
+      "accelRampOff": "Off",
+      "accelRampSeconds": "{{seconds}} s",
+      "accelRampMaxSteps": "Max steps",
+      "brakeRampDuration": "Braking ramp",
+      "brakeRampOff": "Off",
+      "brakeRampSeconds": "{{seconds}} s",
+      "brakeRampMaxSteps": "Max steps"
     }
   }
 }

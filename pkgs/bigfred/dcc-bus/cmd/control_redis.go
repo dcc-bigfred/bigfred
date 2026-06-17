@@ -64,11 +64,11 @@ func (r *Router) applyControlSetSpeed(ctx context.Context, p contract.LocoSetSpe
 		Source:  "server",
 		At:      contract.NowMS(),
 	}
-	if cached, ok, err := r.redis.LoadState(ctx, p.Address); err == nil && ok {
+	if cached, ok, err := r.redis.GetLocoCurrentState(ctx, p.Address); err == nil && ok {
 		snap.Functions = cached.Functions
 		snap.ControlledByUserID = cached.ControlledByUserID
 	}
-	if err := r.redis.StoreState(ctx, snap, StateTTL); err != nil {
+	if err := r.redis.StoreLocoCurrentState(ctx, snap, StateTTL); err != nil {
 		r.log.WithError(err).Debug("dcc-bus control redis store")
 	}
 	service.BroadcastLocoState(ctx, r.hub, snap)
@@ -79,7 +79,7 @@ func (r *Router) applyControlSetFunction(ctx context.Context, p contract.LocoSet
 		return
 	}
 	userID := uint(0)
-	if cached, ok, err := r.redis.LoadState(ctx, p.Address); err == nil && ok {
+	if cached, ok, err := r.redis.GetLocoCurrentState(ctx, p.Address); err == nil && ok {
 		userID = cached.ControlledByUserID
 	}
 	_ = r.setLocoFunction(ctx, p.Address, userID, p.Function, p.On, "server")

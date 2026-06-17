@@ -164,7 +164,7 @@ func applyObservation(ctx context.Context, deps FeedDeps, o commandstation.LocoO
 
 	snap := contract.LocoStateWire{Address: addr}
 	if deps.Redis != nil {
-		if cached, ok, err := deps.Redis.LoadState(ctx, addr); err == nil && ok {
+		if cached, ok, err := deps.Redis.GetLocoCurrentState(ctx, addr); err == nil && ok {
 			snap = cached
 		}
 	}
@@ -207,7 +207,7 @@ func applyObservation(ctx context.Context, deps FeedDeps, o commandstation.LocoO
 	snap.At = time.Now().UTC().UnixMilli()
 
 	if deps.Redis != nil {
-		if err := deps.Redis.StoreState(ctx, snap, deps.StateTTL); err != nil && deps.Log != nil {
+		if err := deps.Redis.StoreLocoCurrentState(ctx, snap, deps.StateTTL); err != nil && deps.Log != nil {
 			deps.Log.WithError(err).Debug("dcc-bus state feed: redis store")
 		}
 	}

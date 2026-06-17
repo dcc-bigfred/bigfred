@@ -88,6 +88,24 @@ func TrainHTTPStatus(err error) (status int, code string) {
 		return http.StatusUnprocessableEntity, CodeTrainMemberMultiplierRange
 	case stderrors.Is(err, ErrTrainLeadingMultiplierImmutable):
 		return http.StatusUnprocessableEntity, CodeTrainLeadingMultiplierImmutable
+	case stderrors.Is(err, ErrTrainMemberPatchEmpty):
+		return http.StatusBadRequest, CodeTrainMemberPatchEmpty
+	case stderrors.Is(err, ErrTrainLeadingSpeedControlImmutable):
+		return http.StatusUnprocessableEntity, CodeTrainLeadingSpeedControlImmutable
+	case stderrors.Is(err, ErrTrainMemberStartDelayRange):
+		return http.StatusUnprocessableEntity, CodeTrainMemberStartDelayRange
+	case stderrors.Is(err, ErrTrainLeadingStartDelayImmutable):
+		return http.StatusUnprocessableEntity, CodeTrainLeadingStartDelayImmutable
+	case stderrors.Is(err, ErrTrainMemberAccelRampRange):
+		return http.StatusUnprocessableEntity, CodeTrainMemberAccelRampRange
+	case stderrors.Is(err, ErrTrainMemberAccelRampStepsRange):
+		return http.StatusUnprocessableEntity, CodeTrainMemberAccelRampStepsRange
+	case stderrors.Is(err, ErrTrainLeadingAccelRampImmutable):
+		return http.StatusUnprocessableEntity, CodeTrainLeadingAccelRampImmutable
+	case stderrors.Is(err, ErrTrainMemberBrakeRampRange):
+		return http.StatusUnprocessableEntity, CodeTrainMemberBrakeRampRange
+	case stderrors.Is(err, ErrTrainMemberBrakeRampStepsRange):
+		return http.StatusUnprocessableEntity, CodeTrainMemberBrakeRampStepsRange
 	default:
 		return http.StatusInternalServerError, "internal_error"
 	}

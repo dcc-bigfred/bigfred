@@ -88,9 +88,15 @@ type DefinedTrain struct {
 type DefinedTrainMember struct {
 	VehicleID uint    `json:"vehicleId"`
 	Position  int     `json:"position"`
-	Reversed        bool    `json:"reversed"`
-	SpeedMultiplier float64 `json:"speedMultiplier"`
-	Addr            *uint16 `json:"addr,omitempty"`
+	Reversed         bool    `json:"reversed"`
+	SpeedMultiplier  float64 `json:"speedMultiplier"`
+	ExcludeFromSpeed      bool    `json:"excludeFromSpeed"`
+	StartDelayMs          int     `json:"startDelayMs"`
+	AccelRampMs           int     `json:"accelRampMs"`
+	AccelRampMaxSteps     int     `json:"accelRampMaxSteps"`
+	BrakeRampMs           int     `json:"brakeRampMs"`
+	BrakeRampMaxSteps     int     `json:"brakeRampMaxSteps"`
+	Addr                  *uint16 `json:"addr,omitempty"`
 }
 
 // Marshal encodes a snapshot for Redis SET/PUBLISH.

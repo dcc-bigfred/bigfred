@@ -44,6 +44,21 @@ func TestDefinedTrainLeadingMember(t *testing.T) {
 	}
 }
 
+func TestDefinedTrainLeadingMemberSkipsExcluded(t *testing.T) {
+	addr1 := uint16(1)
+	addr3 := uint16(3)
+	train := contract.DefinedTrain{
+		Members: []contract.DefinedTrainMember{
+			{VehicleID: 11, Position: 0, Addr: &addr1, ExcludeFromSpeed: true},
+			{VehicleID: 12, Position: 1, Addr: &addr3},
+		},
+	}
+	leading, ok := train.LeadingMember()
+	if !ok || leading.VehicleID != 12 {
+		t.Fatalf("LeadingMember() = %+v, %v", leading, ok)
+	}
+}
+
 func TestDefinedTrainCanDrive(t *testing.T) {
 	train := contract.DefinedTrain{ControllerUserIDs: []uint{1, 5}}
 	if !train.CanDrive(5) {

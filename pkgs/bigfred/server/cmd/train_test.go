@@ -167,4 +167,78 @@ func TestUpdateMemberMultiplier(t *testing.T) {
 	if _, err := tSvc.UpdateMemberMultiplier(ctx, owner.ID, train.Train.ID, leadMember.ID, ownerEff, 1.5); !errors.Is(err, svcerrors.ErrTrainLeadingMultiplierImmutable) {
 		t.Fatalf("leading update err = %v, want immutable", err)
 	}
+
+	excluded := true
+	updated, err = tSvc.UpdateMember(ctx, owner.ID, train.Train.ID, trailMember.ID, ownerEff, cmd.TrainMemberPatchInput{
+		ExcludeFromSpeed: &excluded,
+	})
+	if err != nil {
+		t.Fatalf("exclude trail: %v", err)
+	}
+	if !updated.ExcludeFromSpeed {
+		t.Fatal("expected trail excluded from speed")
+	}
+	if _, err := tSvc.UpdateMember(ctx, owner.ID, train.Train.ID, leadMember.ID, ownerEff, cmd.TrainMemberPatchInput{
+		ExcludeFromSpeed: &excluded,
+	}); !errors.Is(err, svcerrors.ErrTrainLeadingSpeedControlImmutable) {
+		t.Fatalf("leading exclude err = %v, want immutable", err)
+	}
+
+	delay := 150
+	updated, err = tSvc.UpdateMember(ctx, owner.ID, train.Train.ID, trailMember.ID, ownerEff, cmd.TrainMemberPatchInput{
+		StartDelayMs: &delay,
+	})
+	if err != nil {
+		t.Fatalf("set start delay: %v", err)
+	}
+	if updated.StartDelayMs != 150 {
+		t.Fatalf("startDelayMs = %d, want 150", updated.StartDelayMs)
+	}
+
+	rampMs := 2500
+	rampSteps := 3
+	updated, err = tSvc.UpdateMember(ctx, owner.ID, train.Train.ID, trailMember.ID, ownerEff, cmd.TrainMemberPatchInput{
+		AccelRampMs:       &rampMs,
+		AccelRampMaxSteps: &rampSteps,
+	})
+	if err != nil {
+		t.Fatalf("set accel ramp on trail: %v", err)
+	}
+	if updated.AccelRampMs != 2500 || updated.AccelRampMaxSteps != 3 {
+		t.Fatalf("accel ramp = %d/%d, want 2500/3", updated.AccelRampMs, updated.AccelRampMaxSteps)
+	}
+
+	leadDelay := 200
+	updated, err = tSvc.UpdateMember(ctx, owner.ID, train.Train.ID, leadMember.ID, ownerEff, cmd.TrainMemberPatchInput{
+		StartDelayMs: &leadDelay,
+	})
+	if err != nil {
+		t.Fatalf("set start delay on leading: %v", err)
+	}
+	if updated.StartDelayMs != 200 {
+		t.Fatalf("leading startDelayMs = %d, want 200", updated.StartDelayMs)
+	}
+	leadRampMs := 1000
+	updated, err = tSvc.UpdateMember(ctx, owner.ID, train.Train.ID, leadMember.ID, ownerEff, cmd.TrainMemberPatchInput{
+		AccelRampMs: &leadRampMs,
+	})
+	if err != nil {
+		t.Fatalf("set accel ramp on leading: %v", err)
+	}
+	if updated.AccelRampMs != 1000 {
+		t.Fatalf("leading accelRampMs = %d, want 1000", updated.AccelRampMs)
+	}
+
+	brakeMs := 1500
+	brakeSteps := 2
+	updated, err = tSvc.UpdateMember(ctx, owner.ID, train.Train.ID, trailMember.ID, ownerEff, cmd.TrainMemberPatchInput{
+		BrakeRampMs:       &brakeMs,
+		BrakeRampMaxSteps: &brakeSteps,
+	})
+	if err != nil {
+		t.Fatalf("set brake ramp on trail: %v", err)
+	}
+	if updated.BrakeRampMs != 1500 || updated.BrakeRampMaxSteps != 2 {
+		t.Fatalf("brake ramp = %d/%d, want 1500/2", updated.BrakeRampMs, updated.BrakeRampMaxSteps)
+	}
 }

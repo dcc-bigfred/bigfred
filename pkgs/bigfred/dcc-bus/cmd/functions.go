@@ -63,7 +63,7 @@ func (r *Router) setLocoFunction(ctx context.Context, addr uint16, userID uint, 
 		Source:             source,
 		At:                 time.Now().UTC().UnixMilli(),
 	}
-	if env, ok, err := r.redis.LoadState(ctx, addr); err == nil && ok {
+	if env, ok, err := r.redis.GetLocoCurrentState(ctx, addr); err == nil && ok {
 		snap.Speed = env.Speed
 		snap.Forward = env.Forward
 		snap.Functions = make([]bool, maxInt(len(env.Functions), int(fn)+1))
@@ -72,7 +72,7 @@ func (r *Router) setLocoFunction(ctx context.Context, addr uint16, userID uint, 
 		snap.Functions = make([]bool, int(fn)+1)
 	}
 	snap.Functions[fn] = on
-	if err := r.redis.StoreState(ctx, snap, StateTTL); err != nil {
+	if err := r.redis.StoreLocoCurrentState(ctx, snap, StateTTL); err != nil {
 		r.log.WithError(err).Debug("dcc-bus redis store")
 	}
 	service.BroadcastLocoState(ctx, r.hub, snap)
@@ -120,7 +120,7 @@ func (r *Router) checkFnStateMatches(ctx context.Context, addr uint16, fn uint8,
 	if !r.cache.Matches(addr, fn, on) {
 		return false
 	}
-	env, ok, err := r.redis.LoadState(ctx, addr)
+	env, ok, err := r.redis.GetLocoCurrentState(ctx, addr)
 	if err != nil || !ok {
 		return false
 	}

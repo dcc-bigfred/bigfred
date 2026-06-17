@@ -13,6 +13,15 @@ const (
 	CodeTrainNotOwned                    = "train_not_owned"
 	CodeTrainMemberMultiplierRange       = "train_member_multiplier_range"
 	CodeTrainLeadingMultiplierImmutable  = "train_leading_multiplier_immutable"
+	CodeTrainMemberPatchEmpty            = "train_member_patch_empty"
+	CodeTrainLeadingSpeedControlImmutable = "train_leading_speed_control_immutable"
+	CodeTrainMemberStartDelayRange        = "train_member_start_delay_range"
+	CodeTrainLeadingStartDelayImmutable   = "train_leading_start_delay_immutable"
+	CodeTrainMemberAccelRampRange         = "train_member_accel_ramp_range"
+	CodeTrainMemberAccelRampStepsRange    = "train_member_accel_ramp_steps_range"
+	CodeTrainLeadingAccelRampImmutable    = "train_leading_accel_ramp_immutable"
+	CodeTrainMemberBrakeRampRange         = "train_member_brake_ramp_range"
+	CodeTrainMemberBrakeRampStepsRange    = "train_member_brake_ramp_steps_range"
 )
 
 var (
@@ -23,6 +32,15 @@ var (
 	ErrTrainMemberNotOwned             = errors.New(CodeTrainMemberNotOwned)
 	ErrTrainMemberMissing              = errors.New(CodeTrainMemberMissing)
 	ErrTrainNotOwned                   = errors.New(CodeTrainNotOwned)
-	ErrTrainMemberMultiplierRange      = errors.New(CodeTrainMemberMultiplierRange)
-	ErrTrainLeadingMultiplierImmutable = errors.New(CodeTrainLeadingMultiplierImmutable)
+	ErrTrainMemberMultiplierRange       = errors.New(CodeTrainMemberMultiplierRange)
+	ErrTrainLeadingMultiplierImmutable  = errors.New(CodeTrainLeadingMultiplierImmutable)
+	ErrTrainMemberPatchEmpty            = errors.New(CodeTrainMemberPatchEmpty)
+	ErrTrainLeadingSpeedControlImmutable = errors.New(CodeTrainLeadingSpeedControlImmutable)
+	ErrTrainMemberStartDelayRange        = errors.New(CodeTrainMemberStartDelayRange)
+	ErrTrainLeadingStartDelayImmutable   = errors.New(CodeTrainLeadingStartDelayImmutable)
+	ErrTrainMemberAccelRampRange         = errors.New(CodeTrainMemberAccelRampRange)
+	ErrTrainMemberAccelRampStepsRange    = errors.New(CodeTrainMemberAccelRampStepsRange)
+	ErrTrainLeadingAccelRampImmutable    = errors.New(CodeTrainLeadingAccelRampImmutable)
+	ErrTrainMemberBrakeRampRange         = errors.New(CodeTrainMemberBrakeRampRange)
+	ErrTrainMemberBrakeRampStepsRange    = errors.New(CodeTrainMemberBrakeRampStepsRange)
 )

@@ -2,11 +2,13 @@ package httpapi
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"time"
 
+	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
+	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
+	"github.com/keskad/loco/pkgs/bigfred/server/protocol"
 	"github.com/keskad/loco/pkgs/bigfred/server/security"
 	"github.com/keskad/loco/pkgs/bigfred/server/service"
 )
@@ -19,18 +21,18 @@ import (
 // hand-crafted request cannot peek into another layout's roster.
 type LayoutRosterHandler struct {
 	svc  *service.LayoutVehicleService
-	auth *service.AuthService
+	auth *cmd.Auth
 }
 
 // NewLayoutRosterHandler returns a LayoutRosterHandler.
-func NewLayoutRosterHandler(svc *service.LayoutVehicleService, auth *service.AuthService) *LayoutRosterHandler {
+func NewLayoutRosterHandler(svc *service.LayoutVehicleService, auth *cmd.Auth) *LayoutRosterHandler {
 	return &LayoutRosterHandler{svc: svc, auth: auth}
 }
 
 // rosterVehicleResponse is the dashboard row shape. We piggy-back on
-// `vehicleResponse` and add roster metadata.
+// protocol.VehicleResponse and add roster metadata.
 type rosterVehicleResponse struct {
-	vehicleResponse
+	protocol.VehicleResponse
 	OwnerLogin string    `json:"ownerLogin"`
 	AddedAt    time.Time `json:"addedAt"`
 	CanDrive   bool      `json:"canDrive"`
@@ -38,18 +40,18 @@ type rosterVehicleResponse struct {
 
 // rosterTrainResponse is the train-shaped sibling.
 type rosterTrainResponse struct {
-	ID         uint                  `json:"id"`
-	Name       string                `json:"name"`
-	OwnerID    uint                  `json:"ownerId"`
-	OwnerLogin string                `json:"ownerLogin"`
-	AddedAt    time.Time             `json:"addedAt"`
-	CanDrive   bool                  `json:"canDrive"`
-	Members    []trainMemberResponse `json:"members"`
+	ID         uint                           `json:"id"`
+	Name       string                         `json:"name"`
+	OwnerID    uint                           `json:"ownerId"`
+	OwnerLogin string                         `json:"ownerLogin"`
+	AddedAt    time.Time                      `json:"addedAt"`
+	CanDrive   bool                           `json:"canDrive"`
+	Members    []protocol.TrainMemberResponse `json:"members"`
 }
 
 func toRosterVehicleResponse(e service.RosterVehicleEntry, canDrive bool) rosterVehicleResponse {
 	return rosterVehicleResponse{
-		vehicleResponse: toVehicleResponse(e.Vehicle),
+		VehicleResponse: protocol.ToVehicleResponse(e.Vehicle),
 		OwnerLogin:      e.OwnerLogin,
 		AddedAt:         e.AddedAt,
 		CanDrive:        canDrive,
@@ -57,19 +59,9 @@ func toRosterVehicleResponse(e service.RosterVehicleEntry, canDrive bool) roster
 }
 
 func toRosterTrainResponse(e service.RosterTrainEntry, canDrive bool) rosterTrainResponse {
-	members := make([]trainMemberResponse, 0, len(e.Members))
+	members := make([]protocol.TrainMemberResponse, 0, len(e.Members))
 	for _, m := range e.Members {
-		mult := m.SpeedMultiplier
-		if mult <= 0 {
-			mult = 1.0
-		}
-		members = append(members, trainMemberResponse{
-			ID:              m.ID,
-			VehicleID:       m.VehicleID,
-			Position:        m.Position,
-			Reversed:        m.Reversed,
-			SpeedMultiplier: mult,
-		})
+		members = append(members, protocol.ToTrainMemberResponse(m))
 	}
 	return rosterTrainResponse{
 		ID:         e.Train.ID,
@@ -85,27 +77,27 @@ func toRosterTrainResponse(e service.RosterTrainEntry, canDrive bool) rosterTrai
 // requireOwnLayout pulls the layout id from the path and confirms it
 // matches the caller's session layout. Returns (layoutId, true) when
 // happy, and writes the matching 4xx response otherwise.
-func requireOwnLayout(w http.ResponseWriter, r *http.Request) (uint, service.Identity, bool) {
+func requireOwnLayout(w http.ResponseWriter, r *http.Request) (uint, cmd.Identity, bool) {
 	layoutID, ok := parseUintParam(r, "id")
 	if !ok {
 		writeJSONError(w, http.StatusBadRequest, "invalid_id")
-		return 0, service.Identity{}, false
+		return 0, cmd.Identity{}, false
 	}
 	actor, ok := IdentityFromContext(r.Context())
 	if !ok {
 		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
-		return 0, service.Identity{}, false
+		return 0, cmd.Identity{}, false
 	}
 	if actor.Layout.ID != layoutID {
 		writeJSONError(w, http.StatusUnprocessableEntity, "layout_mismatch")
-		return 0, service.Identity{}, false
+		return 0, cmd.Identity{}, false
 	}
 	return layoutID, actor, true
 }
 
 // actorEffectiveRoles returns the caller's role membership inside
 // their pinned layout (§7a.2).
-func (h *LayoutRosterHandler) actorEffectiveRoles(r *http.Request, actor service.Identity) (domain.EffectiveRoles, error) {
+func (h *LayoutRosterHandler) actorEffectiveRoles(r *http.Request, actor cmd.Identity) (domain.EffectiveRoles, error) {
 	if h.auth == nil {
 		if actor.User.Role == domain.RoleAdmin {
 			return domain.NewEffectiveRoles(domain.RoleAdmin), nil
@@ -276,24 +268,6 @@ func (h *LayoutRosterHandler) RemoveTrain(w http.ResponseWriter, r *http.Request
 
 // writeLayoutRosterError maps roster sentinels to status codes.
 func writeLayoutRosterError(w http.ResponseWriter, err error) {
-	switch {
-	case errors.Is(err, service.ErrVehicleNotFound):
-		writeJSONError(w, http.StatusNotFound, "vehicle_not_found")
-	case errors.Is(err, service.ErrTrainNotFound):
-		writeJSONError(w, http.StatusNotFound, "train_not_found")
-	case errors.Is(err, service.ErrVehicleNotOwned):
-		writeJSONError(w, http.StatusForbidden, "vehicle_not_owned")
-	case errors.Is(err, service.ErrTrainNotOwned):
-		writeJSONError(w, http.StatusForbidden, "train_not_owned")
-	case errors.Is(err, service.ErrLayoutVehicleAlreadyOnRoster):
-		writeJSONError(w, http.StatusConflict, "layout_vehicle_already_on_roster")
-	case errors.Is(err, service.ErrLayoutVehicleNotOnRoster):
-		writeJSONError(w, http.StatusNotFound, "layout_vehicle_not_on_roster")
-	case errors.Is(err, service.ErrLayoutTrainAlreadyOnRoster):
-		writeJSONError(w, http.StatusConflict, "layout_train_already_on_roster")
-	case errors.Is(err, service.ErrLayoutTrainNotOnRoster):
-		writeJSONError(w, http.StatusNotFound, "layout_train_not_on_roster")
-	default:
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
-	}
+	status, code := svcerrors.LayoutRosterHTTPStatus(err)
+	writeJSONError(w, status, code)
 }

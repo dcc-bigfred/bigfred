@@ -13,10 +13,10 @@ func (TakeoverSecurityContext) CanRequest(
 	callerUserID uint,
 ) Decision {
 	if !eff.Has(domain.RoleSignalman) {
-		return Deny("not_signalman")
+		return Deny(ReasonNotSignalman)
 	}
 	if occupantUserID == 0 || occupantUserID != callerUserID {
-		return Deny("not_interlocking_occupant")
+		return Deny(ReasonNotInterlockingOccupant)
 	}
 	return Allow
 }

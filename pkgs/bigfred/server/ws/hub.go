@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
+	"github.com/keskad/loco/pkgs/bigfred/server/protocol"
 )
 
 // onlineUser tracks one connected user inside a layout. Multiple WS
@@ -307,4 +308,13 @@ type OccupantPayload struct {
 type ElevationChangedPayload struct {
 	LayoutID uint `json:"layoutId"`
 	UserID   uint `json:"userId"`
+}
+
+// BroadcastElevationChanged implements cmd.SudoHubPort.
+func (h *Hub) BroadcastElevationChanged(layoutID, userID uint) {
+	h.BroadcastToUserInLayout(layoutID, userID, "auth.elevationChanged",
+		protocol.ElevationChangedPayload{
+			LayoutID: layoutID,
+			UserID:   userID,
+		})
 }

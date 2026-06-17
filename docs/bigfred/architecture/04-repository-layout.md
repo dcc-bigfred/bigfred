@@ -65,6 +65,14 @@ Rules:
 3. **Add i18n keys in the same change.** Every new error or denial code
    shipped to the UI needs a matching `errors:<code>` entry in the
    frontend catalogues (§7c).
+4. **Constructors live next to their type.** A `func New{Name}(…)` factory
+   must be defined in the **same file** as the `struct` (or interface
+   implementation type) it constructs — not in a separate `constructors.go`,
+   not in a sibling package, and not only behind a legacy facade. Example:
+   `cmd/vehicle.go` defines both `type Vehicle struct { … }` and
+   `func NewVehicle(…) *Vehicle`. During migration, a thin `service`
+   re-export may call `cmd.NewVehicle`, but the canonical type + constructor
+   pair belongs together in `cmd`.
 
 > **Legacy note (typing).** `pkgs/bigfred/server/security` still contains
 > inline `Deny("forbidden")` string literals. Migrate those to named
@@ -78,22 +86,28 @@ Rules:
 > use-cases are therefore **legacy to migrate into `cmd`**; treat the
 > descriptions in §3.1/§5 as the current (pre-migration) shape.
 
+> **Infrastructure exception.** Server-side dcc-bus orchestration
+> (`DccBusService`, `DccBusLayoutSync`, `DccBusEventConsumer`) remains in
+> `pkgs/bigfred/server/service`: it owns supervisord programs, TCP port
+> allocation, Redis pub/sub and WS fan-in. Application use-cases in `cmd`
+> talk to it only through ports such as `DccBusControlPort`,
+> `EStopTargetDccBusPort` and `CommandStationDccSyncPort`.
+
 ### 3.1 Backend layer responsibilities
 
 Three packages under `pkgs/bigfred/server/` form the main backend stack. Keep
 business rules out of `http` / `ws`; keep authorization policy out of
 `service` (delegate to `security` instead of inlining role checks).
 
-> The table below describes the **current** server shape, where `service`
-> still hosts the use-case layer. The target directory roles (use-cases in
-> `cmd`, `service` narrowed to helper structs) are defined in
-> [§3.0 Directory roles](#30-directory-roles-layering-glossary); the
-> `service` → `cmd` split is *legacy to migrate*.
+> The table below describes the **current** server shape after the
+> `service` → `cmd` migration: application use-cases live in `cmd`;
+> `service` contains transport/runtime adapters and infrastructure helpers.
 
 | Package | Role |
 |--------|------|
 | **`pkgs/bigfred/server/http`** (and **`pkgs/bigfred/server/ws`**) | Handle incoming HTTP / WebSocket traffic: routing (chi), middleware, session/JWT authentication, request/response mapping, status codes. Handlers are thin adapters — they parse input, read identity from context, call a `*Service`, and serialize the result or map sentinel errors to HTTP/WS codes. |
-| **`pkgs/bigfred/server/service`** | Application / use-case layer: input validation, loading entities for authorization, calling `pkgs/bigfred/server/security` to check permissions, business logic (conditionals, orchestration), `pkgs/bigfred/server/repo` access, and calls to other services (`DCCPoolService`, `AuditService`, `DccBusService`, …). |
+| **`pkgs/bigfred/server/cmd`** | Application / use-case layer: input validation handoff, loading entities for authorization, calling `pkgs/bigfred/server/security`, business logic, `pkgs/bigfred/server/repo` access, and side effects through narrow ports. |
+| **`pkgs/bigfred/server/service`** | Runtime adapters and infrastructure helpers: Redis, supervisord, dcc-bus orchestration, diagnostics, WebSocket adapter wrappers, and compatibility helpers that bridge infrastructure into `cmd` ports. Not the use-case layer. |
 | **`pkgs/bigfred/server/security`** | Pure, stateless policy layer (§7a.3): given loaded `domain.*` values, answers whether an actor may perform an action. No SQL, no HTTP. Invoked from services; HTTP middleware may use it for coarse route guards (see §7a.4). |
 
 ```
@@ -113,7 +127,7 @@ pkgs/
     └── server/                 # web application  (also hosts dcc-bus/ — see block below)
     |   ├── main.go             # cmd entrypoint for `loco server`
     |   ├── cli/                # cobra command: `loco server`
-    ├── http/                   # transport adapter — §3.1; delegates to service/
+    ├── http/                   # transport adapter — §3.1; delegates to cmd/service
     │   ├── router.go           # chi router + middleware
     │   ├── locos.go            # REST handlers (GET/POST/PUT/DELETE)
     │   ├── cv.go
@@ -123,42 +137,90 @@ pkgs/
     │   ├── client.go           # per-connection reader/writer
     │   ├── protocol.go         # typed messages (Action/Event)
     │   └── handlers.go         # WS message dispatching
-    ├── service/                # use cases — §3.1: validate, security, logic, repo, other services
-    │   ├── loco.go             # LocoService; map[commandStationID]Station
-    │   ├── train.go            # TrainService – CRUD + SetSpeed fan-out
-    │   │                       #                (lock-step, Reversed-flip, per-member ack)
-    │   ├── auth.go             # AuthService – login + PIN, sessions/JWT
-    │   ├── apikey.go           # APIKeyService – mint/revoke/verify, ≤365d
-    │   ├── user.go             # UserService – roles, temp grants, DCC pool
-    │   ├── lease.go            # LeaseService – vehicle/train leasing
-    │   ├── interlocking.go     # InterlockingService – signal boxes (layout-filtered)
-    │   ├── takeover.go         # TakeoverService – 15s arbitration
-    │   ├── radio.go            # RadioService – walkie-talkie messages
-    │   ├── command_station.go           # CommandStationService – CRUD over centralki (admin only)
-    │   ├── layout.go            # LayoutService – CRUD, vehicle roster, presence,
-    │   │                       #                signalmen list, interlocking whitelist
-    │   ├── function.go         # FunctionService – dcc_functions CRUD, resolve, detach (§3a.6)
-    │   │                       #                copy-on-write detach
-    │   ├── template.go         # TemplateService – CRUD over vehicle templates
-    │   ├── script.go           # ScriptService – CRUD over user JS scripts,
-    │   │                       #                attachments to vehicles/trains,
-    │   │                       #                Run/Stop dispatch to executor,
-    │   │                       #                fan-out of script.changed / script.runStarted etc.
-    │   ├── audit.go            # AuditService – append-only audit log writer
-    │   ├── dcc_bus.go          # NEW (§7e.6) – DccBusService: orchestrator
+    ├── errors/                 # machine-readable REST/WS error codes (Code* + sentinels)
+    │   ├── auth.go             #   login / session failures
+    │   ├── sudo.go             #   sudo / signalman elevation failures
+    │   ├── user.go             #   user catalogue
+    │   ├── vehicle.go          #   vehicle catalogue
+    │   ├── train.go            #   train catalogue
+    │   ├── dcc.go              #   DCC pool / address
+    │   ├── takeover.go         #   takeover arbitration failures
+    │   ├── function.go         #   DCC function slots
+    │   ├── layout_roster.go    #   layout roster
+    │   ├── template.go         #   vehicle templates (shared)
+    │   └── http.go             #   *HTTPStatus mappers
+    ├── validation/             # stateless input validators (no repo, no HTTP)
+    │   ├── user.go
+    │   ├── vehicle.go
+    │   ├── train.go
+    │   ├── command_station.go
+    │   ├── interlocking.go
+    │   └── function.go
+    ├── protocol/               # REST wire DTOs + To*Input helpers
+    │   ├── auth.go
+    │   ├── sudo.go
+    │   ├── session_control.go
+    │   ├── user.go
+    │   ├── vehicle.go
+    │   ├── train.go
+    │   ├── function.go
+    │   ├── command_station.go
+    │   ├── interlocking.go
+    │   ├── template.go
+    │   └── layout.go
+    ├── cmd/                    # use-case layer (migration in progress)
+    │   ├── port.go             #   DCCPoolPort, LayoutRosterHubPort, …
+    │   ├── auth.go             #   login, effective roles, JWT (migrated)
+    │   ├── sudo.go             #   layout-scoped sudo + signalman elevation (migrated)
+    │   ├── session_control.go  #   control-plane session.* WS use case (migrated)
+    │   ├── dcc_pool.go         #   DCC pool validation/replacement (migrated)
+    │   ├── command_station.go  #   CommandStation catalogue CRUD (migrated)
+    │   ├── interlocking.go     #   Interlocking catalogue CRUD (migrated)
+    │   ├── interlocking_occupancy.go # Interlocking join/leave + occupant enrichment (migrated)
+    │   ├── presence.go         #   layout presence snapshots (migrated)
+    │   ├── radio.go            #   walkie-talkie send/replay + fan-out (migrated)
+    │   ├── radio_stop.go       #   layout-wide Radio Stop use case (migrated)
+    │   ├── estop_target.go     #   per-target emergency stop use case (migrated)
+    │   ├── takeover.go         #   takeover arbitration state machine (migrated)
+    │   ├── radio_control.go    #   radio.* WS control dispatch (migrated)
+    │   ├── takeover_control.go #   takeover.* WS control dispatch (migrated)
+    │   ├── user.go             #   User CRUD + DCC pool orchestration (migrated)
+    │   ├── vehicle.go          #   Vehicle CRUD (migrated)
+    │   ├── train.go            #   Train CRUD (migrated)
+    │   ├── function.go         #   Function CRUD (migrated)
+    │   ├── vehicle_template.go #   VehicleTemplate CRUD (migrated)
+    │   ├── layout.go           #   Layout CRUD + PIN (migrated)
+    │   ├── layout_roster.go    #   LayoutRoster CRUD + WS fan-out (migrated)
+    │   └── layout_roster_snapshot.go # Redis/dcc-bus roster snapshot building (migrated)
+    ├── service/                # adapters + infrastructure helpers (no use-case layer)
+    │   ├── session_control.go  # SessionControlService adapter → cmd.SessionControl
+    │   ├── presence.go         # Presence adapter: ws.Hub → cmd.Presence ports
+    │   ├── interlocking_occupancy.go # InterlockingOccupancyService facade → cmd.InterlockingOccupancy
+    │   ├── takeover.go         # TakeoverService facade → cmd.Takeover
+    │   ├── takeover_control.go # TakeoverControlService adapter → cmd.TakeoverControl
+    │   ├── radio.go            # Radio adapter: Redis store/ws.Hub → cmd.Radio ports
+    │   ├── radio_stop.go       # RadioStopService adapter → cmd.RadioStop
+    │   ├── radio_control.go    # RadioControlService adapter → cmd.RadioControl
+    │   ├── estop_target.go     # EStopTargetService adapter → cmd.EStopTarget
+    │   ├── layout_vehicle.go   # LayoutVehicleService facade → cmd.LayoutRoster
+    │   │                       #   plus adapter wiring for roster snapshot publishing
+    │   ├── layout_drive_scope.go # compatibility helpers for drive-scope lessee lookups
+    │   ├── layout_roster_redis.go # Redis roster publisher interface for dcc-bus snapshots
+    │   ├── function.go         # FunctionService facade → cmd.Function
+    │   ├── vehicle_template.go # VehicleTemplateService facade → cmd.VehicleTemplate
+    │   ├── seed.go             # bootstrap admin seeding helper
+    │   ├── redis.go            # Redis client + dcc-bus roster/command pub helpers
+    │   ├── supervisord.go      # supervisord process manager
+    │   ├── diagnostics.go      # whitelisted diagnostics file reader
+    │   ├── dcc_bus.go          # (§7e.6) DccBusService: infrastructure orchestrator
     │   │                       #   for sibling dcc-bus daemons (port pool,
     │   │                       #   EnsureRunning/Stop, PublishCommand)
-    │   ├── dcc_bus_consumer.go # NEW – psubscribe on dcc-bus:evt:* and fan
-    │   │                       #   incoming events into AuditService / Bus /
-    │   │                       #   ScriptService / WebSocket Hub
-    │   ├── loco_driver.go      # NEW – LocoServiceDriver: thin replacement
-    │   │                       #   of LocoService.{SetSpeed,ToggleFn,EStop}
-    │   │                       #   that goes through DccBusService instead of
-    │   │                       #   talking to commandstation.Station directly
-    │   └── poller.go           # legacy: kept only as a fallback when running
-    │                           #   without dcc-bus (--no-supervisor dev mode)
+    │   ├── dcc_bus_supervisord.go # supervisord sync for dcc-bus programs
+    │   └── dcc_bus_consumer.go # psubscribe on dcc-bus:evt:* and fan
+    │                           #   selected daemon events into WebSocket Hub
     ├── security/               # PURE, STATELESS policy layer – see §7a.3
     │   ├── decision.go         # Decision type + Allow / Deny helpers
+    │   ├── reasons.go          # Reason* constants (vehicle_not_owned, train_not_owned, …)
     │   ├── loco.go             # LocoSecurityContext – CanDriveLoco / CanEditLoco
     │   ├── train.go            # TrainSecurityContext
     │   ├── lease.go            # LeaseSecurityContext – CanLeaseOut, CanRevoke

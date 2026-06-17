@@ -22,5 +22,5 @@ func (VehicleSecurityContext) CanMutateVehicle(
 	if actorID == ownerUserID {
 		return Allow
 	}
-	return Deny("vehicle_not_owned")
+	return Deny(ReasonVehicleNotOwned)
 }

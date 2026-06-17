@@ -7,6 +7,7 @@ import (
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 
+	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
 	"github.com/keskad/loco/pkgs/bigfred/server/service"
 	"github.com/keskad/loco/pkgs/bigfred/server/ws"
@@ -16,21 +17,21 @@ import (
 // time. Keeping it as an explicit struct (rather than positional args)
 // makes future additions (Hub, LocoService, …) source-compatible.
 type RouterConfig struct {
-	Auth             *service.AuthService
-	Users            *service.UserService
-	Layouts          *service.LayoutService
-	Interlockings    *service.InterlockingService
+	Auth             *cmd.Auth
+	Users            *cmd.User
+	Layouts          *cmd.Layout
+	Interlockings    *cmd.Interlocking
 	Occupancy        *service.InterlockingOccupancyService
-	Presence         *service.PresenceService
+	Presence         *cmd.Presence
 	DccBusLayoutSync *service.DccBusLayoutSync
-	Vehicles         *service.VehicleService
-	Functions        *service.FunctionService
-	VehicleTemplates *service.VehicleTemplateService
-	Trains           *service.TrainService
+	Vehicles         *cmd.Vehicle
+	Functions        *cmd.Function
+	VehicleTemplates *cmd.VehicleTemplate
+	Trains           *cmd.Train
 	LayoutVehicles   *service.LayoutVehicleService
-	DCCPool          *service.DCCPoolService
-	Sudo             *service.SudoService
-	CommandStations  *service.CommandStationService
+	DCCPool          *cmd.DCCPool
+	Sudo             *cmd.Sudo
+	CommandStations  *cmd.CommandStation
 	Diagnostics      *service.DiagnosticsService
 	Hub              *ws.Hub
 	DccBus           *service.DccBusService

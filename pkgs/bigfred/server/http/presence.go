@@ -4,19 +4,21 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
+
 	"github.com/keskad/loco/pkgs/bigfred/server/service"
 )
 
 // PresenceHandler serves GET /api/v1/layouts/{id}/presence.
 type PresenceHandler struct {
-	svc     *service.PresenceService
+	svc     *cmd.Presence
 	dccSync *service.DccBusLayoutSync
 }
 
 // NewPresenceHandler returns a PresenceHandler. dccSync may be nil when
 // supervisord / dcc-bus is disabled.
-func NewPresenceHandler(svc *service.PresenceService, dccSync *service.DccBusLayoutSync) *PresenceHandler {
+func NewPresenceHandler(svc *cmd.Presence, dccSync *service.DccBusLayoutSync) *PresenceHandler {
 	return &PresenceHandler{svc: svc, dccSync: dccSync}
 }
 

@@ -2,75 +2,25 @@ package httpapi
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/domain"
-	"github.com/keskad/loco/pkgs/bigfred/server/service"
+	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
+	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
+	"github.com/keskad/loco/pkgs/bigfred/server/protocol"
 )
 
 // VehicleTemplateHandler serves the template catalogue (§4.1).
 type VehicleTemplateHandler struct {
-	templates *service.VehicleTemplateService
-	auth      *service.AuthService
+	templates *cmd.VehicleTemplate
+	auth      *cmd.Auth
 }
 
 // NewVehicleTemplateHandler returns a VehicleTemplateHandler.
 func NewVehicleTemplateHandler(
-	templates *service.VehicleTemplateService,
-	auth *service.AuthService,
+	templates *cmd.VehicleTemplate,
+	auth *cmd.Auth,
 ) *VehicleTemplateHandler {
 	return &VehicleTemplateHandler{templates: templates, auth: auth}
-}
-
-type vehicleTemplateFunctionResponse struct {
-	Num      uint8              `json:"num"`
-	Name     string             `json:"name"`
-	Icon     domain.FunctionIcon `json:"icon"`
-	Position int                `json:"position"`
-}
-
-type vehicleTemplateResponse struct {
-	ID          uint                            `json:"id"`
-	Name        string                          `json:"name"`
-	Description string                          `json:"description"`
-	OwnerID     uint                            `json:"ownerId"`
-	OwnerLogin  string                          `json:"ownerLogin"`
-	Version     int                             `json:"version"`
-	Functions   []vehicleTemplateFunctionResponse `json:"functions"`
-}
-
-func toVehicleTemplateResp(t service.VehicleTemplateListEntry) vehicleTemplateResponse {
-	fns := make([]vehicleTemplateFunctionResponse, 0, len(t.Functions))
-	for _, fn := range t.Functions {
-		fns = append(fns, vehicleTemplateFunctionResponse{
-			Num:      fn.Num,
-			Name:     fn.Name,
-			Icon:     fn.Icon,
-			Position: fn.Position,
-		})
-	}
-	return vehicleTemplateResponse{
-		ID:          t.ID,
-		Name:        t.Name,
-		Description: t.Description,
-		OwnerID:     t.OwnerUserID,
-		OwnerLogin:  t.OwnerLogin,
-		Version:     t.Version,
-		Functions:   fns,
-	}
-}
-
-func toVehicleTemplateRespFromDomain(t domain.VehicleTemplate) vehicleTemplateResponse {
-	return vehicleTemplateResponse{
-		ID:          t.ID,
-		Name:        t.Name,
-		Description: t.Description,
-		OwnerID:     t.OwnerUserID,
-		OwnerLogin:  "",
-		Version:     t.Version,
-		Functions:   nil,
-	}
 }
 
 // List handles GET /api/v1/vehicle-templates.
@@ -80,9 +30,9 @@ func (h *VehicleTemplateHandler) List(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 		return
 	}
-	out := make([]vehicleTemplateResponse, 0, len(rows))
+	out := make([]protocol.VehicleTemplateResponse, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, toVehicleTemplateResp(row))
+		out = append(out, protocol.ToVehicleTemplateResponse(row))
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(out)
@@ -101,12 +51,7 @@ func (h *VehicleTemplateHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(toVehicleTemplateRespFromDomain(row))
-}
-
-type vehicleTemplateCreateRequest struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
+	_ = json.NewEncoder(w).Encode(protocol.ToVehicleTemplateResponseFromDomain(row))
 }
 
 // Create handles POST /api/v1/vehicle-templates.
@@ -116,30 +61,21 @@ func (h *VehicleTemplateHandler) Create(w http.ResponseWriter, r *http.Request) 
 		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
-	var req vehicleTemplateCreateRequest
+	var req protocol.VehicleTemplateCreateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid_body")
 		return
 	}
-	row, err := h.templates.Create(r.Context(), service.VehicleTemplateCreateInput{
-		OwnerUserID: actor.User.ID,
-		Name:        req.Name,
-		Description: req.Description,
-	})
+	row, err := h.templates.Create(r.Context(), req.ToCreateInput(actor.User.ID))
 	if err != nil {
 		writeVehicleTemplateError(w, err)
 		return
 	}
-	resp := toVehicleTemplateRespFromDomain(row)
+	resp := protocol.ToVehicleTemplateResponseFromDomain(row)
 	resp.OwnerLogin = actor.User.Login
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(resp)
-}
-
-type vehicleTemplateUpdateRequest struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
 }
 
 // Update handles PUT /api/v1/vehicle-templates/{id}.
@@ -159,34 +95,21 @@ func (h *VehicleTemplateHandler) Update(w http.ResponseWriter, r *http.Request) 
 		writeJSONError(w, http.StatusBadRequest, "invalid_id")
 		return
 	}
-	var req vehicleTemplateUpdateRequest
+	var req protocol.VehicleTemplateUpdateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid_body")
 		return
 	}
-	row, err := h.templates.Update(r.Context(), actor.User.ID, eff, id, service.VehicleTemplateUpdateInput{
-		Name:        req.Name,
-		Description: req.Description,
-	})
+	row, err := h.templates.Update(r.Context(), actor.User.ID, eff, id, req.ToUpdateInput())
 	if err != nil {
 		writeVehicleTemplateError(w, err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(toVehicleTemplateResp(row))
+	_ = json.NewEncoder(w).Encode(protocol.ToVehicleTemplateResponse(row))
 }
 
 func writeVehicleTemplateError(w http.ResponseWriter, err error) {
-	switch {
-	case errors.Is(err, service.ErrVehicleTemplateNotFound):
-		writeJSONError(w, http.StatusNotFound, "vehicle_template_not_found")
-	case errors.Is(err, service.ErrVehicleTemplateNameRequired):
-		writeJSONError(w, http.StatusUnprocessableEntity, "vehicle_template_name_required")
-	case errors.Is(err, service.ErrVehicleTemplateNameTaken):
-		writeJSONError(w, http.StatusConflict, "vehicle_template_name_taken")
-	case errors.Is(err, service.ErrTemplateNotOwned):
-		writeJSONError(w, http.StatusForbidden, "template_not_owned")
-	default:
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
-	}
+	status, code := svcerrors.VehicleTemplateHTTPStatus(err)
+	writeJSONError(w, status, code)
 }

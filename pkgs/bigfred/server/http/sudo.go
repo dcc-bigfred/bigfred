@@ -5,10 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"time"
 
+	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
+	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
+	"github.com/keskad/loco/pkgs/bigfred/server/protocol"
 	"github.com/keskad/loco/pkgs/bigfred/server/security"
-	"github.com/keskad/loco/pkgs/bigfred/server/service"
 )
 
 // SudoHandler bundles the four endpoints that drive the layout-scoped
@@ -25,39 +26,20 @@ import (
 // engineer's-cap icons always target the caller. GrantSignalmanToUser
 // requires effective admin (permanent or sudo).
 type SudoHandler struct {
-	svc      *service.SudoService
-	auth     *service.AuthService
-	users    *service.UserService
-	presence *service.PresenceService
+	svc      *cmd.Sudo
+	auth     *cmd.Auth
+	users    *cmd.User
+	presence *cmd.Presence
 }
 
 // NewSudoHandler returns a SudoHandler.
 func NewSudoHandler(
-	svc *service.SudoService,
-	auth *service.AuthService,
-	users *service.UserService,
-	presence *service.PresenceService,
+	svc *cmd.Sudo,
+	auth *cmd.Auth,
+	users *cmd.User,
+	presence *cmd.Presence,
 ) *SudoHandler {
 	return &SudoHandler{svc: svc, auth: auth, users: users, presence: presence}
-}
-
-// pinRequest mirrors the JSON body of POST /api/v1/layouts/{id}/sudo
-// and POST /api/v1/layouts/{id}/signalman:
-//
-//	{ "pin": "0000" }
-type pinRequest struct {
-	PIN string `json:"pin"`
-}
-
-type grantSignalmanRequest struct {
-	UserID uint `json:"userId"`
-}
-
-// sudoResponse echoes the persisted admin grant so the UI can start
-// a countdown immediately.
-type sudoResponse struct {
-	GrantedAt time.Time `json:"grantedAt"`
-	ExpiresAt time.Time `json:"expiresAt"`
 }
 
 // resolveLayout asserts that the caller is authenticated, the path
@@ -84,7 +66,7 @@ func (h *SudoHandler) resolveLayout(w http.ResponseWriter, r *http.Request) (use
 
 // decodePIN extracts the PIN field from the request body.
 func decodePIN(w http.ResponseWriter, r *http.Request) (string, bool) {
-	var req pinRequest
+	var req protocol.PinRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid_body")
 		return "", false
@@ -111,7 +93,7 @@ func (h *SudoHandler) RequestSudo(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(sudoResponse{
+	_ = json.NewEncoder(w).Encode(protocol.SudoResponse{
 		GrantedAt: row.GrantedAt,
 		ExpiresAt: row.ExpiresAt,
 	})
@@ -180,7 +162,7 @@ func (h *SudoHandler) GrantSignalmanToUser(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	var req grantSignalmanRequest
+	var req protocol.GrantSignalmanRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid_body")
 		return
@@ -190,8 +172,8 @@ func (h *SudoHandler) GrantSignalmanToUser(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if _, err := h.users.Get(r.Context(), req.UserID); err != nil {
-		if errors.Is(err, service.ErrUserNotFound) {
-			writeJSONError(w, http.StatusNotFound, "user_not_found")
+		if errors.Is(err, svcerrors.ErrUserNotFound) {
+			writeJSONError(w, http.StatusNotFound, svcerrors.CodeUserNotFound)
 			return
 		}
 		writeJSONError(w, http.StatusInternalServerError, "internal_error")
@@ -230,8 +212,8 @@ func (h *SudoHandler) RevokeSignalmanFromUser(w http.ResponseWriter, r *http.Req
 		return
 	}
 	if _, err := h.users.Get(r.Context(), targetUserID); err != nil {
-		if errors.Is(err, service.ErrUserNotFound) {
-			writeJSONError(w, http.StatusNotFound, "user_not_found")
+		if errors.Is(err, svcerrors.ErrUserNotFound) {
+			writeJSONError(w, http.StatusNotFound, svcerrors.CodeUserNotFound)
 			return
 		}
 		writeJSONError(w, http.StatusInternalServerError, "internal_error")
@@ -248,20 +230,20 @@ func (h *SudoHandler) RevokeSignalmanFromUser(w http.ResponseWriter, r *http.Req
 
 // resolveLayoutActor returns the authenticated identity and layout
 // id when the path matches the JWT-pinned session layout.
-func (h *SudoHandler) resolveLayoutActor(w http.ResponseWriter, r *http.Request) (service.Identity, uint, bool) {
+func (h *SudoHandler) resolveLayoutActor(w http.ResponseWriter, r *http.Request) (cmd.Identity, uint, bool) {
 	id, ok := parseUintParam(r, "id")
 	if !ok {
 		writeJSONError(w, http.StatusBadRequest, "invalid_id")
-		return service.Identity{}, 0, false
+		return cmd.Identity{}, 0, false
 	}
 	actor, ok := IdentityFromContext(r.Context())
 	if !ok {
 		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
-		return service.Identity{}, 0, false
+		return cmd.Identity{}, 0, false
 	}
 	if actor.Layout.ID != id {
 		writeJSONError(w, http.StatusUnprocessableEntity, "sudo_layout_mismatch")
-		return service.Identity{}, 0, false
+		return cmd.Identity{}, 0, false
 	}
 	return actor, id, true
 }
@@ -269,23 +251,13 @@ func (h *SudoHandler) resolveLayoutActor(w http.ResponseWriter, r *http.Request)
 // writeSudoError maps SudoService sentinels to status + machine
 // codes the frontend can localise. The `Retry-After` hint is set
 // for the lockout case so a polite client can back off.
-func writeSudoError(w http.ResponseWriter, svc *service.SudoService, userID, layoutID uint, err error) {
-	switch {
-	case errors.Is(err, service.ErrSudoInvalidInput):
-		writeJSONError(w, http.StatusUnprocessableEntity, "sudo_layout_mismatch")
-	case errors.Is(err, service.ErrSudoInvalidPIN):
-		writeJSONError(w, http.StatusUnauthorized, "sudo_invalid_pin")
-	case errors.Is(err, service.ErrSudoLocked):
+func writeSudoError(w http.ResponseWriter, svc *cmd.Sudo, userID, layoutID uint, err error) {
+	status, code := svcerrors.SudoHTTPStatus(err)
+	if errors.Is(err, svcerrors.ErrSudoLocked) {
 		secs := svc.LockedRetryAfter(userID, layoutID)
 		if secs > 0 {
 			w.Header().Set("Retry-After", fmt.Sprintf("%d", secs))
 		}
-		writeJSONError(w, http.StatusTooManyRequests, "sudo_locked")
-	case errors.Is(err, service.ErrLayoutAdminPINUnset):
-		writeJSONError(w, http.StatusUnprocessableEntity, "layout_admin_pin_unset")
-	case errors.Is(err, service.ErrLayoutNotFound):
-		writeJSONError(w, http.StatusNotFound, "layout_not_found")
-	default:
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 	}
+	writeJSONError(w, status, code)
 }

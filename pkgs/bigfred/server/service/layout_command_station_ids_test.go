@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
-	"github.com/keskad/loco/pkgs/bigfred/server/service"
 )
 
 func TestLayoutCommandStationIDsForLayout(t *testing.T) {
@@ -31,7 +31,7 @@ func TestLayoutCommandStationIDsForLayout(t *testing.T) {
 		t.Fatalf("system layout should see full catalogue, got %v", systemIDs)
 	}
 
-	layout, err := svc.Create(ctx, adminEff, service.CreateInput{
+	layout, err := svc.Create(ctx, adminEff, cmd.LayoutCreateInput{
 		Name:              "Ops",
 		CreatedBy:         1,
 		CommandStationIDs: []uint{cs.ID},

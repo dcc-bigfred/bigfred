@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"time"
 
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
 )
@@ -28,7 +27,7 @@ func (s *LayoutVehicleService) LesseesByVehicle(
 			return nil, err
 		}
 	}
-	return s.resolveLesseesByVehicle(ctx, entries, trains, time.Now().UTC())
+	return s.LayoutRosterSnapshot.LesseesByVehicle(ctx, entries, trains)
 }
 
 // LesseesByTrain resolves active lessees per train on a layout.
@@ -44,5 +43,5 @@ func (s *LayoutVehicleService) LesseesByTrain(
 			return nil, err
 		}
 	}
-	return s.resolveLesseesByTrain(ctx, entries, time.Now().UTC())
+	return s.LayoutRosterSnapshot.TrainLessees(ctx, entries)
 }

@@ -2,71 +2,29 @@ package httpapi
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 
+	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
+	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
+	"github.com/keskad/loco/pkgs/bigfred/server/protocol"
 	"github.com/keskad/loco/pkgs/bigfred/server/service"
 )
 
 // TrainHandler bundles REST endpoints for the per-user train
 // catalogue (§4.1).
 type TrainHandler struct {
-	svc          *service.TrainService
+	svc          *cmd.Train
 	layoutTrains *service.LayoutVehicleService
-	auth         *service.AuthService
+	auth         *cmd.Auth
 }
 
 // NewTrainHandler returns a TrainHandler.
 func NewTrainHandler(
-	svc *service.TrainService,
+	svc *cmd.Train,
 	layoutTrains *service.LayoutVehicleService,
-	auth *service.AuthService,
+	auth *cmd.Auth,
 ) *TrainHandler {
 	return &TrainHandler{svc: svc, layoutTrains: layoutTrains, auth: auth}
-}
-
-type trainMemberRequest struct {
-	VehicleID       uint    `json:"vehicleId"`
-	Reversed        bool    `json:"reversed"`
-	SpeedMultiplier float64 `json:"speedMultiplier,omitempty"`
-}
-
-type trainMemberResponse struct {
-	ID              uint    `json:"id"`
-	VehicleID       uint    `json:"vehicleId"`
-	Position        int     `json:"position"`
-	Reversed        bool    `json:"reversed"`
-	SpeedMultiplier float64 `json:"speedMultiplier"`
-}
-
-type trainResponse struct {
-	ID      uint                  `json:"id"`
-	Name    string                `json:"name"`
-	OwnerID uint                  `json:"ownerId"`
-	Members []trainMemberResponse `json:"members"`
-}
-
-func toTrainResponse(d service.TrainDetail) trainResponse {
-	members := make([]trainMemberResponse, 0, len(d.Members))
-	for _, m := range d.Members {
-		mult := m.SpeedMultiplier
-		if mult <= 0 {
-			mult = 1.0
-		}
-		members = append(members, trainMemberResponse{
-			ID:              m.ID,
-			VehicleID:       m.VehicleID,
-			Position:        m.Position,
-			Reversed:        m.Reversed,
-			SpeedMultiplier: mult,
-		})
-	}
-	return trainResponse{
-		ID:      d.Train.ID,
-		Name:    d.Train.Name,
-		OwnerID: d.Train.OwnerUserID,
-		Members: members,
-	}
 }
 
 // List handles GET /api/v1/trains — own trains only for now.
@@ -81,17 +39,12 @@ func (h *TrainHandler) List(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 		return
 	}
-	out := make([]trainResponse, 0, len(rows))
+	out := make([]protocol.TrainResponse, 0, len(rows))
 	for _, d := range rows {
-		out = append(out, toTrainResponse(d))
+		out = append(out, protocol.ToTrainResponse(d))
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(out)
-}
-
-type trainCreateRequest struct {
-	Name    string               `json:"name"`
-	Members []trainMemberRequest `json:"members"`
 }
 
 // Create handles POST /api/v1/trains.
@@ -101,42 +54,23 @@ func (h *TrainHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
-	var req trainCreateRequest
+	var req protocol.TrainCreateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid_body")
 		return
 	}
-	members := make([]service.TrainMemberInput, 0, len(req.Members))
-	for _, m := range req.Members {
-		members = append(members, service.TrainMemberInput{
-			VehicleID:       m.VehicleID,
-			Reversed:        m.Reversed,
-			SpeedMultiplier: m.SpeedMultiplier,
-		})
-	}
-	d, err := h.svc.Create(r.Context(), service.TrainCreateInput{
-		OwnerUserID: actor.User.ID,
-		Name:        req.Name,
-		Members:     members,
-	})
+	d, err := h.svc.Create(r.Context(), req.ToCreateInput(actor.User.ID))
 	if err != nil {
 		writeTrainError(w, err)
 		return
 	}
-	// Train may already be on a layout roster; refresh dcc-bus snapshots.
 	if err := h.layoutTrains.SyncLayoutRosterForTrain(r.Context(), d.Train.ID); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(toTrainResponse(d))
-}
-
-type trainUpdateRequest struct {
-	Name       *string              `json:"name"`
-	Members    []trainMemberRequest `json:"members"`
-	MembersSet bool                 `json:"membersSet"`
+	_ = json.NewEncoder(w).Encode(protocol.ToTrainResponse(d))
 }
 
 // Update handles PUT /api/v1/trains/{id}.
@@ -151,28 +85,17 @@ func (h *TrainHandler) Update(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
-	var req trainUpdateRequest
+	var req protocol.TrainUpdateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid_body")
 		return
-	}
-	in := service.TrainUpdateInput{Name: req.Name}
-	if req.MembersSet {
-		members := make([]service.TrainMemberInput, 0, len(req.Members))
-		for _, m := range req.Members {
-			members = append(members, service.TrainMemberInput{
-				VehicleID: m.VehicleID,
-				Reversed:  m.Reversed,
-			})
-		}
-		in.Members = &members
 	}
 	eff, err := h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 		return
 	}
-	d, err := h.svc.Update(r.Context(), actor.User.ID, trainID, eff, in)
+	d, err := h.svc.Update(r.Context(), actor.User.ID, trainID, eff, req.ToUpdateInput())
 	if err != nil {
 		writeTrainError(w, err)
 		return
@@ -182,7 +105,7 @@ func (h *TrainHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(toTrainResponse(d))
+	_ = json.NewEncoder(w).Encode(protocol.ToTrainResponse(d))
 }
 
 // Delete handles DELETE /api/v1/trains/{id}. Cascades the layout
@@ -214,11 +137,6 @@ func (h *TrainHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-
-type trainMemberPatchRequest struct {
-	SpeedMultiplier float64 `json:"speedMultiplier"`
-}
-
 // PatchMember handles PATCH /api/v1/trains/{id}/members/{memberId}.
 func (h *TrainHandler) PatchMember(w http.ResponseWriter, r *http.Request) {
 	trainID, ok := parseUintParam(r, "id")
@@ -236,7 +154,7 @@ func (h *TrainHandler) PatchMember(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
-	var req trainMemberPatchRequest
+	var req protocol.TrainMemberPatchRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid_body")
 		return
@@ -255,42 +173,11 @@ func (h *TrainHandler) PatchMember(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 		return
 	}
-	mult := member.SpeedMultiplier
-	if mult <= 0 {
-		mult = 1.0
-	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(trainMemberResponse{
-		ID:              member.ID,
-		VehicleID:       member.VehicleID,
-		Position:        member.Position,
-		Reversed:        member.Reversed,
-		SpeedMultiplier: mult,
-	})
+	_ = json.NewEncoder(w).Encode(protocol.ToTrainMemberResponse(member))
 }
 
-// writeTrainError maps service sentinels to status codes.
 func writeTrainError(w http.ResponseWriter, err error) {
-	switch {
-	case errors.Is(err, service.ErrTrainNotFound):
-		writeJSONError(w, http.StatusNotFound, "train_not_found")
-	case errors.Is(err, service.ErrTrainNameRequired):
-		writeJSONError(w, http.StatusUnprocessableEntity, "train_name_required")
-	case errors.Is(err, service.ErrTrainNameTaken):
-		writeJSONError(w, http.StatusConflict, "train_name_taken")
-	case errors.Is(err, service.ErrTrainNoMembers):
-		writeJSONError(w, http.StatusUnprocessableEntity, "train_no_members")
-	case errors.Is(err, service.ErrTrainMemberNotOwned):
-		writeJSONError(w, http.StatusForbidden, "train_member_not_owned")
-	case errors.Is(err, service.ErrTrainMemberMissing):
-		writeJSONError(w, http.StatusUnprocessableEntity, "train_member_missing")
-	case errors.Is(err, service.ErrTrainNotOwned):
-		writeJSONError(w, http.StatusForbidden, "train_not_owned")
-	case errors.Is(err, service.ErrTrainMemberMultiplierRange):
-		writeJSONError(w, http.StatusUnprocessableEntity, "train_member_multiplier_range")
-	case errors.Is(err, service.ErrTrainLeadingMultiplierImmutable):
-		writeJSONError(w, http.StatusUnprocessableEntity, "train_leading_multiplier_immutable")
-	default:
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
-	}
+	status, code := svcerrors.TrainHTTPStatus(err)
+	writeJSONError(w, status, code)
 }

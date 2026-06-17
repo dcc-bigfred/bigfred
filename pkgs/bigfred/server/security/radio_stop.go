@@ -23,5 +23,5 @@ func (RadioStopSecurityContext) CanTrigger(eff domain.EffectiveRoles, userID uin
 			}
 		}
 	}
-	return Deny("not_authorized_to_drive")
+	return Deny(ReasonNotAuthorizedToDrive)
 }

@@ -15,5 +15,5 @@ func (DCCPoolSecurityContext) CanManageDCCPool(eff domain.EffectiveRoles) Decisi
 	if eff.Has(domain.RoleAdmin) {
 		return Allow
 	}
-	return Deny("forbidden")
+	return Deny(ReasonForbidden)
 }

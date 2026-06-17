@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/keskad/loco/pkgs/bigfred/contract"
+	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
 	"github.com/keskad/loco/pkgs/bigfred/server/service"
 	"github.com/keskad/loco/pkgs/bigfred/server/ws"
@@ -32,13 +33,13 @@ func TestAllowedVehiclesSnapshotFoldsVehicleLease(t *testing.T) {
 	owner := insertUser(t, ctx, bundle.Users, "owner", domain.RoleDriver)
 	lessee := insertUser(t, ctx, bundle.Users, "lessee", domain.RoleDriver)
 
-	pool := service.NewDCCPoolService(bundle.Pool)
-	if _, err := pool.Replace(ctx, testAdminEff, owner.ID, []service.PoolRange{{From: 1, To: 9999}}); err != nil {
+	pool := cmd.NewDCCPool(bundle.Pool)
+	if _, err := pool.Replace(ctx, testAdminEff, owner.ID, []cmd.PoolRange{{From: 1, To: 9999}}); err != nil {
 		t.Fatalf("seed pool: %v", err)
 	}
-	vehicleSvc := service.NewVehicleService(bundle.Vehicles, pool, bundle.TrainMembers)
+	vehicleSvc := cmd.NewVehicle(bundle.Vehicles, pool, bundle.TrainMembers)
 	addr := uint16(42)
-	vehicle, err := vehicleSvc.Create(ctx, service.VehicleCreateInput{
+	vehicle, err := vehicleSvc.Create(ctx, cmd.VehicleCreateInput{
 		OwnerUserID: owner.ID,
 		Name:        "ET22",
 		Kind:        domain.VehicleKindLoco,
@@ -50,7 +51,7 @@ func TestAllowedVehiclesSnapshotFoldsVehicleLease(t *testing.T) {
 
 	layoutSvc := freshLayoutSvc(t, ctx, bundle)
 	cs := insertCommandStation(t, ctx, bundle.CommandStations, "Test CS")
-	layout, err := layoutSvc.Create(ctx, testAdminEff, service.CreateInput{
+	layout, err := layoutSvc.Create(ctx, testAdminEff, cmd.LayoutCreateInput{
 		Name:              "Test layout",
 		CreatedBy:         owner.ID,
 		AdminPIN:          "1234",

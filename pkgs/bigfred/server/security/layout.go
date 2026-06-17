@@ -23,7 +23,7 @@ func (LayoutSecurityContext) CanRemoveVehicleFromRoster(
 	if actorID == ownerUserID {
 		return Allow
 	}
-	return Deny("vehicle_not_owned")
+	return Deny(ReasonVehicleNotOwned)
 }
 
 // CanRemoveTrainFromRoster is the train-shaped sibling of
@@ -38,7 +38,7 @@ func (LayoutSecurityContext) CanRemoveTrainFromRoster(
 	if actorID == ownerUserID {
 		return Allow
 	}
-	return Deny("train_not_owned")
+	return Deny(ReasonTrainNotOwned)
 }
 
 // CanGrantSignalmanToUser allows an effective admin (permanent or
@@ -48,7 +48,7 @@ func (LayoutSecurityContext) CanGrantSignalmanToUser(eff domain.EffectiveRoles) 
 	if eff.Has(domain.RoleAdmin) {
 		return Allow
 	}
-	return Deny("forbidden")
+	return Deny(ReasonForbidden)
 }
 
 // CanManageLayouts decides whether the caller may create, update or
@@ -58,5 +58,5 @@ func (LayoutSecurityContext) CanManageLayouts(eff domain.EffectiveRoles) Decisio
 	if eff.Has(domain.RoleAdmin) {
 		return Allow
 	}
-	return Deny("forbidden")
+	return Deny(ReasonForbidden)
 }

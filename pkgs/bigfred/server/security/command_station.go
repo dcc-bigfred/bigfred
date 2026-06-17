@@ -13,5 +13,5 @@ func (CommandStationSecurityContext) CanManageCatalog(eff domain.EffectiveRoles)
 	if eff.Has(domain.RoleAdmin) {
 		return Allow
 	}
-	return Deny("forbidden")
+	return Deny(ReasonForbidden)
 }

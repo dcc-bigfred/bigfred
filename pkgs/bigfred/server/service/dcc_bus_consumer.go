@@ -25,9 +25,9 @@ type DccBusEventConsumer struct {
 	hub   *ws.Hub
 	log   *logrus.Logger
 
-	mu       sync.Mutex
-	cancel   context.CancelFunc
-	stopped  bool
+	mu      sync.Mutex
+	cancel  context.CancelFunc
+	stopped bool
 }
 
 // NewDccBusEventConsumer assembles the consumer. Call Start exactly

@@ -4,36 +4,23 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"sync"
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/keskad/loco/pkgs/bigfred/contract"
+	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
+	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
 	"github.com/keskad/loco/pkgs/bigfred/server/repo"
 	"github.com/keskad/loco/pkgs/bigfred/server/ws"
 )
 
-// SessionControlService implements ws.ControlHandler. It owns the
-// control-plane logic that used to be inlined in Client.readLoop:
-// session-scoped command-station selection, the lazy-spawn handshake
-// with DccBusService and the session.opened payload (§7e.6).
+// SessionControlService adapts ws.Client to cmd.SessionControl.
 type SessionControlService struct {
-	log         *logrus.Logger
-	dccBus      *DccBusService
-	radioStop   *RadioStopService
-	estopTarget *EStopTargetService
-	cs          *repo.CommandStations
-	layoutCS   *repo.LayoutCommandStations
-	layoutRows *repo.Layouts
+	core *cmd.SessionControl
 
-	// proxyPathFn turns (csID) into the URL the SPA should dial.
-	// Default returns "/api/v1/dcc-bus/<csId>/ws"; tests may override.
-	proxyPathFn func(csID uint) string
-
-	mu       sync.Mutex
-	sessions map[*ws.Client]struct{}
+	mu      sync.Mutex
+	clients map[*ws.Client]*controlClient
 }
 
 // SessionControlConfig groups dependencies.
@@ -47,320 +34,156 @@ type SessionControlConfig struct {
 	Layouts     *repo.Layouts
 }
 
-// NewSessionControlService returns a ready handler. dccBus may be
-// nil at construction time (e.g. --no-supervisor); EnsureRunning
-// calls then fail fast with `dcc_bus_not_configured`.
+// NewSessionControlService returns a ready WS adapter.
 func NewSessionControlService(cfg SessionControlConfig) *SessionControlService {
-	log := cfg.Log
-	if log == nil {
-		log = logrus.New()
+	var dccBus cmd.DccBusControlPort
+	if cfg.DccBus != nil {
+		dccBus = dccBusControlPort{svc: cfg.DccBus}
+	}
+	var radioStop cmd.RadioStopControlPort
+	if cfg.RadioStop != nil {
+		radioStop = radioStopControlPort{svc: cfg.RadioStop}
+	}
+	var estopTarget cmd.EStopTargetControlPort
+	if cfg.EStopTarget != nil {
+		estopTarget = eStopTargetControlPort{svc: cfg.EStopTarget}
 	}
 	return &SessionControlService{
-		log:         log,
-		dccBus:      cfg.DccBus,
-		radioStop:   cfg.RadioStop,
-		estopTarget: cfg.EStopTarget,
-		cs:          cfg.CommandStns,
-		layoutCS:   cfg.LayoutCS,
-		layoutRows: cfg.Layouts,
-		proxyPathFn: defaultProxyPath,
-		sessions:   make(map[*ws.Client]struct{}, 8),
+		core: cmd.NewSessionControl(cmd.SessionControlConfig{
+			Log:         cfg.Log,
+			DccBus:      dccBus,
+			RadioStop:   radioStop,
+			EStopTarget: estopTarget,
+			CommandStns: cfg.CommandStns,
+			LayoutCS:    cfg.LayoutCS,
+			Layouts:     cfg.Layouts,
+		}),
+		clients: make(map[*ws.Client]*controlClient, 8),
 	}
-}
-
-func defaultProxyPath(csID uint) string {
-	return fmt.Sprintf("/api/v1/dcc-bus/%d/ws", csID)
 }
 
 // Sessions returns a snapshot of every live control-plane client.
-// Used by the dcc-bus event consumer to fan messages out (§7e.5).
 func (s *SessionControlService) Sessions() []*ws.Client {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	out := make([]*ws.Client, 0, len(s.sessions))
-	for c := range s.sessions {
+	out := make([]*ws.Client, 0, len(s.clients))
+	for c := range s.clients {
 		out = append(out, c)
 	}
 	return out
 }
 
-// HandleOpened sends the session.opened welcome envelope with the
-// list of available command stations on the user's layout.
 func (s *SessionControlService) HandleOpened(ctx context.Context, c *ws.Client) {
+	client := wrapControlClient(c)
 	s.mu.Lock()
-	s.sessions[c] = struct{}{}
+	s.clients[c] = client
 	s.mu.Unlock()
-
-	c.SendTyped("session.opened", s.openedPayload(ctx, c))
+	s.core.HandleOpened(ctx, client)
 }
 
-// HandleClosed drops the client from the live set.
-func (s *SessionControlService) HandleClosed(_ context.Context, c *ws.Client) {
+func (s *SessionControlService) HandleClosed(ctx context.Context, c *ws.Client) {
 	s.mu.Lock()
-	delete(s.sessions, c)
+	client := s.clients[c]
+	delete(s.clients, c)
 	s.mu.Unlock()
+	if client == nil {
+		client = wrapControlClient(c)
+	}
+	s.core.HandleClosed(ctx, client)
 }
 
-// HandleEnvelope dispatches inbound frames to the right action.
-// Unknown types are dropped silently — the hub already ack'd them
-// implicitly by accepting the WS upgrade.
 func (s *SessionControlService) HandleEnvelope(ctx context.Context, c *ws.Client, env ws.Envelope) {
-	switch env.Type {
-	case ws.TypeSessionSetCommandStation:
-		var p sessionSetCSPayload
-		if err := json.Unmarshal(env.Payload, &p); err != nil {
-			c.SendAck(env.ID, false, "bad_payload")
-			return
-		}
-		s.handleSetCS(ctx, c, p, env.ID)
-
-	case ws.TypeSystemRadioStop:
-		if s.radioStop == nil {
-			c.SendAck(env.ID, false, "dcc_bus_not_configured")
-			return
-		}
-		ok, code := s.radioStop.Trigger(ctx, c.Session())
-		c.SendAck(env.ID, ok, code)
-
-	case ws.TypeSystemEStopTarget:
-		if s.estopTarget == nil {
-			c.SendAck(env.ID, false, "dcc_bus_not_configured")
-			return
-		}
-		var p contract.EStopTargetPayload
-		if err := json.Unmarshal(env.Payload, &p); err != nil {
-			c.SendAck(env.ID, false, "bad_payload")
-			return
-		}
-		ok, code := s.estopTarget.Trigger(ctx, c.Session(), p.Target, p.TargetID)
-		c.SendAck(env.ID, ok, code)
+	s.mu.Lock()
+	client := s.clients[c]
+	if client == nil {
+		client = wrapControlClient(c)
+		s.clients[c] = client
 	}
-}
-
-type sessionSetCSPayload struct {
-	CommandStationID uint `json:"commandStationId"`
-}
-
-// sessionCommandStationChangedPayload is the broadcast event the
-// server emits on every session of the user when their cs selection
-// changes. `wsUrl` is nil during the spawning phase; the second
-// emission carries the final URL once the daemon is dial-able.
-type sessionCommandStationChangedPayload struct {
-	CommandStationID uint    `json:"commandStationId"`
-	WSURL            *string `json:"wsUrl"`
-	Status           string  `json:"status"`
-	Reason           string  `json:"reason,omitempty"`
-}
-
-func ptr(s string) *string { return &s }
-
-// handleSetCS validates the requested cs against the layout roster,
-// orchestrates the lazy spawn with DccBusService, and broadcasts the
-// intermediate "spawning" + final "running" events on the user's
-// other tabs.
-func (s *SessionControlService) handleSetCS(ctx context.Context, c *ws.Client, p sessionSetCSPayload, requestID string) {
-	sess := c.Session()
-	if s.layoutCS == nil || s.cs == nil || s.layoutRows == nil {
-		c.SendAck(requestID, false, "dcc_bus_not_configured")
-		return
-	}
-	if p.CommandStationID == 0 {
-		sess.SetCommandStation(0)
-		c.SendAck(requestID, true, "")
-		s.broadcastChangeForUser(sess.LayoutID, sess.UserID, sessionCommandStationChangedPayload{
-			CommandStationID: 0,
-			WSURL:            nil,
-			Status:           "stopped",
-		})
-		return
-	}
-
-	if !s.commandStationAttached(ctx, sess.LayoutID, p.CommandStationID) {
-		c.SendAck(requestID, false, "command_station_not_attached")
-		return
-	}
-
-	if s.dccBus == nil {
-		c.SendAck(requestID, false, "dcc_bus_not_configured")
-		return
-	}
-
-	// Lazy spawn UX (§7e.6): emit the interim "spawning" event so the
-	// SPA can paint the placeholder before EnsureRunning blocks.
-	s.broadcastChangeForUser(sess.LayoutID, sess.UserID, sessionCommandStationChangedPayload{
-		CommandStationID: p.CommandStationID,
-		WSURL:            nil,
-		Status:           "starting",
-		Reason:           "spawning",
-	})
-
-	port, _, err := s.dccBus.EnsureRunning(ctx, sess.LayoutID, p.CommandStationID)
-	if err != nil {
-		s.log.WithError(err).Warn("dcc-bus ensure running")
-		code := "dcc_bus_unavailable"
-		if errors.Is(err, ErrNoDccBusPortsAvailable) {
-			code = "no_dcc_bus_ports_available"
-		}
-		c.SendAck(requestID, false, code)
-		s.broadcastChangeForUser(sess.LayoutID, sess.UserID, sessionCommandStationChangedPayload{
-			CommandStationID: p.CommandStationID,
-			WSURL:            nil,
-			Status:           "degraded",
-			Reason:           code,
-		})
-		return
-	}
-
-	sess.SetCommandStation(p.CommandStationID)
-	wsURL := s.proxyPathFn(p.CommandStationID)
-	if !s.dccBus.ProxyEnabled() {
-		// Direct mode (dev / cross-host): the SPA dials the port itself.
-		wsURL = fmt.Sprintf("ws://127.0.0.1:%d/ws", port)
-	}
-
-	c.SendAck(requestID, true, "")
-	s.broadcastChangeForUser(sess.LayoutID, sess.UserID, sessionCommandStationChangedPayload{
-		CommandStationID: p.CommandStationID,
-		WSURL:            ptr(wsURL),
-		Status:           "running",
+	s.mu.Unlock()
+	s.core.HandleEnvelope(ctx, client, cmd.ControlEnvelope{
+		Type:    env.Type,
+		ID:      env.ID,
+		Payload: json.RawMessage(env.Payload),
 	})
 }
 
-type commandStationCatalogChangedPayload struct {
-	CommandStationID uint                      `json:"commandStationId"`
-	Name             string                    `json:"name"`
-	Kind             domain.CommandStationKind `json:"kind"`
-	SpeedSteps       uint                      `json:"speedSteps"`
-}
-
-// BroadcastCommandStationCatalogChanged notifies every live control-
-// plane session whose layout exposes the updated command station.
 func (s *SessionControlService) BroadcastCommandStationCatalogChanged(ctx context.Context, cs domain.CommandStation) {
-	if s.layoutCS == nil || s.layoutRows == nil || s.cs == nil {
-		return
-	}
-	payload := commandStationCatalogChangedPayload{
-		CommandStationID: cs.ID,
-		Name:             cs.Name,
-		Kind:             cs.Kind,
-		SpeedSteps:       cs.SpeedSteps,
-	}
-	for _, c := range s.Sessions() {
-		sess := c.Session()
-		if !s.commandStationAttached(ctx, sess.LayoutID, cs.ID) {
-			continue
-		}
-		c.SendTyped("session.commandStationCatalogChanged", payload)
-	}
+	s.core.BroadcastCommandStationCatalogChanged(ctx, cs)
 }
 
-// broadcastChangeForUser fans the change event out to every session
-// of the user inside the layout. Other users see a separate event
-// from the dcc-bus consumer (presence-style).
-func (s *SessionControlService) broadcastChangeForUser(layoutID, userID uint, payload sessionCommandStationChangedPayload) {
-	for _, c := range s.Sessions() {
-		sess := c.Session()
-		if sess.LayoutID != layoutID || sess.UserID != userID {
-			continue
-		}
-		c.SendTyped("session.commandStationChanged", payload)
-	}
+type controlClient struct {
+	client  *ws.Client
+	session controlSession
 }
 
-// openedSessionPayload is the JSON shape sent on `session.opened`.
-// `availableCommandStations` is computed from layout_command_stations;
-// `currentSession` is the throttle handoff hint for re-connects (a
-// browser that refreshes mid-session can keep the same cs).
-type openedSessionPayload struct {
-	SessionID                string                    `json:"sessionId"`
-	LayoutID                 uint                      `json:"layoutId"`
-	AvailableCommandStations []availableCSPayload      `json:"availableCommandStations"`
-	CurrentSession           *currentSessionPayload    `json:"currentSession,omitempty"`
+func wrapControlClient(c *ws.Client) *controlClient {
+	return &controlClient{client: c, session: controlSession{session: c.Session()}}
 }
 
-type availableCSPayload struct {
-	ID         uint                     `json:"id"`
-	Name       string                   `json:"name"`
-	Kind       domain.CommandStationKind `json:"kind"`
-	SpeedSteps uint                     `json:"speedSteps"`
-	WSURL      *string                  `json:"wsUrl"`
+func (c *controlClient) Session() cmd.ControlSession { return c.session }
+func (c *controlClient) SendTyped(eventType string, payload any) {
+	c.client.SendTyped(eventType, payload)
+}
+func (c *controlClient) SendAck(requestID string, ok bool, errCode string) {
+	c.client.SendAck(requestID, ok, errCode)
 }
 
-type currentSessionPayload struct {
-	CommandStationID uint `json:"commandStationId"`
+type controlSession struct {
+	session *ws.DriveSession
 }
 
-func (s *SessionControlService) openedPayload(ctx context.Context, c *ws.Client) openedSessionPayload {
-	sess := c.Session()
-	out := openedSessionPayload{
-		SessionID: sess.ID,
-		LayoutID:  sess.LayoutID,
-	}
-	if s.layoutCS == nil || s.cs == nil || s.layoutRows == nil {
-		return out
-	}
-	stations, err := s.listAvailableStations(ctx, sess.LayoutID)
-	if err != nil {
-		s.log.WithError(err).Warn("session.opened: list cs by ids")
-		return out
-	}
-	out.AvailableCommandStations = make([]availableCSPayload, 0, len(stations))
-	for _, st := range stations {
-		var wsURL *string
-		if s.dccBus != nil && s.dccBus.PortFor(sess.LayoutID, st.ID) != 0 {
-			if s.dccBus.ProxyEnabled() {
-				url := s.proxyPathFn(st.ID)
-				wsURL = &url
-			} else {
-				url := fmt.Sprintf("ws://127.0.0.1:%d/ws", s.dccBus.PortFor(sess.LayoutID, st.ID))
-				wsURL = &url
-			}
-		}
-		out.AvailableCommandStations = append(out.AvailableCommandStations, availableCSPayload{
-			ID:         st.ID,
-			Name:       st.Name,
-			Kind:       st.Kind,
-			SpeedSteps: st.SpeedSteps,
-			WSURL:      wsURL,
-		})
-	}
-	if cur := sess.CurrentCommandStation(); cur != 0 {
-		out.CurrentSession = &currentSessionPayload{CommandStationID: cur}
-	}
-	return out
+func (s controlSession) SessionID() string           { return s.session.ID }
+func (s controlSession) UserID() uint                { return s.session.UserID }
+func (s controlSession) Login() string               { return s.session.Login }
+func (s controlSession) LayoutID() uint              { return s.session.LayoutID }
+func (s controlSession) CurrentCommandStation() uint { return s.session.CurrentCommandStation() }
+func (s controlSession) SetCommandStation(commandStationID uint) uint {
+	return s.session.SetCommandStation(commandStationID)
 }
 
-func (s *SessionControlService) listAvailableStations(ctx context.Context, layoutID uint) ([]domain.CommandStation, error) {
-	layout, err := s.layoutRows.FindByID(ctx, layoutID)
-	if err != nil {
-		return nil, err
-	}
-	if layout.IsSystem {
-		return s.cs.ListAll(ctx)
-	}
-	rows, err := s.layoutCS.ListByLayout(ctx, layoutID)
-	if err != nil {
-		return nil, err
-	}
-	if len(rows) == 0 {
-		return nil, nil
-	}
-	ids := make([]uint, 0, len(rows))
-	for _, r := range rows {
-		ids = append(ids, r.CommandStationID)
-	}
-	return s.cs.ListByIDs(ctx, ids)
+type dccBusControlPort struct {
+	svc *DccBusService
 }
 
-func (s *SessionControlService) commandStationAttached(ctx context.Context, layoutID, commandStationID uint) bool {
-	layout, err := s.layoutRows.FindByID(ctx, layoutID)
-	if err != nil {
-		return false
+func (p dccBusControlPort) EnsureRunning(ctx context.Context, layoutID, commandStationID uint) (uint16, string, error) {
+	port, name, err := p.svc.EnsureRunning(ctx, layoutID, commandStationID)
+	if errors.Is(err, ErrNoDccBusPortsAvailable) {
+		err = svcerrors.ErrNoDCCBusPortsAvailable
 	}
-	if layout.IsSystem {
-		_, err := s.cs.FindByID(ctx, commandStationID)
-		return err == nil
+	return port, name, err
+}
+
+func (p dccBusControlPort) PortFor(layoutID, commandStationID uint) uint16 {
+	return p.svc.PortFor(layoutID, commandStationID)
+}
+
+func (p dccBusControlPort) ProxyEnabled() bool { return p.svc.ProxyEnabled() }
+
+type radioStopControlPort struct {
+	svc *RadioStopService
+}
+
+func (p radioStopControlPort) Trigger(ctx context.Context, sess cmd.ControlSession) (bool, string) {
+	wrapped, ok := sess.(controlSession)
+	if !ok {
+		return false, "dcc_bus_not_configured"
 	}
-	_, err = s.layoutCS.Find(ctx, layoutID, commandStationID)
-	return err == nil
+	return p.svc.Trigger(ctx, wrapped.session)
+}
+
+type eStopTargetControlPort struct {
+	svc *EStopTargetService
+}
+
+func (p eStopTargetControlPort) Trigger(
+	ctx context.Context,
+	sess cmd.ControlSession,
+	target domain.TakeoverTarget,
+	targetID uint,
+) (bool, string) {
+	wrapped, ok := sess.(controlSession)
+	if !ok {
+		return false, "dcc_bus_not_configured"
+	}
+	return p.svc.Trigger(ctx, wrapped.session, target, targetID)
 }

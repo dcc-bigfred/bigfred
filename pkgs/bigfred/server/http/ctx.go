@@ -6,7 +6,7 @@ package httpapi
 import (
 	"context"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/service"
+	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
 )
 
 // identityCtxKey is the unexported context key used by the auth
@@ -16,13 +16,13 @@ type identityCtxKey struct{}
 
 // WithIdentity returns a derived context that carries id. Used by the
 // auth middleware exclusively.
-func WithIdentity(ctx context.Context, id service.Identity) context.Context {
+func WithIdentity(ctx context.Context, id cmd.Identity) context.Context {
 	return context.WithValue(ctx, identityCtxKey{}, id)
 }
 
 // IdentityFromContext returns the authenticated user's identity, or
 // (zero, false) if the request is anonymous.
-func IdentityFromContext(ctx context.Context) (service.Identity, bool) {
-	id, ok := ctx.Value(identityCtxKey{}).(service.Identity)
+func IdentityFromContext(ctx context.Context) (cmd.Identity, bool) {
+	id, ok := ctx.Value(identityCtxKey{}).(cmd.Identity)
 	return id, ok
 }

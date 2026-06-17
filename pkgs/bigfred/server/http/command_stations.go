@@ -2,41 +2,23 @@ package httpapi
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/domain"
-	"github.com/keskad/loco/pkgs/bigfred/server/service"
+	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
+	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
+	"github.com/keskad/loco/pkgs/bigfred/server/protocol"
 )
 
 // CommandStationHandler bundles REST endpoints for the command-station
 // catalogue.
 type CommandStationHandler struct {
-	svc  *service.CommandStationService
-	auth *service.AuthService
+	svc  *cmd.CommandStation
+	auth *cmd.Auth
 }
 
 // NewCommandStationHandler returns a CommandStationHandler.
-func NewCommandStationHandler(svc *service.CommandStationService, auth *service.AuthService) *CommandStationHandler {
+func NewCommandStationHandler(svc *cmd.CommandStation, auth *cmd.Auth) *CommandStationHandler {
 	return &CommandStationHandler{svc: svc, auth: auth}
-}
-
-type commandStationResponse struct {
-	ID            uint                      `json:"id"`
-	Name          string                    `json:"name"`
-	Kind          domain.CommandStationKind `json:"kind"`
-	ConnectionURI string                    `json:"connectionUri"`
-	SpeedSteps    uint                      `json:"speedSteps"`
-}
-
-func toCommandStationResponse(cs domain.CommandStation) commandStationResponse {
-	return commandStationResponse{
-		ID:            cs.ID,
-		Name:          cs.Name,
-		Kind:          cs.Kind,
-		ConnectionURI: cs.ConnectionURI,
-		SpeedSteps:    cs.SpeedSteps,
-	}
 }
 
 // ListCatalogue handles GET /api/v1/command-stations/catalogue (admin).
@@ -46,19 +28,12 @@ func (h *CommandStationHandler) ListCatalogue(w http.ResponseWriter, r *http.Req
 		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 		return
 	}
-	out := make([]commandStationResponse, 0, len(rows))
+	out := make([]protocol.CommandStationResponse, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, toCommandStationResponse(row))
+		out = append(out, protocol.ToCommandStationResponse(row))
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(out)
-}
-
-type commandStationCreateRequest struct {
-	Name          string                    `json:"name"`
-	Kind          domain.CommandStationKind `json:"kind"`
-	ConnectionURI string                    `json:"connectionUri"`
-	SpeedSteps    uint                      `json:"speedSteps"`
 }
 
 // Create handles POST /api/v1/command-stations (admin).
@@ -73,31 +48,19 @@ func (h *CommandStationHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 		return
 	}
-	var req commandStationCreateRequest
+	var req protocol.CommandStationCreateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid_body")
 		return
 	}
-	row, err := h.svc.Create(r.Context(), eff, service.CommandStationCreateInput{
-		Name:          req.Name,
-		Kind:          req.Kind,
-		ConnectionURI: req.ConnectionURI,
-		SpeedSteps:    req.SpeedSteps,
-	})
+	row, err := h.svc.Create(r.Context(), eff, req.ToCreateInput())
 	if err != nil {
 		writeCommandStationError(w, err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(toCommandStationResponse(row))
-}
-
-type commandStationUpdateRequest struct {
-	Name          *string                    `json:"name"`
-	Kind          *domain.CommandStationKind `json:"kind"`
-	ConnectionURI *string                    `json:"connectionUri"`
-	SpeedSteps    *uint                      `json:"speedSteps"`
+	_ = json.NewEncoder(w).Encode(protocol.ToCommandStationResponse(row))
 }
 
 // Update handles PUT /api/v1/command-stations/{id} (admin).
@@ -117,23 +80,18 @@ func (h *CommandStationHandler) Update(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 		return
 	}
-	var req commandStationUpdateRequest
+	var req protocol.CommandStationUpdateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid_body")
 		return
 	}
-	row, err := h.svc.Update(r.Context(), eff, id, service.CommandStationUpdateInput{
-		Name:          req.Name,
-		Kind:          req.Kind,
-		ConnectionURI: req.ConnectionURI,
-		SpeedSteps:    req.SpeedSteps,
-	})
+	row, err := h.svc.Update(r.Context(), eff, id, req.ToUpdateInput())
 	if err != nil {
 		writeCommandStationError(w, err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(toCommandStationResponse(row))
+	_ = json.NewEncoder(w).Encode(protocol.ToCommandStationResponse(row))
 }
 
 // Delete handles DELETE /api/v1/command-stations/{id} (admin).
@@ -161,22 +119,6 @@ func (h *CommandStationHandler) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 func writeCommandStationError(w http.ResponseWriter, err error) {
-	switch {
-	case errors.Is(err, service.ErrCommandStationNotFound):
-		writeJSONError(w, http.StatusNotFound, "command_station_not_found")
-	case errors.Is(err, service.ErrCommandStationNameTaken):
-		writeJSONError(w, http.StatusConflict, "command_station_name_taken")
-	case errors.Is(err, service.ErrCommandStationNameRequired):
-		writeJSONError(w, http.StatusUnprocessableEntity, "command_station_name_required")
-	case errors.Is(err, service.ErrCommandStationKindInvalid):
-		writeJSONError(w, http.StatusUnprocessableEntity, "command_station_kind_invalid")
-	case errors.Is(err, service.ErrCommandStationSpeedInvalid):
-		writeJSONError(w, http.StatusUnprocessableEntity, "command_station_speed_steps_invalid")
-	case errors.Is(err, service.ErrLayoutNeedsAtLeastOneCommandStation):
-		writeJSONError(w, http.StatusConflict, "layout_needs_at_least_one_command_station")
-	case errors.Is(err, service.ErrCommandStationForbidden):
-		writeJSONError(w, http.StatusForbidden, "forbidden")
-	default:
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
-	}
+	status, code := svcerrors.CommandStationHTTPStatus(err)
+	writeJSONError(w, status, code)
 }

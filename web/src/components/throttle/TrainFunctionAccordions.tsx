@@ -122,6 +122,7 @@ function TrainMemberAccordion({
           )}
           {showMultiplierCog && !member.isLeading && (
             <IconButton
+              component="span"
               size="small"
               aria-label={t("train.multiplier.title")}
               onClick={(ev) => {

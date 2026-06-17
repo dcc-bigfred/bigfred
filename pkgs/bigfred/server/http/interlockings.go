@@ -5,51 +5,33 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/domain"
+	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
+	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
+	"github.com/keskad/loco/pkgs/bigfred/server/protocol"
 	"github.com/keskad/loco/pkgs/bigfred/server/service"
 )
 
 // InterlockingHandler bundles REST endpoints for the interlocking
 // catalogue and layout-scoped listing.
 type InterlockingHandler struct {
-	svc       *service.InterlockingService
+	svc       *cmd.Interlocking
 	occupancy *service.InterlockingOccupancyService
-	auth      *service.AuthService
+	auth      *cmd.Auth
 }
 
 // NewInterlockingHandler returns an InterlockingHandler.
 func NewInterlockingHandler(
-	svc *service.InterlockingService,
+	svc *cmd.Interlocking,
 	occupancy *service.InterlockingOccupancyService,
-	auth *service.AuthService,
+	auth *cmd.Auth,
 ) *InterlockingHandler {
 	return &InterlockingHandler{svc: svc, occupancy: occupancy, auth: auth}
 }
 
-type interlockingResponse struct {
-	ID       uint              `json:"id"`
-	Name     string            `json:"name"`
-	Location string            `json:"location"`
-	Occupant *occupantResponse `json:"occupant,omitempty"`
-}
-
-type occupantResponse struct {
-	UserID uint   `json:"userId"`
-	Login  string `json:"login"`
-}
-
-func toInterlockingResponse(i domain.Interlocking) interlockingResponse {
-	return interlockingResponse{
-		ID:       i.ID,
-		Name:     i.Name,
-		Location: i.Location,
-	}
-}
-
-func toInterlockingWithOccupant(row service.InterlockingWithOccupant) interlockingResponse {
-	out := toInterlockingResponse(row.Interlocking)
+func toInterlockingWithOccupant(row service.InterlockingWithOccupant) protocol.InterlockingResponse {
+	out := protocol.ToInterlockingResponse(row.Interlocking)
 	if row.Occupant != nil {
-		out.Occupant = &occupantResponse{
+		out.Occupant = &protocol.OccupantResponse{
 			UserID: row.Occupant.UserID,
 			Login:  row.Occupant.Login,
 		}
@@ -72,7 +54,7 @@ func (h *InterlockingHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	out := make([]interlockingResponse, 0, len(rows))
+	out := make([]protocol.InterlockingResponse, 0, len(rows))
 	for _, row := range rows {
 		out = append(out, toInterlockingWithOccupant(row))
 	}
@@ -88,9 +70,9 @@ func (h *InterlockingHandler) ListCatalogue(w http.ResponseWriter, r *http.Reque
 		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 		return
 	}
-	out := make([]interlockingResponse, 0, len(rows))
+	out := make([]protocol.InterlockingResponse, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, toInterlockingResponse(row))
+		out = append(out, protocol.ToInterlockingResponse(row))
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(out)
@@ -116,7 +98,7 @@ func (h *InterlockingHandler) Get(w http.ResponseWriter, r *http.Request) {
 	row, err := h.occupancy.GetForLayout(r.Context(), id.Layout.ID, interlockingID)
 	if err != nil {
 		switch {
-		case errors.Is(err, service.ErrInterlockingNotFound),
+		case errors.Is(err, svcerrors.ErrInterlockingNotFound),
 			errors.Is(err, service.ErrInterlockingNotInLayout):
 			writeJSONError(w, http.StatusNotFound, "interlocking_not_found")
 		default:
@@ -126,11 +108,6 @@ func (h *InterlockingHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(toInterlockingWithOccupant(row))
-}
-
-type interlockingCreateRequest struct {
-	Name     string `json:"name"`
-	Location string `json:"location"`
 }
 
 // Create handles POST /api/v1/interlockings (admin only).
@@ -145,27 +122,19 @@ func (h *InterlockingHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 		return
 	}
-	var req interlockingCreateRequest
+	var req protocol.InterlockingCreateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid_body")
 		return
 	}
-	row, err := h.svc.Create(r.Context(), eff, service.InterlockingCreateInput{
-		Name:     req.Name,
-		Location: req.Location,
-	})
+	row, err := h.svc.Create(r.Context(), eff, req.ToCreateInput())
 	if err != nil {
 		writeInterlockingError(w, err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(toInterlockingResponse(row))
-}
-
-type interlockingUpdateRequest struct {
-	Name     *string `json:"name"`
-	Location *string `json:"location"`
+	_ = json.NewEncoder(w).Encode(protocol.ToInterlockingResponse(row))
 }
 
 // Update handles PUT /api/v1/interlockings/{id} (admin only).
@@ -185,21 +154,18 @@ func (h *InterlockingHandler) Update(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 		return
 	}
-	var req interlockingUpdateRequest
+	var req protocol.InterlockingUpdateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid_body")
 		return
 	}
-	row, err := h.svc.Update(r.Context(), eff, interlockingID, service.InterlockingUpdateInput{
-		Name:     req.Name,
-		Location: req.Location,
-	})
+	row, err := h.svc.Update(r.Context(), eff, interlockingID, req.ToUpdateInput())
 	if err != nil {
 		writeInterlockingError(w, err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(toInterlockingResponse(row))
+	_ = json.NewEncoder(w).Encode(protocol.ToInterlockingResponse(row))
 }
 
 // Delete handles DELETE /api/v1/interlockings/{id} (admin only).
@@ -305,7 +271,7 @@ func (h *InterlockingHandler) Leave(w http.ResponseWriter, r *http.Request) {
 
 func writeInterlockingOccupancyError(w http.ResponseWriter, err error) {
 	switch {
-	case errors.Is(err, service.ErrInterlockingNotFound):
+	case errors.Is(err, svcerrors.ErrInterlockingNotFound):
 		writeJSONError(w, http.StatusNotFound, "interlocking_not_found")
 	case errors.Is(err, service.ErrInterlockingOccupied):
 		writeJSONError(w, http.StatusConflict, "interlocking_occupied")
@@ -319,16 +285,6 @@ func writeInterlockingOccupancyError(w http.ResponseWriter, err error) {
 }
 
 func writeInterlockingError(w http.ResponseWriter, err error) {
-	switch {
-	case errors.Is(err, service.ErrInterlockingNotFound):
-		writeJSONError(w, http.StatusNotFound, "interlocking_not_found")
-	case errors.Is(err, service.ErrInterlockingNameTaken):
-		writeJSONError(w, http.StatusConflict, "interlocking_name_taken")
-	case errors.Is(err, service.ErrInterlockingNameRequired):
-		writeJSONError(w, http.StatusUnprocessableEntity, "interlocking_name_required")
-	case errors.Is(err, service.ErrInterlockingForbidden):
-		writeJSONError(w, http.StatusForbidden, "forbidden")
-	default:
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
-	}
+	status, code := svcerrors.InterlockingHTTPStatus(err)
+	writeJSONError(w, status, code)
 }

@@ -11,7 +11,7 @@ func (FunctionSecurityContext) CanEditVehicleFunctions(actorID, ownerUserID uint
 	if actorID == ownerUserID {
 		return Allow
 	}
-	return Deny("only_owner_can_edit")
+	return Deny(ReasonOnlyOwnerCanEdit)
 }
 
 // CanEditTemplateFunctions allows the template owner or an effective admin.
@@ -25,5 +25,5 @@ func (FunctionSecurityContext) CanEditTemplateFunctions(
 	if actorID == ownerUserID {
 		return Allow
 	}
-	return Deny("template_not_owned")
+	return Deny(ReasonTemplateNotOwned)
 }

@@ -22,16 +22,16 @@ func (InterlockingSecurityContext) CanOccupy(
 	current *domain.InterlockingSession,
 ) Decision {
 	if layoutILK == nil {
-		return Deny("interlocking_not_in_layout")
+		return Deny(ReasonInterlockingNotInLayout)
 	}
 	if !eff.Has(domain.RoleSignalman) && !eff.Has(domain.RoleAdmin) {
-		return Deny("not_signalman")
+		return Deny(ReasonNotSignalman)
 	}
 	if current != nil && current.SignalmanUserID == actorID {
 		return Allow
 	}
 	if current != nil {
-		return Deny("interlocking_occupied")
+		return Deny(ReasonInterlockingOccupied)
 	}
 	return Allow
 }
@@ -44,7 +44,7 @@ func (InterlockingSecurityContext) CanDisplace(
 	actorID uint,
 ) Decision {
 	if !eff.Has(domain.RoleSignalman) && !eff.Has(domain.RoleAdmin) {
-		return Deny("not_signalman")
+		return Deny(ReasonNotSignalman)
 	}
 	if current == nil {
 		return Allow
@@ -63,7 +63,7 @@ func (InterlockingSecurityContext) CanManageCatalog(eff domain.EffectiveRoles) D
 	if eff.Has(domain.RoleAdmin) {
 		return Allow
 	}
-	return Deny("forbidden")
+	return Deny(ReasonForbidden)
 }
 
 // IsSignalmanGrantActive reports whether the layout grant is valid at

@@ -16,12 +16,12 @@ func (DriveSecurityContext) CanDrive(actor domain.User, ownerID uint, lessees []
 		if len(lessees) == 0 {
 			return Allow
 		}
-		return Deny("not_authorized_to_drive")
+		return Deny(ReasonNotAuthorizedToDrive)
 	}
 	for _, l := range lessees {
 		if l == actor.ID {
 			return Allow
 		}
 	}
-	return Deny("not_authorized_to_drive")
+	return Deny(ReasonNotAuthorizedToDrive)
 }

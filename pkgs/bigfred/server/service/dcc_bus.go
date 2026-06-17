@@ -17,6 +17,7 @@ import (
 	"github.com/keskad/loco/pkgs/bigfred/contract"
 	dccbuscli "github.com/keskad/loco/pkgs/bigfred/dcc-bus/cli"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/protocol"
+	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
 	"github.com/keskad/loco/pkgs/bigfred/server/repo"
 	"github.com/keskad/loco/pkgs/bigfred/server/supervisord"
 )
@@ -27,7 +28,7 @@ const DccBusGroupName = "dcc-bus"
 
 // ErrNoDccBusPortsAvailable is returned by EnsureRunning when the
 // configured port pool is exhausted.
-var ErrNoDccBusPortsAvailable = errors.New("no dcc-bus ports available")
+var ErrNoDccBusPortsAvailable = svcerrors.ErrNoDCCBusPortsAvailable
 
 // ErrDccBusUnavailable is returned when EnsureRunning could not
 // confirm the daemon reached RUNNING + dial-able within the timeout.
@@ -73,11 +74,11 @@ type DccBusConfig struct {
 // SupervisordService, and exposes typed helpers to publish commands
 // onto the daemon's Redis channels (§7e.6).
 type DccBusService struct {
-	cfg    DccBusConfig
-	sup    Supervisor
-	redis  *RedisService
-	cs     *repo.CommandStations
-	log    *logrus.Logger
+	cfg   DccBusConfig
+	sup   Supervisor
+	redis *RedisService
+	cs    *repo.CommandStations
+	log   *logrus.Logger
 
 	mu    sync.Mutex
 	ports map[portKey]uint16 // (layoutID, commandStationID) -> port

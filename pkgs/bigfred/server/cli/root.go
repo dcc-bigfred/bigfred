@@ -20,6 +20,7 @@ import (
 	"github.com/spf13/cobra"
 
 	dccbuscli "github.com/keskad/loco/pkgs/bigfred/dcc-bus/cli"
+	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
 	httpapi "github.com/keskad/loco/pkgs/bigfred/server/http"
 	"github.com/keskad/loco/pkgs/bigfred/server/repo"
 	"github.com/keskad/loco/pkgs/bigfred/server/repo/migrations"
@@ -51,8 +52,8 @@ type Flags struct {
 	RedisExternal bool
 	RedisPersist  bool
 
-	EnableTelemetry  bool
-	TelemetryConfig  string
+	EnableTelemetry bool
+	TelemetryConfig string
 
 	// LogLevel is a logrus level name (debug, info, warn, error). The
 	// BIGFRED_LOG_LEVEL env var overrides the flag when set.
@@ -161,19 +162,19 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	layoutCommandStations := repo.NewLayoutCommandStations(repository)
 	_ = layoutTrains
 
-	layoutSvc := service.NewLayoutService(layouts, interlockings, layoutInterlockings, commandStations, layoutCommandStations)
-	commandStationSvc := service.NewCommandStationService(commandStations, layoutCommandStations, layouts)
-	interlockingSvc := service.NewInterlockingService(interlockings, layoutInterlockings)
-	authSvc := service.NewAuthService(users, layoutSvc, layoutSignalmen, sudoElevations, service.AuthConfig{JWTSecret: secret})
-	dccPoolSvc := service.NewDCCPoolService(dccPools)
-	vehicleSvc := service.NewVehicleService(vehicles, dccPoolSvc, trainMembers)
-	functionSvc := service.NewFunctionService(dccFunctions, vehicles, vehicleTemplates, users)
-	vehicleTemplateSvc := service.NewVehicleTemplateService(vehicleTemplates, users, dccFunctions)
-	trainSvc := service.NewTrainService(trains, trainMembers, vehicles)
-	userSvc := service.NewUserService(users, vehicles, trains, dccPoolSvc)
+	layoutSvc := cmd.NewLayout(layouts, interlockings, layoutInterlockings, commandStations, layoutCommandStations)
+	commandStationSvc := cmd.NewCommandStation(commandStations, layoutCommandStations, layouts)
+	interlockingSvc := cmd.NewInterlocking(interlockings, layoutInterlockings)
+	authSvc := cmd.NewAuth(users, layoutSvc, layoutSignalmen, sudoElevations, cmd.AuthConfig{JWTSecret: secret})
+	dccPoolSvc := cmd.NewDCCPool(dccPools)
+	vehicleSvc := cmd.NewVehicle(vehicles, dccPoolSvc, trainMembers)
+	functionSvc := cmd.NewFunction(dccFunctions, vehicles, vehicleTemplates, users)
+	vehicleTemplateSvc := cmd.NewVehicleTemplate(vehicleTemplates, users, dccFunctions)
+	trainSvc := cmd.NewTrain(trains, trainMembers, vehicles)
+	userSvc := cmd.NewUser(users, vehicles, trains, dccPoolSvc)
 
 	hub := ws.NewHub()
-	sudoSvc := service.NewSudoService(sudoElevations, layoutSignalmen, layoutSvc, hub, service.DefaultSudoConfig)
+	sudoSvc := cmd.NewSudo(sudoElevations, layoutSignalmen, layoutSvc, hub, cmd.DefaultSudoConfig)
 	presenceSvc := service.NewPresenceService(hub, authSvc, users, interlockingSessions, interlockings, layoutInterlockings)
 	hub.SetPresenceRefresher(presenceSvc)
 	occupancySvc := service.NewInterlockingOccupancyService(
@@ -368,7 +369,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	}
 
 	if dccBusSvc != nil {
-		commandStationSvc.SetRuntime(service.CommandStationRuntime{
+		commandStationSvc.SetRuntime(cmd.CommandStationRuntime{
 			DccSync:    dccLayoutSync,
 			SessionCtl: sessionCtl,
 		})
@@ -386,7 +387,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	if seeded, err := layoutSvc.EnsureSystemLayout(ctx); err != nil {
 		return fmt.Errorf("seed system layout: %w", err)
 	} else if seeded {
-		log.WithField("admin_pin", service.SystemLayoutDefaultAdminPIN).
+		log.WithField("admin_pin", cmd.DefaultAdminPIN).
 			Warn("bootstrap system layout created — CHANGE THE ADMIN PIN AFTER FIRST LOGIN")
 	}
 

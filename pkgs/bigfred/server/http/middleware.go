@@ -5,8 +5,9 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
-	"github.com/keskad/loco/pkgs/bigfred/server/service"
+	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
 )
 
 // SessionCookieName is the name of the HttpOnly cookie that carries
@@ -19,7 +20,7 @@ const SessionCookieName = "bigfred_session"
 // session cookie (falling back to a `?token=` query parameter to
 // support WS upgrades per §7a.1), verifies it via AuthService and
 // attaches the resulting Identity to the request context.
-func RequireAuth(auth *service.AuthService) func(http.Handler) http.Handler {
+func RequireAuth(auth *cmd.Auth) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			token := readSessionToken(r)
@@ -30,7 +31,7 @@ func RequireAuth(auth *service.AuthService) func(http.Handler) http.Handler {
 
 			id, err := auth.VerifyToken(r.Context(), token)
 			if err != nil {
-				if errors.Is(err, service.ErrInvalidCredentials) {
+				if errors.Is(err, svcerrors.ErrInvalidCredentials) {
 					writeJSONError(w, http.StatusUnauthorized, "unauthorized")
 					return
 				}
@@ -48,7 +49,7 @@ func RequireAuth(auth *service.AuthService) func(http.Handler) http.Handler {
 // isn't in the allow-list. Per §7a.7 a sudo admin grants the same
 // authority as a permanent admin everywhere, so the gate consults
 // AuthService.Effective rather than the JWT-pinned permanent role.
-func RequireRole(auth *service.AuthService, roles ...domain.Role) func(http.Handler) http.Handler {
+func RequireRole(auth *cmd.Auth, roles ...domain.Role) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			id, ok := IdentityFromContext(r.Context())

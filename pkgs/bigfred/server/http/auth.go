@@ -2,13 +2,13 @@ package httpapi
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"strings"
 	"time"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/domain"
-	"github.com/keskad/loco/pkgs/bigfred/server/service"
+	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
+	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
+	"github.com/keskad/loco/pkgs/bigfred/server/protocol"
 )
 
 // AuthHandler bundles the three endpoints declared under
@@ -20,61 +20,15 @@ import (
 // change. It MAY be nil in legacy tests; in that case the /me
 // payload simply reports `sudo: null`.
 type AuthHandler struct {
-	auth   *service.AuthService
-	sudo   *service.SudoService
+	auth   *cmd.Auth
+	sudo   *cmd.Sudo
 	secure bool // toggles the Secure cookie flag (off in dev over http://)
 }
 
 // NewAuthHandler returns an AuthHandler. `secureCookie` should be
 // true in any production deployment (HTTPS-only).
-func NewAuthHandler(auth *service.AuthService, sudo *service.SudoService, secureCookie bool) *AuthHandler {
+func NewAuthHandler(auth *cmd.Auth, sudo *cmd.Sudo, secureCookie bool) *AuthHandler {
 	return &AuthHandler{auth: auth, sudo: sudo, secure: secureCookie}
-}
-
-// loginRequest mirrors the JSON body documented in §4.1:
-//
-//	POST /api/v1/auth/login { login, pin, layoutId }
-//
-// `layoutId` is REQUIRED. The frontend pre-fills it from the
-// `GET /api/v1/layouts/login` dropdown (defaulting to the system
-// layout), so a missing value is always a client bug.
-type loginRequest struct {
-	Login    string `json:"login"`
-	PIN      string `json:"pin"`
-	LayoutID uint   `json:"layoutId"`
-}
-
-// sudoElevationDTO carries the active sudo grant (admin elevation,
-// §7a.7) so the AppBar countdown can start from `expiresAt`. The
-// pointer in meResponse is nil when no elevation is live.
-type sudoElevationDTO struct {
-	GrantedAt time.Time `json:"grantedAt"`
-	ExpiresAt time.Time `json:"expiresAt"`
-}
-
-// meResponse is the JSON shape returned by GET /api/v1/auth/me and
-// echoed by POST /api/v1/auth/login (so the frontend can hydrate its
-// store without a follow-up call). The layout fields mirror §4.1:
-// they are derived from the JWT and immutable for the lifetime of
-// the session.
-type meResponse struct {
-	ID    uint        `json:"id"`
-	Login string      `json:"login"`
-	Role  domain.Role `json:"role"`
-	// EffectiveRole is the caller's resolved role label inside their
-	// active layout (§7a.2), used for display: admin > signalman
-	// (layout-scoped grant) > driver.
-	EffectiveRole domain.Role `json:"effectiveRole"`
-	// IsSignalman is true when the caller may operate as a
-	// signalman in the active layout: any (sudo or permanent)
-	// admin or a layout signalman grant satisfy it.
-	IsSignalman    bool   `json:"isSignalman"`
-	LayoutID       uint   `json:"layoutId"`
-	LayoutName     string `json:"layoutName"`
-	LayoutIsSystem bool   `json:"layoutIsSystem"`
-	// Sudo is the active admin elevation, or null when none is
-	// live. The UI drives the AppBar padlock indicator from it.
-	Sudo *sudoElevationDTO `json:"sudo"`
 }
 
 // Login validates credentials, mints a JWT and sets it as a Secure,
@@ -82,7 +36,7 @@ type meResponse struct {
 // repeats the user info so the frontend can hydrate its store
 // without a follow-up /me call.
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
-	var req loginRequest
+	var req protocol.LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid_body")
 		return
@@ -104,18 +58,8 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	id, err := h.auth.Login(r.Context(), req.Login, req.PIN, req.LayoutID)
 	if err != nil {
-		switch {
-		case errors.Is(err, service.ErrInvalidCredentials):
-			writeJSONError(w, http.StatusUnauthorized, "invalid_credentials")
-		case errors.Is(err, service.ErrAccountDeactivated):
-			writeJSONError(w, http.StatusForbidden, "account_deactivated")
-		case errors.Is(err, service.ErrLayoutNotFound):
-			writeJSONError(w, http.StatusUnprocessableEntity, "layout_not_found")
-		case errors.Is(err, service.ErrLayoutLocked):
-			writeJSONError(w, http.StatusUnprocessableEntity, "layout_locked")
-		default:
-			writeJSONError(w, http.StatusInternalServerError, "internal_error")
-		}
+		status, code := svcerrors.AuthHTTPStatus(err)
+		writeJSONError(w, status, code)
 		return
 	}
 
@@ -190,7 +134,7 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 // back to safe defaults (effectiveRole := user.Role, isSignalman :=
 // false, sudo := nil), so a transient repository hiccup never
 // breaks the cookie hand-off.
-func (h *AuthHandler) buildMeResponse(r *http.Request, id service.Identity) meResponse {
+func (h *AuthHandler) buildMeResponse(r *http.Request, id cmd.Identity) protocol.MeResponse {
 	effectiveRole, err := h.auth.EffectiveDisplayRole(r.Context(), id.User, id.Layout.ID)
 	if err != nil {
 		effectiveRole = id.User.Role
@@ -199,16 +143,16 @@ func (h *AuthHandler) buildMeResponse(r *http.Request, id service.Identity) meRe
 	if err != nil {
 		isSignalman = false
 	}
-	var sudo *sudoElevationDTO
+	var sudo *protocol.SudoElevationResponse
 	if h.sudo != nil {
 		if row, err := h.sudo.FindActive(r.Context(), id.User.ID, id.Layout.ID, time.Now().UTC()); err == nil && row != nil {
-			sudo = &sudoElevationDTO{
+			sudo = &protocol.SudoElevationResponse{
 				GrantedAt: row.GrantedAt,
 				ExpiresAt: row.ExpiresAt,
 			}
 		}
 	}
-	return meResponse{
+	return protocol.MeResponse{
 		ID:             id.User.ID,
 		Login:          id.User.Login,
 		Role:           id.User.Role,

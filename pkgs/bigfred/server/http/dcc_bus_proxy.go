@@ -8,6 +8,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
+
 	"github.com/keskad/loco/pkgs/bigfred/server/service"
 )
 
@@ -16,14 +18,14 @@ import (
 // forwarding; the layout pinning makes sure a session for layout L
 // cannot reach a daemon serving layout L'.
 type DccBusProxy struct {
-	auth   *service.AuthService
+	auth   *cmd.Auth
 	dccBus *service.DccBusService
 }
 
 // NewDccBusProxy returns a handler that accepts WS upgrades on
 // `/api/v1/dcc-bus/{commandStationId}/ws` and forwards them to the
 // matching daemon on the loopback interface.
-func NewDccBusProxy(auth *service.AuthService, dccBus *service.DccBusService) *DccBusProxy {
+func NewDccBusProxy(auth *cmd.Auth, dccBus *service.DccBusService) *DccBusProxy {
 	return &DccBusProxy{auth: auth, dccBus: dccBus}
 }
 

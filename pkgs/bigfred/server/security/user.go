@@ -21,7 +21,7 @@ func (UserSecurityContext) CanManageUsers(eff domain.EffectiveRoles) Decision {
 	if eff.Has(domain.RoleAdmin) {
 		return Allow
 	}
-	return Deny("forbidden")
+	return Deny(ReasonForbidden)
 }
 
 // CanDeactivateSelf prevents an admin from locking themselves out by
@@ -29,7 +29,7 @@ func (UserSecurityContext) CanManageUsers(eff domain.EffectiveRoles) Decision {
 // top of CanManageUsers when the actor and target IDs match.
 func (UserSecurityContext) CanDeactivateSelf(actor domain.User, target domain.User) Decision {
 	if actor.ID == target.ID {
-		return Deny("cannot_deactivate_self")
+		return Deny(ReasonCannotDeactivateSelf)
 	}
 	return Allow
 }
@@ -40,7 +40,7 @@ func (UserSecurityContext) CanDeactivateSelf(actor domain.User, target domain.Us
 // the UI render a precise tooltip in either case.
 func (UserSecurityContext) CanDeleteSelf(actor domain.User, target domain.User) Decision {
 	if actor.ID == target.ID {
-		return Deny("cannot_delete_self")
+		return Deny(ReasonCannotDeleteSelf)
 	}
 	return Allow
 }

@@ -22,5 +22,5 @@ func (TrainSecurityContext) CanMutateTrain(
 	if actorID == ownerUserID {
 		return Allow
 	}
-	return Deny("train_not_owned")
+	return Deny(ReasonTrainNotOwned)
 }

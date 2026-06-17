@@ -2,61 +2,31 @@ package httpapi
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/domain"
+	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
+	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
+	"github.com/keskad/loco/pkgs/bigfred/server/protocol"
 	"github.com/keskad/loco/pkgs/bigfred/server/service"
 )
 
 // VehicleHandler bundles REST endpoints for the per-user vehicle
 // catalogue (§4.1).
 type VehicleHandler struct {
-	svc            *service.VehicleService
+	svc            *cmd.Vehicle
 	layoutVehicles *service.LayoutVehicleService
-	pool           *service.DCCPoolService
-	auth           *service.AuthService
+	pool           *cmd.DCCPool
+	auth           *cmd.Auth
 }
 
 // NewVehicleHandler returns a VehicleHandler.
 func NewVehicleHandler(
-	svc *service.VehicleService,
+	svc *cmd.Vehicle,
 	layoutVehicles *service.LayoutVehicleService,
-	pool *service.DCCPoolService,
-	auth *service.AuthService,
+	pool *cmd.DCCPool,
+	auth *cmd.Auth,
 ) *VehicleHandler {
 	return &VehicleHandler{svc: svc, layoutVehicles: layoutVehicles, pool: pool, auth: auth}
-}
-
-// vehicleResponse is the JSON shape the frontend consumes. DCCAddress
-// is a pointer so the dummy case ("DCC: —") is representable.
-type vehicleResponse struct {
-	ID         uint               `json:"id"`
-	Name       string             `json:"name"`
-	Kind       domain.VehicleKind `json:"kind"`
-	Number     string             `json:"number"`
-	DCCAddress *uint16            `json:"dccAddress"`
-	IsDummy    bool               `json:"isDummy"`
-	OwnerID    uint               `json:"ownerId"`
-
-	Rp1Function             uint8                      `json:"rp1Function"`
-	EmergencyLightsFunction uint8                      `json:"emergencyLightsFunction"`
-	DeadManSwitchOption     domain.DeadManSwitchOption `json:"deadManSwitchOption"`
-}
-
-func toVehicleResponse(v domain.Vehicle) vehicleResponse {
-	return vehicleResponse{
-		ID:                      v.ID,
-		Name:                    v.Name,
-		Kind:                    v.Kind,
-		Number:                  v.Number,
-		DCCAddress:              v.DCCAddress,
-		IsDummy:                 v.IsDummy(),
-		OwnerID:                 v.OwnerUserID,
-		Rp1Function:             v.Rp1Function,
-		EmergencyLightsFunction: v.EmergencyLightsFunction,
-		DeadManSwitchOption:     v.DeadManSwitchOption,
-	}
 }
 
 // List handles GET /api/v1/vehicles — own vehicles only for now.
@@ -73,23 +43,12 @@ func (h *VehicleHandler) List(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 		return
 	}
-	out := make([]vehicleResponse, 0, len(rows))
+	out := make([]protocol.VehicleResponse, 0, len(rows))
 	for _, v := range rows {
-		out = append(out, toVehicleResponse(v))
+		out = append(out, protocol.ToVehicleResponse(v))
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(out)
-}
-
-type vehicleCreateRequest struct {
-	Name       string             `json:"name"`
-	Kind       domain.VehicleKind `json:"kind"`
-	Number     string             `json:"number"`
-	DCCAddress *uint16            `json:"dccAddress"`
-
-	Rp1Function             *uint8                      `json:"rp1Function"`
-	EmergencyLightsFunction *uint8                      `json:"emergencyLightsFunction"`
-	DeadManSwitchOption     *domain.DeadManSwitchOption `json:"deadManSwitchOption"`
 }
 
 // Create handles POST /api/v1/vehicles.
@@ -99,43 +58,19 @@ func (h *VehicleHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
-	var req vehicleCreateRequest
+	var req protocol.VehicleCreateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid_body")
 		return
 	}
-	row, err := h.svc.Create(r.Context(), service.VehicleCreateInput{
-		OwnerUserID:             id.User.ID,
-		Name:                    req.Name,
-		Kind:                    req.Kind,
-		Number:                  req.Number,
-		DCCAddress:              req.DCCAddress,
-		Rp1Function:             req.Rp1Function,
-		EmergencyLightsFunction: req.EmergencyLightsFunction,
-		DeadManSwitchOption:     req.DeadManSwitchOption,
-	})
+	row, err := h.svc.Create(r.Context(), req.ToCreateInput(id.User.ID))
 	if err != nil {
 		writeVehicleError(w, err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(toVehicleResponse(row))
-}
-
-// vehicleUpdateRequest mirrors the tri-state in VehicleUpdateInput.
-// `dccAddressSet` is true when the client wants to mutate the
-// column; when it is false, the existing value stays put.
-type vehicleUpdateRequest struct {
-	Name          *string             `json:"name"`
-	Kind          *domain.VehicleKind `json:"kind"`
-	Number        *string             `json:"number"`
-	DCCAddress    *uint16             `json:"dccAddress"`
-	DCCAddressSet bool                `json:"dccAddressSet"`
-
-	Rp1Function             *uint8                      `json:"rp1Function"`
-	EmergencyLightsFunction *uint8                      `json:"emergencyLightsFunction"`
-	DeadManSwitchOption     *domain.DeadManSwitchOption `json:"deadManSwitchOption"`
+	_ = json.NewEncoder(w).Encode(protocol.ToVehicleResponse(row))
 }
 
 // Update handles PUT /api/v1/vehicles/{id}.
@@ -150,28 +85,17 @@ func (h *VehicleHandler) Update(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
-	var req vehicleUpdateRequest
+	var req protocol.VehicleUpdateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid_body")
 		return
-	}
-	in := service.VehicleUpdateInput{
-		Name:                    req.Name,
-		Kind:                    req.Kind,
-		Number:                  req.Number,
-		Rp1Function:             req.Rp1Function,
-		EmergencyLightsFunction: req.EmergencyLightsFunction,
-		DeadManSwitchOption:     req.DeadManSwitchOption,
-	}
-	if req.DCCAddressSet {
-		in.DCCAddress = service.VehicleAddressPatch{IsSet: true, Value: req.DCCAddress}
 	}
 	eff, err := h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 		return
 	}
-	row, err := h.svc.Update(r.Context(), actor.User.ID, vehicleID, eff, in)
+	row, err := h.svc.Update(r.Context(), actor.User.ID, vehicleID, eff, req.ToUpdateInput())
 	if err != nil {
 		writeVehicleError(w, err)
 		return
@@ -181,7 +105,7 @@ func (h *VehicleHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(toVehicleResponse(row))
+	_ = json.NewEncoder(w).Encode(protocol.ToVehicleResponse(row))
 }
 
 // Delete handles DELETE /api/v1/vehicles/{id}. Cascades the layout
@@ -238,29 +162,7 @@ func (h *VehicleHandler) ListPool(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(out)
 }
 
-// writeVehicleError maps service sentinels to status codes + machine
-// codes the frontend can localise.
 func writeVehicleError(w http.ResponseWriter, err error) {
-	switch {
-	case errors.Is(err, service.ErrVehicleNotFound):
-		writeJSONError(w, http.StatusNotFound, "vehicle_not_found")
-	case errors.Is(err, service.ErrVehicleNameRequired):
-		writeJSONError(w, http.StatusUnprocessableEntity, "vehicle_name_required")
-	case errors.Is(err, service.ErrVehicleKindInvalid):
-		writeJSONError(w, http.StatusUnprocessableEntity, "vehicle_kind_invalid")
-	case errors.Is(err, service.ErrDCCAddressTaken):
-		writeJSONError(w, http.StatusConflict, "dcc_address_taken")
-	case errors.Is(err, service.ErrDCCAddressOutsidePool):
-		writeJSONError(w, http.StatusUnprocessableEntity, "dcc_address_outside_pool")
-	case errors.Is(err, service.ErrVehicleNotOwned):
-		writeJSONError(w, http.StatusForbidden, "vehicle_not_owned")
-	case errors.Is(err, service.ErrVehicleInUse):
-		writeJSONError(w, http.StatusConflict, "vehicle_in_use")
-	case errors.Is(err, service.ErrVehicleDccFunctionInvalid):
-		writeJSONError(w, http.StatusUnprocessableEntity, "vehicle_dcc_function_invalid")
-	case errors.Is(err, service.ErrVehicleDeadManSwitchInvalid):
-		writeJSONError(w, http.StatusUnprocessableEntity, "vehicle_deadman_switch_invalid")
-	default:
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
-	}
+	status, code := svcerrors.VehicleHTTPStatus(err)
+	writeJSONError(w, status, code)
 }

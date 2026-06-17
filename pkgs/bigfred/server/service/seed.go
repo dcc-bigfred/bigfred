@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
+	"github.com/keskad/loco/pkgs/bigfred/server/helpers"
 	"github.com/keskad/loco/pkgs/bigfred/server/repo"
 )
 
@@ -40,7 +41,7 @@ func SeedAdmin(ctx context.Context, users *repo.Users, cfg SeedConfig) (bool, er
 		return false, nil
 	}
 
-	hash, err := HashPIN(cfg.PIN)
+	hash, err := helpers.HashPIN(cfg.PIN)
 	if err != nil {
 		return false, err
 	}

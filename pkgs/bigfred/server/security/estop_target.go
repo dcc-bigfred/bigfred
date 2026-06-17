@@ -27,5 +27,5 @@ func (EStopTargetSecurityContext) CanStop(
 	if eff.Has(domain.RoleSignalman) && isInterlockingOccupant {
 		return Allow
 	}
-	return Deny("not_authorized_to_stop")
+	return Deny(ReasonNotAuthorizedToStop)
 }

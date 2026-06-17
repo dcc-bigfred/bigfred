@@ -5,13 +5,14 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/service"
+	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
+
 	"github.com/keskad/loco/pkgs/bigfred/server/ws"
 )
 
 // ServeWS upgrades an authenticated HTTP request to a WebSocket and
 // registers a drive session in the Hub (§4.2).
-func ServeWS(hub *ws.Hub, auth *service.AuthService, w http.ResponseWriter, r *http.Request) {
+func ServeWS(hub *ws.Hub, auth *cmd.Auth, w http.ResponseWriter, r *http.Request) {
 	token := readSessionToken(r)
 	if token == "" {
 		writeJSONError(w, http.StatusUnauthorized, "unauthorized")

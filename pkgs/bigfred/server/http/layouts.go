@@ -8,49 +8,20 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/domain"
-	"github.com/keskad/loco/pkgs/bigfred/server/service"
+	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
+	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
+	"github.com/keskad/loco/pkgs/bigfred/server/protocol"
 )
 
-// LayoutHandler bundles the endpoints documented under
-// `/api/v1/layouts*` in §4.1. The public dropdown endpoint
-// (`/layouts/login`) lives here too because it is logically part of
-// the layouts surface — wiring it next to the admin endpoints keeps
-// the JSON shape in one place.
+// LayoutHandler bundles the endpoints documented under `/api/v1/layouts*` in §4.1.
 type LayoutHandler struct {
-	svc  *service.LayoutService
-	auth *service.AuthService
+	svc  *cmd.Layout
+	auth *cmd.Auth
 }
 
-// NewLayoutHandler returns a LayoutHandler bound to a LayoutService.
-func NewLayoutHandler(svc *service.LayoutService, auth *service.AuthService) *LayoutHandler {
+// NewLayoutHandler returns a LayoutHandler.
+func NewLayoutHandler(svc *cmd.Layout, auth *cmd.Auth) *LayoutHandler {
 	return &LayoutHandler{svc: svc, auth: auth}
-}
-
-// layoutResponse is the canonical JSON shape of a Layout row.
-type layoutResponse struct {
-	ID       uint   `json:"id"`
-	Name     string `json:"name"`
-	IsSystem bool   `json:"isSystem"`
-	Locked   bool   `json:"locked"`
-}
-
-// loginLayoutResponse is the trimmed shape returned by the public
-// `/layouts/login` endpoint (§4.1). The UI substitutes the i18n key
-// `layout:system_default_label` for rows where `isSystem == true`.
-type loginLayoutResponse struct {
-	ID       uint   `json:"id"`
-	Name     string `json:"name"`
-	IsSystem bool   `json:"isSystem"`
-}
-
-func toLayoutResponse(l domain.Layout) layoutResponse {
-	return layoutResponse{
-		ID:       l.ID,
-		Name:     l.Name,
-		IsSystem: l.IsSystem,
-		Locked:   l.Locked,
-	}
 }
 
 // ListForLogin handles the unauthenticated `GET /api/v1/layouts/login`
@@ -63,13 +34,9 @@ func (h *LayoutHandler) ListForLogin(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 		return
 	}
-	out := make([]loginLayoutResponse, 0, len(rows))
+	out := make([]protocol.LoginLayoutResponse, 0, len(rows))
 	for _, l := range rows {
-		out = append(out, loginLayoutResponse{
-			ID:       l.ID,
-			Name:     l.Name,
-			IsSystem: l.IsSystem,
-		})
+		out = append(out, protocol.ToLoginLayoutResponse(l))
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(out)
@@ -84,9 +51,9 @@ func (h *LayoutHandler) List(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 		return
 	}
-	out := make([]layoutResponse, 0, len(rows))
+	out := make([]protocol.LayoutResponse, 0, len(rows))
 	for _, l := range rows {
-		out = append(out, toLayoutResponse(l))
+		out = append(out, protocol.ToLayoutResponse(l))
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(out)
@@ -105,24 +72,10 @@ func (h *LayoutHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(toLayoutResponse(layout))
+	_ = json.NewEncoder(w).Encode(protocol.ToLayoutResponse(layout))
 }
 
-// createRequest models the JSON body of POST /api/v1/layouts.
-type createRequest struct {
-	Name              string `json:"name"`
-	InterlockingIDs   []uint `json:"interlockingIds"`
-	CommandStationIDs []uint `json:"commandStationIds"`
-	// AdminPIN is the initial layout admin PIN (§7a.7). Empty
-	// means "default" — the service falls back to the well-known
-	// SystemLayoutDefaultAdminPIN ("0000"), mirroring the
-	// bootstrap UX of the system layout.
-	AdminPIN string `json:"adminPin"`
-}
-
-// Create handles `POST /api/v1/layouts` (admin only). The HTTP wiring
-// adds the auth middleware; this handler trusts the identity in
-// context.
+// Create handles `POST /api/v1/layouts` (admin only).
 func (h *LayoutHandler) Create(w http.ResponseWriter, r *http.Request) {
 	actor, ok := IdentityFromContext(r.Context())
 	if !ok {
@@ -134,25 +87,19 @@ func (h *LayoutHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 		return
 	}
-	var req createRequest
+	var req protocol.LayoutCreateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid_body")
 		return
 	}
-	layout, err := h.svc.Create(r.Context(), eff, service.CreateInput{
-		Name:              req.Name,
-		CreatedBy:         actor.User.ID,
-		InterlockingIDs:   req.InterlockingIDs,
-		CommandStationIDs: req.CommandStationIDs,
-		AdminPIN:          req.AdminPIN,
-	})
+	layout, err := h.svc.Create(r.Context(), eff, req.ToCreateInput(actor.User.ID))
 	if err != nil {
-		if errors.Is(err, service.ErrInterlockingNotFound) {
+		if errors.Is(err, svcerrors.ErrInterlockingNotFound) {
 			writeLayoutInterlockingError(w, err)
 			return
 		}
-		if errors.Is(err, service.ErrCommandStationNotFound) ||
-			errors.Is(err, service.ErrLayoutNeedsAtLeastOneCommandStation) {
+		if errors.Is(err, svcerrors.ErrCommandStationNotFound) ||
+			errors.Is(err, svcerrors.ErrLayoutNeedsAtLeastOneCommandStation) {
 			writeLayoutCommandStationError(w, err)
 			return
 		}
@@ -161,7 +108,7 @@ func (h *LayoutHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(toLayoutResponse(layout))
+	_ = json.NewEncoder(w).Encode(protocol.ToLayoutResponse(layout))
 }
 
 // ListCommandStations handles GET /api/v1/layouts/{id}/command-stations.
@@ -176,9 +123,9 @@ func (h *LayoutHandler) ListCommandStations(w http.ResponseWriter, r *http.Reque
 		writeLayoutCommandStationError(w, err)
 		return
 	}
-	out := make([]commandStationResponse, 0, len(rows))
+	out := make([]protocol.CommandStationResponse, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, toCommandStationResponse(row))
+		out = append(out, protocol.ToCommandStationResponse(row))
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(out)
@@ -216,9 +163,9 @@ func (h *LayoutHandler) SetCommandStations(w http.ResponseWriter, r *http.Reques
 		writeLayoutCommandStationError(w, err)
 		return
 	}
-	out := make([]commandStationResponse, 0, len(rows))
+	out := make([]protocol.CommandStationResponse, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, toCommandStationResponse(row))
+		out = append(out, protocol.ToCommandStationResponse(row))
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(out)
@@ -236,9 +183,9 @@ func (h *LayoutHandler) ListInterlockings(w http.ResponseWriter, r *http.Request
 		writeLayoutInterlockingError(w, err)
 		return
 	}
-	out := make([]interlockingResponse, 0, len(rows))
+	out := make([]protocol.InterlockingResponse, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, toInterlockingResponse(row))
+		out = append(out, protocol.ToInterlockingResponse(row))
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(out)
@@ -277,9 +224,9 @@ func (h *LayoutHandler) SetInterlockings(w http.ResponseWriter, r *http.Request)
 		writeLayoutInterlockingError(w, err)
 		return
 	}
-	out := make([]interlockingResponse, 0, len(rows))
+	out := make([]protocol.InterlockingResponse, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, toInterlockingResponse(row))
+		out = append(out, protocol.ToInterlockingResponse(row))
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(out)
@@ -351,7 +298,7 @@ func (h *LayoutHandler) Update(w http.ResponseWriter, r *http.Request) {
 		layout = updated
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(toLayoutResponse(layout))
+	_ = json.NewEncoder(w).Encode(protocol.ToLayoutResponse(layout))
 }
 
 // Delete handles `DELETE /api/v1/layouts/{id}` (admin only).
@@ -391,7 +338,7 @@ func (h *LayoutHandler) Lock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(toLayoutResponse(layout))
+	_ = json.NewEncoder(w).Encode(protocol.ToLayoutResponse(layout))
 }
 
 // Unlock handles `DELETE /api/v1/layouts/{id}/lock` (admin only).
@@ -407,61 +354,22 @@ func (h *LayoutHandler) Unlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(toLayoutResponse(layout))
+	_ = json.NewEncoder(w).Encode(protocol.ToLayoutResponse(layout))
 }
 
-// writeLayoutError maps every service-level sentinel to the matching
-// status + machine-readable code. Unknown errors fall through to
-// `internal_error` so the response stays JSON-shaped.
 func writeLayoutError(w http.ResponseWriter, err error) {
-	switch {
-	case errors.Is(err, service.ErrLayoutNotFound):
-		writeJSONError(w, http.StatusNotFound, "layout_not_found")
-	case errors.Is(err, service.ErrLayoutNameTaken):
-		writeJSONError(w, http.StatusConflict, "layout_name_taken")
-	case errors.Is(err, service.ErrLayoutNameRequired):
-		writeJSONError(w, http.StatusUnprocessableEntity, "layout_name_required")
-	case errors.Is(err, service.ErrSystemLayoutImmutable):
-		writeJSONError(w, http.StatusUnprocessableEntity, "default_layout_immutable")
-	case errors.Is(err, service.ErrSystemLayoutUndeletable):
-		writeJSONError(w, http.StatusUnprocessableEntity, "default_layout_undeletable")
-	case errors.Is(err, service.ErrLayoutAdminPINInvalid):
-		writeJSONError(w, http.StatusUnprocessableEntity, "layout_admin_pin_invalid")
-	case errors.Is(err, service.ErrLayoutForbidden):
-		writeJSONError(w, http.StatusForbidden, "forbidden")
-	default:
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
-	}
+	status, code := svcerrors.LayoutHTTPStatus(err)
+	writeJSONError(w, status, code)
 }
 
 func writeLayoutInterlockingError(w http.ResponseWriter, err error) {
-	switch {
-	case errors.Is(err, service.ErrLayoutNotFound):
-		writeJSONError(w, http.StatusNotFound, "layout_not_found")
-	case errors.Is(err, service.ErrInterlockingNotFound):
-		writeJSONError(w, http.StatusNotFound, "interlocking_not_found")
-	case errors.Is(err, service.ErrLayoutForbidden):
-		writeJSONError(w, http.StatusForbidden, "forbidden")
-	default:
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
-	}
+	status, code := svcerrors.LayoutInterlockingHTTPStatus(err)
+	writeJSONError(w, status, code)
 }
 
 func writeLayoutCommandStationError(w http.ResponseWriter, err error) {
-	switch {
-	case errors.Is(err, service.ErrLayoutNotFound):
-		writeJSONError(w, http.StatusNotFound, "layout_not_found")
-	case errors.Is(err, service.ErrCommandStationNotFound):
-		writeJSONError(w, http.StatusNotFound, "command_station_not_found")
-	case errors.Is(err, service.ErrLayoutNeedsAtLeastOneCommandStation):
-		writeJSONError(w, http.StatusUnprocessableEntity, "layout_needs_at_least_one_command_station")
-	case errors.Is(err, service.ErrSystemLayoutCommandStationsImmutable):
-		writeJSONError(w, http.StatusUnprocessableEntity, "default_layout_command_stations_immutable")
-	case errors.Is(err, service.ErrLayoutForbidden):
-		writeJSONError(w, http.StatusForbidden, "forbidden")
-	default:
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
-	}
+	status, code := svcerrors.LayoutCommandStationHTTPStatus(err)
+	writeJSONError(w, status, code)
 }
 
 // parseUintParam pulls a path parameter from chi and parses it as a

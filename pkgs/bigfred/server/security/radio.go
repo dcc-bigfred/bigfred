@@ -12,12 +12,12 @@ func (RadioSecurityContext) CanSend(eff domain.EffectiveRoles, toUserID, toInter
 		if eff.Has(domain.RoleSignalman) {
 			return Allow
 		}
-		return Deny("not_signalman")
+		return Deny(ReasonNotSignalman)
 	}
 	if toInterlockingID != 0 {
 		return Allow
 	}
-	return Deny("radio_invalid_target")
+	return Deny(ReasonRadioInvalidTarget)
 }
 
 // CanReplayInterlocking reports whether the caller may read the group
@@ -29,13 +29,13 @@ func (RadioSecurityContext) CanReplayInterlocking(
 	callerUserID uint,
 ) Decision {
 	if interlockingID == 0 {
-		return Deny("invalid_interlocking")
+		return Deny(ReasonInvalidInterlocking)
 	}
 	if !eff.Has(domain.RoleSignalman) {
-		return Deny("not_signalman")
+		return Deny(ReasonNotSignalman)
 	}
 	if occupantUserID == 0 || occupantUserID != callerUserID {
-		return Deny("not_interlocking_occupant")
+		return Deny(ReasonNotInterlockingOccupant)
 	}
 	return Allow
 }

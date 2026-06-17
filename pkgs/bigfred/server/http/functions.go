@@ -2,77 +2,26 @@ package httpapi
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
-	"github.com/keskad/loco/pkgs/bigfred/server/service"
+	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
+	"github.com/keskad/loco/pkgs/bigfred/server/protocol"
 )
 
-// FunctionHandler serves function list/edit for vehicles and templates
-// through the same handler type (§6.3e, §4.1).
+// FunctionHandler serves function list/edit for vehicles and templates (§6.3e).
 type FunctionHandler struct {
-	functions *service.FunctionService
-	auth      *service.AuthService
+	functions *cmd.Function
+	auth      *cmd.Auth
 }
 
 // NewFunctionHandler returns a FunctionHandler.
-func NewFunctionHandler(functions *service.FunctionService, auth *service.AuthService) *FunctionHandler {
+func NewFunctionHandler(functions *cmd.Function, auth *cmd.Auth) *FunctionHandler {
 	return &FunctionHandler{functions: functions, auth: auth}
-}
-
-type functionResponse struct {
-	Num      uint8              `json:"num"`
-	Name     string             `json:"name"`
-	Icon     domain.FunctionIcon `json:"icon"`
-	Position int                `json:"position"`
-	Source   string             `json:"source,omitempty"`
-}
-
-type functionUpsertRequest struct {
-	Name     string              `json:"name"`
-	Icon     domain.FunctionIcon `json:"icon"`
-	Position int                 `json:"position"`
-}
-
-type functionReorderRequest struct {
-	Positions []functionReorderEntry `json:"positions"`
-}
-
-type functionReorderEntry struct {
-	Num      uint8 `json:"num"`
-	Position int   `json:"position"`
-}
-
-type functionIconResponse struct {
-	Icon string `json:"icon"`
-}
-
-func toFunctionResponses(rows []service.ResolvedFunction) []functionResponse {
-	out := make([]functionResponse, 0, len(rows))
-	for _, r := range rows {
-		out = append(out, functionResponse{
-			Num:      r.Num,
-			Name:     r.Name,
-			Icon:     r.Icon,
-			Position: r.Position,
-			Source:   r.Source,
-		})
-	}
-	return out
-}
-
-type functionCatalogueEntryResponse struct {
-	VehicleID   uint               `json:"vehicleId"`
-	VehicleName string             `json:"vehicleName"`
-	OwnerID     uint               `json:"ownerId"`
-	OwnerLogin  string             `json:"ownerLogin"`
-	DCCAddress  *uint16            `json:"dccAddress"`
-	Kind        domain.VehicleKind `json:"kind"`
-	Functions   []functionResponse `json:"functions"`
 }
 
 // ListCatalogue handles GET /api/v1/vehicles/function-catalogue.
@@ -82,17 +31,9 @@ func (h *FunctionHandler) ListCatalogue(w http.ResponseWriter, r *http.Request) 
 		writeFunctionError(w, err)
 		return
 	}
-	out := make([]functionCatalogueEntryResponse, 0, len(rows))
+	out := make([]protocol.FunctionCatalogueEntryResponse, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, functionCatalogueEntryResponse{
-			VehicleID:   row.VehicleID,
-			VehicleName: row.VehicleName,
-			OwnerID:     row.OwnerID,
-			OwnerLogin:  row.OwnerLogin,
-			DCCAddress:  row.DCCAddress,
-			Kind:        row.Kind,
-			Functions:   toFunctionResponses(row.Functions),
-		})
+		out = append(out, protocol.ToFunctionCatalogueEntry(row))
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(out)
@@ -101,15 +42,13 @@ func (h *FunctionHandler) ListCatalogue(w http.ResponseWriter, r *http.Request) 
 // ListIcons handles GET /api/v1/function-icons.
 func (h *FunctionHandler) ListIcons(w http.ResponseWriter, r *http.Request) {
 	icons := h.functions.ListIcons()
-	out := make([]functionIconResponse, 0, len(icons))
+	out := make([]protocol.FunctionIconResponse, 0, len(icons))
 	for _, icon := range icons {
-		out = append(out, functionIconResponse{Icon: string(icon)})
+		out = append(out, protocol.FunctionIconResponse{Icon: string(icon)})
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(out)
 }
-
-// --- Vehicle routes (/vehicles/{id}/functions) ---
 
 // ListVehicle handles GET /api/v1/vehicles/{id}/functions.
 func (h *FunctionHandler) ListVehicle(w http.ResponseWriter, r *http.Request) {
@@ -124,7 +63,7 @@ func (h *FunctionHandler) ListVehicle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(toFunctionResponses(rows))
+	_ = json.NewEncoder(w).Encode(protocol.ToFunctionResponses(rows))
 }
 
 // UpsertVehicle handles PUT /api/v1/vehicles/{id}/functions/{num}.
@@ -133,18 +72,18 @@ func (h *FunctionHandler) UpsertVehicle(w http.ResponseWriter, r *http.Request) 
 	if !ok {
 		return
 	}
-	var req functionUpsertRequest
+	var req protocol.FunctionUpsertRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid_body")
 		return
 	}
-	row, err := h.functions.UpsertVehicleSlot(r.Context(), actorID, vehicleID, num, toUpsertInput(req))
+	row, err := h.functions.UpsertVehicleSlot(r.Context(), actorID, vehicleID, num, req.ToUpsertInput())
 	if err != nil {
 		writeFunctionError(w, err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(toDccFunctionResponse(row, "vehicle"))
+	_ = json.NewEncoder(w).Encode(protocol.ToFunctionResponse(row, "vehicle"))
 }
 
 // DeleteVehicle handles DELETE /api/v1/vehicles/{id}/functions/{num}.
@@ -160,14 +99,7 @@ func (h *FunctionHandler) DeleteVehicle(w http.ResponseWriter, r *http.Request) 
 	w.WriteHeader(http.StatusNoContent)
 }
 
-type functionReplaceFromRequest struct {
-	TemplateID      uint `json:"templateId"`
-	SourceVehicleID uint `json:"sourceVehicleId"`
-}
-
 // AttachVehicle handles POST /api/v1/vehicles/{id}/functions/attach.
-// Body must set exactly one of templateId (re-link to template) or
-// sourceVehicleId (copy snapshot from another vehicle).
 func (h *FunctionHandler) AttachVehicle(w http.ResponseWriter, r *http.Request) {
 	vehicleID, ok := parseUintParam(r, "id")
 	if !ok {
@@ -179,7 +111,7 @@ func (h *FunctionHandler) AttachVehicle(w http.ResponseWriter, r *http.Request) 
 		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
-	var req functionReplaceFromRequest
+	var req protocol.FunctionReplaceFromRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid_body")
 		return
@@ -191,7 +123,7 @@ func (h *FunctionHandler) AttachVehicle(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	var (
-		rows []service.ResolvedFunction
+		rows []cmd.ResolvedFunction
 		err  error
 	)
 	if fromTemplate {
@@ -208,7 +140,7 @@ func (h *FunctionHandler) AttachVehicle(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(toFunctionResponses(rows))
+	_ = json.NewEncoder(w).Encode(protocol.ToFunctionResponses(rows))
 }
 
 // ReorderVehicle handles POST /api/v1/vehicles/{id}/functions/reorder.
@@ -234,8 +166,6 @@ func (h *FunctionHandler) ReorderVehicle(w http.ResponseWriter, r *http.Request)
 	h.ListVehicle(w, r)
 }
 
-// --- Template routes (/vehicle-templates/{id}/functions) ---
-
 // ListTemplate handles GET /api/v1/vehicle-templates/{id}/functions.
 func (h *FunctionHandler) ListTemplate(w http.ResponseWriter, r *http.Request) {
 	templateID, ok := parseUintParam(r, "id")
@@ -249,7 +179,7 @@ func (h *FunctionHandler) ListTemplate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(toFunctionResponses(rows))
+	_ = json.NewEncoder(w).Encode(protocol.ToFunctionResponses(rows))
 }
 
 // UpsertTemplate handles PUT /api/v1/vehicle-templates/{id}/functions/{num}.
@@ -258,18 +188,18 @@ func (h *FunctionHandler) UpsertTemplate(w http.ResponseWriter, r *http.Request)
 	if !ok {
 		return
 	}
-	var req functionUpsertRequest
+	var req protocol.FunctionUpsertRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid_body")
 		return
 	}
-	row, err := h.functions.UpsertTemplateSlot(r.Context(), actorID, eff, templateID, num, toUpsertInput(req))
+	row, err := h.functions.UpsertTemplateSlot(r.Context(), actorID, eff, templateID, num, req.ToUpsertInput())
 	if err != nil {
 		writeFunctionError(w, err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(toDccFunctionResponse(row, "template"))
+	_ = json.NewEncoder(w).Encode(protocol.ToFunctionResponse(row, "template"))
 }
 
 // DeleteTemplate handles DELETE /api/v1/vehicle-templates/{id}/functions/{num}.
@@ -357,17 +287,13 @@ func (h *FunctionHandler) parseTemplateMutation(w http.ResponseWriter, r *http.R
 	return templateID, num, actor.User.ID, eff, true
 }
 
-func (h *FunctionHandler) decodeReorder(w http.ResponseWriter, r *http.Request) ([]service.FunctionReorderEntry, bool) {
-	var req functionReorderRequest
+func (h *FunctionHandler) decodeReorder(w http.ResponseWriter, r *http.Request) ([]cmd.FunctionReorderEntry, bool) {
+	var req protocol.FunctionReorderRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid_body")
 		return nil, false
 	}
-	out := make([]service.FunctionReorderEntry, 0, len(req.Positions))
-	for _, p := range req.Positions {
-		out = append(out, service.FunctionReorderEntry{Num: p.Num, Position: p.Position})
-	}
-	return out, true
+	return req.ToReorderEntries(), true
 }
 
 func parseFunctionNumParam(w http.ResponseWriter, r *http.Request) (uint8, bool) {
@@ -380,44 +306,7 @@ func parseFunctionNumParam(w http.ResponseWriter, r *http.Request) (uint8, bool)
 	return uint8(n), true
 }
 
-func toUpsertInput(req functionUpsertRequest) service.FunctionUpsertInput {
-	return service.FunctionUpsertInput{
-		Name:     req.Name,
-		Icon:     req.Icon,
-		Position: req.Position,
-	}
-}
-
-func toDccFunctionResponse(row domain.DccFunction, source string) functionResponse {
-	return functionResponse{
-		Num:      row.Num,
-		Name:     row.Name,
-		Icon:     row.Icon,
-		Position: row.Position,
-		Source:   source,
-	}
-}
-
 func writeFunctionError(w http.ResponseWriter, err error) {
-	switch {
-	case errors.Is(err, service.ErrVehicleNotFound),
-		errors.Is(err, service.ErrVehicleTemplateNotFound):
-		writeJSONError(w, http.StatusNotFound, "not_found")
-	case errors.Is(err, service.ErrFunctionNotFound):
-		writeJSONError(w, http.StatusNotFound, "function_not_found")
-	case errors.Is(err, service.ErrOnlyOwnerCanEdit):
-		writeJSONError(w, http.StatusForbidden, "only_owner_can_edit")
-	case errors.Is(err, service.ErrTemplateNotOwned):
-		writeJSONError(w, http.StatusForbidden, "template_not_owned")
-	case errors.Is(err, service.ErrFunctionReplaceSourceInvalid):
-		writeJSONError(w, http.StatusUnprocessableEntity, "function_replace_source_invalid")
-	case errors.Is(err, service.ErrFunctionNumInvalid),
-		errors.Is(err, service.ErrFunctionIconInvalid),
-		errors.Is(err, service.ErrFunctionNameRequired):
-		writeJSONError(w, http.StatusUnprocessableEntity, err.Error())
-	case errors.Is(err, service.ErrFunctionNumTaken):
-		writeJSONError(w, http.StatusConflict, "function_num_taken")
-	default:
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
-	}
+	status, code := svcerrors.FunctionHTTPStatus(err)
+	writeJSONError(w, status, code)
 }

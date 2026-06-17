@@ -164,7 +164,7 @@ func (h *TrainHandler) PatchMember(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 		return
 	}
-	member, err := h.svc.UpdateMemberMultiplier(r.Context(), actor.User.ID, trainID, memberID, eff, req.SpeedMultiplier)
+	member, err := h.svc.UpdateMember(r.Context(), actor.User.ID, trainID, memberID, eff, req.ToMemberPatchInput())
 	if err != nil {
 		writeTrainError(w, err)
 		return

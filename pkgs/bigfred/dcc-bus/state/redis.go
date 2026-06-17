@@ -31,9 +31,9 @@ func NewRedis(client *redis.Client, layoutID, commandStationID uint) *Redis {
 // Client exposes the raw connection for low-level pub/sub callers.
 func (r *Redis) Client() *redis.Client { return r.client }
 
-// StateKey returns the Redis key holding the last-known state for
-// one locomotive on this daemon's layout.
-func (r *Redis) StateKey(addr uint16) string {
+// LocoCurrentStateKey returns the Redis key holding the last-known
+// state for one locomotive on this daemon's layout.
+func (r *Redis) LocoCurrentStateKey(addr uint16) string {
 	return contract.LocoStateKey(r.layoutID, addr)
 }
 
@@ -50,30 +50,30 @@ func (r *Redis) CommandChannel() string {
 	return contract.DccBusCommandChannel(r.layoutID, r.commandStationID)
 }
 
-// StoreState writes one snapshot atomically and publishes it on the
-// event channel. The TTL keeps stale rows from accumulating after
-// a roster removal (§7e.3 — server bumps the TTL via the same key
-// on takeover).
+// StoreLocoCurrentState writes one snapshot atomically and publishes
+// it on the event channel. The TTL keeps stale rows from accumulating
+// after a roster removal (§7e.3 — server bumps the TTL via the same
+// key on takeover).
 //
 // The two operations live inside a TxPipeline so a reader that
 // SUBSCRIBE'd to the event channel never sees a state event for a
 // key it cannot GET back.
-func (r *Redis) StoreState(ctx context.Context, snap contract.LocoStateWire, ttl time.Duration) error {
+func (r *Redis) StoreLocoCurrentState(ctx context.Context, snap contract.LocoStateWire, ttl time.Duration) error {
 	payload, err := json.Marshal(snap)
 	if err != nil {
 		return err
 	}
 	pipe := r.client.TxPipeline()
-	pipe.Set(ctx, r.StateKey(snap.Address), payload, ttl)
+	pipe.Set(ctx, r.LocoCurrentStateKey(snap.Address), payload, ttl)
 	pipe.Publish(ctx, r.EventChannel(), payload)
 	_, err = pipe.Exec(ctx)
 	return err
 }
 
-// LoadState reads the latest snapshot for one locomotive. Returns
-// (zero, false, nil) when the key is missing.
-func (r *Redis) LoadState(ctx context.Context, addr uint16) (contract.LocoStateWire, bool, error) {
-	raw, err := r.client.Get(ctx, r.StateKey(addr)).Result()
+// GetLocoCurrentState reads the latest snapshot for one locomotive.
+// Returns (zero, false, nil) when the key is missing.
+func (r *Redis) GetLocoCurrentState(ctx context.Context, addr uint16) (contract.LocoStateWire, bool, error) {
+	raw, err := r.client.Get(ctx, r.LocoCurrentStateKey(addr)).Result()
 	if err == redis.Nil {
 		return contract.LocoStateWire{}, false, nil
 	}
@@ -125,4 +125,3 @@ func (r *Redis) SubscribeLayoutRadioStop(ctx context.Context) (*redis.PubSub, er
 	}
 	return sub, nil
 }
-

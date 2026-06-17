@@ -43,11 +43,11 @@ func (r *Router) applyEmergencyStop(ctx context.Context, userID uint, sessionID 
 			Source:             "estop",
 			At:                 time.Now().UTC().UnixMilli(),
 		}
-		if cached, ok, err := r.redis.LoadState(ctx, addr); err == nil && ok {
+		if cached, ok, err := r.redis.GetLocoCurrentState(ctx, addr); err == nil && ok {
 			snap.Functions = cached.Functions
 			snap.Forward = cached.Forward
 		}
-		if err := r.redis.StoreState(ctx, snap, StateTTL); err != nil {
+		if err := r.redis.StoreLocoCurrentState(ctx, snap, StateTTL); err != nil {
 			r.log.WithError(err).Debug("dcc-bus estop redis store")
 		}
 		service.BroadcastLocoState(ctx, r.hub, snap)
@@ -70,7 +70,7 @@ func (r *Router) applyEmergencyStop(ctx context.Context, userID uint, sessionID 
 }
 
 func (r *Router) shouldEmergencyStopLoco(ctx context.Context, addr uint16, movingOnly bool) bool {
-	cached, ok, err := r.redis.LoadState(ctx, addr)
+	cached, ok, err := r.redis.GetLocoCurrentState(ctx, addr)
 	if err != nil || !ok {
 		return !movingOnly
 	}
@@ -114,12 +114,12 @@ func (r *Router) applyEStopTarget(ctx context.Context, addrs []uint16) {
 			Source:  "estop",
 			At:      time.Now().UTC().UnixMilli(),
 		}
-		if cached, ok, err := r.redis.LoadState(ctx, addr); err == nil && ok {
+		if cached, ok, err := r.redis.GetLocoCurrentState(ctx, addr); err == nil && ok {
 			snap.Functions = cached.Functions
 			snap.Forward = cached.Forward
 			snap.ControlledByUserID = cached.ControlledByUserID
 		}
-		_ = r.redis.StoreState(ctx, snap, StateTTL)
+		_ = r.redis.StoreLocoCurrentState(ctx, snap, StateTTL)
 		service.BroadcastLocoState(ctx, r.hub, snap)
 	}
 	if len(affected) == 0 {
@@ -144,10 +144,10 @@ func (r *Router) applyEStopAll(ctx context.Context, reason string) []uint16 {
 			Source:  "estop",
 			At:      time.Now().UTC().UnixMilli(),
 		}
-		if cached, ok, err := r.redis.LoadState(ctx, addr); err == nil && ok {
+		if cached, ok, err := r.redis.GetLocoCurrentState(ctx, addr); err == nil && ok {
 			snap.Functions = cached.Functions
 		}
-		_ = r.redis.StoreState(ctx, snap, StateTTL)
+		_ = r.redis.StoreLocoCurrentState(ctx, snap, StateTTL)
 		service.BroadcastLocoState(ctx, r.hub, snap)
 	}
 	_ = r.redis.Publish(ctx, "system.estop.audit", map[string]any{

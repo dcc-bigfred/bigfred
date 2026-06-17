@@ -102,9 +102,24 @@ function TrainMemberAccordion({
             pr: 1,
           }}
         >
-          <Typography variant="body2" sx={{ flex: 1, fontWeight: 600 }}>
-            {member.name}
-          </Typography>
+          <Box sx={{ flex: 1, minWidth: 0, display: "flex", alignItems: "baseline", gap: 0.75 }}>
+            <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
+              {member.name}
+            </Typography>
+            <Typography
+              variant="caption"
+              component="span"
+              aria-label={t("train.memberSpeed", { speed: state?.speed ?? 0 })}
+              sx={{
+                color: cockpit.textMuted,
+                fontSize: "0.65rem",
+                fontVariantNumeric: "tabular-nums",
+                flexShrink: 0,
+              }}
+            >
+              {state?.speed ?? 0}
+            </Typography>
+          </Box>
           {member.isLeading && (
             <Chip
               size="small"
@@ -120,7 +135,7 @@ function TrainMemberAccordion({
               }}
             />
           )}
-          {showMultiplierCog && !member.isLeading && (
+          {showMultiplierCog && (
             <IconButton
               component="span"
               size="small"

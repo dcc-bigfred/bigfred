@@ -31,8 +31,14 @@ type TrainMember struct {
 	TrainID   uint `db:"train_id"`
 	VehicleID uint `db:"vehicle_id"`
 	Position  int
-	Reversed  bool
-	SpeedMultiplier float64 `db:"speed_multiplier"`
+	Reversed         bool
+	SpeedMultiplier  float64 `db:"speed_multiplier"`
+	ExcludeFromSpeed    bool    `db:"exclude_from_speed"`
+	StartDelayMs        int     `db:"start_delay_ms"`
+	AccelRampMs         int     `db:"accel_ramp_ms"`
+	AccelRampMaxSteps   int     `db:"accel_ramp_max_steps"`
+	BrakeRampMs         int     `db:"brake_ramp_ms"`
+	BrakeRampMaxSteps   int     `db:"brake_ramp_max_steps"`
 }
 
 // Table tells REL which physical table backs this struct.

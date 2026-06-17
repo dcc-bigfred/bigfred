@@ -56,10 +56,10 @@ func (r *Router) applyMemberSetSpeed(
 		Source:             source,
 		At:                 time.Now().UTC().UnixMilli(),
 	}
-	if env, ok, err := r.redis.LoadState(ctx, addr); err == nil && ok {
+	if env, ok, err := r.redis.GetLocoCurrentState(ctx, addr); err == nil && ok {
 		snap.Functions = env.Functions
 	}
-	if err := r.redis.StoreState(ctx, snap, StateTTL); err != nil {
+	if err := r.redis.StoreLocoCurrentState(ctx, snap, StateTTL); err != nil {
 		r.log.WithError(err).Debug("dcc-bus redis store")
 	}
 	service.BroadcastLocoState(ctx, r.hub, snap)

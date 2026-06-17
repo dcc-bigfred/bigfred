@@ -36,7 +36,7 @@ func (r *Router) HandleSubscribe(ctx context.Context, actor Actor, resp Responde
 	resp.Subscribe(accepted...)
 
 	for _, addr := range accepted {
-		if snap, ok, err := r.redis.LoadState(ctx, addr); err == nil && ok {
+		if snap, ok, err := r.redis.GetLocoCurrentState(ctx, addr); err == nil && ok {
 			r.cache.Seed(addr, snap.Functions)
 			_ = resp.SendLocoState(ctx, snap)
 		}

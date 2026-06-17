@@ -37,3 +37,68 @@ func TestValidateSpeedMultiplier(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateStartDelayMs(t *testing.T) {
+	for _, ms := range []int{0, 50, 1000} {
+		if err := validation.ValidateStartDelayMs(ms); err != nil {
+			t.Fatalf("delay %d: %v", ms, err)
+		}
+	}
+	for _, ms := range []int{-50, 25, 1050} {
+		if err := validation.ValidateStartDelayMs(ms); !errors.Is(err, svcerrors.ErrTrainMemberStartDelayRange) {
+			t.Fatalf("delay %d: got %v", ms, err)
+		}
+	}
+}
+
+func TestValidateAccelRampMs(t *testing.T) {
+	for _, ms := range []int{0, 500, 5000} {
+		if err := validation.ValidateAccelRampMs(ms); err != nil {
+			t.Fatalf("ramp %d: %v", ms, err)
+		}
+	}
+	for _, ms := range []int{-500, 250, 5500} {
+		if err := validation.ValidateAccelRampMs(ms); !errors.Is(err, svcerrors.ErrTrainMemberAccelRampRange) {
+			t.Fatalf("ramp %d: got %v", ms, err)
+		}
+	}
+}
+
+func TestValidateAccelRampMaxSteps(t *testing.T) {
+	for _, steps := range []int{1, 5, validation.MaxAccelRampMaxSteps} {
+		if err := validation.ValidateAccelRampMaxSteps(steps); err != nil {
+			t.Fatalf("steps %d: %v", steps, err)
+		}
+	}
+	for _, steps := range []int{0, 11} {
+		if err := validation.ValidateAccelRampMaxSteps(steps); !errors.Is(err, svcerrors.ErrTrainMemberAccelRampStepsRange) {
+			t.Fatalf("steps %d: got %v", steps, err)
+		}
+	}
+}
+
+func TestValidateBrakeRampMs(t *testing.T) {
+	for _, ms := range []int{0, 500, 5000} {
+		if err := validation.ValidateBrakeRampMs(ms); err != nil {
+			t.Fatalf("ramp %d: %v", ms, err)
+		}
+	}
+	for _, ms := range []int{-500, 250, 5500} {
+		if err := validation.ValidateBrakeRampMs(ms); !errors.Is(err, svcerrors.ErrTrainMemberBrakeRampRange) {
+			t.Fatalf("ramp %d: got %v", ms, err)
+		}
+	}
+}
+
+func TestValidateBrakeRampMaxSteps(t *testing.T) {
+	for _, steps := range []int{1, 5, validation.MaxBrakeRampMaxSteps} {
+		if err := validation.ValidateBrakeRampMaxSteps(steps); err != nil {
+			t.Fatalf("steps %d: %v", steps, err)
+		}
+	}
+	for _, steps := range []int{0, 11} {
+		if err := validation.ValidateBrakeRampMaxSteps(steps); !errors.Is(err, svcerrors.ErrTrainMemberBrakeRampStepsRange) {
+			t.Fatalf("steps %d: got %v", steps, err)
+		}
+	}
+}

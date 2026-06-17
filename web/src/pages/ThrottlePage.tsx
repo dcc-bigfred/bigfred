@@ -24,7 +24,7 @@ import { useVehicleFunctions } from "../api/functions";
 import {
   useLayoutTrains,
   useLayoutVehicles,
-  usePatchTrainMemberMultiplier,
+  usePatchTrainMemberSettings,
   type RosterTrain,
 } from "../api/vehicles";
 import type { ThrottleCockpitFunction } from "../components/throttle/ThrottleCockpit";
@@ -444,6 +444,7 @@ function useCockpitTrains(layoutID: number) {
 function findLeadingMember(train: RosterTrain, vehiclesById: Map<number, { name: string; dccAddress: number | null }>) {
   const sorted = [...train.members].sort((a, b) => a.position - b.position);
   for (const m of sorted) {
+    if (m.excludeFromSpeed) continue;
     const v = vehiclesById.get(m.vehicleId);
     if (v?.dccAddress != null) {
       return { member: m, vehicle: v, dccAddress: v.dccAddress };
@@ -468,6 +469,12 @@ function useSelectedTrainContext(layoutID: number, trainId: number | null) {
           dccAddress: number;
           isLeading: boolean;
           speedMultiplier: number;
+          excludeFromSpeed: boolean;
+          startDelayMs: number;
+          accelRampMs: number;
+          accelRampMaxSteps: number;
+          brakeRampMs: number;
+          brakeRampMaxSteps: number;
         }>,
       };
     }
@@ -497,6 +504,12 @@ function useSelectedTrainContext(layoutID: number, trainId: number | null) {
           dccAddress: v.dccAddress,
           isLeading: leading?.member.id === m.id,
           speedMultiplier: mult,
+          excludeFromSpeed: m.excludeFromSpeed,
+          startDelayMs: m.startDelayMs ?? 0,
+          accelRampMs: m.accelRampMs ?? 0,
+          accelRampMaxSteps: m.accelRampMaxSteps > 0 ? m.accelRampMaxSteps : 1,
+          brakeRampMs: m.brakeRampMs ?? 0,
+          brakeRampMaxSteps: m.brakeRampMaxSteps > 0 ? m.brakeRampMaxSteps : 1,
         },
       ];
     });
@@ -643,7 +656,7 @@ function ConnectedThrottle({
   const isMoving = cockpitSpeed > 0 && witnessAddr != null;
 
   const [settingsMemberId, setSettingsMemberId] = useState<number | null>(null);
-  const patchMultiplier = usePatchTrainMemberMultiplier();
+  const patchMemberSettings = usePatchTrainMemberSettings();
   const { expandedMemberIds, toggleMember } = useTrainAccordionExpanded(
     isTrainMode ? selectedTarget.trainId : null,
   );
@@ -753,16 +766,35 @@ function ConnectedThrottle({
         open={settingsMember != null}
         memberName={settingsMember?.name ?? ""}
         isLeading={settingsMember?.isLeading ?? false}
-        initialMultiplier={settingsMember?.speedMultiplier ?? 1}
-        saving={patchMultiplier.isPending}
+        initialSettings={{
+          speedMultiplier: settingsMember?.speedMultiplier ?? 1,
+          excludeFromSpeed: settingsMember?.excludeFromSpeed ?? false,
+          startDelayMs: settingsMember?.startDelayMs ?? 0,
+          accelRampMs: settingsMember?.accelRampMs ?? 0,
+          accelRampMaxSteps: settingsMember?.accelRampMaxSteps ?? 1,
+          brakeRampMs: settingsMember?.brakeRampMs ?? 0,
+          brakeRampMaxSteps: settingsMember?.brakeRampMaxSteps ?? 1,
+        }}
+        saving={patchMemberSettings.isPending}
         onClose={() => setSettingsMemberId(null)}
-        onSave={(multiplier) => {
+        onSave={(settings) => {
           if (!isTrainMode || settingsMember == null) return;
-          void patchMultiplier
+          const isLeadingMember = settingsMember.isLeading;
+          void patchMemberSettings
             .mutateAsync({
               trainId: selectedTarget.trainId,
               memberId: settingsMember.memberId,
-              speedMultiplier: multiplier,
+              ...(isLeadingMember
+                ? {}
+                : {
+                    speedMultiplier: settings.speedMultiplier,
+                    excludeFromSpeed: settings.excludeFromSpeed,
+                  }),
+              startDelayMs: settings.startDelayMs,
+              accelRampMs: settings.accelRampMs,
+              accelRampMaxSteps: settings.accelRampMaxSteps,
+              brakeRampMs: settings.brakeRampMs,
+              brakeRampMaxSteps: settings.brakeRampMaxSteps,
             })
             .then(() => {
               setSettingsMemberId(null);

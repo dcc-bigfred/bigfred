@@ -188,6 +188,12 @@ export interface TrainMember {
   position: number;
   reversed: boolean;
   speedMultiplier: number;
+  excludeFromSpeed: boolean;
+  startDelayMs: number;
+  accelRampMs: number;
+  accelRampMaxSteps: number;
+  brakeRampMs: number;
+  brakeRampMaxSteps: number;
 }
 
 export interface Train {
@@ -422,23 +428,43 @@ export function useRemoveTrainFromRoster() {
 }
 
 
-export function usePatchTrainMemberMultiplier() {
+export function usePatchTrainMemberSettings() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({
       trainId,
       memberId,
       speedMultiplier,
+      excludeFromSpeed,
+      startDelayMs,
+      accelRampMs,
+      accelRampMaxSteps,
+      brakeRampMs,
+      brakeRampMaxSteps,
     }: {
       trainId: number;
       memberId: number;
-      speedMultiplier: number;
+      speedMultiplier?: number;
+      excludeFromSpeed?: boolean;
+      startDelayMs?: number;
+      accelRampMs?: number;
+      accelRampMaxSteps?: number;
+      brakeRampMs?: number;
+      brakeRampMaxSteps?: number;
     }) =>
       apiFetch<TrainMember>(
         `/api/v1/trains/${trainId}/members/${memberId}`,
         {
           method: "PATCH",
-          body: JSON.stringify({ speedMultiplier }),
+          body: JSON.stringify({
+            speedMultiplier,
+            excludeFromSpeed,
+            startDelayMs,
+            accelRampMs,
+            accelRampMaxSteps,
+            brakeRampMs,
+            brakeRampMaxSteps,
+          }),
         },
       ),
     onSuccess: () => {

@@ -48,6 +48,7 @@ type Router struct {
 
 	dcc   *service.DCCWriter
 	cache *service.FunctionsCache
+	trainSpeed *service.TrainSpeedScheduler
 
 	pulseMu     sync.Mutex
 	pulseActive map[service.FnKey]bool
@@ -95,6 +96,7 @@ func NewRouter(_ context.Context, cfg Config) (*Router, error) {
 			Log:        log,
 		},
 		cache:       service.NewFunctionsCache(),
+		trainSpeed:  service.NewTrainSpeedScheduler(),
 		pulseActive: make(map[service.FnKey]bool, 8),
 	}
 	r.dcc.LogFields = r.stationLogFields

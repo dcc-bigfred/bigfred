@@ -80,6 +80,7 @@
     "pingMeasuring": "mierzenie…"
   },
   "reconnecting": "Utracono połączenie z centralką, ponawiam próbę połączenia co 2s…",
+  "commandRetrying": "Wysyłanie polecenia, ponawiam…",
   "errors": {
     "command_station_disconnected": "Utracono połączenie z centralką",
     "vehicle_not_on_layout": "Ten pojazd nie znajduje się na obecnej makiecie",

@@ -22,7 +22,7 @@ export function useDebouncedTrainSpeedSend(sendTrainSpeed: TrainSpeedSender) {
     speed: number;
     forward: boolean;
   } | null>(null);
-  const { dispatch, cancel } = useRetryingSend(sendTrainSpeed);
+  const { dispatch, cancel, retrying } = useRetryingSend(sendTrainSpeed);
 
   const flush = useCallback(() => {
     if (timerRef.current != null) {
@@ -78,5 +78,5 @@ export function useDebouncedTrainSpeedSend(sendTrainSpeed: TrainSpeedSender) {
     [],
   );
 
-  return { queueSpeed, sendSpeedNow, flush };
+  return { queueSpeed, sendSpeedNow, flush, retrying };
 }

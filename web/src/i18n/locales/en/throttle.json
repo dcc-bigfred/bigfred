@@ -80,6 +80,7 @@
     "pingMeasuring": "measuring…"
   },
   "reconnecting": "Lost connection to the command station, retrying every 2s…",
+  "commandRetrying": "Sending command, retrying…",
   "errors": {
     "command_station_disconnected": "Lost connection to the command station",
     "vehicle_not_on_layout": "This vehicle is not on the active layout",

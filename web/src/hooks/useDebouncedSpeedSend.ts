@@ -23,7 +23,7 @@ export function useDebouncedSpeedSend(
   const pendingRef = useRef<PendingSpeed | null>(null);
   const setSpeedRef = useRef(setSpeed);
   setSpeedRef.current = setSpeed;
-  const { dispatch, cancel } = useRetryingSend(setSpeed);
+  const { dispatch, cancel, retrying } = useRetryingSend(setSpeed);
 
   const flush = useCallback(() => {
     if (timerRef.current) {
@@ -81,5 +81,5 @@ export function useDebouncedSpeedSend(
     [],
   );
 
-  return { queueSpeed, sendSpeedNow, flush };
+  return { queueSpeed, sendSpeedNow, flush, retrying };
 }

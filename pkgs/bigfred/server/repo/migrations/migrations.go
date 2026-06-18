@@ -69,6 +69,19 @@ func register(m *migrator.Migrator) {
 	m.Register(20260617_000002, addTrainMemberStartDelayMsUp, addTrainMemberStartDelayMsDown)
 	m.Register(20260617_000003, addTrainMemberAccelRampUp, addTrainMemberAccelRampDown)
 	m.Register(20260617_000004, addTrainMemberBrakeRampUp, addTrainMemberBrakeRampDown)
+	m.Register(20260617_000005, seedRailboxRb23xxEp07Eu07TemplateUp, seedRailboxRb23xxEp07Eu07TemplateDown)
+	m.Register(20260617_000006, seedRailboxRb23xxSt44TemplateUp, seedRailboxRb23xxSt44TemplateDown)
+	m.Register(20260617_000007, seedRailboxRb23xxSm42TemplateUp, seedRailboxRb23xxSm42TemplateDown)
+	m.Register(20260617_000008, seedRailboxRb23xxEs64TemplateUp, seedRailboxRb23xxEs64TemplateDown)
+	m.Register(20260617_000009, seedRailboxRb23xxVectronTemplateUp, seedRailboxRb23xxVectronTemplateDown)
+	m.Register(20260617_000010, seedRailboxRb23xxEp09TemplateUp, seedRailboxRb23xxEp09TemplateDown)
+	m.Register(20260617_000011, seedRailboxRb23xxSm31TemplateUp, seedRailboxRb23xxSm31TemplateDown)
+	m.Register(20260617_000012, seedRailboxRb23xxEp08TemplateUp, seedRailboxRb23xxEp08TemplateDown)
+	m.Register(20260617_000013, seedRailboxRb23xxEt22TemplateUp, seedRailboxRb23xxEt22TemplateDown)
+	m.Register(20260617_000014, seedRailboxRb23xxEn57TemplateUp, seedRailboxRb23xxEn57TemplateDown)
+	m.Register(20260617_000015, seedRailboxRb23xxSu45TemplateUp, seedRailboxRb23xxSu45TemplateDown)
+	m.Register(20260617_000016, seedRailboxRb23xxBr232LudmilaTemplateUp, seedRailboxRb23xxBr232LudmilaTemplateDown)
+	m.Register(20260617_000017, seedRailboxRb23xxTp1TemplateUp, seedRailboxRb23xxTp1TemplateDown)
 }
 
 // createCommandStationsUp installs the `command_stations` catalogue

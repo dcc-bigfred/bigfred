@@ -84,14 +84,6 @@ export default function ThrottlePage() {
   const me = useMe().data;
   const { t } = useTranslation(["throttle", "common", "errors"]);
 
-  useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, []);
-
   const layoutID = me?.layoutId ?? null;
   useRadioStopSound();
   const driverRadio = useDriverRadioInbound();

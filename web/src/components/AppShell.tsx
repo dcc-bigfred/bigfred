@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AppBar,
   Box,
@@ -72,6 +72,17 @@ function AppShellContent() {
   const hideAppTitle = useMediaQuery(theme.breakpoints.down("lg"));
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const onThrottlePage = Boolean(useMatch("/throttle"));
+
+  // Throttle is a fixed-viewport route (AppShell clips to 100dvh). Ensure
+  // document scroll is never left locked after leaving — a stale body overflow
+  // breaks tables and long pages on every other screen.
+  useEffect(() => {
+    if (isThrottlePage) {
+      return;
+    }
+    document.body.style.removeProperty("overflow");
+    document.documentElement.style.removeProperty("overflow");
+  }, [isThrottlePage]);
 
   // Namespaces:
   //   common — appName, nav.*, comingSoon

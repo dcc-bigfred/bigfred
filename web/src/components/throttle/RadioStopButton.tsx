@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Button,
   Dialog,
@@ -18,6 +18,8 @@ import { cockpit } from "./throttleCockpitTheme";
 interface RadioStopButtonProps {
   layoutId: number;
   variant?: "icon" | "bar";
+  /** Fired when a radio-stop retry chain starts or finishes. */
+  onRetryingChange?: (retrying: boolean) => void;
 }
 
 // RadioStopButton opens a confirmation overlay and fires system.radioStop
@@ -25,6 +27,7 @@ interface RadioStopButtonProps {
 export default function RadioStopButton({
   layoutId,
   variant = "icon",
+  onRetryingChange,
 }: RadioStopButtonProps) {
   const { t } = useTranslation(["throttle", "interlocking"]);
   const { sendAction } = useSocket();
@@ -32,7 +35,7 @@ export default function RadioStopButton({
     () => sendAction("system.radioStop", {}),
     [sendAction],
   );
-  const { dispatchAsync: sendRadioStopWithRetry } =
+  const { dispatchAsync: sendRadioStopWithRetry, retrying } =
     useRetryingSend(sendRadioStop);
   const me = useMe().data;
   const roster = useLayoutVehicles(layoutId).data ?? [];
@@ -62,6 +65,11 @@ export default function RadioStopButton({
       setBusy(false);
     }
   }, [sendRadioStopWithRetry]);
+
+  useEffect(() => {
+    onRetryingChange?.(retrying);
+    return () => onRetryingChange?.(false);
+  }, [onRetryingChange, retrying]);
 
   if (!canTrigger) {
     return null;

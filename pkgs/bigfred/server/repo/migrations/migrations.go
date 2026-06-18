@@ -17,71 +17,91 @@ import (
 // `rel_schema_versions` table, so calling MigrateUp on every server
 // startup is safe and cheap.
 func MigrateUp(ctx context.Context, repo rel.Repository) {
+	remapLegacyMigrationVersions(ctx, repo)
 	m := migrator.New(repo)
 	register(&m)
 	m.Migrate(ctx)
 }
 
-// register is the single place where new migrations are wired in.
-// Versions MUST be monotonically increasing integers (epoch-like
-// stamps are recommended so concurrent feature branches don't collide).
-func register(m *migrator.Migrator) {
-	m.Register(20260523_000001, createUsersUp, createUsersDown)
-	m.Register(20260525_000001, createLayoutsUp, createLayoutsDown)
-	m.Register(20260525_000002, createInterlockingsUp, createInterlockingsDown)
-	m.Register(20260525_000003, createLayoutSignalmenUp, createLayoutSignalmenDown)
-	m.Register(20260525_000004, createInterlockingSessionsUp, createInterlockingSessionsDown)
-	m.Register(20260525_000005, createDCCAddressRangesUp, createDCCAddressRangesDown)
-	m.Register(20260525_000006, createVehiclesUp, createVehiclesDown)
-	m.Register(20260525_000007, createTrainsUp, createTrainsDown)
-	m.Register(20260525_000008, createLayoutVehiclesUp, createLayoutVehiclesDown)
-	m.Register(20260525_000009, addUsersActiveColumnUp, addUsersActiveColumnDown)
-	m.Register(20260525_000010, addLayoutsAdminPINUp, addLayoutsAdminPINDown)
-	m.Register(20260525_000011, createSudoElevationsUp, createSudoElevationsDown)
-	m.Register(20260525_000012, dropSystemLayoutLockCheckUp, dropSystemLayoutLockCheckDown)
-	m.Register(20260526_000001, createCommandStationsUp, createCommandStationsDown)
-	m.Register(20260526_000002, createLayoutCommandStationsUp, createLayoutCommandStationsDown)
-	m.Register(20260604_000001, createVehicleTemplatesAndDccFunctionsUp, createVehicleTemplatesAndDccFunctionsDown)
-	m.Register(20260604_000002, addVehicleDeadManSwitchColumnsUp, addVehicleDeadManSwitchColumnsDown)
+// migrationVersion encodes YYYYMMDD + a per-day sequence into an int
+// that fits on 32-bit platforms (CI cross-builds linux/arm GOARM=7).
+// go-rel's migrator.Register takes int, not int64.
+func migrationVersion(date, seq int) int {
+	return date*1000 + seq
+}
 
-	m.Register(20260608_000001, seedPikoSm31TemplateUp, seedPikoSm31TemplateDown)
-	m.Register(20260608_000002, seedPikoZimoSm31TemplateUp, seedPikoZimoSm31TemplateDown)
-	m.Register(20260608_000003, seedSchlesienModelleEsuLoksoundTemplateUp, seedSchlesienModelleEsuLoksoundTemplateDown)
-	m.Register(20260608_000004, seedPikoXpSu46TemplateUp, seedPikoXpSu46TemplateDown)
-	m.Register(20260608_000005, seedPikoXpSp45Su45TemplateUp, seedPikoXpSp45Su45TemplateDown)
-	m.Register(20260608_000006, seedPikoDcc24EsuSp45Su45TemplateUp, seedPikoDcc24EsuSp45Su45TemplateDown)
-	m.Register(20260608_000007, seedRocoZimo810TemplateUp, seedRocoZimo810TemplateDown)
-	m.Register(20260608_000008, seedPikoXpSt44TemplateUp, seedPikoXpSt44TemplateDown)
-	m.Register(20260608_000009, seedPikoDcc24EsuEp07Eu07TemplateUp, seedPikoDcc24EsuEp07Eu07TemplateDown)
-	m.Register(20260608_000010, seedSchlesienModelleEsuEp07Eu07TemplateUp, seedSchlesienModelleEsuEp07Eu07TemplateDown)
-	m.Register(20260608_000011, seedPikoXpEn57TemplateUp, seedPikoXpEn57TemplateDown)
-	m.Register(20260608_000012, seedRoboEsuEn57TemplateUp, seedRoboEsuEn57TemplateDown)
-	m.Register(20260608_000013, seedRoboDigisoundEn57TemplateUp, seedRoboDigisoundEn57TemplateDown)
-	m.Register(20260608_000014, seedRocoDcc24ZimoTy2TemplateUp, seedRocoDcc24ZimoTy2TemplateDown)
-	m.Register(20260608_000015, seedRocoDcc24EsuTy2TemplateUp, seedRocoDcc24EsuTy2TemplateDown)
-	m.Register(20260608_000016, seedPikoXpEt21TemplateUp, seedPikoXpEt21TemplateDown)
-	m.Register(20260615_000001, createVehicleLeasesUp, createVehicleLeasesDown)
-	m.Register(20260615_000002, createTrainLeasesUp, createTrainLeasesDown)
-	m.Register(20260615_000003, createTakeoverRequestsUp, createTakeoverRequestsDown)
-	m.Register(20260615_000004, seedSchlesienModelleDcc24EsuEp07V3TemplateUp, seedSchlesienModelleDcc24EsuEp07V3TemplateDown)
-	m.Register(20260616_000001, addTrainMemberSpeedMultiplierUp, addTrainMemberSpeedMultiplierDown)
-	m.Register(20260617_000001, addTrainMemberExcludeFromSpeedUp, addTrainMemberExcludeFromSpeedDown)
-	m.Register(20260617_000002, addTrainMemberStartDelayMsUp, addTrainMemberStartDelayMsDown)
-	m.Register(20260617_000003, addTrainMemberAccelRampUp, addTrainMemberAccelRampDown)
-	m.Register(20260617_000004, addTrainMemberBrakeRampUp, addTrainMemberBrakeRampDown)
-	m.Register(20260617_000005, seedRailboxRb23xxEp07Eu07TemplateUp, seedRailboxRb23xxEp07Eu07TemplateDown)
-	m.Register(20260617_000006, seedRailboxRb23xxSt44TemplateUp, seedRailboxRb23xxSt44TemplateDown)
-	m.Register(20260617_000007, seedRailboxRb23xxSm42TemplateUp, seedRailboxRb23xxSm42TemplateDown)
-	m.Register(20260617_000008, seedRailboxRb23xxEs64TemplateUp, seedRailboxRb23xxEs64TemplateDown)
-	m.Register(20260617_000009, seedRailboxRb23xxVectronTemplateUp, seedRailboxRb23xxVectronTemplateDown)
-	m.Register(20260617_000010, seedRailboxRb23xxEp09TemplateUp, seedRailboxRb23xxEp09TemplateDown)
-	m.Register(20260617_000011, seedRailboxRb23xxSm31TemplateUp, seedRailboxRb23xxSm31TemplateDown)
-	m.Register(20260617_000012, seedRailboxRb23xxEp08TemplateUp, seedRailboxRb23xxEp08TemplateDown)
-	m.Register(20260617_000013, seedRailboxRb23xxEt22TemplateUp, seedRailboxRb23xxEt22TemplateDown)
-	m.Register(20260617_000014, seedRailboxRb23xxEn57TemplateUp, seedRailboxRb23xxEn57TemplateDown)
-	m.Register(20260617_000015, seedRailboxRb23xxSu45TemplateUp, seedRailboxRb23xxSu45TemplateDown)
-	m.Register(20260617_000016, seedRailboxRb23xxBr232LudmilaTemplateUp, seedRailboxRb23xxBr232LudmilaTemplateDown)
-	m.Register(20260617_000017, seedRailboxRb23xxTp1TemplateUp, seedRailboxRb23xxTp1TemplateDown)
+// remapLegacyMigrationVersions rewrites pre-2026-06-18 epoch stamps
+// (YYYYMMDD*1_000_000+seq) into the compact form above. Existing DBs
+// store versions as BIGINT so the old values survived on amd64; without
+// this remap the migrator would either re-apply or panic on mismatch.
+func remapLegacyMigrationVersions(ctx context.Context, repo rel.Repository) {
+	_, _, _ = repo.Exec(ctx, `
+		UPDATE rel_schema_versions
+		SET version = (version / 1000000) * 1000 + (version % 1000000)
+		WHERE version > 1000000000000
+	`)
+}
+
+// register is the single place where new migrations are wired in.
+// Versions MUST be monotonically increasing integers. Use
+// migrationVersion(YYYYMMDD, seq) so IDs stay int32-safe on armv7.
+func register(m *migrator.Migrator) {
+	m.Register(migrationVersion(20260523, 1), createUsersUp, createUsersDown)
+	m.Register(migrationVersion(20260525, 1), createLayoutsUp, createLayoutsDown)
+	m.Register(migrationVersion(20260525, 2), createInterlockingsUp, createInterlockingsDown)
+	m.Register(migrationVersion(20260525, 3), createLayoutSignalmenUp, createLayoutSignalmenDown)
+	m.Register(migrationVersion(20260525, 4), createInterlockingSessionsUp, createInterlockingSessionsDown)
+	m.Register(migrationVersion(20260525, 5), createDCCAddressRangesUp, createDCCAddressRangesDown)
+	m.Register(migrationVersion(20260525, 6), createVehiclesUp, createVehiclesDown)
+	m.Register(migrationVersion(20260525, 7), createTrainsUp, createTrainsDown)
+	m.Register(migrationVersion(20260525, 8), createLayoutVehiclesUp, createLayoutVehiclesDown)
+	m.Register(migrationVersion(20260525, 9), addUsersActiveColumnUp, addUsersActiveColumnDown)
+	m.Register(migrationVersion(20260525, 10), addLayoutsAdminPINUp, addLayoutsAdminPINDown)
+	m.Register(migrationVersion(20260525, 11), createSudoElevationsUp, createSudoElevationsDown)
+	m.Register(migrationVersion(20260525, 12), dropSystemLayoutLockCheckUp, dropSystemLayoutLockCheckDown)
+	m.Register(migrationVersion(20260526, 1), createCommandStationsUp, createCommandStationsDown)
+	m.Register(migrationVersion(20260526, 2), createLayoutCommandStationsUp, createLayoutCommandStationsDown)
+	m.Register(migrationVersion(20260604, 1), createVehicleTemplatesAndDccFunctionsUp, createVehicleTemplatesAndDccFunctionsDown)
+	m.Register(migrationVersion(20260604, 2), addVehicleDeadManSwitchColumnsUp, addVehicleDeadManSwitchColumnsDown)
+
+	m.Register(migrationVersion(20260608, 1), seedPikoSm31TemplateUp, seedPikoSm31TemplateDown)
+	m.Register(migrationVersion(20260608, 2), seedPikoZimoSm31TemplateUp, seedPikoZimoSm31TemplateDown)
+	m.Register(migrationVersion(20260608, 3), seedSchlesienModelleEsuLoksoundTemplateUp, seedSchlesienModelleEsuLoksoundTemplateDown)
+	m.Register(migrationVersion(20260608, 4), seedPikoXpSu46TemplateUp, seedPikoXpSu46TemplateDown)
+	m.Register(migrationVersion(20260608, 5), seedPikoXpSp45Su45TemplateUp, seedPikoXpSp45Su45TemplateDown)
+	m.Register(migrationVersion(20260608, 6), seedPikoDcc24EsuSp45Su45TemplateUp, seedPikoDcc24EsuSp45Su45TemplateDown)
+	m.Register(migrationVersion(20260608, 7), seedRocoZimo810TemplateUp, seedRocoZimo810TemplateDown)
+	m.Register(migrationVersion(20260608, 8), seedPikoXpSt44TemplateUp, seedPikoXpSt44TemplateDown)
+	m.Register(migrationVersion(20260608, 9), seedPikoDcc24EsuEp07Eu07TemplateUp, seedPikoDcc24EsuEp07Eu07TemplateDown)
+	m.Register(migrationVersion(20260608, 10), seedSchlesienModelleEsuEp07Eu07TemplateUp, seedSchlesienModelleEsuEp07Eu07TemplateDown)
+	m.Register(migrationVersion(20260608, 11), seedPikoXpEn57TemplateUp, seedPikoXpEn57TemplateDown)
+	m.Register(migrationVersion(20260608, 12), seedRoboEsuEn57TemplateUp, seedRoboEsuEn57TemplateDown)
+	m.Register(migrationVersion(20260608, 13), seedRoboDigisoundEn57TemplateUp, seedRoboDigisoundEn57TemplateDown)
+	m.Register(migrationVersion(20260608, 14), seedRocoDcc24ZimoTy2TemplateUp, seedRocoDcc24ZimoTy2TemplateDown)
+	m.Register(migrationVersion(20260608, 15), seedRocoDcc24EsuTy2TemplateUp, seedRocoDcc24EsuTy2TemplateDown)
+	m.Register(migrationVersion(20260608, 16), seedPikoXpEt21TemplateUp, seedPikoXpEt21TemplateDown)
+	m.Register(migrationVersion(20260615, 1), createVehicleLeasesUp, createVehicleLeasesDown)
+	m.Register(migrationVersion(20260615, 2), createTrainLeasesUp, createTrainLeasesDown)
+	m.Register(migrationVersion(20260615, 3), createTakeoverRequestsUp, createTakeoverRequestsDown)
+	m.Register(migrationVersion(20260615, 4), seedSchlesienModelleDcc24EsuEp07V3TemplateUp, seedSchlesienModelleDcc24EsuEp07V3TemplateDown)
+	m.Register(migrationVersion(20260616, 1), addTrainMemberSpeedMultiplierUp, addTrainMemberSpeedMultiplierDown)
+	m.Register(migrationVersion(20260617, 1), addTrainMemberExcludeFromSpeedUp, addTrainMemberExcludeFromSpeedDown)
+	m.Register(migrationVersion(20260617, 2), addTrainMemberStartDelayMsUp, addTrainMemberStartDelayMsDown)
+	m.Register(migrationVersion(20260617, 3), addTrainMemberAccelRampUp, addTrainMemberAccelRampDown)
+	m.Register(migrationVersion(20260617, 4), addTrainMemberBrakeRampUp, addTrainMemberBrakeRampDown)
+	m.Register(migrationVersion(20260617, 5), seedRailboxRb23xxEp07Eu07TemplateUp, seedRailboxRb23xxEp07Eu07TemplateDown)
+	m.Register(migrationVersion(20260617, 6), seedRailboxRb23xxSt44TemplateUp, seedRailboxRb23xxSt44TemplateDown)
+	m.Register(migrationVersion(20260617, 7), seedRailboxRb23xxSm42TemplateUp, seedRailboxRb23xxSm42TemplateDown)
+	m.Register(migrationVersion(20260617, 8), seedRailboxRb23xxEs64TemplateUp, seedRailboxRb23xxEs64TemplateDown)
+	m.Register(migrationVersion(20260617, 9), seedRailboxRb23xxVectronTemplateUp, seedRailboxRb23xxVectronTemplateDown)
+	m.Register(migrationVersion(20260617, 10), seedRailboxRb23xxEp09TemplateUp, seedRailboxRb23xxEp09TemplateDown)
+	m.Register(migrationVersion(20260617, 11), seedRailboxRb23xxSm31TemplateUp, seedRailboxRb23xxSm31TemplateDown)
+	m.Register(migrationVersion(20260617, 12), seedRailboxRb23xxEp08TemplateUp, seedRailboxRb23xxEp08TemplateDown)
+	m.Register(migrationVersion(20260617, 13), seedRailboxRb23xxEt22TemplateUp, seedRailboxRb23xxEt22TemplateDown)
+	m.Register(migrationVersion(20260617, 14), seedRailboxRb23xxEn57TemplateUp, seedRailboxRb23xxEn57TemplateDown)
+	m.Register(migrationVersion(20260617, 15), seedRailboxRb23xxSu45TemplateUp, seedRailboxRb23xxSu45TemplateDown)
+	m.Register(migrationVersion(20260617, 16), seedRailboxRb23xxBr232LudmilaTemplateUp, seedRailboxRb23xxBr232LudmilaTemplateDown)
+	m.Register(migrationVersion(20260617, 17), seedRailboxRb23xxTp1TemplateUp, seedRailboxRb23xxTp1TemplateDown)
 }
 
 // createCommandStationsUp installs the `command_stations` catalogue

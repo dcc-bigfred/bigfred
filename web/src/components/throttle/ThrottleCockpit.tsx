@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 import {
   Box,
   CircularProgress,
@@ -109,6 +109,12 @@ export default function ThrottleCockpit({
 }: ThrottleCockpitProps) {
   const { t } = useTranslation("throttle");
   const navigate = useNavigate();
+  const [radioStopRetrying, setRadioStopRetrying] = useState(false);
+  const onRadioStopRetryingChange = useCallback(
+    (retrying: boolean) => setRadioStopRetrying(retrying),
+    [],
+  );
+  const settingsRetrying = commandRetrying || radioStopRetrying;
 
   const effectiveTarget: ThrottleTarget | null = useMemo(() => {
     if (selectedTarget != null) return selectedTarget;
@@ -188,7 +194,10 @@ export default function ThrottleCockpit({
           minHeight: 48,
         }}
       >
-        <RadioStopButton layoutId={layoutId} />
+        <RadioStopButton
+          layoutId={layoutId}
+          onRetryingChange={onRadioStopRetryingChange}
+        />
         {headerExtra}
 
         <FormControl
@@ -258,11 +267,11 @@ export default function ThrottleCockpit({
         <IconButton
           size="small"
           onClick={onOpenSetup}
-          disabled={connectionLost || commandRetrying}
+          disabled={connectionLost || settingsRetrying}
           aria-label={
             connectionLost
               ? t("reconnecting")
-              : commandRetrying
+              : settingsRetrying
                 ? t("commandRetrying")
                 : t("setup.open")
           }
@@ -270,7 +279,7 @@ export default function ThrottleCockpit({
         >
           {connectionLost ? (
             <CircularProgress size={18} sx={{ color: cockpit.text }} />
-          ) : commandRetrying ? (
+          ) : settingsRetrying ? (
             <SyncIcon
               fontSize="small"
               sx={{

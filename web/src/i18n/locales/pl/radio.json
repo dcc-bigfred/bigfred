@@ -13,10 +13,20 @@
     "ACCEPTED_CROSSINGS_EXTRA_CAUTION": "Przyjąłem. Przejazd przez rozjazdy ze szczególną ostrożnością.",
     "ACCEPTED_PUSHING_BEYOND_POINTS": "Przyjąłem. Wypycham skład poza ukres rozjazdu",
     "ACCEPTED_STOPPING_SHUNTING": "Przyjąłem. Zatrzymuję manewry.",
+    "PASSED_POINTS_AHEAD_WAITING_RUN_AROUND_ROUTE": "Wyjechałem za rozjazd z przodu składu, czekam na ustawienie trasy powrotnej na oblot",
+    "REACHED_POINTS_REAR_WAITING_RUN_AROUND_ROUTE": "Wyjechałem na rozjazd z tyłu składu, czekam na ustawienie trasy powrotnej na oblot",
+    "READY_TO_COUPLE_WAGONS": "Gotów podpiąć wagony",
+    "READY_TO_UNCOUPLE_WAGONS": "Gotów odpiąć wagony",
+    "REPORTING_CONSIST_COUPLED_TO_LOCO": "Melduję podpięcie składu pod lokomotywę",
+    "WAGONS_TAKEN": "Wagony zabrane",
+    "WAGONS_SET_ASIDE": "Wagony odstawione",
     "RADIO_LINK_RESTORED": "Zgłaszam chwilową utratę łączności radiowej, obecnie przywrócona.",
     "LEVEL_CROSSING_GATES_OPEN": "Na przejeździe przed stacją rogatki otwarte",
     "REPORT_ACKNOWLEDGED": "Przyjąłem zgłoszenie.",
     "REPETITION_CORRECT": "Powtórzenie prawidłowe.",
+    "CONFIRMED": "Potwierdzam",
+    "NO": "Nie",
+    "REFUSED_WAIT_FOR_SIGNAL": "Odmawiam, poczekaj na sygnał",
     "ENTRY_PERMITTED": "Wjazd dozwolony",
     "DEPARTURE_CLEARED": "Odjazd dozwolony",
     "DEPARTURE_ON_REPLACEMENT_SIGNAL": "Wyjazd na sygnał zastępczy",
@@ -47,7 +57,16 @@
     "title": "Wyślij komunikat radiowy",
     "search": "Szukaj frazy…",
     "note": "Notatka (opcjonalnie)",
+    "groupLabel": "Grupa",
+    "group": {
+      "all": "Wszystkie",
+      "shunting": "Manewry",
+      "arrival": "Przyjazd",
+      "departure": "Wyjazd",
+      "confirmations": "Potwierdzenia",
+      "other": "Pozostałe"
+    },
     "send": "Wyślij",
-    "cancel": "Anuluj"
+    "close": "Zamknij"
   }
 }

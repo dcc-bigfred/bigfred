@@ -1,26 +1,38 @@
-import { useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
+import CloseIcon from "@mui/icons-material/Close";
 import {
-  Button,
   Dialog,
-  DialogActions,
   DialogContent,
   DialogTitle,
+  FormControl,
+  IconButton,
+  InputLabel,
+  MenuItem,
+  Select,
   Stack,
   Table,
   TableBody,
   TableCell,
   TableContainer,
-  TableHead,
   TableRow,
   TextField,
   Typography,
 } from "@mui/material";
+import type { SelectChangeEvent } from "@mui/material";
 import { useTranslation } from "react-i18next";
 
 import {
+  RADIO_PHRASE_GROUP_ALL,
+  RADIO_PHRASE_GROUP_ORDER,
+  radioPhraseGroup,
+  radioPhraseIsContextualConfirmation,
   radioPhrasesForSide,
+  readStoredRadioPhraseGroupFilter,
+  sortRadioPhrasesWithinGroup,
   useSendRadio,
+  writeStoredRadioPhraseGroupFilter,
   type RadioPhrase,
+  type RadioPhraseGroupFilter,
   type RadioPhraseSide,
   type RadioSendContext,
   type RadioSendTarget,
@@ -35,6 +47,34 @@ export interface RadioPhrasePickerDialogProps {
   side: RadioPhraseSide;
   targetLabel?: string;
   contextLabel?: string;
+}
+
+function PhraseRow({
+  phrase,
+  busy,
+  label,
+  contextualConfirmation,
+  onSend,
+}: {
+  phrase: RadioPhrase;
+  busy: boolean;
+  label: string;
+  contextualConfirmation: boolean;
+  onSend: (phrase: RadioPhrase) => void;
+}) {
+  return (
+    <TableRow
+      hover
+      sx={{ cursor: busy ? "default" : "pointer" }}
+      onClick={() => {
+        if (!busy) onSend(phrase);
+      }}
+    >
+      <TableCell sx={contextualConfirmation ? { color: "success.dark" } : undefined}>
+        {label}
+      </TableCell>
+    </TableRow>
+  );
 }
 
 // RadioPhrasePickerDialog lists the closed phrase vocabulary with a
@@ -53,17 +93,35 @@ export default function RadioPhrasePickerDialog({
   const { playSent } = useRadioSounds(false);
   const [query, setQuery] = useState("");
   const [note, setNote] = useState("");
+  const [groupFilter, setGroupFilter] = useState<RadioPhraseGroupFilter>(() =>
+    readStoredRadioPhraseGroupFilter(side),
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const vocabulary = radioPhrasesForSide(side);
 
+  useEffect(() => {
+    if (open) {
+      setGroupFilter(readStoredRadioPhraseGroupFilter(side));
+    }
+  }, [open, side]);
+
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
     return vocabulary.filter((phrase) => {
+      if (groupFilter !== RADIO_PHRASE_GROUP_ALL && radioPhraseGroup(phrase, side) !== groupFilter) {
+        return false;
+      }
       const label = t(`radio:phrase.${phrase}`).toLowerCase();
       return !q || label.includes(q) || phrase.toLowerCase().includes(q);
     });
-  }, [query, t, vocabulary]);
+  }, [groupFilter, query, side, t, vocabulary]);
+
+  const resetForm = () => {
+    setQuery("");
+    setNote("");
+    setError(null);
+  };
 
   const handleSend = async (phrase: RadioPhrase) => {
     setBusy(true);
@@ -79,8 +137,7 @@ export default function RadioPhrasePickerDialog({
         return;
       }
       playSent();
-      setQuery("");
-      setNote("");
+      resetForm();
       onClose();
     } finally {
       setBusy(false);
@@ -89,13 +146,40 @@ export default function RadioPhrasePickerDialog({
 
   const handleClose = () => {
     if (busy) return;
-    setError(null);
+    resetForm();
     onClose();
   };
 
+  const handleGroupChange = (ev: SelectChangeEvent<RadioPhraseGroupFilter>) => {
+    const group = ev.target.value as RadioPhraseGroupFilter;
+    setGroupFilter(group);
+    writeStoredRadioPhraseGroupFilter(side, group);
+  };
+
+  const phraseLabel = (phrase: RadioPhrase) => t(`radio:phrase.${phrase}`);
+  const isContextualConfirmation = (phrase: RadioPhrase) =>
+    radioPhraseIsContextualConfirmation(phrase, side);
+
+  const sortedGroupRows = (group: (typeof RADIO_PHRASE_GROUP_ORDER)[number], phrases: RadioPhrase[]) =>
+    sortRadioPhrasesWithinGroup(phrases, side, group);
+
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
-      <DialogTitle>{t("radio:picker.title")}</DialogTitle>
+      <DialogTitle
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          pr: 1,
+        }}
+      >
+        <Typography variant="h6" component="span">
+          {t("radio:picker.title")}
+        </Typography>
+        <IconButton edge="end" onClick={handleClose} disabled={busy} aria-label={t("radio:picker.close")}>
+          <CloseIcon />
+        </IconButton>
+      </DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ pt: 0.5 }}>
           {(targetLabel || contextLabel) && (
@@ -119,6 +203,22 @@ export default function RadioPhrasePickerDialog({
             onChange={(ev) => setNote(ev.target.value)}
             inputProps={{ maxLength: 80 }}
           />
+          <FormControl size="small" fullWidth>
+            <InputLabel id="radio-phrase-group-label">{t("radio:picker.groupLabel")}</InputLabel>
+            <Select
+              labelId="radio-phrase-group-label"
+              label={t("radio:picker.groupLabel")}
+              value={groupFilter}
+              onChange={handleGroupChange}
+            >
+              <MenuItem value={RADIO_PHRASE_GROUP_ALL}>{t("radio:picker.group.all")}</MenuItem>
+              {RADIO_PHRASE_GROUP_ORDER.map((group) => (
+                <MenuItem key={group} value={group}>
+                  {t(`radio:picker.group.${group}`)}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
           {error && (
             <Typography variant="body2" color="error">
               {error}
@@ -126,34 +226,59 @@ export default function RadioPhrasePickerDialog({
           )}
           <TableContainer sx={{ maxHeight: 320 }}>
             <Table size="small" stickyHeader>
-              <TableHead>
-                <TableRow>
-                  <TableCell>{t("radio:picker.search")}</TableCell>
-                </TableRow>
-              </TableHead>
               <TableBody>
-                {rows.map((phrase) => (
-                  <TableRow
-                    key={phrase}
-                    hover
-                    sx={{ cursor: busy ? "default" : "pointer" }}
-                    onClick={() => {
-                      if (!busy) void handleSend(phrase);
-                    }}
-                  >
-                    <TableCell>{t(`radio:phrase.${phrase}`)}</TableCell>
-                  </TableRow>
-                ))}
+                {groupFilter === RADIO_PHRASE_GROUP_ALL
+                  ? RADIO_PHRASE_GROUP_ORDER.map((group) => {
+                      const groupRows = sortedGroupRows(
+                        group,
+                        rows.filter((phrase) => radioPhraseGroup(phrase, side) === group),
+                      );
+                      if (groupRows.length === 0) {
+                        return null;
+                      }
+                      return (
+                        <Fragment key={group}>
+                          <TableRow>
+                            <TableCell
+                              sx={{
+                                fontWeight: 600,
+                                bgcolor: "action.hover",
+                                position: "sticky",
+                                top: 0,
+                                zIndex: 1,
+                              }}
+                            >
+                              {t(`radio:picker.group.${group}`)}
+                            </TableCell>
+                          </TableRow>
+                          {groupRows.map((phrase) => (
+                            <PhraseRow
+                              key={phrase}
+                              phrase={phrase}
+                              busy={busy}
+                              label={phraseLabel(phrase)}
+                              contextualConfirmation={isContextualConfirmation(phrase)}
+                              onSend={(p) => void handleSend(p)}
+                            />
+                          ))}
+                        </Fragment>
+                      );
+                    })
+                  : sortedGroupRows(groupFilter, rows).map((phrase) => (
+                      <PhraseRow
+                        key={phrase}
+                        phrase={phrase}
+                        busy={busy}
+                        label={phraseLabel(phrase)}
+                        contextualConfirmation={isContextualConfirmation(phrase)}
+                        onSend={(p) => void handleSend(p)}
+                      />
+                    ))}
               </TableBody>
             </Table>
           </TableContainer>
         </Stack>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={handleClose} disabled={busy}>
-          {t("radio:picker.cancel")}
-        </Button>
-      </DialogActions>
     </Dialog>
   );
 }

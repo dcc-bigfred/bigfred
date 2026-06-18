@@ -1,6 +1,7 @@
 import { useMemo, type ReactNode } from "react";
 import {
   Box,
+  CircularProgress,
   FormControl,
   IconButton,
   ListSubheader,
@@ -63,6 +64,8 @@ export interface ThrottleCockpitProps {
   /** Replaces the flat function grid (train accordion mode). */
   functionPanel?: ReactNode;
   disabled?: boolean;
+  /** When true, settings icon shows a reconnect spinner instead. */
+  connectionLost?: boolean;
   onSpeedChange: (speed: number) => void;
   onDirectionChange: (forward: boolean) => void;
   onFunctionToggle: (fn: number) => void;
@@ -93,6 +96,7 @@ export default function ThrottleCockpit({
   configuredFunctions,
   functionPanel,
   disabled = false,
+  connectionLost = false,
   onSpeedChange,
   onDirectionChange,
   onFunctionToggle,
@@ -250,10 +254,17 @@ export default function ThrottleCockpit({
         <IconButton
           size="small"
           onClick={onOpenSetup}
-          aria-label={t("setup.open")}
+          disabled={connectionLost}
+          aria-label={
+            connectionLost ? t("reconnecting") : t("setup.open")
+          }
           sx={{ color: cockpit.text }}
         >
-          <SettingsIcon fontSize="small" />
+          {connectionLost ? (
+            <CircularProgress size={18} sx={{ color: cockpit.text }} />
+          ) : (
+            <SettingsIcon fontSize="small" />
+          )}
         </IconButton>
       </Box>
 

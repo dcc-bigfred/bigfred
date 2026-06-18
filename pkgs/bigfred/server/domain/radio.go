@@ -25,11 +25,21 @@ const (
 	RadioAcceptedCrossingsExtraCaution        RadioPhrase = "ACCEPTED_CROSSINGS_EXTRA_CAUTION"
 	RadioAcceptedPushingBeyondPoints          RadioPhrase = "ACCEPTED_PUSHING_BEYOND_POINTS"
 	RadioAcceptedStoppingShunting             RadioPhrase = "ACCEPTED_STOPPING_SHUNTING"
+	RadioPassedPointsAheadWaitingRunAroundRoute RadioPhrase = "PASSED_POINTS_AHEAD_WAITING_RUN_AROUND_ROUTE"
+	RadioReachedPointsRearWaitingRunAroundRoute RadioPhrase = "REACHED_POINTS_REAR_WAITING_RUN_AROUND_ROUTE"
+	RadioReadyToCoupleWagons                    RadioPhrase = "READY_TO_COUPLE_WAGONS"
+	RadioReadyToUncoupleWagons                  RadioPhrase = "READY_TO_UNCOUPLE_WAGONS"
+	RadioReportingConsistCoupledToLoco          RadioPhrase = "REPORTING_CONSIST_COUPLED_TO_LOCO"
+	RadioWagonsTaken                            RadioPhrase = "WAGONS_TAKEN"
+	RadioWagonsSetAside                         RadioPhrase = "WAGONS_SET_ASIDE"
 	RadioLinkRestored                         RadioPhrase = "RADIO_LINK_RESTORED"
 	RadioLevelCrossingGatesOpen               RadioPhrase = "LEVEL_CROSSING_GATES_OPEN"
 
 	RadioReportAcknowledged                      RadioPhrase = "REPORT_ACKNOWLEDGED"
 	RadioRepetitionCorrect                       RadioPhrase = "REPETITION_CORRECT"
+	RadioConfirmed                               RadioPhrase = "CONFIRMED"
+	RadioNo                                      RadioPhrase = "NO"
+	RadioRefusedWaitForSignal                    RadioPhrase = "REFUSED_WAIT_FOR_SIGNAL"
 	RadioEntryPermitted                          RadioPhrase = "ENTRY_PERMITTED"
 	RadioDepartureCleared                        RadioPhrase = "DEPARTURE_CLEARED"
 	RadioDepartureOnReplacementSignal            RadioPhrase = "DEPARTURE_ON_REPLACEMENT_SIGNAL"
@@ -71,10 +81,20 @@ var AllRadioPhrases = []RadioPhrase{
 	RadioAcceptedCrossingsExtraCaution,
 	RadioAcceptedPushingBeyondPoints,
 	RadioAcceptedStoppingShunting,
+	RadioPassedPointsAheadWaitingRunAroundRoute,
+	RadioReachedPointsRearWaitingRunAroundRoute,
+	RadioReadyToCoupleWagons,
+	RadioReadyToUncoupleWagons,
+	RadioReportingConsistCoupledToLoco,
+	RadioWagonsTaken,
+	RadioWagonsSetAside,
 	RadioLinkRestored,
 	RadioLevelCrossingGatesOpen,
 	RadioReportAcknowledged,
 	RadioRepetitionCorrect,
+	RadioConfirmed,
+	RadioNo,
+	RadioRefusedWaitForSignal,
 	RadioEntryPermitted,
 	RadioDepartureCleared,
 	RadioDepartureOnReplacementSignal,

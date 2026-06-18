@@ -17,6 +17,13 @@ export const RADIO_PHRASES_DRIVER = [
   "ACCEPTED_CROSSINGS_EXTRA_CAUTION",
   "ACCEPTED_PUSHING_BEYOND_POINTS",
   "ACCEPTED_STOPPING_SHUNTING",
+  "PASSED_POINTS_AHEAD_WAITING_RUN_AROUND_ROUTE",
+  "REACHED_POINTS_REAR_WAITING_RUN_AROUND_ROUTE",
+  "READY_TO_COUPLE_WAGONS",
+  "READY_TO_UNCOUPLE_WAGONS",
+  "REPORTING_CONSIST_COUPLED_TO_LOCO",
+  "WAGONS_TAKEN",
+  "WAGONS_SET_ASIDE",
   "RADIO_LINK_RESTORED",
   "LEVEL_CROSSING_GATES_OPEN",
 ] as const;
@@ -27,6 +34,9 @@ export const RADIO_PHRASES_SIGNALMAN = [
   "AGREED",
   "REPORT_ACKNOWLEDGED",
   "REPETITION_CORRECT",
+  "CONFIRMED",
+  "NO",
+  "REFUSED_WAIT_FOR_SIGNAL",
   "ENTRY_PERMITTED",
   "DEPARTURE_CLEARED",
   "DEPARTURE_ON_REPLACEMENT_SIGNAL",
@@ -60,8 +70,187 @@ export type RadioPhrase =
 
 export type RadioPhraseSide = "driver" | "signalman";
 
+export type RadioPhraseGroup = "shunting" | "arrival" | "departure" | "confirmations" | "other";
+
+export const RADIO_PHRASE_GROUP_ALL = "all" as const;
+
+export type RadioPhraseGroupFilter = RadioPhraseGroup | typeof RADIO_PHRASE_GROUP_ALL;
+
+export const RADIO_PHRASE_GROUP_ORDER: readonly RadioPhraseGroup[] = [
+  "shunting",
+  "arrival",
+  "departure",
+  "confirmations",
+  "other",
+] as const;
+
+const DRIVER_PHRASE_GROUP: Record<(typeof RADIO_PHRASES_DRIVER)[number], RadioPhraseGroup> = {
+  ACK: "confirmations",
+  STOPPED_AT_SIGNAL_READY_TO_ENTER: "arrival",
+  READY_TO_DEPART: "departure",
+  ACCEPTED_DEPARTURE_ON_REPLACEMENT_SIGNAL: "departure",
+  ACCEPTED_HELPER_DETACH_AT_STATION: "shunting",
+  ACCEPTED_WAITING_FOR_OPPOSITE_TRAIN: "arrival",
+  TRAIN_ARRIVED_COMPLETE_AT_STATION: "arrival",
+  LOCO_READY_FOR_RUN_AROUND: "shunting",
+  ACCEPTED_CROSSINGS_EXTRA_CAUTION: "shunting",
+  ACCEPTED_PUSHING_BEYOND_POINTS: "shunting",
+  ACCEPTED_STOPPING_SHUNTING: "shunting",
+  PASSED_POINTS_AHEAD_WAITING_RUN_AROUND_ROUTE: "shunting",
+  REACHED_POINTS_REAR_WAITING_RUN_AROUND_ROUTE: "shunting",
+  READY_TO_COUPLE_WAGONS: "shunting",
+  READY_TO_UNCOUPLE_WAGONS: "shunting",
+  REPORTING_CONSIST_COUPLED_TO_LOCO: "shunting",
+  WAGONS_TAKEN: "shunting",
+  WAGONS_SET_ASIDE: "shunting",
+  RADIO_LINK_RESTORED: "other",
+  LEVEL_CROSSING_GATES_OPEN: "other",
+};
+
+const DRIVER_PHRASE_CONTEXTUAL_CONFIRMATION = new Set<
+  (typeof RADIO_PHRASES_DRIVER)[number]
+>([
+  "ACCEPTED_DEPARTURE_ON_REPLACEMENT_SIGNAL",
+  "ACCEPTED_HELPER_DETACH_AT_STATION",
+  "ACCEPTED_WAITING_FOR_OPPOSITE_TRAIN",
+  "ACCEPTED_CROSSINGS_EXTRA_CAUTION",
+  "ACCEPTED_PUSHING_BEYOND_POINTS",
+  "ACCEPTED_STOPPING_SHUNTING",
+]);
+
+const SIGNALMAN_PHRASE_GROUP: Record<
+  (typeof RADIO_PHRASES_SIGNALMAN)[number],
+  RadioPhraseGroup
+> = {
+  ACK: "confirmations",
+  AGREED: "confirmations",
+  REPORT_ACKNOWLEDGED: "confirmations",
+  REPETITION_CORRECT: "confirmations",
+  CONFIRMED: "confirmations",
+  NO: "confirmations",
+  REFUSED_WAIT_FOR_SIGNAL: "confirmations",
+  ENTRY_PERMITTED: "arrival",
+  DEPARTURE_CLEARED: "departure",
+  DEPARTURE_ON_REPLACEMENT_SIGNAL: "departure",
+  ROUTE_SET: "departure",
+  ARRIVAL_COMPLETE_ACKNOWLEDGED: "arrival",
+  TRAIN_TRACK_1_FREE_RECEIVE_TRACK_1: "arrival",
+  TRAIN_TRACK_2_FREE_RECEIVE_TRACK_2: "arrival",
+  TRAIN_TRACK_3_FREE_RECEIVE_TRACK_3: "arrival",
+  TRAIN_TRACK_4_FREE_RECEIVE_TRACK_4: "arrival",
+  TRAIN_TRACK_5_FREE_RECEIVE_TRACK_5: "arrival",
+  TRAIN_TRACK_6_FREE_RECEIVE_TRACK_6: "arrival",
+  TRAIN_TRACK_7_FREE_RECEIVE_TRACK_7: "arrival",
+  TRAIN_TRACK_8_FREE_RECEIVE_TRACK_8: "arrival",
+  WRONG_ROAD_FROM_POST_TO_STATION: "arrival",
+  ACCEPTED_WRONG_ROAD_FROM_POST_TO_STATION: "arrival",
+  CANCEL_ROUTE: "shunting",
+  SHUNTING_EXTRA_CAUTION_THROUGH_POINTS: "shunting",
+  RUN_AROUND_PERMITTED: "shunting",
+  PUSHING_BEYOND_POINTS_PERMITTED: "shunting",
+  STOP_SHUNTING_IMMEDIATELY: "shunting",
+  HELPER_LOCO_WILL_DETACH_AT_STATION: "shunting",
+  STOP_IMMEDIATELY: "shunting",
+  ACCEPTED_NOTIFYING_GATEKEEPER_AND_NEIGHBORS: "arrival",
+  TRAIN_WAITING_FOR_OPPOSITE: "arrival",
+  STAFF_ON_TRACK_CAUTION_SIGNAL: "arrival",
+};
+
+const SIGNALMAN_PHRASE_CONTEXTUAL_CONFIRMATION = new Set<
+  (typeof RADIO_PHRASES_SIGNALMAN)[number]
+>([
+  "ARRIVAL_COMPLETE_ACKNOWLEDGED",
+  "ACCEPTED_WRONG_ROAD_FROM_POST_TO_STATION",
+  "ACCEPTED_NOTIFYING_GATEKEEPER_AND_NEIGHBORS",
+]);
+
 export function radioPhrasesForSide(side: RadioPhraseSide): readonly RadioPhrase[] {
   return side === "driver" ? RADIO_PHRASES_DRIVER : RADIO_PHRASES_SIGNALMAN;
+}
+
+export function radioPhraseGroup(phrase: RadioPhrase, side: RadioPhraseSide): RadioPhraseGroup {
+  if (side === "driver") {
+    return DRIVER_PHRASE_GROUP[phrase as (typeof RADIO_PHRASES_DRIVER)[number]];
+  }
+  return SIGNALMAN_PHRASE_GROUP[phrase as (typeof RADIO_PHRASES_SIGNALMAN)[number]];
+}
+
+// radioPhraseIsContextualConfirmation reports whether a phrase is a
+// domain-specific ack (e.g. accepted shunting) rather than a general one.
+export function radioPhraseIsContextualConfirmation(
+  phrase: RadioPhrase,
+  side: RadioPhraseSide,
+): boolean {
+  if (side === "driver") {
+    return DRIVER_PHRASE_CONTEXTUAL_CONFIRMATION.has(
+      phrase as (typeof RADIO_PHRASES_DRIVER)[number],
+    );
+  }
+  return SIGNALMAN_PHRASE_CONTEXTUAL_CONFIRMATION.has(
+    phrase as (typeof RADIO_PHRASES_SIGNALMAN)[number],
+  );
+}
+
+const OPERATIONAL_RADIO_PHRASE_GROUPS = new Set<RadioPhraseGroup>([
+  "shunting",
+  "arrival",
+  "departure",
+]);
+
+// sortRadioPhrasesWithinGroup puts contextual confirmations first inside
+// shunting / arrival / departure lists; other groups keep vocabulary order.
+export function sortRadioPhrasesWithinGroup(
+  phrases: readonly RadioPhrase[],
+  side: RadioPhraseSide,
+  group: RadioPhraseGroup,
+): RadioPhrase[] {
+  if (!OPERATIONAL_RADIO_PHRASE_GROUPS.has(group)) {
+    return [...phrases];
+  }
+  const confirmations: RadioPhrase[] = [];
+  const operative: RadioPhrase[] = [];
+  for (const phrase of phrases) {
+    if (radioPhraseIsContextualConfirmation(phrase, side)) {
+      confirmations.push(phrase);
+    } else {
+      operative.push(phrase);
+    }
+  }
+  return [...confirmations, ...operative];
+}
+
+const RADIO_PHRASE_GROUP_STORAGE_PREFIX = "bigfred.radio.phrase-group";
+
+const VALID_RADIO_PHRASE_GROUP_FILTERS = new Set<RadioPhraseGroupFilter>([
+  RADIO_PHRASE_GROUP_ALL,
+  ...RADIO_PHRASE_GROUP_ORDER,
+]);
+
+function radioPhraseGroupStorageKey(side: RadioPhraseSide): string {
+  return `${RADIO_PHRASE_GROUP_STORAGE_PREFIX}.${side}`;
+}
+
+export function readStoredRadioPhraseGroupFilter(side: RadioPhraseSide): RadioPhraseGroupFilter {
+  try {
+    const raw = sessionStorage.getItem(radioPhraseGroupStorageKey(side));
+    if (raw != null && VALID_RADIO_PHRASE_GROUP_FILTERS.has(raw as RadioPhraseGroupFilter)) {
+      return raw as RadioPhraseGroupFilter;
+    }
+  } catch {
+    /* ignore */
+  }
+  return RADIO_PHRASE_GROUP_ALL;
+}
+
+export function writeStoredRadioPhraseGroupFilter(
+  side: RadioPhraseSide,
+  group: RadioPhraseGroupFilter,
+): void {
+  try {
+    sessionStorage.setItem(radioPhraseGroupStorageKey(side), group);
+  } catch {
+    /* ignore */
+  }
 }
 
 export interface RadioUser {

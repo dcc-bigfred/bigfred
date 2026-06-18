@@ -13,10 +13,20 @@
     "ACCEPTED_CROSSINGS_EXTRA_CAUTION": "Acknowledged. Passing through points with extra caution.",
     "ACCEPTED_PUSHING_BEYOND_POINTS": "Acknowledged. Pushing consist beyond points",
     "ACCEPTED_STOPPING_SHUNTING": "Acknowledged. Stopping shunting.",
+    "PASSED_POINTS_AHEAD_WAITING_RUN_AROUND_ROUTE": "Passed points ahead of consist, waiting for return run-around route",
+    "REACHED_POINTS_REAR_WAITING_RUN_AROUND_ROUTE": "Reached points at rear of consist, waiting for return run-around route",
+    "READY_TO_COUPLE_WAGONS": "Ready to couple wagons",
+    "READY_TO_UNCOUPLE_WAGONS": "Ready to uncouple wagons",
+    "REPORTING_CONSIST_COUPLED_TO_LOCO": "Reporting consist coupled to locomotive",
+    "WAGONS_TAKEN": "Wagons taken",
+    "WAGONS_SET_ASIDE": "Wagons set aside",
     "RADIO_LINK_RESTORED": "Reporting brief loss of radio contact, now restored.",
     "LEVEL_CROSSING_GATES_OPEN": "Level crossing gates open before station",
     "REPORT_ACKNOWLEDGED": "Report acknowledged.",
     "REPETITION_CORRECT": "Repetition correct.",
+    "CONFIRMED": "Confirmed",
+    "NO": "No",
+    "REFUSED_WAIT_FOR_SIGNAL": "Refused, wait for signal",
     "ENTRY_PERMITTED": "Entry permitted",
     "DEPARTURE_CLEARED": "Departure cleared",
     "DEPARTURE_ON_REPLACEMENT_SIGNAL": "Departure on replacement signal",
@@ -47,7 +57,16 @@
     "title": "Send radio message",
     "search": "Search phrases…",
     "note": "Note (optional)",
+    "groupLabel": "Group",
+    "group": {
+      "all": "All",
+      "shunting": "Shunting",
+      "arrival": "Arrival",
+      "departure": "Departure",
+      "confirmations": "Confirmations",
+      "other": "Other"
+    },
     "send": "Send",
-    "cancel": "Cancel"
+    "close": "Close"
   }
 }

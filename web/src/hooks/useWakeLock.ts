@@ -1,62 +1,57 @@
 import { useEffect } from "react";
-
-function wakeLockSupported(): boolean {
-  return typeof navigator !== "undefined" && "wakeLock" in navigator;
-}
+import NoSleep from "nosleep.js";
 
 // useWakeLock keeps the device screen awake while the app tab is visible.
-// Uses the Screen Wake Lock API; silently no-ops when unsupported or denied.
 //
-// Browsers release the lock when the tab is hidden — we re-acquire on
-// visibilitychange. Some mobile browsers (notably iOS Safari) only grant
-// the first lock after a user gesture, so we also retry once on pointerdown.
+// We use NoSleep.js rather than the native Screen Wake Lock API on purpose:
+// BigFred is served over plain HTTP on the local WiFi (never HTTPS), so it is
+// not a secure context and `navigator.wakeLock` is unavailable on the phones.
+// NoSleep.js falls back to a muted looping <video>, which keeps the screen on
+// over HTTP, and transparently uses the native Wake Lock API when it *is*
+// available (e.g. if the panel is ever served over HTTPS or via localhost).
+//
+// Browsers require a user gesture before media can play, so the first
+// enable() is deferred to the first pointer/key interaction. The video is
+// paused when the tab is hidden, so we re-enable on visibilitychange.
 export function useWakeLock(enabled = true): void {
   useEffect(() => {
-    if (!enabled || !wakeLockSupported()) {
+    if (!enabled || typeof navigator === "undefined") {
       return;
     }
 
-    let lock: WakeLockSentinel | null = null;
+    const noSleep = new NoSleep();
     let cancelled = false;
+    let armed = false;
 
-    const release = async () => {
-      if (!lock) return;
-      try {
-        await lock.release();
-      } catch {
-        // Already released.
-      }
-      lock = null;
-    };
-
-    const acquire = async () => {
+    const enable = () => {
       if (cancelled || document.visibilityState !== "visible") return;
-      if (lock && !lock.released) return;
       try {
-        lock = await navigator.wakeLock.request("screen");
-        lock.addEventListener("release", () => {
-          lock = null;
-        });
+        const result = noSleep.enable();
+        if (result && typeof result.then === "function") {
+          result.catch(() => {
+            // Low battery, denied, or autoplay policy — ignore.
+          });
+        }
       } catch {
-        // Low battery, permission denied, or platform policy.
+        // Not yet allowed (needs a user gesture) — retry on interaction.
       }
     };
 
     const onVisibilityChange = () => {
       if (document.visibilityState === "visible") {
-        void acquire();
+        if (armed) enable();
       } else {
-        void release();
+        noSleep.disable();
       }
     };
 
     const onFirstInteraction = () => {
-      void acquire();
+      armed = true;
+      enable();
       document.removeEventListener("pointerdown", onFirstInteraction);
       document.removeEventListener("keydown", onFirstInteraction);
     };
 
-    void acquire();
     document.addEventListener("visibilitychange", onVisibilityChange);
     document.addEventListener("pointerdown", onFirstInteraction, {
       passive: true,
@@ -68,7 +63,7 @@ export function useWakeLock(enabled = true): void {
       document.removeEventListener("visibilitychange", onVisibilityChange);
       document.removeEventListener("pointerdown", onFirstInteraction);
       document.removeEventListener("keydown", onFirstInteraction);
-      void release();
+      noSleep.disable();
     };
   }, [enabled]);
 }

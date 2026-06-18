@@ -72,7 +72,8 @@ export interface CommandStationCatalogChangedPayload {
 // can `await sendAction(...)` and react to ack.ok / ack.error.
 type PendingResolver = (ack: { ok: boolean; error?: string }) => void;
 
-const RECONNECT_INTERVAL_MS = 2_000;
+const RECONNECT_INTERVAL_MS = 250;
+const RECONNECT_MAX_MS = 2_000;
 const CONNECT_TIMEOUT_MS = 1_000;
 
 interface SocketContextValue {
@@ -229,6 +230,9 @@ export function SocketProvider({
     }
 
     let disposed = false;
+    // Fast first retry for brief WiFi blips, backing off to a cap so a long
+    // outage (server restart) doesn't hammer the radio and drain the battery.
+    let reconnectDelay = RECONNECT_INTERVAL_MS;
     const url = wsURL();
 
     const clearReconnect = () => {
@@ -272,10 +276,9 @@ export function SocketProvider({
         if (hadOpenedRef.current) {
           setReconnecting(true);
         }
-        reconnectTimerRef.current = window.setTimeout(
-          connect,
-          RECONNECT_INTERVAL_MS,
-        );
+        const delay = reconnectDelay;
+        reconnectDelay = Math.min(reconnectDelay * 2, RECONNECT_MAX_MS);
+        reconnectTimerRef.current = window.setTimeout(connect, delay);
       };
 
       socket.onopen = () => {
@@ -284,6 +287,7 @@ export function SocketProvider({
           return;
         }
         hadOpenedRef.current = true;
+        reconnectDelay = RECONNECT_INTERVAL_MS;
         setReconnecting(false);
         setConnected(true);
       };
@@ -423,10 +427,33 @@ export function SocketProvider({
       };
     };
 
+    // Android suspends background tabs and powers down WiFi, which kills
+    // the socket and freezes the reconnect timer. Force an immediate retry
+    // when the tab returns to the foreground or the network comes back.
+    const reconnectNow = () => {
+      if (disposed) return;
+      const socket = socketRef.current;
+      if (
+        socket &&
+        (socket.readyState === WebSocket.OPEN ||
+          socket.readyState === WebSocket.CONNECTING)
+      ) {
+        return;
+      }
+      connect();
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") reconnectNow();
+    };
+    window.addEventListener("online", reconnectNow);
+    document.addEventListener("visibilitychange", onVisible);
+
     connect();
 
     return () => {
       disposed = true;
+      window.removeEventListener("online", reconnectNow);
+      document.removeEventListener("visibilitychange", onVisible);
       clearReconnect();
       activeCleanup?.();
       rejectPending(pending.current);

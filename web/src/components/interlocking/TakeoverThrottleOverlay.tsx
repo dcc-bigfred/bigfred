@@ -25,6 +25,7 @@ import { DccBusProvider, useDccBus } from "../../context/DccBusContext";
 import { useSocket } from "../../context/SocketContext";
 import ThrottleCockpit from "../throttle/ThrottleCockpit";
 import { useDebouncedSpeedSend } from "../../hooks/useDebouncedSpeedSend";
+import { useKeyedRetryingSend } from "../../hooks/useRetryingSend";
 import { useThrottleSpeedOverride } from "../../hooks/useThrottleSpeedOverride";
 
 interface TakeoverThrottleOverlayProps {
@@ -143,6 +144,10 @@ function TakeoverOverlayBody({
   );
   const cockpitSpeed = Math.min(displaySpeed, maxSpeed);
   const { queueSpeed, sendSpeedNow } = useDebouncedSpeedSend(setSpeed);
+  const { dispatch: sendFunction } = useKeyedRetryingSend(
+    setFunction,
+    (address: number, fn: number) => `${address}:${fn}`,
+  );
 
   const leaseRemaining = useLeaseCountdown(grant.leaseExpiresAt);
   const [releasing, setReleasing] = useState(false);
@@ -249,7 +254,7 @@ function TakeoverOverlayBody({
               sendSpeedNow(drive.dccAddress, cockpitSpeed, fwd);
             }}
             onFunctionToggle={(n) => {
-              void setFunction(drive.dccAddress, n, !(functions[n] ?? false));
+              sendFunction(drive.dccAddress, n, !(functions[n] ?? false));
             }}
             onStop={() => {
               noteUserSpeed(0);

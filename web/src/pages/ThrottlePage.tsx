@@ -40,6 +40,7 @@ import { useRadioStopSound } from "../hooks/useRadioStopSound";
 import { useThrottleSpeedOverride } from "../hooks/useThrottleSpeedOverride";
 import { useThrottleCommandStationSelection } from "../hooks/useThrottleCommandStationSelection";
 import { useDebouncedTrainSpeedSend } from "../hooks/useDebouncedTrainSpeedSend";
+import { useKeyedRetryingSend } from "../hooks/useRetryingSend";
 import { useThrottleTargetSelection } from "../hooks/useThrottleTargetSelection";
 import { useTrainAccordionExpanded } from "../hooks/useTrainAccordionExpanded";
 import { useDriverRadioInbound } from "../hooks/useDriverRadioInbound";
@@ -196,12 +197,6 @@ export default function ThrottlePage() {
           )}
         />
       </Stack>
-
-      {reconnecting && (
-        <AutoDismissAlert severity="warning" resetKey="control-reconnecting">
-          {t("throttle:controlPlane.reconnecting")}
-        </AutoDismissAlert>
-      )}
 
       <CommandStationPicker
         stations={stations}
@@ -599,11 +594,15 @@ function ConnectedThrottle({
     setTrainSpeed,
     setFunction,
     speedSteps: busSpeedSteps,
+    reconnecting: dccReconnecting,
   } = useDccBus();
   const { t } = useTranslation(["throttle", "errors"]);
   const speedSteps = busSpeedSteps ?? sessionSpeedSteps;
   const maxSpeed = maxSpeedValue(speedSteps);
-  const connectionLost = status !== "open";
+  // Only spin once a connection was established and then lost — not during
+  // the very first connect, which would flash the icon on every page load.
+  const connectionLost =
+    dccReconnecting || status === "closed" || status === "error";
 
   const subscribeAddrs = useMemo(() => {
     if (isTrainMode) {
@@ -636,6 +635,10 @@ function ConnectedThrottle({
     sendSpeedNow: sendTrainSpeedNow,
     flush: flushTrain,
   } = useDebouncedTrainSpeedSend(setTrainSpeed);
+  const { dispatch: sendFunction } = useKeyedRetryingSend(
+    setFunction,
+    (address: number, fn: number) => `${address}:${fn}`,
+  );
   const isMoving = cockpitSpeed > 0 && witnessAddr != null;
 
   const [settingsMemberId, setSettingsMemberId] = useState<number | null>(null);
@@ -664,14 +667,14 @@ function ConnectedThrottle({
   };
   const handleFn = (n: number) => {
     if (selectedAddr == null) return;
-    void setFunction(selectedAddr, n, !(functions[n] ?? false));
+    sendFunction(selectedAddr, n, !(functions[n] ?? false));
   };
   const handleTrainFn = (memberId: number, fn: number) => {
     const member = trainCtx.poweredMembers.find((m) => m.memberId === memberId);
     if (!member) return;
     const memberState = states.get(member.dccAddress);
     const memberFns = memberState?.functions ?? [];
-    void setFunction(member.dccAddress, fn, !(memberFns[fn] ?? false));
+    sendFunction(member.dccAddress, fn, !(memberFns[fn] ?? false));
   };
   const handleStop = () => {
     noteUserSpeed(0);

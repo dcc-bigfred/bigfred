@@ -37,7 +37,7 @@ export type DataPlaneStatus =
   | "closed"
   | "error";
 
-const RECONNECT_INTERVAL_MS = 2_000;
+const RECONNECT_INTERVAL_MS = 250;
 const CONNECT_TIMEOUT_MS = 1_000;
 
 interface DccBusContextValue {

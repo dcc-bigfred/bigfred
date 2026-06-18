@@ -343,25 +343,7 @@ function SetupDataPlaneSection() {
             : t("dataPlane.pingMeasuring")}
         </Typography>
       )}
-      {dcc?.reconnecting && (
-        <AutoDismissAlert severity="warning" resetKey="dcc-reconnecting">
-          {t("reconnecting")}
-        </AutoDismissAlert>
-      )}
     </>
-  );
-}
-
-function ReconnectingAlert() {
-  const { reconnecting } = useDccBus();
-  const { t } = useTranslation("throttle");
-  if (!reconnecting) {
-    return null;
-  }
-  return (
-    <AutoDismissAlert severity="warning" resetKey="cockpit-reconnecting">
-      {t("reconnecting")}
-    </AutoDismissAlert>
   );
 }
 
@@ -621,6 +603,7 @@ function ConnectedThrottle({
   const { t } = useTranslation(["throttle", "errors"]);
   const speedSteps = busSpeedSteps ?? sessionSpeedSteps;
   const maxSpeed = maxSpeedValue(speedSteps);
+  const connectionLost = status !== "open";
 
   const subscribeAddrs = useMemo(() => {
     if (isTrainMode) {
@@ -815,6 +798,7 @@ function ConnectedThrottle({
         configuredFunctions={configuredFunctions}
         functionPanel={trainAccordion}
         disabled={witnessAddr == null}
+        connectionLost={connectionLost}
         headerExtra={headerExtra}
         onSpeedChange={handleSpeed}
         onDirectionChange={handleDir}
@@ -822,21 +806,20 @@ function ConnectedThrottle({
         onStop={handleStop}
       />
 
-      <Box
-        sx={{
-          position: "absolute",
-          left: 8,
-          right: 8,
-          bottom: 64,
-          display: "flex",
-          flexDirection: "column",
-          gap: 1,
-          pointerEvents: "none",
-          "& .MuiAlert-root": { pointerEvents: "auto" },
-        }}
-      >
-        <ReconnectingAlert />
-        {lastError && (
+      {lastError && (
+        <Box
+          sx={{
+            position: "absolute",
+            left: 8,
+            right: 8,
+            bottom: 64,
+            display: "flex",
+            flexDirection: "column",
+            gap: 1,
+            pointerEvents: "none",
+            "& .MuiAlert-root": { pointerEvents: "auto" },
+          }}
+        >
           <AutoDismissAlert severity="warning" resetKey={lastError}>
             {translateErrorCode(
               t as unknown as (
@@ -847,8 +830,8 @@ function ConnectedThrottle({
               t("throttle:errors.command_station_disconnected"),
             )}
           </AutoDismissAlert>
-        )}
-      </Box>
+        </Box>
+      )}
     </Box>
   );
 }

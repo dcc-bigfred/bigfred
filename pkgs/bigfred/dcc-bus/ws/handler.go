@@ -205,14 +205,20 @@ func (s *Server) readLoop(ctx context.Context, sess *Session) {
 		if s.metrics != nil {
 			s.metrics.RecordSessionClosed(reason)
 		}
-		s.router.HandleSessionClose(context.Background(), sess, errors.WsCodeSessionWsClosed)
 		s.hub.Unregister(sess)
-		sess.Close(errors.WsCodeSessionReadLoopDone)
+		if !sess.IsClosed() {
+			sess.Close(errors.WsCodeSessionReadLoopDone)
+		}
 		s.log.WithFields(logrus.Fields{
 			"sessionId":              sess.ID,
 			"userId":                 sess.UserID,
 			"userSessionsRemaining": len(s.hub.SessionsForUser(sess.UserID)),
 		}).Info("dcc-bus session closed")
+		// Give the browser time to reconnect before firing the dead-man's
+		// switch. Ping silence still triggers DMS immediately via watchDeadman.
+		if reason != errors.WsCodeSessionDeadman {
+			go s.delayedSessionClose(sess, reason)
+		}
 	}()
 
 	for {
@@ -355,6 +361,15 @@ func (s *Server) ackOrFail(ctx context.Context, sess *Session, requestID string,
 		return OK()
 	}
 	return Fail(errCode)
+}
+
+// delayedSessionClose waits deadmanSecs (same budget as ping silence) before
+// running the dead-man's plan for a dropped WebSocket. If the user opens a new
+// tab in the meantime, HandleSessionClose sees the live session and skips the
+// layout-wide emergency stop.
+func (s *Server) delayedSessionClose(sess *Session, reason string) {
+	time.Sleep(time.Duration(s.deadmanSecs) * time.Second)
+	s.router.HandleSessionClose(context.Background(), sess, reason)
 }
 
 // watchDeadman fires HandleSessionClose(WsCodeSessionDeadman) when the session

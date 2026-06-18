@@ -621,16 +621,21 @@ function ConnectedThrottle({
     witnessAddr,
   );
   const cockpitSpeed = Math.min(displaySpeed, maxSpeed);
-  const { queueSpeed, sendSpeedNow, flush } = useDebouncedSpeedSend(setSpeed);
+  const { queueSpeed, sendSpeedNow, flush, retrying: speedRetrying } =
+    useDebouncedSpeedSend(setSpeed);
   const {
     queueSpeed: queueTrainSpeed,
     sendSpeedNow: sendTrainSpeedNow,
     flush: flushTrain,
+    retrying: trainSpeedRetrying,
   } = useDebouncedTrainSpeedSend(setTrainSpeed);
-  const { dispatch: sendFunction } = useKeyedRetryingSend(
+  const { dispatch: sendFunction, retrying: functionRetrying } =
+    useKeyedRetryingSend(
     setFunction,
     (address: number, fn: number) => `${address}:${fn}`,
   );
+  const commandRetrying =
+    speedRetrying || trainSpeedRetrying || functionRetrying;
   const isMoving = cockpitSpeed > 0 && witnessAddr != null;
 
   const [settingsMemberId, setSettingsMemberId] = useState<number | null>(null);
@@ -794,6 +799,7 @@ function ConnectedThrottle({
         functionPanel={trainAccordion}
         disabled={witnessAddr == null}
         connectionLost={connectionLost}
+        commandRetrying={commandRetrying}
         headerExtra={headerExtra}
         onSpeedChange={handleSpeed}
         onDirectionChange={handleDir}

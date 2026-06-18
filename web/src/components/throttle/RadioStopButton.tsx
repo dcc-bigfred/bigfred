@@ -12,6 +12,7 @@ import { useTranslation } from "react-i18next";
 import { useMe } from "../../api/auth";
 import { useLayoutVehicles } from "../../api/vehicles";
 import { useSocket } from "../../context/SocketContext";
+import { useRetryingSend } from "../../hooks/useRetryingSend";
 import { cockpit } from "./throttleCockpitTheme";
 
 interface RadioStopButtonProps {
@@ -27,6 +28,12 @@ export default function RadioStopButton({
 }: RadioStopButtonProps) {
   const { t } = useTranslation(["throttle", "interlocking"]);
   const { sendAction } = useSocket();
+  const sendRadioStop = useCallback(
+    () => sendAction("system.radioStop", {}),
+    [sendAction],
+  );
+  const { dispatchAsync: sendRadioStopWithRetry } =
+    useRetryingSend(sendRadioStop);
   const me = useMe().data;
   const roster = useLayoutVehicles(layoutId).data ?? [];
   const [open, setOpen] = useState(false);
@@ -47,12 +54,14 @@ export default function RadioStopButton({
   const handleConfirm = useCallback(async () => {
     setBusy(true);
     try {
-      await sendAction("system.radioStop", {});
-      setOpen(false);
+      const res = await sendRadioStopWithRetry();
+      if (res.ok) {
+        setOpen(false);
+      }
     } finally {
       setBusy(false);
     }
-  }, [sendAction]);
+  }, [sendRadioStopWithRetry]);
 
   if (!canTrigger) {
     return null;

@@ -143,11 +143,14 @@ function TakeoverOverlayBody({
     drive?.dccAddress ?? null,
   );
   const cockpitSpeed = Math.min(displaySpeed, maxSpeed);
-  const { queueSpeed, sendSpeedNow } = useDebouncedSpeedSend(setSpeed);
-  const { dispatch: sendFunction } = useKeyedRetryingSend(
+  const { queueSpeed, sendSpeedNow, retrying: speedRetrying } =
+    useDebouncedSpeedSend(setSpeed);
+  const { dispatch: sendFunction, retrying: functionRetrying } =
+    useKeyedRetryingSend(
     setFunction,
     (address: number, fn: number) => `${address}:${fn}`,
   );
+  const commandRetrying = speedRetrying || functionRetrying;
 
   const leaseRemaining = useLeaseCountdown(grant.leaseExpiresAt);
   const [releasing, setReleasing] = useState(false);
@@ -260,6 +263,7 @@ function TakeoverOverlayBody({
               noteUserSpeed(0);
               sendSpeedNow(drive.dccAddress, 0, forward);
             }}
+            commandRetrying={commandRetrying}
           />
         </Box>
       </DialogContent>

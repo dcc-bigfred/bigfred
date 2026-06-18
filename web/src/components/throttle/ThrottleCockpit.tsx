@@ -13,6 +13,7 @@ import {
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import SettingsIcon from "@mui/icons-material/Settings";
+import SyncIcon from "@mui/icons-material/Sync";
 import TuneIcon from "@mui/icons-material/Tune";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
@@ -66,6 +67,8 @@ export interface ThrottleCockpitProps {
   disabled?: boolean;
   /** When true, settings icon shows a reconnect spinner instead. */
   connectionLost?: boolean;
+  /** When true, settings icon shows a retry spinner (command resend in flight). */
+  commandRetrying?: boolean;
   onSpeedChange: (speed: number) => void;
   onDirectionChange: (forward: boolean) => void;
   onFunctionToggle: (fn: number) => void;
@@ -97,6 +100,7 @@ export default function ThrottleCockpit({
   functionPanel,
   disabled = false,
   connectionLost = false,
+  commandRetrying = false,
   onSpeedChange,
   onDirectionChange,
   onFunctionToggle,
@@ -254,14 +258,30 @@ export default function ThrottleCockpit({
         <IconButton
           size="small"
           onClick={onOpenSetup}
-          disabled={connectionLost}
+          disabled={connectionLost || commandRetrying}
           aria-label={
-            connectionLost ? t("reconnecting") : t("setup.open")
+            connectionLost
+              ? t("reconnecting")
+              : commandRetrying
+                ? t("commandRetrying")
+                : t("setup.open")
           }
           sx={{ color: cockpit.text }}
         >
           {connectionLost ? (
             <CircularProgress size={18} sx={{ color: cockpit.text }} />
+          ) : commandRetrying ? (
+            <SyncIcon
+              fontSize="small"
+              sx={{
+                color: cockpit.text,
+                animation: "throttleCommandRetrySpin 1s linear infinite",
+                "@keyframes throttleCommandRetrySpin": {
+                  from: { transform: "rotate(0deg)" },
+                  to: { transform: "rotate(360deg)" },
+                },
+              }}
+            />
           ) : (
             <SettingsIcon fontSize="small" />
           )}

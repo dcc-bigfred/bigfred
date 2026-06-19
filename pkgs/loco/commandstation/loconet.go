@@ -309,6 +309,21 @@ func (l *LocoNet) dispatch() {
 // observe parses a bus packet, refreshes the local caches and emits a
 // LocoObservation for the change. Slot-keyed packets (SPD/DIRF/SND) are
 // attributed via the reverse slot→addr map populated from slot reads.
+// applySlotData refreshes BigFred's per-loco cache (slot mapping, direction,
+// the F0..F8 function groups and speed) from an OPC_SL_RD_DATA frame seen on
+// the bus. It is the single place that maps slot data onto the cache, shared by
+// the passive observer and the request paths (slot acquire / query) so a
+// locomotive subscription deterministically refreshes the cache straight from
+// the bus reply instead of relying on observation timing. It intentionally does
+// not emit a LocoObservation: observe() owns fan-out so upper layers are
+// notified exactly once.
+func (l *LocoNet) applySlotData(sd lnSlotData) {
+	l.setSlot(sd.Addr, sd.Slot)
+	l.setDirf(sd.Addr, sd.DirF)
+	l.setSnd(sd.Addr, sd.Snd)
+	l.setSpd(sd.Addr, sd.Speed)
+}
+
 func (l *LocoNet) observe(pkt []byte) {
 	if len(pkt) < 2 {
 		return
@@ -325,10 +340,7 @@ func (l *LocoNet) observe(pkt []byte) {
 		if sd.Slot >= 120 {
 			return
 		}
-		l.setSlot(sd.Addr, sd.Slot)
-		l.setDirf(sd.Addr, sd.DirF)
-		l.setSnd(sd.Addr, sd.Snd)
-		l.setSpd(sd.Addr, sd.Speed)
+		l.applySlotData(sd)
 		fns := make(map[int]bool, 9)
 		for fn := 0; fn <= 4; fn++ {
 			fns[fn] = getFnFromDirf(sd.DirF, fn)
@@ -846,10 +858,10 @@ func (l *LocoNet) acquireSlotFreshLocked(addr LocoAddr) (byte, error) {
 			return 0, err
 		}
 		if sd, ok := parseLnSlotData(pkt); ok {
-			// Cache state always.
-			l.setSlot(sd.Addr, sd.Slot)
-			l.setDirf(sd.Addr, sd.DirF)
-			l.setSnd(sd.Addr, sd.Snd)
+			// Refresh BigFred's cache from the bus reply (slot, direction,
+			// F0..F8 and speed) so a subscription reflects the command
+			// station's current view of the loco.
+			l.applySlotData(sd)
 			if sd.Addr == addr {
 				// Promote slot to IN_USE via NULL MOVE so BigFred is the
 				// authoritative throttle. Without this, the slot stays
@@ -946,9 +958,7 @@ func (l *LocoNet) querySlotLocked(slot byte, addr LocoAddr) (lnSlotData, error) 
 			return lnSlotData{}, err
 		}
 		if sd, ok := parseLnSlotData(pkt); ok {
-			l.setSlot(sd.Addr, sd.Slot)
-			l.setDirf(sd.Addr, sd.DirF)
-			l.setSnd(sd.Addr, sd.Snd)
+			l.applySlotData(sd)
 			if sd.Slot == slot && (addr == 0 || sd.Addr == addr) {
 				return sd, nil
 			}

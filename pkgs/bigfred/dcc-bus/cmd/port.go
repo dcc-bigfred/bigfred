@@ -11,6 +11,10 @@ import (
 type Actor struct {
 	UserID    uint
 	SessionID string
+	// ClosingSubscribedAddrs is populated only on session close. The WS layer
+	// unregisters the session from the hub before the delayed dead-man fires,
+	// so drive-target collection must not rely on the hub still listing this tab.
+	ClosingSubscribedAddrs []uint16
 }
 
 // Responder sends protocol frames back to one connected client. The WS

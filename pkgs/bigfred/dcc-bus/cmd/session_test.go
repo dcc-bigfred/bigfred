@@ -124,6 +124,46 @@ func TestHandleSessionClose_releasesSlotsWhenNoSessionsRemain(t *testing.T) {
 	}
 }
 
+// When the closing tab had subscribed locos but Redis has no ControlledByUserID
+// (user viewed throttle without driving), slots must still be released. This
+// mirrors production: the hub unregisters the session before the delayed DMS runs,
+// so drive targets must come from ClosingSubscribedAddrs, not the live hub.
+func TestHandleSessionClose_releasesSlotsFromClosingSubscriptions(t *testing.T) {
+	t.Parallel()
+	rs, cleanup := testRedis(t)
+	defer cleanup()
+	ctx := context.Background()
+	const addr uint16 = 31
+
+	st := &slotStubStation{}
+	r, err := NewRouter(ctx, Config{
+		Station:          st,
+		Hub:              &stubHub{}, // session already gone from hub
+		Redis:            rs,
+		LayoutID:         2,
+		CommandStationID: 1,
+		SpeedSteps:       128,
+		AllowedVehicles: contract.AllowedVehicles{
+			LayoutID: 2,
+			Vehicles: []contract.AllowedVehicle{{Addr: addr}},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	r.HandleSessionClose(ctx, Actor{
+		UserID:                 42,
+		SessionID:              "last-tab",
+		ClosingSubscribedAddrs: []uint16{addr},
+	}, "ws_closed")
+
+	got := waitForRelease(t, st, 1)
+	if len(got) != 1 || got[0] != addr {
+		t.Fatalf("released = %v, want [%d]", got, addr)
+	}
+}
+
 func TestHandleSessionClose_keepsSlotWhenAnotherSessionSubscribed(t *testing.T) {
 	t.Parallel()
 	rs, cleanup := testRedis(t)

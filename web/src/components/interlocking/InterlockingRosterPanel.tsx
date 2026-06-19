@@ -120,6 +120,7 @@ export default function InterlockingRosterPanel({
   } | null>(null);
   const [stopBusy, setStopBusy] = useState(false);
   const [stopError, setStopError] = useState<string | null>(null);
+  const [takeoverError, setTakeoverError] = useState<string | null>(null);
   const [radioTarget, setRadioTarget] = useState<{
     to: RadioSendTarget;
     context: RadioSendContext;
@@ -262,12 +263,18 @@ export default function InterlockingRosterPanel({
                         <IconButton
                           size="small"
                           aria-label={t("view.roster.actions.takeover")}
-                          onClick={() =>
+                          onClick={() => {
                             void requestTakeover(
                               row.kind === "vehicle" ? "vehicle" : "train",
                               row.entityId,
                             )
-                          }
+                              .then((ack) => {
+                                if (!ack.ok) {
+                                  setTakeoverError(ack.error ?? "error");
+                                }
+                              })
+                              .catch(() => setTakeoverError("error"));
+                          }}
                         >
                           <SwapHorizIcon fontSize="small" />
                         </IconButton>
@@ -338,6 +345,22 @@ export default function InterlockingRosterPanel({
         <Alert severity="error" onClose={() => setStopError(null)} variant="filled">
           {t(`view.roster.stopError.${stopError ?? "error"}`, {
             defaultValue: t("view.roster.stopError.error"),
+          })}
+        </Alert>
+      </Snackbar>
+      <Snackbar
+        open={takeoverError != null}
+        autoHideDuration={5000}
+        onClose={() => setTakeoverError(null)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert
+          severity="error"
+          onClose={() => setTakeoverError(null)}
+          variant="filled"
+        >
+          {t(`view.roster.takeoverError.${takeoverError ?? "error"}`, {
+            defaultValue: t("view.roster.takeoverError.error"),
           })}
         </Alert>
       </Snackbar>

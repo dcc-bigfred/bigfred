@@ -41,7 +41,10 @@ import { useThrottleSpeedOverride } from "../hooks/useThrottleSpeedOverride";
 import { useThrottleCommandStationSelection } from "../hooks/useThrottleCommandStationSelection";
 import { useDebouncedTrainSpeedSend } from "../hooks/useDebouncedTrainSpeedSend";
 import { useKeyedRetryingSend } from "../hooks/useRetryingSend";
-import { useThrottleTargetSelection } from "../hooks/useThrottleTargetSelection";
+import {
+  useThrottleTargetSelection,
+  type ThrottleTarget,
+} from "../hooks/useThrottleTargetSelection";
 import { useTrainAccordionExpanded } from "../hooks/useTrainAccordionExpanded";
 import { useDriverRadioInbound } from "../hooks/useDriverRadioInbound";
 import { buildThrottleRadioHeader } from "../hooks/useThrottleRadioChat";
@@ -610,6 +613,23 @@ function ConnectedThrottle({
     void subscribe(subscribeAddrs);
   }, [subscribeAddrs, subscribe, rosterAddrKey, status]);
 
+  // Picking a loco in the select box re-fetches its live state from the
+  // dcc-bus websocket: the daemon answers loco.subscribe with the current
+  // loco.state (speed, direction, functions), which is what drives the slider
+  // and the function buttons. We subscribe here explicitly — not only via the
+  // subscribeAddrs effect above — so re-picking the same loco also refreshes a
+  // possibly stale view. Trains rely on the effect, which re-runs once their
+  // powered members resolve.
+  const handleSelectTarget = useCallback(
+    (target: ThrottleTarget) => {
+      selectTarget(target);
+      if (target.kind === "vehicle" && status === "open") {
+        void subscribe([target.dccAddress]);
+      }
+    },
+    [selectTarget, subscribe, status],
+  );
+
   const witnessAddr = isTrainMode ? trainCtx.leadingAddr : selectedAddr;
   const state = witnessAddr != null ? states.get(witnessAddr) : undefined;
   const serverSpeed = state?.speed ?? 0;
@@ -790,7 +810,7 @@ function ConnectedThrottle({
         vehicles={vehicles}
         trains={trains}
         selectedTarget={selectedTarget}
-        onSelectTarget={selectTarget}
+        onSelectTarget={handleSelectTarget}
         speed={cockpitSpeed}
         maxSpeed={maxSpeed}
         forward={forward}

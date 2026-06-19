@@ -8,6 +8,7 @@ import (
 
 	"github.com/keskad/loco/pkgs/bigfred/contract"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/service"
+	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/service/station"
 	"github.com/keskad/loco/pkgs/loco/commandstation"
 )
 
@@ -39,6 +40,14 @@ func (r *Router) retireRemovedLoco(ctx context.Context, addr uint16) {
 			fields["addr"] = addr
 			fields["function"] = fn
 			r.log.WithError(err).WithFields(fields).Warn("dcc-bus roster retire SendFn failed")
+		}
+	}
+	// Release the slot assigned to the locomotive back to COMMON so the command station can
+	// reclaim it and physical throttles may take control.
+	// AsSlotManager unwraps any decorator (e.g. the instrumented wrapper).
+	if sm, ok := station.AsSlotManager(r.station); ok {
+		if err := sm.ReleaseSlot(commandstation.LocoAddr(addr)); err != nil {
+			r.log.WithError(err).WithField("addr", addr).Warn("dcc-bus roster retire ReleaseSlot failed")
 		}
 	}
 	r.cache.ClearAddr(addr)

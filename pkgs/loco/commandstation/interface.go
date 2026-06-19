@@ -24,6 +24,28 @@ func (cv *CV) Translate() uint16 {
 	return uint16(cv.Num - 1)
 }
 
+// SlotManager is an optional interface implemented by LocoNet drivers that
+// support the full slot lifecycle: releasing ownership, dispatching to
+// physical throttles, and acquiring slots dispatched by physical throttles.
+// Callers type-assert the Station value before use.
+type SlotManager interface {
+	// ReleaseSlot marks the slot for addr as COMMON on the command station
+	// (no active throttle owner) and removes it from the local cache.
+	// The locomotive continues at its current speed; call SetSpeed first
+	// if a controlled stop is needed.
+	ReleaseSlot(addr LocoAddr) error
+
+	// DispatchSlot moves the slot for addr into the LocoNet dispatch slot
+	// (OPC_MOVE_SLOTS src=slot, dst=0). A physical FRED or other throttle
+	// can then claim it via a dispatch GET. Stop the loco first.
+	DispatchSlot(addr LocoAddr) error
+
+	// AcquireDispatched claims the slot currently held in the LocoNet
+	// dispatch slot (OPC_MOVE_SLOTS src=0, dst=0) and returns the loco
+	// address it controls. Returns (0, nil) when the dispatch slot is empty.
+	AcquireDispatched() (LocoAddr, error)
+}
+
 // Station is the synchronous request/response surface every driver
 // implements. Drivers that can additionally report state changes seen
 // on the bus (including external throttles) also implement the optional

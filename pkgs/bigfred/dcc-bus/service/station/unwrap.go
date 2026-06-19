@@ -37,3 +37,18 @@ func AsLocoInfoSubscriber(s commandstation.Station) (commandstation.LocoInfoSubs
 	}
 	return nil, false
 }
+
+// AsSlotManager returns the SlotManager behind optional wrappers
+func AsSlotManager(s commandstation.Station) (commandstation.SlotManager, bool) {
+	for s != nil {
+		if sm, ok := s.(commandstation.SlotManager); ok {
+			return sm, true
+		}
+		u, ok := s.(innerStation)
+		if !ok {
+			return nil, false
+		}
+		s = u.Inner()
+	}
+	return nil, false
+}

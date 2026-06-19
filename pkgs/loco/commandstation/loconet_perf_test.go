@@ -188,6 +188,73 @@ func TestPacerEnforcesMinGap(t *testing.T) {
 	}
 }
 
+// MetricsSnapshot must reflect hot-path activity: TX frames/bytes, per-opcode
+// counts, coalesced frames, and the active-slot gauge.
+func TestMetricsSnapshotCountsTraffic(t *testing.T) {
+	l, _ := newTestLoconet()
+	const addr LocoAddr = 31
+	l.setSlot(addr, 5)
+	l.setDirf(addr, 0x20) // forward, so no DIRF frame on a forward SetSpeed
+
+	if err := l.SetSpeed(addr, 10, true, 128); err != nil {
+		t.Fatalf("SetSpeed: %v", err)
+	}
+	if err := l.SendFn(MainTrackMode, addr, 1, true); err != nil {
+		t.Fatalf("SendFn: %v", err)
+	}
+
+	s := l.MetricsSnapshot()
+	// One SPD (SetSpeed) + one DIRF (SendFn F1) = 2 frames, no DIRF from SetSpeed.
+	if s.TxFrames != 2 {
+		t.Fatalf("TxFrames = %d, want 2", s.TxFrames)
+	}
+	if s.TxBytes == 0 {
+		t.Fatalf("TxBytes = 0, want > 0")
+	}
+	if got := s.TxByOpcode[lnOPC_LOCO_SPD]; got != 1 {
+		t.Fatalf("TxByOpcode[LOCO_SPD] = %d, want 1", got)
+	}
+	if got := s.TxByOpcode[lnOPC_LOCO_DIRF]; got != 1 {
+		t.Fatalf("TxByOpcode[LOCO_DIRF] = %d, want 1", got)
+	}
+	if s.SlotsActive != 1 {
+		t.Fatalf("SlotsActive = %d, want 1", s.SlotsActive)
+	}
+
+	// A superseded speed frame must be counted as coalesced, not transmitted.
+	g1 := l.nextSpeedGen(addr)
+	_ = l.nextSpeedGen(addr) // supersede g1
+	if err := l.writeSpeed(addr, 5, 99, true, g1); err != nil {
+		t.Fatalf("writeSpeed(stale): %v", err)
+	}
+	if s2 := l.MetricsSnapshot(); s2.TxCoalesced != 1 {
+		t.Fatalf("TxCoalesced = %d, want 1", s2.TxCoalesced)
+	}
+}
+
+// The RX path (dispatch → countRx) must tally received frames by opcode.
+func TestMetricsSnapshotCountsRx(t *testing.T) {
+	l, _ := newTestLoconet()
+	go l.dispatch()
+	t.Cleanup(func() { close(l.stop) })
+
+	// OPC_GPON (83 7C) is a valid 2-byte frame; feed it as a received packet.
+	l.rxCh <- lnPacket{lnOPC_GPON, 0x7C}
+
+	deadline := time.After(2 * time.Second)
+	for {
+		select {
+		case <-deadline:
+			t.Fatal("timeout waiting for RX frame to be counted")
+		default:
+		}
+		if l.MetricsSnapshot().RxByOpcode[lnOPC_GPON] == 1 {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
 // refreshSlots (keepalive) re-sends the last known speed for every cached slot
 // so the master does not purge it.
 func TestKeepaliveRefreshesCachedSlots(t *testing.T) {

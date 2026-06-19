@@ -52,3 +52,19 @@ func AsSlotManager(s commandstation.Station) (commandstation.SlotManager, bool) 
 	}
 	return nil, false
 }
+
+// AsMetricsSource returns the MetricsSource behind optional wrappers, so the
+// telemetry layer can read driver counters even when the station is decorated.
+func AsMetricsSource(s commandstation.Station) (commandstation.MetricsSource, bool) {
+	for s != nil {
+		if ms, ok := s.(commandstation.MetricsSource); ok {
+			return ms, true
+		}
+		u, ok := s.(innerStation)
+		if !ok {
+			return nil, false
+		}
+		s = u.Inner()
+	}
+	return nil, false
+}

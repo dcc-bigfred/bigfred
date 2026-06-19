@@ -57,6 +57,24 @@ type lnSerialTransport struct {
 	// a count of zero is a strong signal the bus is dead / unpowered / miswired,
 	// not that the addressed module failed to answer.
 	rxBytes atomic.Uint64
+
+	// Reliability counters surfaced for telemetry via lnTransportStats.
+	badChecksum   atomic.Uint64 // frames dropped on RX for a bad checksum
+	reconnects    atomic.Uint64 // successful port reopens
+	writeTimeouts atomic.Uint64 // WritePacket watchdog firings
+	writeErrors   atomic.Uint64 // WritePacket failures (incl. timeouts)
+}
+
+// lnTransportStats implements lnStatsTransport, surfacing low-level serial
+// reliability counters for the metrics snapshot.
+func (t *lnSerialTransport) lnTransportStats() lnTransportStatsSnapshot {
+	return lnTransportStatsSnapshot{
+		RxBytes:       t.rxBytes.Load(),
+		BadChecksum:   t.badChecksum.Load(),
+		Reconnects:    t.reconnects.Load(),
+		WriteTimeouts: t.writeTimeouts.Load(),
+		WriteErrors:   t.writeErrors.Load(),
+	}
 }
 
 func newLnSerialTransport(device string, baudrate int, rxCh chan<- lnPacket) (*lnSerialTransport, error) {
@@ -134,6 +152,7 @@ func (t *lnSerialTransport) WritePacket(pkt []byte) error {
 	select {
 	case err := <-done:
 		if err != nil {
+			t.writeErrors.Add(1)
 			t.signalReconnect()
 		}
 		return err
@@ -141,6 +160,8 @@ func (t *lnSerialTransport) WritePacket(pkt []byte) error {
 		// Stuck write: ask the supervisor to reconnect, which closes this fd
 		// and unblocks the goroutine above. Wait (bounded) for it to unwind
 		// so two writes never race on a live fd.
+		t.writeTimeouts.Add(1)
+		t.writeErrors.Add(1)
 		t.signalReconnect()
 		select {
 		case <-done:
@@ -220,6 +241,7 @@ func (t *lnSerialTransport) doReconnect() {
 		t.mu.Lock()
 		t.port = p
 		t.mu.Unlock()
+		t.reconnects.Add(1)
 		logrus.WithFields(logrus.Fields{
 			"device":   t.device,
 			"baudrate": t.baudrate,
@@ -275,6 +297,7 @@ func (t *lnSerialTransport) readLoop() {
 				continue
 			}
 			if !lnChecksumOK(pkt) {
+				t.badChecksum.Add(1)
 				logrus.Debugf("loconet serial: dropping packet (bad checksum): % X", pkt)
 				continue
 			}

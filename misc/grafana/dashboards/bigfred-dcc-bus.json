@@ -20,7 +20,19 @@
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
   "id": null,
-  "links": [],
+  "links": [
+    {
+      "asDropdown": false,
+      "icon": "external link",
+      "includeVars": true,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "LocoNet (bus metrics)",
+      "type": "link",
+      "url": "/d/bigfred-dcc-bus-loconet/bigfred-dcc-bus-loconet"
+    }
+  ],
   "panels": [
     {
       "collapsed": false,

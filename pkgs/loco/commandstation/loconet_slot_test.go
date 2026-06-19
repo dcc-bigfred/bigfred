@@ -16,12 +16,15 @@ type slotServerTransport struct {
 	tx    [][]byte
 	slot  byte // slot number the station reports for the queried address
 	stat1 byte // STAT1 returned for OPC_LOCO_ADR (e.g. COMMON or IN_USE)
+	speed byte // SPD reported in the slot read
+	dirf  byte // DIRF reported in the slot read (0x20 = forward)
+	snd   byte // SND reported in the slot read
 }
 
 func (s *slotServerTransport) WritePacket(pkt []byte) error {
 	s.mu.Lock()
 	s.tx = append(s.tx, append([]byte(nil), pkt...))
-	slot, stat1 := s.slot, s.stat1
+	slot, stat1, speed, dirf, snd := s.slot, s.stat1, s.speed, s.dirf, s.snd
 	s.mu.Unlock()
 
 	if len(pkt) == 0 {
@@ -30,11 +33,11 @@ func (s *slotServerTransport) WritePacket(pkt []byte) error {
 	switch pkt[0] {
 	case lnOPC_LOCO_ADR:
 		addr := LocoAddr(pkt[2]&0x7F) | (LocoAddr(pkt[1]&0x7F) << 7)
-		s.rxCh <- buildSlotRead(slot, stat1, addr)
+		s.rxCh <- buildSlotRead(slot, stat1, addr, speed, dirf, snd)
 	case lnOPC_MOVE_SLOTS:
 		// NULL MOVE (src==dst): confirm by echoing the slot as IN_USE.
 		if pkt[1] == pkt[2] {
-			s.rxCh <- buildSlotRead(pkt[1], lnSLOT_IN_USE, 0)
+			s.rxCh <- buildSlotRead(pkt[1], lnSLOT_IN_USE, 0, 0, 0x20, 0)
 		}
 	}
 	return nil
@@ -50,18 +53,18 @@ func (s *slotServerTransport) txFrames() [][]byte {
 	return out
 }
 
-func buildSlotRead(slot, stat1 byte, addr LocoAddr) lnPacket {
+func buildSlotRead(slot, stat1 byte, addr LocoAddr, speed, dirf, snd byte) lnPacket {
 	msg := []byte{
 		lnOPC_SL_RD_DATA, 0x0E,
 		slot,
 		stat1,
 		byte(addr & 0x7F), // adr lo
-		0x00,              // speed
-		0x20,              // dirf (forward)
+		speed,             // speed
+		dirf,              // dirf
 		0x00,              // trk
 		0x00,              // stat2
 		byte((addr >> 7) & 0x7F), // adr hi
-		0x00,                     // snd
+		snd,                      // snd
 		0x00,                     // id1
 		0x00,                     // id2
 	}
@@ -71,7 +74,7 @@ func buildSlotRead(slot, stat1 byte, addr LocoAddr) lnPacket {
 func newSlotTestLoconet(slot, stat1 byte) (*LocoNet, *slotServerTransport) {
 	l := newLocoNetBase()
 	l.minTxGap = 0
-	srv := &slotServerTransport{rxCh: l.rxCh, slot: slot, stat1: stat1}
+	srv := &slotServerTransport{rxCh: l.rxCh, slot: slot, stat1: stat1, dirf: 0x20}
 	l.t = srv
 	go l.dispatch()
 	return l, srv
@@ -98,6 +101,42 @@ func TestAcquireSlotReclaimsCommonSlot(t *testing.T) {
 	}
 	if countOpcode(tx, lnOPC_MOVE_SLOTS) != 1 {
 		t.Fatalf("expected one NULL MOVE for a COMMON slot, got % X", tx)
+	}
+}
+
+// On subscription, AcquireSlot must refresh BigFred's cache (speed, direction
+// and the F0..F8 groups) straight from the bus slot reply, so a returning
+// client and the keepalive/fast paths see the command station's current view
+// rather than a stale value.
+func TestAcquireSlotRefreshesCacheFromBus(t *testing.T) {
+	l := newLocoNetBase()
+	l.minTxGap = 0
+	// dirf 0x20 (forward) + F1 (bit 0) on; snd has F5 (bit 0) on.
+	srv := &slotServerTransport{
+		rxCh:  l.rxCh,
+		slot:  6,
+		stat1: lnSLOT_IN_USE, // already in use → no NULL MOVE noise
+		speed: 73,
+		dirf:  0x20 | 0x01,
+		snd:   0x01,
+	}
+	l.t = srv
+	go l.dispatch()
+	t.Cleanup(func() { close(l.stop) })
+
+	const addr LocoAddr = 31
+	if err := l.AcquireSlot(addr); err != nil {
+		t.Fatalf("AcquireSlot: %v", err)
+	}
+
+	if spd, ok := l.getSpd(addr); !ok || spd != 73 {
+		t.Fatalf("cached speed = %d (ok=%v), want 73 from bus slot data", spd, ok)
+	}
+	if dirf := l.getDirf(addr); dirf != (0x20 | 0x01) {
+		t.Fatalf("cached dirf = %#x, want %#x", dirf, 0x20|0x01)
+	}
+	if snd := l.getSnd(addr); snd != 0x01 {
+		t.Fatalf("cached snd = %#x, want 0x01", snd)
 	}
 }
 

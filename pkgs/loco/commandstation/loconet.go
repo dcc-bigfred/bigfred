@@ -823,7 +823,17 @@ func (l *LocoNet) ensureSlotLocked(addr LocoAddr) (byte, error) {
 	if slot, ok := l.getSlot(addr); ok {
 		return slot, nil
 	}
+	return l.acquireSlotFreshLocked(addr)
+}
 
+// acquireSlotFreshLocked always queries the command station for addr's slot,
+// refreshes the cache (re-mapping if the slot number changed) and asserts
+// IN_USE via NULL MOVE. Unlike ensureSlotLocked it ignores the cache, so it
+// reclaims a slot the command station purged to COMMON or reassigned to another
+// loco while BigFred was idle. NULL MOVE runs only when the slot is not already
+// IN_USE, so an active physical throttle (FRED) currently owning the slot is
+// never stolen. Caller holds reqMu and has called beginSync.
+func (l *LocoNet) acquireSlotFreshLocked(addr LocoAddr) (byte, error) {
 	// Request slot allocation/lookup.
 	if err := l.sendLocked(lnBuildLocoAdr(addr)); err != nil {
 		return 0, err
@@ -855,6 +865,43 @@ func (l *LocoNet) ensureSlotLocked(addr LocoAddr) (byte, error) {
 		}
 	}
 	return 0, fmt.Errorf("timeout waiting for slot data for loco %d", addr)
+}
+
+// AcquireSlot makes BigFred the authoritative server-side owner of addr's slot.
+// It queries the command station fresh (ignoring the cache) and asserts IN_USE,
+// reclaiming a slot the master purged to COMMON or reassigned while the loco was
+// idle — so a client leaving and returning to the throttle never silently loses
+// control. Slots are owned per-locomotive by the server, independent of any
+// session; the drive-permission layer is enforced separately by the caller.
+//
+// Idempotent and intended for the subscribe path, not the per-tick speed path:
+// it performs a command-station round trip. An already-IN_USE slot (e.g. held by
+// a physical FRED) is left untouched.
+func (l *LocoNet) AcquireSlot(addr LocoAddr) error {
+	if addr == 0 {
+		return fmt.Errorf("loconet: AcquireSlot invalid addr 0")
+	}
+	l.reqMu.Lock()
+	defer l.reqMu.Unlock()
+	l.beginSync()
+	defer l.endSync()
+
+	var lastErr error
+	for i := 0; i <= lnSlotAcquireRetries; i++ {
+		if i > 0 {
+			l.metrics.incr(&l.metrics.slotRetries)
+		}
+		if _, err := l.acquireSlotFreshLocked(addr); err == nil {
+			l.metrics.incr(&l.metrics.slotAcquires)
+			return nil
+		} else {
+			lastErr = err
+			logrus.Debugf("loconet: AcquireSlot attempt %d/%d for addr %d failed: %v",
+				i+1, lnSlotAcquireRetries+1, addr, err)
+		}
+	}
+	l.metrics.incr(&l.metrics.slotAcquireFails)
+	return lastErr
 }
 
 // nullMoveLocked sends OPC_MOVE_SLOTS with src==dst (NULL MOVE), which
@@ -935,6 +982,12 @@ func (l *LocoNet) setSlot(addr LocoAddr, slot byte) {
 		return
 	}
 	l.slotMu.Lock()
+	// If the command station moved this loco to a different slot (purge +
+	// reassignment), drop the stale reverse mapping so bus traffic on the old
+	// slot is no longer misattributed to this address.
+	if prev, ok := l.slotByAd[addr]; ok && prev != slot {
+		delete(l.slotAddr, prev)
+	}
 	l.slotByAd[addr] = slot
 	l.slotAddr[slot] = addr
 	l.slotMu.Unlock()

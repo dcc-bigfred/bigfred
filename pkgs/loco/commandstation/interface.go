@@ -29,6 +29,15 @@ func (cv *CV) Translate() uint16 {
 // physical throttles, and acquiring slots dispatched by physical throttles.
 // Callers type-assert the Station value before use.
 type SlotManager interface {
+	// AcquireSlot makes the driver the authoritative server-side owner of the
+	// slot for addr, querying the command station fresh and asserting IN_USE.
+	// It reclaims a slot the master purged to COMMON or reassigned while the
+	// loco was idle, so control survives a client leaving and returning.
+	// Slots are owned per-locomotive, not per-session; the drive-permission
+	// layer is enforced separately by the caller. An already-IN_USE slot
+	// (e.g. held by a physical throttle) is left untouched.
+	AcquireSlot(addr LocoAddr) error
+
 	// ReleaseSlot marks the slot for addr as COMMON on the command station
 	// (no active throttle owner) and removes it from the local cache.
 	// The locomotive continues at its current speed; call SetSpeed first

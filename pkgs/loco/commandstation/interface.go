@@ -46,6 +46,17 @@ type SlotManager interface {
 	AcquireDispatched() (LocoAddr, error)
 }
 
+// MetricsSource is an optional interface implemented by drivers that expose a
+// point-in-time snapshot of low-level counters for telemetry. Implementations
+// import no telemetry library and only bump atomic counters on the hot path;
+// the dcc-bus layer reads the snapshot and maps it onto OpenTelemetry
+// instruments. Callers type-assert the Station value before use.
+type MetricsSource interface {
+	// MetricsSnapshot returns the current cumulative counters and instantaneous
+	// gauges. It is safe to call concurrently with bus traffic.
+	MetricsSnapshot() LnMetricsSnapshot
+}
+
 // Station is the synchronous request/response surface every driver
 // implements. Drivers that can additionally report state changes seen
 // on the bus (including external throttles) also implement the optional

@@ -16,6 +16,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
+	"go.opentelemetry.io/otel/metric"
 
 	"github.com/keskad/loco/pkgs/bigfred/contract"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/auth"
@@ -71,6 +72,7 @@ type Daemon struct {
 	srv             *http.Server
 	router          *cmd.Router
 	metricsShutdown func(context.Context) error
+	lnMetricsReg    metric.Registration
 }
 
 // New validates cfg, opens Redis + the command station driver and
@@ -187,6 +189,27 @@ func New(ctx context.Context, log *logrus.Logger, cfg Config) (*Daemon, error) {
 		"connection":       station.Describe(cs),
 	}).Info("dcc-bus command station driver ready")
 
+	// Register LocoNet driver metrics (RX/TX, per-opcode, slots, saturation).
+	// Observable instruments read a snapshot at each OTLP export; no extra
+	// goroutine. Only wired when the driver exposes counters (LocoNet) and
+	// telemetry is on.
+	var lnMetricsReg metric.Registration
+	if cfg.EnableTelemetry && cfg.OTLPEndpoint != "" {
+		if src, ok := station.AsMetricsSource(st); ok {
+			reg, regErr := station.StartLocoNetMetrics(src, station.LocoNetMetricsConfig{
+				LayoutID:         cfg.LayoutID,
+				CommandStationID: cfg.CommandStationID,
+				Kind:             cs.Kind,
+			})
+			if regErr != nil {
+				log.WithError(regErr).Warn("dcc-bus loconet metrics registration failed")
+			} else {
+				lnMetricsReg = reg
+				log.Info("dcc-bus loconet driver metrics enabled")
+			}
+		}
+	}
+
 	hub := ws.NewHub()
 
 	router, err := cmd.NewRouter(ctx, cmd.Config{
@@ -259,6 +282,7 @@ func New(ctx context.Context, log *logrus.Logger, cfg Config) (*Daemon, error) {
 		srv:             srv,
 		router:          router,
 		metricsShutdown: metricsShutdown,
+		lnMetricsReg:    lnMetricsReg,
 	}, nil
 }
 
@@ -413,6 +437,9 @@ func (d *Daemon) Close() error {
 	// Let the clean up happen - release all assigned slots for example
 	if d.router != nil {
 		d.router.Shutdown()
+	}
+	if d.lnMetricsReg != nil {
+		_ = d.lnMetricsReg.Unregister()
 	}
 	if d.rds != nil {
 		_ = d.rds.Close()

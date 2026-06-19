@@ -95,6 +95,10 @@ type LocoNet struct {
 	// the only authoritative copy is the one we keep here, updated both
 	// when WE send and when we observe such a packet on the shared bus.
 	extFnByA map[LocoAddr]uint32
+
+	// metrics holds lock-free hot-path counters. Always non-nil; bumping it is
+	// near-free and OTel-agnostic (see loconet_metrics.go).
+	metrics *lnMetrics
 }
 
 // LocoNet TX/timeout tuning. These trade a touch of latency for the ability to
@@ -135,7 +139,43 @@ func newLocoNetBase() *LocoNet {
 		spdByA:            make(map[LocoAddr]byte),
 		speedGenByA:       make(map[LocoAddr]uint64),
 		extFnByA:          make(map[LocoAddr]uint32),
+		metrics:           newLnMetrics(),
 	}
+}
+
+// MetricsSnapshot implements the MetricsSource interface: it returns the
+// current cumulative counters plus instantaneous gauges (active slots, channel
+// depths) and any reliability counters the transport tracks. OTel-free by
+// design; the dcc-bus telemetry layer maps it onto instruments.
+func (l *LocoNet) MetricsSnapshot() LnMetricsSnapshot {
+	s := l.metrics.snapshot()
+
+	// RX bytes come from the transport (it counts raw bytes off the wire).
+	s.RxBytes = l.rxByteCount()
+
+	// Fold in transport-level reliability counters when available.
+	if st, ok := l.t.(lnStatsTransport); ok {
+		ts := st.lnTransportStats()
+		if ts.RxBytes > 0 {
+			s.RxBytes = ts.RxBytes
+		}
+		s.BadChecksum = ts.BadChecksum
+		s.Reconnects = ts.Reconnects
+		s.WriteTimeouts = ts.WriteTimeouts
+		// Prefer the transport's write-error tally when it tracks one.
+		if ts.WriteErrors > s.TxErrors {
+			s.TxErrors = ts.WriteErrors
+		}
+	}
+
+	// Gauges.
+	l.slotMu.Lock()
+	s.SlotsActive = int64(len(l.slotByAd))
+	l.slotMu.Unlock()
+	s.RxQueueLen, s.RxQueueCap = int64(len(l.rxCh)), int64(cap(l.rxCh))
+	s.ObsQueueLen, s.ObsQueueCap = int64(len(l.obsCh)), int64(cap(l.obsCh))
+	s.SyncQueueLen, s.SyncQueueCap = int64(len(l.syncCh)), int64(cap(l.syncCh))
+	return s
 }
 
 func NewLocoNetSerial(device string, baudrate int) (*LocoNet, error) {
@@ -251,11 +291,15 @@ func (l *LocoNet) dispatch() {
 				return
 			}
 			logrus.Debugf("loconet RX: % X", []byte(pkt))
+			if len(pkt) > 0 {
+				l.metrics.countRx(pkt[0])
+			}
 			l.observe(pkt)
 			if l.syncActive.Load() {
 				select {
 				case l.syncCh <- pkt:
 				default:
+					l.metrics.incr(&l.metrics.syncDropped)
 				}
 			}
 		}
@@ -361,6 +405,7 @@ func (l *LocoNet) emit(obs LocoObservation) {
 	select {
 	case l.obsCh <- obs:
 	default:
+		l.metrics.incr(&l.metrics.obsDropped)
 		logrus.Debug("loconet: observation channel full, dropping update")
 	}
 }
@@ -656,6 +701,7 @@ func (l *LocoNet) writeSpeed(addr LocoAddr, slot, lnSpeed byte, forward bool, ge
 
 	l.pace()
 	if l.currentSpeedGen(addr) != gen {
+		l.metrics.incr(&l.metrics.txCoalesced)
 		return nil // superseded by a newer SetSpeed; drop this stale frame
 	}
 	if err := l.writeRaw(lnBuildSetSpeed(slot, lnSpeed)); err != nil {
@@ -699,14 +745,19 @@ func (l *LocoNet) acquireSlot(addr LocoAddr) (byte, error) {
 
 	var lastErr error
 	for i := 0; i <= lnSlotAcquireRetries; i++ {
+		if i > 0 {
+			l.metrics.incr(&l.metrics.slotRetries)
+		}
 		slot, err := l.ensureSlotLocked(addr)
 		if err == nil {
+			l.metrics.incr(&l.metrics.slotAcquires)
 			return slot, nil
 		}
 		lastErr = err
 		logrus.Debugf("loconet: slot acquire attempt %d/%d for addr %d failed: %v",
 			i+1, lnSlotAcquireRetries+1, addr, err)
 	}
+	l.metrics.incr(&l.metrics.slotAcquireFails)
 	return 0, lastErr
 }
 
@@ -746,6 +797,7 @@ func (l *LocoNet) pace() {
 		return
 	}
 	if wait := l.minTxGap - time.Since(l.lastTxAt); wait > 0 {
+		l.metrics.addPaceWait(int64(wait))
 		time.Sleep(wait)
 	}
 }
@@ -759,6 +811,11 @@ func (l *LocoNet) writeRaw(pkt []byte) error {
 	logrus.Debugf("loconet TX: % X", pkt)
 	err := l.t.WritePacket(pkt)
 	l.lastTxAt = time.Now()
+	if err != nil {
+		l.metrics.incr(&l.metrics.txErrors)
+	} else if len(pkt) > 0 {
+		l.metrics.countTx(pkt[0], len(pkt))
+	}
 	return err
 }
 
@@ -822,6 +879,7 @@ func (l *LocoNet) nullMoveLocked(slot byte) error {
 		// OPC_LONG_ACK for OPC_MOVE_SLOTS: B4 <BA&0x7F=0x3A> <code> <chk>
 		if len(pkt) >= 4 && pkt[0] == lnOPC_LONG_ACK && pkt[1] == (lnOPC_MOVE_SLOTS&0x7F) {
 			if pkt[2] == 0x00 {
+				l.metrics.incr(&l.metrics.lackRejections)
 				return fmt.Errorf("loconet: null move rejected by command station for slot %d", slot)
 			}
 			return nil // any non-zero code means accepted
@@ -915,6 +973,7 @@ func (l *LocoNet) ReleaseSlot(addr LocoAddr) error {
 		return err
 	}
 	l.clearSlot(addr, slot)
+	l.metrics.incr(&l.metrics.slotReleases)
 	logrus.Debugf("loconet: released slot %d for addr %d (set COMMON)", slot, addr)
 	return nil
 }
@@ -944,14 +1003,17 @@ func (l *LocoNet) DispatchSlot(addr LocoAddr) error {
 		}
 		if sd, ok := parseLnSlotData(pkt); ok && sd.Slot == slot {
 			l.clearSlot(addr, slot)
+			l.metrics.incr(&l.metrics.slotDispatches)
 			logrus.Debugf("loconet: dispatched slot %d for addr %d", slot, addr)
 			return nil
 		}
 		if len(pkt) >= 4 && pkt[0] == lnOPC_LONG_ACK && pkt[1] == (lnOPC_MOVE_SLOTS&0x7F) {
 			if pkt[2] == 0x00 {
+				l.metrics.incr(&l.metrics.lackRejections)
 				return fmt.Errorf("loconet: dispatch PUT rejected for slot %d (addr %d)", slot, addr)
 			}
 			l.clearSlot(addr, slot)
+			l.metrics.incr(&l.metrics.slotDispatches)
 			logrus.Debugf("loconet: dispatched slot %d for addr %d (LACK)", slot, addr)
 			return nil
 		}
@@ -1095,7 +1157,9 @@ func (l *LocoNet) refreshSlots() {
 		}
 		if err := l.sendLocked(lnBuildSetSpeed(p.slot, spd)); err != nil {
 			logrus.WithError(err).Debugf("loconet keepalive: slot %d addr %d", p.slot, p.addr)
+			continue
 		}
+		l.metrics.incr(&l.metrics.keepaliveRefresh)
 	}
 }
 

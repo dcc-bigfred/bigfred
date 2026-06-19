@@ -85,6 +85,20 @@
         "vehicle_is_dummy": "Ten skład nie ma przypisanego adresu DCC.",
         "vehicle_not_on_layout": "Ten skład nie znajduje się na makiecie.",
         "dcc_bus_unavailable": "Magistrala DCC jest niedostępna."
+      },
+      "takeoverError": {
+        "error": "Nie udało się wysłać prośby o przejęcie.",
+        "not_signalman": "Nie masz uprawnień nastawniczego.",
+        "not_interlocking_occupant": "Musisz obsadzić nastawnię, aby przejąć sterowanie.",
+        "takeover_not_configured": "Przejęcie sterowania nie jest skonfigurowane.",
+        "takeover_target_not_on_layout": "Ten skład nie znajduje się na makiecie.",
+        "takeover_not_owner": "Nie możesz przejąć własnego składu.",
+        "takeover_already_pending": "Prośba o przejęcie tego składu jest już w toku.",
+        "takeover_not_found": "Nie znaleziono prośby o przejęcie.",
+        "takeover_invalid_state": "Prośba o przejęcie jest w nieprawidłowym stanie.",
+        "takeover_failed": "Nie udało się wysłać prośby o przejęcie.",
+        "control_offline": "Połączenie z serwerem jest niedostępne.",
+        "ack_timeout": "Serwer nie odpowiedział na czas."
       }
     },
     "takeover": {

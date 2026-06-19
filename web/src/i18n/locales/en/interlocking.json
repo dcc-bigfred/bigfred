@@ -85,6 +85,20 @@
         "vehicle_is_dummy": "This consist has no DCC address assigned.",
         "vehicle_not_on_layout": "This consist is not on the layout.",
         "dcc_bus_unavailable": "The DCC bus is unavailable."
+      },
+      "takeoverError": {
+        "error": "Failed to send the takeover request.",
+        "not_signalman": "You do not have signalman permissions.",
+        "not_interlocking_occupant": "You must staff the interlocking to take over control.",
+        "takeover_not_configured": "Takeover is not configured.",
+        "takeover_target_not_on_layout": "This consist is not on the layout.",
+        "takeover_not_owner": "You cannot take over your own consist.",
+        "takeover_already_pending": "A takeover request for this consist is already pending.",
+        "takeover_not_found": "Takeover request not found.",
+        "takeover_invalid_state": "The takeover request is in an invalid state.",
+        "takeover_failed": "Failed to send the takeover request.",
+        "control_offline": "The server connection is unavailable.",
+        "ack_timeout": "The server did not respond in time."
       }
     },
     "takeover": {

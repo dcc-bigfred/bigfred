@@ -40,7 +40,11 @@ func (a *RouterAdapter) HandleEStop(ctx context.Context, sess *Session, payload 
 }
 
 func (a *RouterAdapter) HandleSessionClose(ctx context.Context, sess *Session, reason string) {
-	a.inner.HandleSessionClose(ctx, actor(sess), reason)
+	a.inner.HandleSessionClose(ctx, cmd.Actor{
+		UserID:                 sess.UserID,
+		SessionID:              sess.ID,
+		ClosingSubscribedAddrs: append([]uint16(nil), sess.SubscribedAddrs()...),
+	}, reason)
 }
 
 func actor(sess *Session) cmd.Actor {

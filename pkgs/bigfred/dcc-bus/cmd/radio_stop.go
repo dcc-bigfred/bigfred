@@ -20,7 +20,7 @@ func (r *Router) HandleRadioStop(ctx context.Context) {
 			continue
 		}
 		seen[sess.UserID] = struct{}{}
-		targets := r.collectDriveTargetsForUser(ctx, sess.UserID)
+		targets := r.collectDriveTargetsForUser(ctx, sess.UserID, nil)
 		if len(targets) == 0 {
 			continue
 		}

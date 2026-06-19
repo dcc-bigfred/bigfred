@@ -15,7 +15,7 @@
       }
     ]
   },
-  "description": "LocoNet driver OTLP metrics from dcc-bus: bus utilization (% of 16.66 kbit/s capacity), throughput (RX/TX), per-opcode traffic, TX pacer saturation, slot lifecycle, transport reliability, and internal queue backpressure. Requires a LocoNet command station with telemetry enabled.",
+  "description": "LocoNet driver OTLP metrics from dcc-bus: bus utilization (% of 16.66 kbit/s capacity), estimated max slot capacity (linear extrapolation from BigFred TX), throughput (RX/TX), per-opcode traffic, TX pacer saturation, slot lifecycle, transport reliability, and internal queue backpressure. Requires a LocoNet command station with telemetry enabled.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -524,7 +524,7 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 6,
+        "w": 4,
         "x": 0,
         "y": 6
       },
@@ -601,8 +601,8 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 6,
-        "x": 6,
+        "w": 4,
+        "x": 4,
         "y": 6
       },
       "id": 417,
@@ -678,8 +678,8 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 6,
-        "x": 12,
+        "w": 4,
+        "x": 8,
         "y": 6
       },
       "id": 418,
@@ -755,8 +755,8 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 6,
-        "x": 18,
+        "w": 4,
+        "x": 12,
         "y": 6
       },
       "id": 419,
@@ -788,6 +788,77 @@
         }
       ],
       "title": "Bus load (frames)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "Linear extrapolation: active slots divided by BigFred TX byte utilization (2083 B/s ceiling). If each slot keeps its current average TX load, this is how many slots the bus could carry before saturation. When no WebSocket sessions are connected, the slot count is floored at 1 so idle daemons still show a theoretical capacity (TX utilization is floored at 1%). Ignores traffic from other LocoNet devices.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 10
+              },
+              {
+                "color": "green",
+                "value": 20
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 16,
+        "y": 6
+      },
+      "id": 426,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "(sum(bigfred_dcc_bus_loconet_slots_active{service_name=\"dcc-bus\", layout_id=~\"$layout_id\", command_station_id=~\"$command_station_id\", station_kind=~\"$station_kind\"}) + (sum(bigfred_dcc_bus_ws_sessions_active{service_name=\"dcc-bus\", layout_id=~\"$layout_id\", command_station_id=~\"$command_station_id\"}) == bool 0) * (sum(bigfred_dcc_bus_loconet_slots_active{service_name=\"dcc-bus\", layout_id=~\"$layout_id\", command_station_id=~\"$command_station_id\", station_kind=~\"$station_kind\"}) == bool 0)) / clamp_min(sum(rate(bigfred_dcc_bus_loconet_bytes_total{service_name=\"dcc-bus\", layout_id=~\"$layout_id\", command_station_id=~\"$command_station_id\", station_kind=~\"$station_kind\", direction=\"tx\"}[$__rate_interval])) / 2083, 0.01)",
+          "legendFormat": "est. max slots",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Est. max slots",
       "type": "stat"
     },
     {

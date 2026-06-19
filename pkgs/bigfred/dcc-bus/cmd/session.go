@@ -13,7 +13,7 @@ import (
 // HandleSessionClose runs the dead-man's plan when a browser session ends.
 func (r *Router) HandleSessionClose(ctx context.Context, actor Actor, reason string) {
 	if r.isLastSessionForUser(actor) {
-		addrs := r.collectDriveTargetsForUser(ctx, actor.UserID)
+		addrs := r.collectDriveTargetsForUser(ctx, actor.UserID, actor.ClosingSubscribedAddrs)
 		r.log.WithFields(logrus.Fields{
 			"sessionId": actor.SessionID,
 			"userId":    actor.UserID,
@@ -101,7 +101,7 @@ func (r *Router) collectSessionAddrs(sessionID string) []uint16 {
 	return nil
 }
 
-func (r *Router) collectDriveTargetsForUser(ctx context.Context, userID uint) []uint16 {
+func (r *Router) collectDriveTargetsForUser(ctx context.Context, userID uint, extraAddrs []uint16) []uint16 {
 	seen := make(map[uint16]struct{}, 8)
 	add := func(out *[]uint16, addr uint16) {
 		if _, ok := seen[addr]; ok {
@@ -111,6 +111,9 @@ func (r *Router) collectDriveTargetsForUser(ctx context.Context, userID uint) []
 		*out = append(*out, addr)
 	}
 	var addrs []uint16
+	for _, addr := range extraAddrs {
+		add(&addrs, addr)
+	}
 	for _, s := range r.hub.SessionsForUser(userID) {
 		for _, addr := range s.SubscribedAddrs {
 			add(&addrs, addr)

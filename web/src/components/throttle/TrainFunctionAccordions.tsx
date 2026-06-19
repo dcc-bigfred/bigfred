@@ -26,7 +26,8 @@ export interface TrainAccordionMember {
   memberId: number;
   vehicleId: number;
   name: string;
-  dccAddress: number;
+  dccAddress: number | null;
+  isDummy: boolean;
   isLeading: boolean;
   speedMultiplier: number;
 }
@@ -53,7 +54,43 @@ function useMemberFunctions(vehicleId: number): ThrottleCockpitFunction[] {
   );
 }
 
-function TrainMemberAccordion({
+function TrainDummyMemberRow({ member }: { member: TrainAccordionMember }) {
+  const { t } = useTranslation(["throttle", "vehicle"]);
+
+  return (
+    <Box
+      sx={{
+        bgcolor: cockpit.bgPanel,
+        color: cockpit.text,
+        border: `1px solid ${cockpit.border}`,
+        borderRadius: "4px",
+        display: "flex",
+        alignItems: "center",
+        gap: 1,
+        px: 1.5,
+        py: 1,
+        minHeight: 44,
+      }}
+    >
+      <Typography variant="body2" noWrap sx={{ fontWeight: 600, flex: 1, minWidth: 0 }}>
+        {member.name}
+      </Typography>
+      <Chip
+        size="small"
+        label={t("vehicle:dummyBadge")}
+        sx={{
+          height: 22,
+          fontSize: "0.7rem",
+          color: cockpit.textMuted,
+          border: `1px solid ${cockpit.border}`,
+          "& .MuiChip-label": { px: 1 },
+        }}
+      />
+    </Box>
+  );
+}
+
+function TrainPoweredMemberAccordion({
   member,
   state,
   expanded,
@@ -63,7 +100,7 @@ function TrainMemberAccordion({
   showMultiplierCog,
   disabled,
 }: {
-  member: TrainAccordionMember;
+  member: TrainAccordionMember & { dccAddress: number };
   state: LocoState | undefined;
   expanded: boolean;
   onToggleExpanded: () => void;
@@ -197,19 +234,24 @@ export default function TrainFunctionAccordions({
 }: TrainFunctionAccordionsProps) {
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
-      {members.map((member) => (
-        <TrainMemberAccordion
-          key={member.memberId}
-          member={member}
-          state={states.get(member.dccAddress)}
-          expanded={expandedMemberIds.includes(member.memberId)}
-          onToggleExpanded={() => onToggleExpanded(member.memberId)}
-          onFunctionToggle={(fn) => onFunctionToggle(member.memberId, fn)}
-          onOpenSettings={() => onOpenSettings(member.memberId)}
-          showMultiplierCog={showMultiplierCog}
-          disabled={disabled}
-        />
-      ))}
+      {members.map((member) => {
+        if (member.isDummy || member.dccAddress == null) {
+          return <TrainDummyMemberRow key={member.memberId} member={member} />;
+        }
+        return (
+          <TrainPoweredMemberAccordion
+            key={member.memberId}
+            member={{ ...member, dccAddress: member.dccAddress }}
+            state={states.get(member.dccAddress)}
+            expanded={expandedMemberIds.includes(member.memberId)}
+            onToggleExpanded={() => onToggleExpanded(member.memberId)}
+            onFunctionToggle={(fn) => onFunctionToggle(member.memberId, fn)}
+            onOpenSettings={() => onOpenSettings(member.memberId)}
+            showMultiplierCog={showMultiplierCog}
+            disabled={disabled}
+          />
+        );
+      })}
     </Box>
   );
 }

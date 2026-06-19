@@ -30,7 +30,9 @@ import {
 import type { ThrottleCockpitFunction } from "../components/throttle/ThrottleCockpit";
 import AutoDismissAlert from "../components/AutoDismissAlert";
 import ThrottleCockpit from "../components/throttle/ThrottleCockpit";
-import TrainFunctionAccordions from "../components/throttle/TrainFunctionAccordions";
+import TrainFunctionAccordions, {
+  type TrainAccordionMember,
+} from "../components/throttle/TrainFunctionAccordions";
 import TrainMemberSettingsDialog from "../components/throttle/TrainMemberSettingsDialog";
 import ThrottleNavigationGuard from "../components/throttle/ThrottleNavigationGuard";
 import ThrottleSetupDialog from "../components/throttle/ThrottleSetupDialog";
@@ -413,6 +415,19 @@ function useCockpitTrains(layoutID: number) {
   );
 }
 
+type TrainMemberContext = TrainAccordionMember & {
+  excludeFromSpeed: boolean;
+  startDelayMs: number;
+  accelRampMs: number;
+  accelRampMaxSteps: number;
+  brakeRampMs: number;
+  brakeRampMaxSteps: number;
+};
+
+function trainMemberDccAddresses(members: TrainMemberContext[]): number[] {
+  return members.flatMap((m) => (m.dccAddress != null ? [m.dccAddress] : []));
+}
+
 function findLeadingMember(train: RosterTrain, vehiclesById: Map<number, { name: string; dccAddress: number | null }>) {
   const sorted = [...train.members].sort((a, b) => a.position - b.position);
   for (const m of sorted) {
@@ -434,20 +449,7 @@ function useSelectedTrainContext(layoutID: number, trainId: number | null) {
         train: null as RosterTrain | null,
         leadingAddr: null as number | null,
         leadingName: null as string | null,
-        poweredMembers: [] as Array<{
-          memberId: number;
-          vehicleId: number;
-          name: string;
-          dccAddress: number;
-          isLeading: boolean;
-          speedMultiplier: number;
-          excludeFromSpeed: boolean;
-          startDelayMs: number;
-          accelRampMs: number;
-          accelRampMaxSteps: number;
-          brakeRampMs: number;
-          brakeRampMaxSteps: number;
-        }>,
+        members: [] as TrainMemberContext[],
       };
     }
     const train = trains.find((tr) => tr.id === trainId) ?? null;
@@ -456,7 +458,7 @@ function useSelectedTrainContext(layoutID: number, trainId: number | null) {
         train: null,
         leadingAddr: null,
         leadingName: null,
-        poweredMembers: [],
+        members: [],
       };
     }
     const byId = new Map(
@@ -464,9 +466,10 @@ function useSelectedTrainContext(layoutID: number, trainId: number | null) {
     );
     const leading = findLeadingMember(train, byId);
     const sorted = [...train.members].sort((a, b) => a.position - b.position);
-    const poweredMembers = sorted.flatMap((m) => {
+    const members = sorted.flatMap((m) => {
       const v = byId.get(m.vehicleId);
-      if (v?.dccAddress == null) return [];
+      if (!v) return [];
+      const isDummy = v.dccAddress == null;
       const mult = m.speedMultiplier > 0 ? m.speedMultiplier : 1;
       return [
         {
@@ -474,7 +477,8 @@ function useSelectedTrainContext(layoutID: number, trainId: number | null) {
           vehicleId: m.vehicleId,
           name: v.name,
           dccAddress: v.dccAddress,
-          isLeading: leading?.member.id === m.id,
+          isDummy,
+          isLeading: !isDummy && leading?.member.id === m.id,
           speedMultiplier: mult,
           excludeFromSpeed: m.excludeFromSpeed,
           startDelayMs: m.startDelayMs ?? 0,
@@ -489,7 +493,7 @@ function useSelectedTrainContext(layoutID: number, trainId: number | null) {
       train,
       leadingAddr: leading?.dccAddress ?? null,
       leadingName: leading?.vehicle.name ?? null,
-      poweredMembers,
+      members,
     };
   }, [trainId, trains, vehicles]);
 }
@@ -601,11 +605,11 @@ function ConnectedThrottle({
 
   const subscribeAddrs = useMemo(() => {
     if (isTrainMode) {
-      return trainCtx.poweredMembers.map((m) => m.dccAddress);
+      return trainMemberDccAddresses(trainCtx.members);
     }
     if (selectedAddr != null) return [selectedAddr];
     return [];
-  }, [isTrainMode, trainCtx.poweredMembers, selectedAddr]);
+  }, [isTrainMode, trainCtx.members, selectedAddr]);
 
   const rosterAddrKey = subscribeAddrs.join(",");
   useEffect(() => {
@@ -687,8 +691,8 @@ function ConnectedThrottle({
     sendFunction(selectedAddr, n, !(functions[n] ?? false));
   };
   const handleTrainFn = (memberId: number, fn: number) => {
-    const member = trainCtx.poweredMembers.find((m) => m.memberId === memberId);
-    if (!member) return;
+    const member = trainCtx.members.find((m) => m.memberId === memberId);
+    if (!member || member.dccAddress == null) return;
     const memberState = states.get(member.dccAddress);
     const memberFns = memberState?.functions ?? [];
     sendFunction(member.dccAddress, fn, !(memberFns[fn] ?? false));
@@ -735,19 +739,19 @@ function ConnectedThrottle({
 
   const settingsMember =
     settingsMemberId != null
-      ? trainCtx.poweredMembers.find((m) => m.memberId === settingsMemberId)
+      ? trainCtx.members.find((m) => m.memberId === settingsMemberId)
       : undefined;
 
   const trainAccordion = isTrainMode ? (
     <TrainFunctionAccordions
-      members={trainCtx.poweredMembers}
+      members={trainCtx.members}
       states={states}
       expandedMemberIds={expandedMemberIds}
       onToggleExpanded={toggleMember}
       onFunctionToggle={handleTrainFn}
       onOpenSettings={setSettingsMemberId}
       showMultiplierCog={trainCtx.train?.ownerId === me?.id}
-      disabled={trainCtx.poweredMembers.length === 0}
+      disabled={trainMemberDccAddresses(trainCtx.members).length === 0}
     />
   ) : undefined;
 
@@ -781,7 +785,7 @@ function ConnectedThrottle({
         saving={patchMemberSettings.isPending}
         onClose={() => setSettingsMemberId(null)}
         onSave={(settings) => {
-          if (!isTrainMode || settingsMember == null) return;
+          if (!isTrainMode || settingsMember == null || settingsMember.isDummy) return;
           const isLeadingMember = settingsMember.isLeading;
           void patchMemberSettings
             .mutateAsync({

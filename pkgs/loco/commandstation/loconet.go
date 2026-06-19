@@ -36,7 +36,28 @@ func (l *LocoNet) rxByteCount() uint64 {
 type LocoNet struct {
 	t lnTransport
 
+	// timeout bounds request/response sequences that legitimately take a while
+	// (LNCV programming, manual dispatch). Slot speed/function ops use the much
+	// shorter slotTimeout instead.
 	timeout time.Duration
+
+	// slotTimeout bounds a single slot request/response (LOCO_ADR, RQ_SL_DATA,
+	// NULL MOVE). LocoNet replies arrive well under 30 ms; a tight bound keeps a
+	// lost reply from stalling slot acquisition — and thus the whole fleet — for
+	// seconds.
+	slotTimeout time.Duration
+
+	// TX pacing: txMu serializes every transport write and enforces a minimum
+	// inter-frame gap (minTxGap) matched to the 16.66 kbit/s bus, so bursts from
+	// many locomotives queue at the driver instead of overflowing the
+	// serial/socket buffer.
+	txMu     sync.Mutex
+	lastTxAt time.Time
+	minTxGap time.Duration
+
+	// keepaliveInterval is how often active slots are re-touched so the master
+	// does not purge them to COMMON after ~200 s of inactivity (spec §4.3).
+	keepaliveInterval time.Duration
 
 	// rxCh receives every packet the transport reads off the bus.
 	// A single dispatch goroutine owns it (see dispatch): it updates
@@ -64,9 +85,11 @@ type LocoNet struct {
 	slotByAd map[LocoAddr]byte
 	slotAddr map[byte]LocoAddr // reverse map, needed to attribute bus traffic
 
-	stateMu sync.Mutex
-	dirfByA map[LocoAddr]byte
-	sndByA  map[LocoAddr]byte
+	stateMu     sync.Mutex
+	dirfByA     map[LocoAddr]byte
+	sndByA      map[LocoAddr]byte
+	spdByA      map[LocoAddr]byte   // last commanded/observed slot speed, for keepalive
+	speedGenByA map[LocoAddr]uint64 // per-address SetSpeed generation, for TX coalescing
 	// extFnByA caches functions F9..F28 per address. These are NOT held
 	// in the command-station slot (they ride immediate DCC packets), so
 	// the only authoritative copy is the one we keep here, updated both
@@ -74,18 +97,44 @@ type LocoNet struct {
 	extFnByA map[LocoAddr]uint32
 }
 
+// LocoNet TX/timeout tuning. These trade a touch of latency for the ability to
+// drive many locomotives at once over the 16.66 kbit/s bus.
+const (
+	// lnDefaultMinTxGap paces transmissions to ~the bus drain rate. A 4-byte
+	// LocoNet frame plus its mandatory CD backoff occupies ~3.6 ms of bus time,
+	// so a ~5 ms floor keeps the driver from outrunning the wire and overflowing
+	// the transport buffer when many locomotives move at once.
+	lnDefaultMinTxGap = 5 * time.Millisecond
+
+	// lnDefaultSlotTimeout bounds slot request/response sequences.
+	lnDefaultSlotTimeout = 600 * time.Millisecond
+
+	// lnSlotAcquireRetries retries a timed-out slot acquisition once before
+	// giving up, since a single dropped reply is common on a busy bus.
+	lnSlotAcquireRetries = 1
+
+	// lnKeepaliveInterval re-touches active slots well within the ~200 s purge
+	// window (spec §4.3 recommends ~100 s).
+	lnKeepaliveInterval = 90 * time.Second
+)
+
 func newLocoNetBase() *LocoNet {
 	return &LocoNet{
-		timeout:  4 * time.Second,
-		rxCh:     make(chan lnPacket, 64),
-		syncCh:   make(chan lnPacket, 64),
-		obsCh:    make(chan LocoObservation, 64),
-		stop:     make(chan struct{}),
-		slotByAd: make(map[LocoAddr]byte),
-		slotAddr: make(map[byte]LocoAddr),
-		dirfByA:  make(map[LocoAddr]byte),
-		sndByA:   make(map[LocoAddr]byte),
-		extFnByA: make(map[LocoAddr]uint32),
+		timeout:           4 * time.Second,
+		slotTimeout:       lnDefaultSlotTimeout,
+		minTxGap:          lnDefaultMinTxGap,
+		keepaliveInterval: lnKeepaliveInterval,
+		rxCh:              make(chan lnPacket, 64),
+		syncCh:            make(chan lnPacket, 64),
+		obsCh:             make(chan LocoObservation, 64),
+		stop:              make(chan struct{}),
+		slotByAd:          make(map[LocoAddr]byte),
+		slotAddr:          make(map[byte]LocoAddr),
+		dirfByA:           make(map[LocoAddr]byte),
+		sndByA:            make(map[LocoAddr]byte),
+		spdByA:            make(map[LocoAddr]byte),
+		speedGenByA:       make(map[LocoAddr]uint64),
+		extFnByA:          make(map[LocoAddr]uint32),
 	}
 }
 
@@ -97,6 +146,7 @@ func NewLocoNetSerial(device string, baudrate int) (*LocoNet, error) {
 	}
 	ln.t = t
 	go ln.dispatch()
+	go ln.keepaliveLoop()
 	return ln, nil
 }
 
@@ -108,6 +158,7 @@ func NewLocoNetTCP(host string, port uint16) (*LocoNet, error) {
 	}
 	ln.t = t
 	go ln.dispatch()
+	go ln.keepaliveLoop()
 	return ln, nil
 }
 
@@ -124,6 +175,7 @@ func NewLocoNetTCPBinary(host string, port uint16) (*LocoNet, error) {
 	}
 	ln.t = t
 	go ln.dispatch()
+	go ln.keepaliveLoop()
 	return ln, nil
 }
 
@@ -232,6 +284,7 @@ func (l *LocoNet) observe(pkt []byte) {
 		l.setSlot(sd.Addr, sd.Slot)
 		l.setDirf(sd.Addr, sd.DirF)
 		l.setSnd(sd.Addr, sd.Snd)
+		l.setSpd(sd.Addr, sd.Speed)
 		fns := make(map[int]bool, 9)
 		for fn := 0; fn <= 4; fn++ {
 			fns[fn] = getFnFromDirf(sd.DirF, fn)
@@ -255,6 +308,7 @@ func (l *LocoNet) observe(pkt []byte) {
 		if !ok {
 			return
 		}
+		l.setSpd(addr, pkt[2])
 		l.emit(LocoObservation{Addr: addr, HasSpeed: true, Speed: pkt[2]})
 	case lnOPC_LOCO_DIRF:
 		if len(pkt) < 4 {
@@ -502,31 +556,24 @@ func (l *LocoNet) SendFn(mode Mode, addr LocoAddr, num FuncNum, toggle bool) err
 		return fmt.Errorf("SendFn: unsupported function number %d (LocoNet driver supports F0-F28)", fn)
 	}
 
-	l.reqMu.Lock()
-	defer l.reqMu.Unlock()
-	l.beginSync()
-	defer l.endSync()
-
 	// F9..F28 are not stored in the slot; send them as an immediate DCC
 	// function-group packet addressed by loco number (no slot needed).
 	if fn >= 9 {
-		return l.sendExtFnLocked(addr, fn, toggle)
+		return l.sendExtFn(addr, fn, toggle)
 	}
 
-	slot, err := l.ensureSlotLocked(addr)
+	slot, err := l.acquireSlot(addr)
 	if err != nil {
 		return err
 	}
 
-	// refresh current state so we don't clobber other bits
-	if _, err := l.querySlotLocked(slot, addr); err != nil {
-		// not fatal; we'll try with cached state
-		logrus.Debugf("SendFn: slot query failed (continuing with cache): %v", err)
-	}
-
+	// Trust the cached DIRF/SND state. The driver keeps it current from bus
+	// observation (observe()), so the previous per-call OPC_RQ_SL_DATA round
+	// trip was redundant — and, held under the global request lock, it
+	// serialized every other locomotive behind a ~15 ms wait on each function
+	// toggle. Dropping it is the single biggest fleet-latency win.
 	if fn <= 4 {
-		dirf := l.getDirf(addr)
-		dirf = setFnInDirf(dirf, fn, toggle)
+		dirf := setFnInDirf(l.getDirf(addr), fn, toggle)
 		if err := l.sendLocked(lnBuildSetDirF(slot, dirf)); err != nil {
 			return err
 		}
@@ -534,9 +581,7 @@ func (l *LocoNet) SendFn(mode Mode, addr LocoAddr, num FuncNum, toggle bool) err
 		return nil
 	}
 
-	// fn 5..8
-	snd := l.getSnd(addr)
-	snd = setFnInSnd(snd, fn, toggle)
+	snd := setFnInSnd(l.getSnd(addr), fn, toggle)
 	if err := l.sendLocked(lnBuildSetSnd(slot, snd)); err != nil {
 		return err
 	}
@@ -582,38 +627,87 @@ func (l *LocoNet) ListFunctions(addr LocoAddr) ([]int, error) {
 	return on, nil
 }
 
+// SetSpeed sets speed and direction. On the hot path (slot already cached) it
+// takes no request/response lock: it paces a single OPC_LOCO_SPD frame — plus
+// OPC_LOCO_DIRF only when the direction bit actually changes — so 20+ locos can
+// be driven without serializing behind each other. Acquiring a slot for a
+// not-yet-seen address still goes through the request/response path once.
 func (l *LocoNet) SetSpeed(addr LocoAddr, speed uint8, forward bool, speedSteps uint8) error {
-	l.reqMu.Lock()
-	defer l.reqMu.Unlock()
-	l.beginSync()
-	defer l.endSync()
-
-	slot, err := l.ensureSlotLocked(addr)
-	if err != nil {
-		return err
-	}
-
 	lnSpeed, err := scaleToLnSpeed(speed, speedSteps)
 	if err != nil {
 		return err
 	}
-
-	if err := l.sendLocked(lnBuildSetSpeed(slot, lnSpeed)); err != nil {
+	slot, err := l.acquireSlot(addr)
+	if err != nil {
 		return err
 	}
+	gen := l.nextSpeedGen(addr)
+	return l.writeSpeed(addr, slot, lnSpeed, forward, gen)
+}
 
-	// Direction is carried in DIRF, so preserve functions and just set DIR bit.
+// writeSpeed paces and writes the speed frame, coalescing superseded updates:
+// if a newer SetSpeed for this address arrived while we waited for the bus, the
+// stale frame is dropped instead of wasting a scarce transmission slot. The
+// direction frame is sent only when the DIR bit changed (it rarely does during
+// a throttle sweep), halving speed-related bus traffic.
+func (l *LocoNet) writeSpeed(addr LocoAddr, slot, lnSpeed byte, forward bool, gen uint64) error {
+	l.txMu.Lock()
+	defer l.txMu.Unlock()
+
+	l.pace()
+	if l.currentSpeedGen(addr) != gen {
+		return nil // superseded by a newer SetSpeed; drop this stale frame
+	}
+	if err := l.writeRaw(lnBuildSetSpeed(slot, lnSpeed)); err != nil {
+		return err
+	}
+	l.setSpd(addr, lnSpeed)
+
 	dirf := l.getDirf(addr)
+	want := dirf
 	if forward {
-		dirf |= 0x20
+		want |= 0x20
 	} else {
-		dirf &^= 0x20
+		want &^= 0x20
 	}
-	if err := l.sendLocked(lnBuildSetDirF(slot, dirf)); err != nil {
-		return err
+	if want != dirf {
+		l.pace()
+		if err := l.writeRaw(lnBuildSetDirF(slot, want)); err != nil {
+			return err
+		}
+		l.setDirf(addr, want)
 	}
-	l.setDirf(addr, dirf)
 	return nil
+}
+
+// acquireSlot returns the slot for addr, allocating it through the
+// request/response path (under reqMu) the first time. Subsequent calls hit the
+// cache and return without taking any lock, keeping the fast path lock-free so
+// one loco's command never waits on another's.
+func (l *LocoNet) acquireSlot(addr LocoAddr) (byte, error) {
+	if slot, ok := l.getSlot(addr); ok {
+		return slot, nil
+	}
+	l.reqMu.Lock()
+	defer l.reqMu.Unlock()
+	// Another goroutine may have acquired it while we waited for reqMu.
+	if slot, ok := l.getSlot(addr); ok {
+		return slot, nil
+	}
+	l.beginSync()
+	defer l.endSync()
+
+	var lastErr error
+	for i := 0; i <= lnSlotAcquireRetries; i++ {
+		slot, err := l.ensureSlotLocked(addr)
+		if err == nil {
+			return slot, nil
+		}
+		lastErr = err
+		logrus.Debugf("loconet: slot acquire attempt %d/%d for addr %d failed: %v",
+			i+1, lnSlotAcquireRetries+1, addr, err)
+	}
+	return 0, lastErr
 }
 
 func (l *LocoNet) GetSpeed(addr LocoAddr) (speed uint8, forward bool, err error) {
@@ -634,12 +728,38 @@ func (l *LocoNet) GetSpeed(addr LocoAddr) (speed uint8, forward bool, err error)
 	return uint8(sd.Speed), forward, nil
 }
 
+// sendLocked transmits one frame with bus pacing. Despite the historical name
+// it now self-synchronizes: it takes txMu and honours the inter-frame gap, so
+// it is safe to call both from the request/response path (under reqMu) and from
+// the lock-free fast path (SetSpeed/SendFn with a cached slot).
 func (l *LocoNet) sendLocked(pkt []byte) error {
+	l.txMu.Lock()
+	defer l.txMu.Unlock()
+	l.pace()
+	return l.writeRaw(pkt)
+}
+
+// pace blocks until the minimum inter-frame gap has elapsed since the last
+// transmission, throttling the driver to the bus drain rate. Caller holds txMu.
+func (l *LocoNet) pace() {
+	if l.minTxGap <= 0 {
+		return
+	}
+	if wait := l.minTxGap - time.Since(l.lastTxAt); wait > 0 {
+		time.Sleep(wait)
+	}
+}
+
+// writeRaw validates and writes one frame to the transport, advancing the
+// pacing clock. Caller holds txMu.
+func (l *LocoNet) writeRaw(pkt []byte) error {
 	if !lnChecksumOK(pkt) {
 		return fmt.Errorf("refusing to send packet with invalid checksum: % X", pkt)
 	}
 	logrus.Debugf("loconet TX: % X", pkt)
-	return l.t.WritePacket(pkt)
+	err := l.t.WritePacket(pkt)
+	l.lastTxAt = time.Now()
+	return err
 }
 
 func (l *LocoNet) ensureSlotLocked(addr LocoAddr) (byte, error) {
@@ -652,7 +772,7 @@ func (l *LocoNet) ensureSlotLocked(addr LocoAddr) (byte, error) {
 		return 0, err
 	}
 
-	deadline := time.Now().Add(l.timeout)
+	deadline := time.Now().Add(l.slotTimeout)
 	for time.Now().Before(deadline) {
 		pkt, err := l.readPacketUntil(deadline)
 		if err != nil {
@@ -689,7 +809,7 @@ func (l *LocoNet) nullMoveLocked(slot byte) error {
 	if err := l.sendLocked(lnBuildMoveSlots(slot, slot)); err != nil {
 		return err
 	}
-	deadline := time.Now().Add(l.timeout)
+	deadline := time.Now().Add(l.slotTimeout)
 	for time.Now().Before(deadline) {
 		pkt, err := l.readPacketUntil(deadline)
 		if err != nil {
@@ -714,7 +834,7 @@ func (l *LocoNet) querySlotLocked(slot byte, addr LocoAddr) (lnSlotData, error) 
 	if err := l.sendLocked(lnBuildRqSlotData(slot)); err != nil {
 		return lnSlotData{}, err
 	}
-	deadline := time.Now().Add(l.timeout)
+	deadline := time.Now().Add(l.slotTimeout)
 	for time.Now().Before(deadline) {
 		pkt, err := l.readPacketUntil(deadline)
 		if err != nil {
@@ -903,6 +1023,82 @@ func (l *LocoNet) setSnd(addr LocoAddr, snd byte) {
 	l.stateMu.Unlock()
 }
 
+func (l *LocoNet) setSpd(addr LocoAddr, spd byte) {
+	if addr == 0 {
+		return
+	}
+	l.stateMu.Lock()
+	l.spdByA[addr] = spd
+	l.stateMu.Unlock()
+}
+
+func (l *LocoNet) getSpd(addr LocoAddr) (byte, bool) {
+	l.stateMu.Lock()
+	defer l.stateMu.Unlock()
+	spd, ok := l.spdByA[addr]
+	return spd, ok
+}
+
+// nextSpeedGen bumps and returns the per-address SetSpeed generation. Each
+// SetSpeed reserves a generation before writing; writeSpeed drops its frame if a
+// newer generation has since been reserved (TX coalescing).
+func (l *LocoNet) nextSpeedGen(addr LocoAddr) uint64 {
+	l.stateMu.Lock()
+	defer l.stateMu.Unlock()
+	l.speedGenByA[addr]++
+	return l.speedGenByA[addr]
+}
+
+func (l *LocoNet) currentSpeedGen(addr LocoAddr) uint64 {
+	l.stateMu.Lock()
+	defer l.stateMu.Unlock()
+	return l.speedGenByA[addr]
+}
+
+// keepaliveLoop periodically re-touches every cached slot so the master does
+// not purge it to COMMON after ~200 s of inactivity (spec §4.3). Without this a
+// parked locomotive silently loses BigFred's IN_USE ownership.
+func (l *LocoNet) keepaliveLoop() {
+	if l.keepaliveInterval <= 0 {
+		return
+	}
+	ticker := time.NewTicker(l.keepaliveInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-l.stop:
+			return
+		case <-ticker.C:
+			l.refreshSlots()
+		}
+	}
+}
+
+// refreshSlots re-sends each cached slot's last known speed, a harmless no-op
+// move that resets the master's purge timer.
+func (l *LocoNet) refreshSlots() {
+	type pair struct {
+		addr LocoAddr
+		slot byte
+	}
+	l.slotMu.Lock()
+	pairs := make([]pair, 0, len(l.slotByAd))
+	for addr, slot := range l.slotByAd {
+		pairs = append(pairs, pair{addr, slot})
+	}
+	l.slotMu.Unlock()
+
+	for _, p := range pairs {
+		spd, ok := l.getSpd(p.addr)
+		if !ok {
+			continue
+		}
+		if err := l.sendLocked(lnBuildSetSpeed(p.slot, spd)); err != nil {
+			logrus.WithError(err).Debugf("loconet keepalive: slot %d addr %d", p.slot, p.addr)
+		}
+	}
+}
+
 func (l *LocoNet) getExtFn(addr LocoAddr) uint32 {
 	l.stateMu.Lock()
 	defer l.stateMu.Unlock()
@@ -944,10 +1140,11 @@ func (l *LocoNet) mergeExtFn(addr LocoAddr, fns map[int]bool) {
 	l.extFnByA[addr] = bits
 }
 
-// sendExtFnLocked sets one F9..F28 function via an immediate DCC packet.
-// The whole group's bitmask is sent, taken from the per-loco cache, so
-// other functions in the group are preserved. Caller holds reqMu.
-func (l *LocoNet) sendExtFnLocked(addr LocoAddr, fn int, on bool) error {
+// sendExtFn sets one F9..F28 function via an immediate DCC packet. The whole
+// group's bitmask is sent, taken from the per-loco cache, so other functions in
+// the group are preserved. No slot and no request/response lock are needed; the
+// single frame is paced like any other write.
+func (l *LocoNet) sendExtFn(addr LocoAddr, fn int, on bool) error {
 	bits := l.setExtFn(addr, fn, on)
 	dcc, ok := dccFnGroupPacket(addr, fn, bits)
 	if !ok {

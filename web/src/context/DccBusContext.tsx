@@ -2,12 +2,12 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
   useRef,
   useState,
   type ReactNode,
 } from "react";
+import { useWsConnection } from "../hooks/useWsConnection";
 
 // LocoState is the wire shape dcc-bus pushes on every authoritative
 // state change. Mirrors `protocol.LocoStatePayload` in Go.
@@ -36,10 +36,6 @@ export type DataPlaneStatus =
   | "open"
   | "closed"
   | "error";
-
-const RECONNECT_INTERVAL_MS = 250;
-const RECONNECT_MAX_MS = 2_000;
-const CONNECT_TIMEOUT_MS = 1_000;
 
 interface DccBusContextValue {
   status: DataPlaneStatus;
@@ -97,265 +93,146 @@ export function DccBusProvider({
   children: ReactNode;
 }) {
   const [status, setStatus] = useState<DataPlaneStatus>("idle");
-  const [reconnecting, setReconnecting] = useState(false);
   const [speedSteps, setSpeedSteps] = useState<number | null>(null);
   const [pingLatencyMs, setPingLatencyMs] = useState<number | null>(null);
   const [states, setStates] = useState<Map<number, LocoState>>(new Map());
   const [lastError, setLastError] = useState<string | null>(null);
 
-  const sockRef = useRef<WebSocket | null>(null);
-  const connectGenRef = useRef(0);
-  const hadOpenedRef = useRef(false);
-  const reconnectTimerRef = useRef<number | null>(null);
   const pending = useRef<
     Map<string, (ack: { ok: boolean; error?: string }) => void>
   >(new Map());
   const pingSentAtRef = useRef<number | null>(null);
   const lastPingRttMsRef = useRef<number | null>(null);
 
-  useEffect(() => {
-    if (!wsUrl) {
-      setStatus("idle");
-      setReconnecting(false);
-      setSpeedSteps(null);
-      setPingLatencyMs(null);
-      setStates(new Map());
-      hadOpenedRef.current = false;
+  const resolvedUrl = wsUrl != null ? resolveURL(wsUrl) : null;
+
+  const handleConnecting = useCallback(() => {
+    pingSentAtRef.current = null;
+    lastPingRttMsRef.current = null;
+    setPingLatencyMs(null);
+    setLastError(null);
+    setStatus("connecting");
+  }, []);
+
+  const handleOpen = useCallback(() => {
+    setStatus("open");
+  }, []);
+
+  const handleClose = useCallback(() => {
+    setStatus("closed");
+    // Fail in-flight commands immediately instead of waiting out the
+    // ack timeout while the socket is already gone.
+    for (const resolver of pending.current.values()) {
+      resolver({ ok: false, error: "dcc_bus_offline" });
+    }
+    pending.current.clear();
+  }, []);
+
+  const handleDispose = useCallback(() => {
+    for (const resolver of pending.current.values()) {
+      resolver({ ok: false, error: "dcc_bus_offline" });
+    }
+    pending.current.clear();
+    setStatus("idle");
+    setSpeedSteps(null);
+    setPingLatencyMs(null);
+    setStates(new Map());
+  }, []);
+
+  const handleError = useCallback(() => {
+    setStatus("error");
+    setLastError("connection_error");
+    console.warn("[dcc-bus] WebSocket error", { wsUrl });
+  }, [wsUrl]);
+
+  const handlePong = useCallback(() => {
+    const sentAt = pingSentAtRef.current;
+    if (sentAt == null) return;
+    pingSentAtRef.current = null;
+    const rttMs = performance.now() - sentAt;
+    lastPingRttMsRef.current = rttMs;
+    setPingLatencyMs(rttMs);
+  }, []);
+
+  const buildPingFrame = useCallback(() => {
+    const payload =
+      lastPingRttMsRef.current != null
+        ? { lastPingLatencyMs: lastPingRttMsRef.current }
+        : {};
+    pingSentAtRef.current = performance.now();
+    return JSON.stringify({ type: "ping", payload });
+  }, []);
+
+  const handleMessage = useCallback((data: string) => {
+    let msg: { type?: string; id?: string; payload?: unknown };
+    try {
+      msg = JSON.parse(data);
+    } catch {
       return;
     }
-
-    let disposed = false;
-    // Fast first retry for brief WiFi blips, backing off to a cap so a long
-    // outage (server restart) doesn't hammer the radio and drain the battery.
-    let reconnectDelay = RECONNECT_INTERVAL_MS;
-    const resolved = wsUrl.startsWith("ws://") || wsUrl.startsWith("wss://")
-      ? wsUrl
-      : resolveURL(wsUrl);
-
-    const clearReconnect = () => {
-      if (reconnectTimerRef.current != null) {
-        window.clearTimeout(reconnectTimerRef.current);
-        reconnectTimerRef.current = null;
+    switch (msg.type) {
+      case "ack": {
+        if (!msg.id) return;
+        const resolver = pending.current.get(msg.id);
+        if (!resolver) return;
+        pending.current.delete(msg.id);
+        const ack =
+          (msg.payload as { ok?: boolean; error?: string }) ?? { ok: false };
+        if (ack.ok) {
+          setLastError(null);
+        }
+        resolver({ ok: Boolean(ack.ok), error: ack.error });
+        break;
       }
-    };
-
-    let activeCleanup: (() => void) | undefined;
-
-    const connect = () => {
-      if (disposed) {
-        return;
+      case "loco.state": {
+        const state = msg.payload as LocoState;
+        setStates((prev) => {
+          const next = new Map(prev);
+          next.set(state.address, state);
+          return next;
+        });
+        break;
       }
-      clearReconnect();
-      activeCleanup?.();
-
-      const gen = ++connectGenRef.current;
-      setStatus("connecting");
-      setLastError(null);
-      setPingLatencyMs(null);
-      pingSentAtRef.current = null;
-      lastPingRttMsRef.current = null;
-      if (hadOpenedRef.current) {
-        setReconnecting(true);
+      case "loco.error": {
+        const err = msg.payload as {
+          address?: number;
+          code?: string;
+          detail?: string;
+        };
+        if (err?.code) {
+          setLastError(err.code);
+          console.warn("[dcc-bus] loco.error", err);
+        }
+        break;
       }
-
-      const sock = new WebSocket(resolved);
-      sockRef.current = sock;
-
-      const connectTimeout = window.setTimeout(() => {
-        if (disposed || gen !== connectGenRef.current) {
-          return;
+      // "pong" is consumed by useWsConnection (watchdog + onPong callback)
+      case "dcc-bus.opened": {
+        const opened = msg.payload as DccBusOpenedPayload;
+        if (opened.speedSteps > 0) {
+          setSpeedSteps(opened.speedSteps);
         }
-        if (sock.readyState === WebSocket.CONNECTING) {
-          sock.close();
-        }
-      }, CONNECT_TIMEOUT_MS);
-
-      const scheduleReconnect = () => {
-        if (disposed) {
-          return;
-        }
-        if (hadOpenedRef.current) {
-          setReconnecting(true);
-        }
-        const delay = reconnectDelay;
-        reconnectDelay = Math.min(reconnectDelay * 2, RECONNECT_MAX_MS);
-        reconnectTimerRef.current = window.setTimeout(connect, delay);
-      };
-
-      sock.onopen = () => {
-        window.clearTimeout(connectTimeout);
-        if (disposed || gen !== connectGenRef.current) {
-          return;
-        }
-        hadOpenedRef.current = true;
-        reconnectDelay = RECONNECT_INTERVAL_MS;
-        setReconnecting(false);
-        setStatus("open");
-        setLastError(null);
-      };
-      sock.onerror = () => {
-        window.clearTimeout(connectTimeout);
-        if (disposed || gen !== connectGenRef.current) {
-          return;
-        }
-        setStatus("error");
-        setLastError("connection_error");
-        console.warn("[dcc-bus] WebSocket error", { wsUrl: resolved });
-      };
-      sock.onclose = () => {
-        window.clearTimeout(connectTimeout);
-        if (disposed || gen !== connectGenRef.current) {
-          return;
-        }
-        setStatus("closed");
-        if (sockRef.current === sock) {
-          sockRef.current = null;
-        }
-        // Fail in-flight commands immediately instead of waiting out the
-        // 8s ack timeout while the socket is already gone.
-        for (const resolver of pending.current.values()) {
-          resolver({ ok: false, error: "dcc_bus_offline" });
-        }
-        pending.current.clear();
-        scheduleReconnect();
-      };
-      sock.onmessage = (ev) => {
-        let msg: { type?: string; id?: string; payload?: unknown };
-        try {
-          msg = JSON.parse(String(ev.data));
-        } catch {
-          return;
-        }
-        switch (msg.type) {
-          case "ack": {
-            if (!msg.id) return;
-            const resolver = pending.current.get(msg.id);
-            if (!resolver) return;
-            pending.current.delete(msg.id);
-            const ack =
-              (msg.payload as { ok?: boolean; error?: string }) ?? { ok: false };
-            if (ack.ok) {
-              setLastError(null);
-            }
-            resolver({ ok: Boolean(ack.ok), error: ack.error });
-            break;
-          }
-          case "loco.state": {
-            const state = msg.payload as LocoState;
-            setStates((prev) => {
-              const next = new Map(prev);
-              next.set(state.address, state);
-              return next;
-            });
-            break;
-          }
-          case "loco.error": {
-            const err = msg.payload as {
-              address?: number;
-              code?: string;
-              detail?: string;
-            };
-            if (err?.code) {
-              setLastError(err.code);
-              console.warn("[dcc-bus] loco.error", err);
-            }
-            break;
-          }
-          case "pong": {
-            const sentAt = pingSentAtRef.current;
-            if (sentAt == null) {
-              break;
-            }
-            pingSentAtRef.current = null;
-            const rttMs = performance.now() - sentAt;
-            lastPingRttMsRef.current = rttMs;
-            setPingLatencyMs(rttMs);
-            break;
-          }
-          case "dcc-bus.opened": {
-            const opened = msg.payload as DccBusOpenedPayload;
-            if (opened.speedSteps > 0) {
-              setSpeedSteps(opened.speedSteps);
-            }
-            break;
-          }
-        }
-      };
-
-      const heartbeat = window.setInterval(() => {
-        if (sock.readyState !== WebSocket.OPEN) {
-          return;
-        }
-        const payload =
-          lastPingRttMsRef.current != null
-            ? { lastPingLatencyMs: lastPingRttMsRef.current }
-            : {};
-        pingSentAtRef.current = performance.now();
-        sock.send(JSON.stringify({ type: "ping", payload }));
-      }, heartbeatSecs * 1000);
-
-      activeCleanup = () => {
-        window.clearTimeout(connectTimeout);
-        window.clearInterval(heartbeat);
-        sock.onopen = null;
-        sock.onerror = null;
-        sock.onclose = null;
-        sock.onmessage = null;
-        if (sockRef.current === sock) {
-          sockRef.current = null;
-        }
-        if (
-          sock.readyState === WebSocket.CONNECTING ||
-          sock.readyState === WebSocket.OPEN
-        ) {
-          sock.close();
-        }
-      };
-    };
-
-    // Android suspends background tabs and powers down WiFi, which kills
-    // the socket and freezes the reconnect timer. Force an immediate retry
-    // when the tab returns to the foreground or the network comes back.
-    const reconnectNow = () => {
-      if (disposed) return;
-      const sock = sockRef.current;
-      if (
-        sock &&
-        (sock.readyState === WebSocket.OPEN ||
-          sock.readyState === WebSocket.CONNECTING)
-      ) {
-        return;
+        break;
       }
-      connect();
-    };
-    const onVisible = () => {
-      if (document.visibilityState === "visible") reconnectNow();
-    };
-    window.addEventListener("online", reconnectNow);
-    document.addEventListener("visibilitychange", onVisible);
+    }
+  }, []);
 
-    connect();
-
-    return () => {
-      disposed = true;
-      window.removeEventListener("online", reconnectNow);
-      document.removeEventListener("visibilitychange", onVisible);
-      clearReconnect();
-      activeCleanup?.();
-      pending.current.clear();
-      hadOpenedRef.current = false;
-      setReconnecting(false);
-      setSpeedSteps(null);
-      setPingLatencyMs(null);
-      setStates(new Map());
-      setStatus("idle");
-    };
-  }, [wsUrl, heartbeatSecs]);
+  const { socketRef, reconnecting } = useWsConnection({
+    url: resolvedUrl,
+    pingIntervalMs: heartbeatSecs * 1_000,
+    buildPingFrame,
+    onConnecting: handleConnecting,
+    onOpen: handleOpen,
+    onClose: handleClose,
+    onDispose: handleDispose,
+    onError: handleError,
+    onMessage: handleMessage,
+    onPong: handlePong,
+  });
 
   const send = useCallback(
     (type: string, payload: unknown) =>
       new Promise<{ ok: boolean; error?: string }>((resolve) => {
-        const sock = sockRef.current;
+        const sock = socketRef.current;
         if (!sock || sock.readyState !== WebSocket.OPEN) {
           resolve({ ok: false, error: "dcc_bus_offline" });
           return;
@@ -369,7 +246,7 @@ export function DccBusProvider({
           }
         }, 8_000);
       }),
-    [],
+    [socketRef],
   );
 
   const subscribe = useCallback(

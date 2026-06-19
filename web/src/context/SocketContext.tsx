@@ -2,12 +2,12 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
   useRef,
   useState,
   type ReactNode,
 } from "react";
+import { useWsConnection } from "../hooks/useWsConnection";
 
 type EventHandler = (payload: unknown) => void;
 
@@ -71,10 +71,6 @@ export interface CommandStationCatalogChangedPayload {
 // Pending request → ack resolver. Used by `sendAction` so the caller
 // can `await sendAction(...)` and react to ack.ok / ack.error.
 type PendingResolver = (ack: { ok: boolean; error?: string }) => void;
-
-const RECONNECT_INTERVAL_MS = 250;
-const RECONNECT_MAX_MS = 2_000;
-const CONNECT_TIMEOUT_MS = 1_000;
 
 interface SocketContextValue {
   subscribe: (eventType: string, handler: EventHandler) => () => void;
@@ -154,14 +150,129 @@ export function SocketProvider({
 }) {
   const handlers = useRef(new Map<string, Set<EventHandler>>());
   const pending = useRef(new Map<string, PendingResolver>());
-  const socketRef = useRef<WebSocket | null>(null);
-  const connectGenRef = useRef(0);
-  const hadOpenedRef = useRef(false);
-  const reconnectTimerRef = useRef<number | null>(null);
   const [connected, setConnected] = useState(false);
-  const [reconnecting, setReconnecting] = useState(false);
   const [session, setSession] = useState<SessionOpenedPayload | null>(null);
   const [sessionRefreshKey, setSessionRefreshKey] = useState(0);
+
+  const handleOpen = useCallback(() => {
+    setConnected(true);
+  }, []);
+
+  const handleClose = useCallback(() => {
+    setConnected(false);
+    rejectPending(pending.current);
+  }, []);
+
+  const handleError = useCallback(() => {
+    setConnected(false);
+  }, []);
+
+  const handleDispose = useCallback(() => {
+    rejectPending(pending.current);
+    setConnected(false);
+    setSession(null);
+  }, []);
+
+  const handleMessage = useCallback((data: string) => {
+    try {
+      const msg = JSON.parse(data) as {
+        type?: string;
+        id?: string;
+        payload?: unknown;
+      };
+      if (!msg.type) return;
+      if (msg.type === WsMessageType.Ack && msg.id) {
+        const resolver = pending.current.get(msg.id);
+        if (resolver) {
+          pending.current.delete(msg.id);
+          const ack =
+            (msg.payload as { ok?: boolean; error?: string }) ?? {};
+          resolver({ ok: Boolean(ack.ok), error: ack.error });
+        }
+        return;
+      }
+      if (msg.type === WsMessageType.SessionOpened) {
+        setSession((msg.payload as SessionOpenedPayload) ?? null);
+      }
+      if (msg.type === WsMessageType.SessionCommandStationChanged) {
+        const p = msg.payload as CommandStationChangedPayload;
+        setSession((prev) => {
+          if (!prev) return prev;
+          const next: SessionOpenedPayload = { ...prev };
+          const idx = next.availableCommandStations.findIndex(
+            (cs) => cs.id === p.commandStationId,
+          );
+          if (idx >= 0) {
+            next.availableCommandStations = [
+              ...next.availableCommandStations,
+            ];
+            const entry = { ...next.availableCommandStations[idx] };
+            // Lazy-spawn sends wsUrl=null while starting. Keep the
+            // previous URL so DccBusProvider is not torn down mid-
+            // CONNECTING (that surfaces as "closed before established").
+            if (p.wsUrl) {
+              entry.wsUrl = p.wsUrl;
+            } else if (
+              p.status === CommandStationStatus.Stopped ||
+              p.status === CommandStationStatus.Degraded ||
+              p.commandStationId === 0
+            ) {
+              entry.wsUrl = null;
+            }
+            next.availableCommandStations[idx] = entry;
+          }
+          if (
+            p.commandStationId > 0 &&
+            (p.status === CommandStationStatus.Running ||
+              p.status === CommandStationStatus.Starting)
+          ) {
+            next.currentSession = { commandStationId: p.commandStationId };
+          } else if (
+            p.status === CommandStationStatus.Stopped ||
+            p.status === CommandStationStatus.Degraded ||
+            p.commandStationId === 0
+          ) {
+            next.currentSession = undefined;
+          }
+          return next;
+        });
+      }
+      if (msg.type === WsMessageType.SessionCommandStationCatalogChanged) {
+        const p = msg.payload as CommandStationCatalogChangedPayload;
+        setSession((prev) => {
+          if (!prev) return prev;
+          const idx = prev.availableCommandStations.findIndex(
+            (cs) => cs.id === p.commandStationId,
+          );
+          if (idx < 0) return prev;
+          const next: SessionOpenedPayload = { ...prev };
+          next.availableCommandStations = [
+            ...prev.availableCommandStations,
+          ];
+          next.availableCommandStations[idx] = {
+            ...next.availableCommandStations[idx],
+            name: p.name,
+            kind: p.kind,
+            speedSteps: p.speedSteps,
+          };
+          return next;
+        });
+      }
+      handlers.current.get(msg.type)?.forEach((fn) => fn(msg.payload));
+    } catch {
+      // malformed frame — ignore
+    }
+  }, []);
+
+  const { socketRef, reconnecting } = useWsConnection({
+    url: enabled ? wsURL() : null,
+    resetKey: sessionRefreshKey,
+    onOpen: handleOpen,
+    onClose: handleClose,
+    onError: handleError,
+    onDispose: handleDispose,
+    onMessage: handleMessage,
+  });
 
   const subscribe = useCallback((eventType: string, handler: EventHandler) => {
     let set = handlers.current.get(eventType);
@@ -196,7 +307,7 @@ export function SocketProvider({
           }, ackTimeoutMs);
         });
       }),
-    [],
+    [socketRef],
   );
 
   const sendAction = useCallback<SocketContextValue["sendAction"]>(
@@ -219,250 +330,6 @@ export function SocketProvider({
   const refreshSession = useCallback(() => {
     setSessionRefreshKey((k) => k + 1);
   }, []);
-
-  useEffect(() => {
-    if (!enabled) {
-      setConnected(false);
-      setReconnecting(false);
-      setSession(null);
-      hadOpenedRef.current = false;
-      return;
-    }
-
-    let disposed = false;
-    // Fast first retry for brief WiFi blips, backing off to a cap so a long
-    // outage (server restart) doesn't hammer the radio and drain the battery.
-    let reconnectDelay = RECONNECT_INTERVAL_MS;
-    const url = wsURL();
-
-    const clearReconnect = () => {
-      if (reconnectTimerRef.current != null) {
-        window.clearTimeout(reconnectTimerRef.current);
-        reconnectTimerRef.current = null;
-      }
-    };
-
-    let activeCleanup: (() => void) | undefined;
-
-    const connect = () => {
-      if (disposed) {
-        return;
-      }
-      clearReconnect();
-      activeCleanup?.();
-
-      const gen = ++connectGenRef.current;
-      setConnected(false);
-      if (hadOpenedRef.current) {
-        setReconnecting(true);
-      }
-
-      const socket = new WebSocket(url);
-      socketRef.current = socket;
-
-      const connectTimeout = window.setTimeout(() => {
-        if (disposed || gen !== connectGenRef.current) {
-          return;
-        }
-        if (socket.readyState === WebSocket.CONNECTING) {
-          socket.close();
-        }
-      }, CONNECT_TIMEOUT_MS);
-
-      const scheduleReconnect = () => {
-        if (disposed) {
-          return;
-        }
-        if (hadOpenedRef.current) {
-          setReconnecting(true);
-        }
-        const delay = reconnectDelay;
-        reconnectDelay = Math.min(reconnectDelay * 2, RECONNECT_MAX_MS);
-        reconnectTimerRef.current = window.setTimeout(connect, delay);
-      };
-
-      socket.onopen = () => {
-        window.clearTimeout(connectTimeout);
-        if (disposed || gen !== connectGenRef.current) {
-          return;
-        }
-        hadOpenedRef.current = true;
-        reconnectDelay = RECONNECT_INTERVAL_MS;
-        setReconnecting(false);
-        setConnected(true);
-      };
-      socket.onerror = () => {
-        window.clearTimeout(connectTimeout);
-        if (disposed || gen !== connectGenRef.current) {
-          return;
-        }
-        setConnected(false);
-      };
-      socket.onclose = () => {
-        window.clearTimeout(connectTimeout);
-        if (disposed || gen !== connectGenRef.current) {
-          return;
-        }
-        setConnected(false);
-        rejectPending(pending.current);
-        if (socketRef.current === socket) {
-          socketRef.current = null;
-        }
-        scheduleReconnect();
-      };
-
-      socket.onmessage = (ev) => {
-        try {
-          const msg = JSON.parse(String(ev.data)) as {
-            type?: string;
-            id?: string;
-            payload?: unknown;
-          };
-          if (!msg.type) return;
-          if (msg.type === WsMessageType.Ack && msg.id) {
-            const resolver = pending.current.get(msg.id);
-            if (resolver) {
-              pending.current.delete(msg.id);
-              const ack =
-                (msg.payload as { ok?: boolean; error?: string }) ?? {};
-              resolver({ ok: Boolean(ack.ok), error: ack.error });
-            }
-            return;
-          }
-          if (msg.type === WsMessageType.SessionOpened) {
-            setSession((msg.payload as SessionOpenedPayload) ?? null);
-          }
-          if (msg.type === WsMessageType.SessionCommandStationChanged) {
-            const p = msg.payload as CommandStationChangedPayload;
-            setSession((prev) => {
-              if (!prev) return prev;
-              const next: SessionOpenedPayload = { ...prev };
-              const idx = next.availableCommandStations.findIndex(
-                (cs) => cs.id === p.commandStationId,
-              );
-              if (idx >= 0) {
-                next.availableCommandStations = [
-                  ...next.availableCommandStations,
-                ];
-                const entry = { ...next.availableCommandStations[idx] };
-                // Lazy-spawn sends wsUrl=null while starting. Keep the
-                // previous URL so DccBusProvider is not torn down mid-
-                // CONNECTING (that surfaces as "closed before established").
-                if (p.wsUrl) {
-                  entry.wsUrl = p.wsUrl;
-                } else if (
-                  p.status === CommandStationStatus.Stopped ||
-                  p.status === CommandStationStatus.Degraded ||
-                  p.commandStationId === 0
-                ) {
-                  entry.wsUrl = null;
-                }
-                next.availableCommandStations[idx] = entry;
-              }
-              if (
-                p.commandStationId > 0 &&
-                (p.status === CommandStationStatus.Running ||
-                  p.status === CommandStationStatus.Starting)
-              ) {
-                next.currentSession = { commandStationId: p.commandStationId };
-              } else if (
-                p.status === CommandStationStatus.Stopped ||
-                p.status === CommandStationStatus.Degraded ||
-                p.commandStationId === 0
-              ) {
-                next.currentSession = undefined;
-              }
-              return next;
-            });
-          }
-          if (msg.type === WsMessageType.SessionCommandStationCatalogChanged) {
-            const p = msg.payload as CommandStationCatalogChangedPayload;
-            setSession((prev) => {
-              if (!prev) return prev;
-              const idx = prev.availableCommandStations.findIndex(
-                (cs) => cs.id === p.commandStationId,
-              );
-              if (idx < 0) return prev;
-              const next: SessionOpenedPayload = { ...prev };
-              next.availableCommandStations = [
-                ...prev.availableCommandStations,
-              ];
-              next.availableCommandStations[idx] = {
-                ...next.availableCommandStations[idx],
-                name: p.name,
-                kind: p.kind,
-                speedSteps: p.speedSteps,
-              };
-              return next;
-            });
-          }
-          handlers.current.get(msg.type)?.forEach((fn) => fn(msg.payload));
-        } catch {
-          // malformed frame — ignore
-        }
-      };
-
-      const ping = window.setInterval(() => {
-        if (socket.readyState === WebSocket.OPEN) {
-          socket.send(JSON.stringify({ type: WsMessageType.Ping }));
-        }
-      }, 30_000);
-
-      activeCleanup = () => {
-        window.clearTimeout(connectTimeout);
-        window.clearInterval(ping);
-        socket.onopen = null;
-        socket.onerror = null;
-        socket.onclose = null;
-        socket.onmessage = null;
-        if (socketRef.current === socket) {
-          socketRef.current = null;
-        }
-        if (
-          socket.readyState === WebSocket.CONNECTING ||
-          socket.readyState === WebSocket.OPEN
-        ) {
-          socket.close();
-        }
-      };
-    };
-
-    // Android suspends background tabs and powers down WiFi, which kills
-    // the socket and freezes the reconnect timer. Force an immediate retry
-    // when the tab returns to the foreground or the network comes back.
-    const reconnectNow = () => {
-      if (disposed) return;
-      const socket = socketRef.current;
-      if (
-        socket &&
-        (socket.readyState === WebSocket.OPEN ||
-          socket.readyState === WebSocket.CONNECTING)
-      ) {
-        return;
-      }
-      connect();
-    };
-    const onVisible = () => {
-      if (document.visibilityState === "visible") reconnectNow();
-    };
-    window.addEventListener("online", reconnectNow);
-    document.addEventListener("visibilitychange", onVisible);
-
-    connect();
-
-    return () => {
-      disposed = true;
-      window.removeEventListener("online", reconnectNow);
-      document.removeEventListener("visibilitychange", onVisible);
-      clearReconnect();
-      activeCleanup?.();
-      rejectPending(pending.current);
-      hadOpenedRef.current = false;
-      setConnected(false);
-      setReconnecting(false);
-      setSession(null);
-    };
-  }, [enabled, sessionRefreshKey]);
 
   const value = useMemo<SocketContextValue>(
     () => ({

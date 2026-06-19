@@ -215,6 +215,79 @@ func TestProgTaskAndReply(t *testing.T) {
 	}
 }
 
+func TestParseSlotDataStat1(t *testing.T) {
+	// Build a slot read with STAT1=0x03 (IN_USE) and verify the field is parsed.
+	msg := []byte{
+		lnOPC_SL_RD_DATA, 0x0E,
+		0x05,       // slot
+		0x03,       // stat1: IN_USE
+		0x07,       // adr lo
+		0x15,       // speed
+		0x20,       // dirf
+		0x00,       // trk
+		0x00,       // stat2
+		0x00,       // adr hi
+		0x00,       // snd
+		0x00, 0x00, // id1, id2
+	}
+	pkt := lnAppendChecksum(msg)
+	sd, ok := parseLnSlotData(pkt)
+	if !ok {
+		t.Fatalf("expected parse ok for % X", pkt)
+	}
+	if sd.Stat1 != 0x03 {
+		t.Fatalf("Stat1: got 0x%02X, want 0x03", sd.Stat1)
+	}
+	if sd.Stat1&lnSLOT_STA_MASK != lnSLOT_IN_USE {
+		t.Fatalf("SL_STA: got 0x%02X, want lnSLOT_IN_USE (0x03)", sd.Stat1&lnSLOT_STA_MASK)
+	}
+}
+
+func TestLnBuildMoveSlots(t *testing.T) {
+	// NULL MOVE: src == dst
+	pkt := lnBuildMoveSlots(5, 5)
+	if len(pkt) != 4 {
+		t.Fatalf("expected 4-byte packet, got %d: % X", len(pkt), pkt)
+	}
+	if pkt[0] != lnOPC_MOVE_SLOTS || pkt[1] != 5 || pkt[2] != 5 {
+		t.Fatalf("null move: got % X", pkt)
+	}
+	if !lnChecksumOK(pkt) {
+		t.Fatalf("null move checksum invalid: % X", pkt)
+	}
+
+	// Dispatch PUT: dst == 0
+	put := lnBuildMoveSlots(7, 0)
+	if put[1] != 7 || put[2] != 0 {
+		t.Fatalf("dispatch PUT: got % X", put)
+	}
+	if !lnChecksumOK(put) {
+		t.Fatalf("dispatch PUT checksum invalid: % X", put)
+	}
+
+	// Dispatch GET: src == 0, dst == 0
+	get := lnBuildMoveSlots(0, 0)
+	if get[1] != 0 || get[2] != 0 {
+		t.Fatalf("dispatch GET: got % X", get)
+	}
+	if !lnChecksumOK(get) {
+		t.Fatalf("dispatch GET checksum invalid: % X", get)
+	}
+}
+
+func TestLnBuildSlotStat1(t *testing.T) {
+	pkt := lnBuildSlotStat1(3, lnSLOT_COMMON)
+	if len(pkt) != 4 {
+		t.Fatalf("expected 4-byte packet, got %d: % X", len(pkt), pkt)
+	}
+	if pkt[0] != lnOPC_SLOT_STAT1 || pkt[1] != 3 || pkt[2] != lnSLOT_COMMON {
+		t.Fatalf("slot stat1: got % X", pkt)
+	}
+	if !lnChecksumOK(pkt) {
+		t.Fatalf("slot stat1 checksum invalid: % X", pkt)
+	}
+}
+
 func TestDccPacketFunctionsOffBits(t *testing.T) {
 	// F13..F20 group with only F15 on; others must be reported off.
 	dcc, _ := dccFnGroupPacket(7, 15, 1<<15)

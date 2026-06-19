@@ -110,6 +110,8 @@ func (p *lnStreamParser) PushByte(b byte) (pkt []byte, ok bool) {
 const (
 	lnOPC_LOCO_ADR   = 0xBF
 	lnOPC_RQ_SL_DATA = 0xBB
+	lnOPC_MOVE_SLOTS = 0xBA
+	lnOPC_SLOT_STAT1 = 0xB5
 	lnOPC_LOCO_SPD   = 0xA0
 	lnOPC_LOCO_DIRF  = 0xA1
 	lnOPC_LOCO_SND   = 0xA2
@@ -121,6 +123,17 @@ const (
 	lnOPC_GPOFF      = 0x82
 	lnOPC_GPON       = 0x83
 	lnOPC_IDLE       = 0x85
+)
+
+// Slot status values (STAT1 bits 1..0, SL_STA field).
+// After OPC_LOCO_ADR the master returns COMMON; a NULL MOVE promotes
+// the slot to IN_USE so BigFred becomes the authoritative throttle.
+const (
+	lnSLOT_FREE    = byte(0x00) // slot has no locomotive; completely empty
+	lnSLOT_COMMON  = byte(0x01) // loco address known, no active throttle (shareable)
+	lnSLOT_IDLE    = byte(0x02) // slot purged/idle
+	lnSLOT_IN_USE  = byte(0x03) // slot actively controlled by a throttle
+	lnSLOT_STA_MASK = byte(0x03)
 )
 
 // Immediate-packet and programming-track constants (see
@@ -174,6 +187,7 @@ func lnBuildSetSnd(slot byte, snd byte) []byte {
 
 type lnSlotData struct {
 	Slot  byte
+	Stat1 byte // STAT1 byte from the slot read; SL_STA = Stat1 & lnSLOT_STA_MASK
 	Addr  LocoAddr
 	Speed byte
 	DirF  byte
@@ -197,11 +211,27 @@ func parseLnSlotData(pkt []byte) (lnSlotData, bool) {
 	addr := LocoAddr(adrLo&0x7F) | (LocoAddr(adrHi&0x7F) << 7)
 	return lnSlotData{
 		Slot:  slot,
+		Stat1: pkt[3],
 		Addr:  addr,
 		Speed: pkt[5],
 		DirF:  pkt[6],
 		Snd:   pkt[10],
 	}, true
+}
+
+// lnBuildMoveSlots builds an OPC_MOVE_SLOTS packet.
+//   - NULL MOVE (promote COMMON/IDLE → IN_USE): src == dst
+//   - Dispatch PUT (hand slot to dispatch slot):  dst == 0, src == slot
+//   - Dispatch GET (acquire dispatched slot):     src == 0, dst == 0
+func lnBuildMoveSlots(src, dst byte) []byte {
+	return lnAppendChecksum([]byte{lnOPC_MOVE_SLOTS, src & 0x7F, dst & 0x7F})
+}
+
+// lnBuildSlotStat1 builds an OPC_SLOT_STAT1 packet that directly writes
+// the STAT1 byte of the given slot. This is fire-and-forget: the command
+// station does not reply. Use lnSLOT_COMMON to release BigFred's ownership.
+func lnBuildSlotStat1(slot, stat1 byte) []byte {
+	return lnAppendChecksum([]byte{lnOPC_SLOT_STAT1, slot & 0x7F, stat1 & 0x7F})
 }
 
 // --- Extended functions (F9..F28) via immediate DCC packets ---

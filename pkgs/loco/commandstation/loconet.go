@@ -135,12 +135,48 @@ func (l *LocoNet) SetTimeout(d time.Duration) {
 }
 
 func (l *LocoNet) CleanUp() error {
+	// Release all cached slots before closing the transport so the command
+	// station knows BigFred no longer owns any locomotives. A physical FRED
+	// can then claim them immediately after BigFred disconnects.
+	l.releaseAllSlots()
 	select {
 	case <-l.stop:
 	default:
 		close(l.stop)
 	}
 	return l.t.Close()
+}
+
+// releaseAllSlots sends OPC_SLOT_STAT1 COMMON for every currently cached
+// slot, atomically clears the cache, and logs the result.
+// Fire-and-forget: OPC_SLOT_STAT1 does not produce a reply.
+func (l *LocoNet) releaseAllSlots() {
+	type pair struct {
+		addr LocoAddr
+		slot byte
+	}
+	l.slotMu.Lock()
+	if len(l.slotByAd) == 0 {
+		l.slotMu.Unlock()
+		return
+	}
+	pairs := make([]pair, 0, len(l.slotByAd))
+	for addr, slot := range l.slotByAd {
+		pairs = append(pairs, pair{addr, slot})
+	}
+	l.slotByAd = make(map[LocoAddr]byte)
+	l.slotAddr = make(map[byte]LocoAddr)
+	l.slotMu.Unlock()
+
+	l.reqMu.Lock()
+	defer l.reqMu.Unlock()
+	for _, p := range pairs {
+		if err := l.sendLocked(lnBuildSlotStat1(p.slot, lnSLOT_COMMON)); err != nil {
+			logrus.WithError(err).Debugf("loconet: releaseAllSlots: slot %d addr %d", p.slot, p.addr)
+			continue
+		}
+		logrus.Debugf("loconet: released slot %d (addr %d) on shutdown", p.slot, p.addr)
+	}
 }
 
 // ObserveStates implements StateObserver: LocoNet is a shared bus, so
@@ -628,11 +664,50 @@ func (l *LocoNet) ensureSlotLocked(addr LocoAddr) (byte, error) {
 			l.setDirf(sd.Addr, sd.DirF)
 			l.setSnd(sd.Addr, sd.Snd)
 			if sd.Addr == addr {
+				// Promote slot to IN_USE via NULL MOVE so BigFred is the
+				// authoritative throttle. Without this, the slot stays
+				// COMMON and the command station may allow another throttle
+				// to steal it. Failure is non-fatal: log and continue.
+				if sd.Stat1&lnSLOT_STA_MASK != lnSLOT_IN_USE {
+					if err := l.nullMoveLocked(sd.Slot); err != nil {
+						logrus.WithError(err).Debugf("loconet: null move for slot %d addr %d skipped", sd.Slot, addr)
+					}
+				}
 				return sd.Slot, nil
 			}
 		}
 	}
 	return 0, fmt.Errorf("timeout waiting for slot data for loco %d", addr)
+}
+
+// nullMoveLocked sends OPC_MOVE_SLOTS with src==dst (NULL MOVE), which
+// promotes the slot from COMMON or IDLE to IN_USE on the command station.
+// Caller must hold reqMu and have called beginSync.
+// Returns an error only when the command station explicitly rejects the move;
+// a timeout is treated as success (some non-Digitrax masters are silent).
+func (l *LocoNet) nullMoveLocked(slot byte) error {
+	if err := l.sendLocked(lnBuildMoveSlots(slot, slot)); err != nil {
+		return err
+	}
+	deadline := time.Now().Add(l.timeout)
+	for time.Now().Before(deadline) {
+		pkt, err := l.readPacketUntil(deadline)
+		if err != nil {
+			// Timeout treated as silent acceptance (non-Digitrax masters).
+			return nil
+		}
+		if sd, ok := parseLnSlotData(pkt); ok && sd.Slot == slot {
+			return nil
+		}
+		// OPC_LONG_ACK for OPC_MOVE_SLOTS: B4 <BA&0x7F=0x3A> <code> <chk>
+		if len(pkt) >= 4 && pkt[0] == lnOPC_LONG_ACK && pkt[1] == (lnOPC_MOVE_SLOTS&0x7F) {
+			if pkt[2] == 0x00 {
+				return fmt.Errorf("loconet: null move rejected by command station for slot %d", slot)
+			}
+			return nil // any non-zero code means accepted
+		}
+	}
+	return nil // timeout → silent acceptance
 }
 
 func (l *LocoNet) querySlotLocked(slot byte, addr LocoAddr) (lnSlotData, error) {
@@ -687,6 +762,13 @@ func (l *LocoNet) setSlot(addr LocoAddr, slot byte) {
 	l.slotMu.Unlock()
 }
 
+func (l *LocoNet) clearSlot(addr LocoAddr, slot byte) {
+	l.slotMu.Lock()
+	delete(l.slotByAd, addr)
+	delete(l.slotAddr, slot)
+	l.slotMu.Unlock()
+}
+
 // slotToAddr resolves a slot number back to a loco address using the
 // reverse map populated whenever a slot read is seen on the bus.
 func (l *LocoNet) slotToAddr(slot byte) (LocoAddr, bool) {
@@ -694,6 +776,107 @@ func (l *LocoNet) slotToAddr(slot byte) (LocoAddr, bool) {
 	defer l.slotMu.Unlock()
 	addr, ok := l.slotAddr[slot]
 	return addr, ok
+}
+
+// ReleaseSlot writes OPC_SLOT_STAT1 with COMMON status, relinquishing
+// BigFred's ownership of the slot without stopping the locomotive. The slot
+// remains in the command station's table (loco address and speed preserved)
+// but is now claimable by any throttle. The local cache entry is removed.
+//
+// This is a fire-and-forget operation: OPC_SLOT_STAT1 produces no reply.
+func (l *LocoNet) ReleaseSlot(addr LocoAddr) error {
+	slot, ok := l.getSlot(addr)
+	if !ok {
+		return nil // never acquired, nothing to do
+	}
+	l.reqMu.Lock()
+	defer l.reqMu.Unlock()
+	if err := l.sendLocked(lnBuildSlotStat1(slot, lnSLOT_COMMON)); err != nil {
+		return err
+	}
+	l.clearSlot(addr, slot)
+	logrus.Debugf("loconet: released slot %d for addr %d (set COMMON)", slot, addr)
+	return nil
+}
+
+// DispatchSlot moves the slot for addr into the LocoNet dispatch slot
+// (OPC_MOVE_SLOTS src=slot, dst=0). A physical throttle (e.g. a FRED) can
+// then claim it by sending a dispatch GET (OPC_MOVE_SLOTS 0 0).
+// The loco should be stopped before calling this to avoid runaway behaviour.
+func (l *LocoNet) DispatchSlot(addr LocoAddr) error {
+	slot, ok := l.getSlot(addr)
+	if !ok {
+		return fmt.Errorf("loconet: no tracked slot for addr %d", addr)
+	}
+	l.reqMu.Lock()
+	defer l.reqMu.Unlock()
+	l.beginSync()
+	defer l.endSync()
+
+	if err := l.sendLocked(lnBuildMoveSlots(slot, 0)); err != nil {
+		return err
+	}
+	deadline := time.Now().Add(l.timeout)
+	for time.Now().Before(deadline) {
+		pkt, err := l.readPacketUntil(deadline)
+		if err != nil {
+			return fmt.Errorf("loconet: timeout waiting for dispatch PUT reply (slot %d, addr %d)", slot, addr)
+		}
+		if sd, ok := parseLnSlotData(pkt); ok && sd.Slot == slot {
+			l.clearSlot(addr, slot)
+			logrus.Debugf("loconet: dispatched slot %d for addr %d", slot, addr)
+			return nil
+		}
+		if len(pkt) >= 4 && pkt[0] == lnOPC_LONG_ACK && pkt[1] == (lnOPC_MOVE_SLOTS&0x7F) {
+			if pkt[2] == 0x00 {
+				return fmt.Errorf("loconet: dispatch PUT rejected for slot %d (addr %d)", slot, addr)
+			}
+			l.clearSlot(addr, slot)
+			logrus.Debugf("loconet: dispatched slot %d for addr %d (LACK)", slot, addr)
+			return nil
+		}
+	}
+	return fmt.Errorf("loconet: timeout waiting for dispatch PUT reply (slot %d, addr %d)", slot, addr)
+}
+
+// AcquireDispatched claims the slot currently held in the LocoNet dispatch
+// slot (OPC_MOVE_SLOTS src=0, dst=0) and caches it locally.
+// Returns (0, nil) when the dispatch slot is empty.
+// After acquiring, a NULL MOVE is performed to confirm IN_USE ownership.
+func (l *LocoNet) AcquireDispatched() (LocoAddr, error) {
+	l.reqMu.Lock()
+	defer l.reqMu.Unlock()
+	l.beginSync()
+	defer l.endSync()
+
+	if err := l.sendLocked(lnBuildMoveSlots(0, 0)); err != nil {
+		return 0, err
+	}
+	deadline := time.Now().Add(l.timeout)
+	for time.Now().Before(deadline) {
+		pkt, err := l.readPacketUntil(deadline)
+		if err != nil {
+			return 0, errors.New("loconet: timeout waiting for dispatch GET reply")
+		}
+		if sd, ok := parseLnSlotData(pkt); ok {
+			l.setSlot(sd.Addr, sd.Slot)
+			l.setDirf(sd.Addr, sd.DirF)
+			l.setSnd(sd.Addr, sd.Snd)
+			// Confirm ownership with NULL MOVE (non-fatal if rejected).
+			if err := l.nullMoveLocked(sd.Slot); err != nil {
+				logrus.WithError(err).Debugf("loconet: null move after dispatch GET failed for slot %d", sd.Slot)
+			}
+			logrus.Debugf("loconet: acquired dispatched slot %d for addr %d", sd.Slot, sd.Addr)
+			return sd.Addr, nil
+		}
+		// LONG_ACK code 0x00 means the dispatch slot is empty.
+		if len(pkt) >= 4 && pkt[0] == lnOPC_LONG_ACK && pkt[1] == (lnOPC_MOVE_SLOTS&0x7F) {
+			if pkt[2] == 0x00 {
+				return 0, nil // no dispatched slot
+			}
+		}
+	}
+	return 0, errors.New("loconet: timeout waiting for dispatch GET reply")
 }
 
 func (l *LocoNet) getDirf(addr LocoAddr) byte {

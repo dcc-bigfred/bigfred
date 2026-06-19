@@ -20,8 +20,8 @@ import (
 	"github.com/keskad/loco/pkgs/bigfred/contract"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/auth"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/cmd"
-	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/state"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/service/station"
+	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/state"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/ws"
 	bfotel "github.com/keskad/loco/pkgs/bigfred/otel"
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
@@ -405,17 +405,22 @@ func (d *Daemon) runRadioStopConsumer(ctx context.Context, sub *redis.PubSub) {
 }
 
 // Close releases every dependency the daemon opened. Idempotent.
+// Shutdown order: HTTP server → command station  → Redis → metrics.
 func (d *Daemon) Close() error {
+	if d.srv != nil {
+		_ = d.srv.Close()
+	}
+	// Let the clean up happen - release all assigned slots for example
+	if d.router != nil {
+		d.router.Shutdown()
+	}
+	if d.rds != nil {
+		_ = d.rds.Close()
+	}
 	if d.metricsShutdown != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		_ = d.metricsShutdown(ctx)
 		cancel()
-	}
-	if d.srv != nil {
-		_ = d.srv.Close()
-	}
-	if d.rds != nil {
-		_ = d.rds.Close()
 	}
 	return nil
 }

@@ -41,7 +41,10 @@ web-dev:
 	cd web && HOST="$(HOST)" npm run dev
 
 web-build:
-	cd web && npm run build
+	cd web && npm ci && npm run build
+
+web-check-offline:
+	cd web && npm run check:offline
 
 # --- Test / lint targets --------------------------------------------------
 ensure-go-junit-report:

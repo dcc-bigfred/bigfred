@@ -129,14 +129,6 @@ function AppShellContent() {
         icon: <BugReportIcon fontSize="small" />,
         onClick: () => navigate("/admin/diagnostics"),
       },
-      { id: "divider-1", divider: true },
-      {
-        id: "audit-log",
-        label: t("nav.administration.auditLog"),
-        icon: <HistoryIcon fontSize="small" />,
-        disabled: true,
-        tooltip: comingSoon("M3"),
-      },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [t],
@@ -161,6 +153,13 @@ function AppShellContent() {
         label: t("nav.my.templates"),
         icon: <TuneIcon fontSize="small" />,
         onClick: () => navigate("/vehicle-templates"),
+      },
+      { id: "divider-audit", divider: true },
+      {
+        id: "audit-log",
+        label: t("nav.administration.auditLog"),
+        icon: <HistoryIcon fontSize="small" />,
+        onClick: () => navigate("/audit-log"),
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -1,0 +1,29 @@
+{
+  "title": "Audit log",
+  "subtitle": "Recent system events",
+  "refresh": "Refresh",
+  "empty": "No events to display.",
+  "error": "Failed to load the audit log.",
+  "unknownEvent": "Unknown event: {{msg}}",
+  "colTime": "Time",
+  "colEvent": "Event",
+  "events": {
+    "audit_radio_stop": "{{actorLogin}} triggered radio stop",
+    "audit_estop_target": "{{actorLogin}} stopped vehicle ({{target}} #{{targetId}})",
+    "audit_layout_updated": "{{actorLogin}} updated settings of layout \"{{name}}\"",
+    "audit_layout_locked": "{{actorLogin}} locked layout \"{{name}}\"",
+    "audit_layout_unlocked": "{{actorLogin}} unlocked layout \"{{name}}\"",
+    "audit_command_station_updated": "{{actorLogin}} updated command station \"{{name}}\"",
+    "audit_command_station_deleted": "{{actorLogin}} deleted command station \"{{name}}\"",
+    "audit_takeover_granted": "{{actorLogin}} took over vehicle \"{{vehicle}}\" from user {{driver}}",
+    "audit_user_created": "{{actorLogin}} created user \"{{target}}\"",
+    "audit_user_updated": "{{actorLogin}} updated data of user \"{{target}}\"",
+    "audit_user_deleted": "{{actorLogin}} deleted user \"{{target}}\"",
+    "audit_user_activated": "{{actorLogin}} activated account of user \"{{target}}\"",
+    "audit_user_deactivated": "{{actorLogin}} deactivated account of user \"{{target}}\"",
+    "audit_roster_vehicle_added": "{{actorLogin}} added vehicle \"{{vehicle}}\" to layout",
+    "audit_roster_vehicle_removed": "{{actorLogin}} removed vehicle \"{{vehicle}}\" from layout",
+    "audit_roster_train_added": "{{actorLogin}} added train \"{{train}}\" to layout",
+    "audit_roster_train_removed": "{{actorLogin}} removed train \"{{train}}\" from layout"
+  }
+}

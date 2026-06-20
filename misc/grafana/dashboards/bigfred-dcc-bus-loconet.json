@@ -1004,8 +1004,10 @@
             },
             "thresholdsStyle": {
               "mode": "line+area"
-            }
+            },
+            "suffix": " B/s"
           },
+          "decimals": 1,
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
@@ -1020,7 +1022,7 @@
               }
             ]
           },
-          "unit": "Bps"
+          "unit": "none"
         },
         "overrides": []
       },

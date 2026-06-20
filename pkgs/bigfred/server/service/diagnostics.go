@@ -62,7 +62,7 @@ type DiagnosticsService struct {
 }
 
 // NewDiagnosticsService builds a catalogue from supervisord paths.
-// When sup is nil, default XDG paths are used (files may be absent).
+// When sup is nil, default hub paths are used (files may be absent).
 func NewDiagnosticsService(sup Supervisor) (*DiagnosticsService, error) {
 	var configPath, logDir string
 	if sup != nil {

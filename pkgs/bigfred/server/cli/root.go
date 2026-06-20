@@ -100,7 +100,7 @@ real-time throttle commands.`,
 	cmd.Flags().Uint16Var(&f.RedisPort, "redis-port", 6380,
 		"TCP port the managed redis-server listens on (default 6380 to avoid colliding with a system redis on 6379)")
 	cmd.Flags().StringVar(&f.RedisDataDir, "redis-data-dir", "",
-		"working directory for redis-server (defaults to the supervisord log directory)")
+		"working directory for redis-server (defaults to the supervisord config directory)")
 	cmd.Flags().StringVar(&f.RedisAddr, "redis-addr", "",
 		"redis dial address (host:port) used by loco-server and dcc-bus; defaults to redis-bind:redis-port")
 	cmd.Flags().BoolVar(&f.RedisExternal, "redis-external", false,

@@ -33,6 +33,7 @@ type RadioStop struct {
 	redis  RadioStopRedisPort
 	roster RadioStopRosterPort
 	auth   RadioAuthPort
+	audit  AuditPublisher
 	log    *logrus.Logger
 	sec    security.RadioStopSecurityContext
 
@@ -45,6 +46,7 @@ type RadioStopConfig struct {
 	Redis  RadioStopRedisPort
 	Roster RadioStopRosterPort
 	Auth   RadioAuthPort
+	Audit  AuditPublisher
 	Log    *logrus.Logger
 }
 
@@ -58,6 +60,7 @@ func NewRadioStop(cfg RadioStopConfig) *RadioStop {
 		redis:       cfg.Redis,
 		roster:      cfg.Roster,
 		auth:        cfg.Auth,
+		audit:       cfg.Audit,
 		log:         log,
 		lastTrigger: make(map[uint]time.Time, 4),
 	}
@@ -108,6 +111,11 @@ func (s *RadioStop) Trigger(ctx context.Context, sess ControlSession) (bool, str
 		"triggeredBy": sess.Login(),
 		"userId":      sess.UserID(),
 	}).Info("radio stop triggered")
+
+	if s.audit != nil {
+		_ = s.audit.Publish(ctx, sess.LayoutID(), AuditActor{UserID: sess.UserID(), Login: sess.Login()},
+			"audit_radio_stop", nil)
+	}
 
 	return true, ""
 }

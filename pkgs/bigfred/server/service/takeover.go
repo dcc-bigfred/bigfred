@@ -33,6 +33,7 @@ type TakeoverConfig struct {
 	Roster        *LayoutVehicleService
 	Auth          *cmd.Auth
 	Hub           *ws.Hub
+	Audit         cmd.AuditPublisher
 }
 
 // TakeoverService is the legacy facade for cmd.Takeover.
@@ -61,6 +62,7 @@ func NewTakeoverService(cfg TakeoverConfig) *TakeoverService {
 		Roster:        roster,
 		Auth:          cfg.Auth,
 		Hub:           hub,
+		Audit:         cfg.Audit,
 	})}
 }
 

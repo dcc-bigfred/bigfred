@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/sirupsen/logrus"
 
@@ -40,6 +41,7 @@ type EStopTarget struct {
 	roster      EStopTargetRosterPort
 	layouts     EStopTargetLayoutsPort
 	auth        RadioAuthPort
+	audit       AuditPublisher
 	ilkSessions *repo.InterlockingSessions
 	layoutIlks  *repo.LayoutInterlockings
 	log         *logrus.Logger
@@ -51,6 +53,7 @@ type EStopTargetConfig struct {
 	Roster      EStopTargetRosterPort
 	Layouts     EStopTargetLayoutsPort
 	Auth        RadioAuthPort
+	Audit       AuditPublisher
 	IlkSessions *repo.InterlockingSessions
 	LayoutIlks  *repo.LayoutInterlockings
 	Log         *logrus.Logger
@@ -66,6 +69,7 @@ func NewEStopTarget(cfg EStopTargetConfig) *EStopTarget {
 		roster:      cfg.Roster,
 		layouts:     cfg.Layouts,
 		auth:        cfg.Auth,
+		audit:       cfg.Audit,
 		ilkSessions: cfg.IlkSessions,
 		layoutIlks:  cfg.LayoutIlks,
 		log:         log,
@@ -133,6 +137,14 @@ func (s *EStopTarget) Trigger(
 		"targetId":    targetID,
 		"addrs":       resolved.addrs,
 	}).Info("estop target triggered")
+
+	if s.audit != nil {
+		_ = s.audit.Publish(ctx, sess.LayoutID(), AuditActor{UserID: sess.UserID(), Login: sess.Login()},
+			"audit_estop_target", map[string]string{
+				"target":   string(target),
+				"targetId": fmt.Sprintf("%d", targetID),
+			})
+	}
 
 	return true, ""
 }

@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -38,6 +39,7 @@ type Takeover struct {
 	roster        TakeoverRosterPort
 	auth          TakeoverAuthPort
 	hub           TakeoverHubPort
+	audit         AuditPublisher
 	sec           security.TakeoverSecurityContext
 
 	mu             sync.Mutex
@@ -72,6 +74,7 @@ type TakeoverConfig struct {
 	Roster        TakeoverRosterPort
 	Auth          TakeoverAuthPort
 	Hub           TakeoverHubPort
+	Audit         AuditPublisher
 }
 
 // NewTakeover returns a ready orchestrator.
@@ -88,6 +91,7 @@ func NewTakeover(cfg TakeoverConfig) *Takeover {
 		roster:        cfg.Roster,
 		auth:          cfg.Auth,
 		hub:           cfg.Hub,
+		audit:         cfg.Audit,
 		grantTimers:   make(map[uint]*time.Timer),
 		releaseTimers: make(map[uint]*time.Timer),
 	}
@@ -430,6 +434,18 @@ func (s *Takeover) autoGrant(ctx context.Context, requestID uint) error {
 	s.scheduleLeaseRelease(row.ID, expires)
 
 	signalmanLogin := s.userLogin(ctx, row.SignalmanUserID)
+	driverLogin := s.userLogin(ctx, row.DriverUserID)
+	targetName := s.targetName(ctx, row.Target, row.TargetID)
+	if s.audit != nil {
+		_ = s.audit.Publish(ctx, row.LayoutID,
+			AuditActor{UserID: row.SignalmanUserID, Login: signalmanLogin},
+			"audit_takeover_granted", map[string]string{
+				"driver":  driverLogin,
+				"target":  string(row.Target),
+				"vehicle": targetName,
+			})
+	}
+
 	granted := contract.TakeoverGrantedWire{
 		RequestID:      row.ID,
 		Target:         row.Target,
@@ -592,6 +608,24 @@ func (s *Takeover) trainOnLayout(ctx context.Context, layoutID, trainID uint) bo
 		}
 	}
 	return false
+}
+
+func (s *Takeover) targetName(ctx context.Context, target domain.TakeoverTarget, targetID uint) string {
+	switch target {
+	case domain.TakeoverTargetVehicle:
+		if s.vehicles != nil {
+			if v, err := s.vehicles.FindByID(ctx, targetID); err == nil {
+				return v.Name
+			}
+		}
+	case domain.TakeoverTargetTrain:
+		if s.trains != nil {
+			if t, err := s.trains.FindByID(ctx, targetID); err == nil {
+				return t.Name
+			}
+		}
+	}
+	return fmt.Sprintf("#%d", targetID)
 }
 
 type takeoverDeniedError struct{ code string }

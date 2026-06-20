@@ -15,6 +15,7 @@ type RadioStopConfig struct {
 	Redis  *RedisService
 	Roster *LayoutVehicleService
 	Auth   *cmd.Auth
+	Audit  cmd.AuditPublisher
 	Log    *logrus.Logger
 }
 
@@ -37,6 +38,7 @@ func NewRadioStopService(cfg RadioStopConfig) *RadioStopService {
 		Redis:  cfg.Redis,
 		Roster: roster,
 		Auth:   cfg.Auth,
+		Audit:  cfg.Audit,
 		Log:    cfg.Log,
 	})}
 }

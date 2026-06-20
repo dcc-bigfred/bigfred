@@ -35,6 +35,7 @@ import type plCommandStation from "./locales/pl/commandStation.json";
 import type plDiagnostics from "./locales/pl/diagnostics.json";
 import type plFunction from "./locales/pl/function.json";
 import type plTrainAnnouncements from "./locales/pl/trainAnnouncements.json";
+import type plAudit from "./locales/pl/audit.json";
 
 declare module "i18next" {
   interface CustomTypeOptions {
@@ -56,6 +57,7 @@ declare module "i18next" {
       diagnostics: typeof plDiagnostics;
       function: typeof plFunction;
       trainAnnouncements: typeof plTrainAnnouncements;
+      audit: typeof plAudit;
     };
     // returnNull is false in index.ts; mirror that here so the t()
     // return type is `string` (not `string | null`).

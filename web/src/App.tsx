@@ -19,6 +19,7 @@ import VehicleFunctionsPage from "./pages/VehicleFunctionsPage";
 import VehicleTemplatesPage from "./pages/VehicleTemplatesPage";
 import TemplateFunctionsPage from "./pages/TemplateFunctionsPage";
 import ThrottlePage from "./pages/ThrottlePage";
+import AuditLogPage from "./pages/AuditLogPage";
 import LayoutsAdminPage from "./pages/admin/LayoutsPage";
 import InterlockingsAdminPage from "./pages/admin/InterlockingsPage";
 import CommandStationsAdminPage from "./pages/admin/CommandStationsPage";
@@ -59,6 +60,7 @@ const router = createBrowserRouter(
           <Route path="/my/trains" element={<MyTrainsPage />} />
           <Route path="/throttle" element={<ThrottlePage />} />
           <Route path="/interlockings/:id" element={<InterlockingPage />} />
+          <Route path="/audit-log" element={<AuditLogPage />} />
           <Route element={<AdminRoute />}>
             <Route path="/admin/users" element={<UsersAdminPage />} />
             <Route path="/admin/layouts" element={<LayoutsAdminPage />} />

@@ -1,0 +1,29 @@
+{
+  "title": "Dziennik audytu",
+  "subtitle": "Ostatnie zdarzenia systemowe",
+  "refresh": "Odśwież",
+  "empty": "Brak zdarzeń do wyświetlenia.",
+  "error": "Nie udało się wczytać dziennika.",
+  "unknownEvent": "Nieznane zdarzenie: {{msg}}",
+  "colTime": "Czas",
+  "colEvent": "Zdarzenie",
+  "events": {
+    "audit_radio_stop": "{{actorLogin}} wcisnął radiostop",
+    "audit_estop_target": "{{actorLogin}} zatrzymał pojazd ({{target}} #{{targetId}})",
+    "audit_layout_updated": "{{actorLogin}} zmienił ustawienia makiety \"{{name}}\"",
+    "audit_layout_locked": "{{actorLogin}} zablokował makietę \"{{name}}\"",
+    "audit_layout_unlocked": "{{actorLogin}} odblokował makietę \"{{name}}\"",
+    "audit_command_station_updated": "{{actorLogin}} zaktualizował ustawienia centralki \"{{name}}\"",
+    "audit_command_station_deleted": "{{actorLogin}} usunął centralkę \"{{name}}\"",
+    "audit_takeover_granted": "{{actorLogin}} przejął pojazd \"{{vehicle}}\" od użytkownika {{driver}}",
+    "audit_user_created": "{{actorLogin}} dodał użytkownika \"{{target}}\"",
+    "audit_user_updated": "{{actorLogin}} zaktualizował dane użytkownika \"{{target}}\"",
+    "audit_user_deleted": "{{actorLogin}} usunął użytkownika \"{{target}}\"",
+    "audit_user_activated": "{{actorLogin}} aktywował konto użytkownika \"{{target}}\"",
+    "audit_user_deactivated": "{{actorLogin}} dezaktywował konto użytkownika \"{{target}}\"",
+    "audit_roster_vehicle_added": "{{actorLogin}} dodał pojazd \"{{vehicle}}\" do makiety",
+    "audit_roster_vehicle_removed": "{{actorLogin}} usunął pojazd \"{{vehicle}}\" z makiety",
+    "audit_roster_train_added": "{{actorLogin}} dodał skład \"{{train}}\" do makiety",
+    "audit_roster_train_removed": "{{actorLogin}} usunął skład \"{{train}}\" z makiety"
+  }
+}

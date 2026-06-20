@@ -43,14 +43,17 @@ type Flags struct {
 
 	// Redis. By default loco-server spawns its own redis-server via
 	// supervisord on RedisBindAddr:RedisPort; pass --redis-external
-	// to skip the managed daemon and dial RedisAddr instead.
-	RedisBin      string
-	RedisBindAddr string
-	RedisPort     uint16
-	RedisDataDir  string
-	RedisAddr     string
-	RedisExternal bool
-	RedisPersist  bool
+	// to skip the managed daemon and dial RedisAddr instead. When
+	// RedisAutoDetect is true (default), an existing instance at
+	// RedisAddr is reused without spawning.
+	RedisBin        string
+	RedisBindAddr   string
+	RedisPort       uint16
+	RedisDataDir    string
+	RedisAddr       string
+	RedisExternal   bool
+	RedisAutoDetect bool
+	RedisPersist    bool
 
 	EnableTelemetry bool
 	TelemetryConfig string
@@ -105,6 +108,8 @@ real-time throttle commands.`,
 		"redis dial address (host:port) used by loco-server and dcc-bus; defaults to redis-bind:redis-port")
 	cmd.Flags().BoolVar(&f.RedisExternal, "redis-external", false,
 		"do not spawn a managed redis-server; dial --redis-addr instead (operator runs Redis out-of-band)")
+	cmd.Flags().BoolVar(&f.RedisAutoDetect, "redis-auto-detect", true,
+		"skip spawning managed redis-server when --redis-addr already accepts PING")
 	cmd.Flags().BoolVar(&f.RedisPersist, "redis-persist", false,
 		"keep RDB snapshots / AOF for the managed redis-server; off by default because dcc-bus rebuilds state cheaply")
 	cmd.Flags().BoolVar(&f.EnableTelemetry, "enable-telemetry", false,
@@ -175,7 +180,14 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	if redisAddr == "" {
 		redisAddr = fmt.Sprintf("%s:%d", f.RedisBindAddr, f.RedisPort)
 	}
-	redisSvc := service.NewRedisService(service.RedisServiceConfig{Addr: redisAddr})
+	redisCfg := service.RedisServiceConfig{Addr: redisAddr}
+	redisMgmt := service.ResolveRedisManagement(ctx, redisCfg, f.RedisExternal, f.RedisAutoDetect)
+	if redisMgmt.Source == "auto-detected" {
+		log.WithField("addr", redisAddr).Info("redis already running; skipping managed instance")
+	} else if redisMgmt.Source == "explicit-external" {
+		log.WithField("addr", redisAddr).Info("using external redis (--redis-external)")
+	}
+	redisSvc := service.NewRedisService(redisCfg)
 	defer func() { _ = redisSvc.Close() }()
 
 	var supSvc service.Supervisor
@@ -196,7 +208,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 				Port:                 f.RedisPort,
 				DataDir:              f.RedisDataDir,
 				EphemeralPersistence: !f.RedisPersist,
-				Disable:              f.RedisExternal,
+				Disable:              !redisMgmt.Managed,
 			},
 			Telemetry: telemetryCfg,
 		})
@@ -234,20 +246,21 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	// timeout is generous because supervisord's StartSecs already
 	// gates "RUNNING" on a healthy boot.
 	redisReady := true
-	if !f.RedisExternal || f.NoSupervisor {
-		readyCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		if err := redisSvc.WaitReady(readyCtx, 10*time.Second); err != nil {
-			cancel()
-			redisReady = false
-			if f.NoSupervisor {
-				log.WithError(err).Warn("redis unreachable; continuing because --no-supervisor was set")
-			} else {
-				return fmt.Errorf("redis wait ready: %w", err)
-			}
+	readyCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	if err := redisSvc.WaitReady(readyCtx, 10*time.Second); err != nil {
+		cancel()
+		redisReady = false
+		if f.NoSupervisor {
+			log.WithError(err).Warn("redis unreachable; continuing because --no-supervisor was set")
 		} else {
-			cancel()
-			log.WithField("addr", redisAddr).Info("redis ready")
+			return fmt.Errorf("redis wait ready: %w", err)
 		}
+	} else {
+		cancel()
+		log.WithFields(logrus.Fields{
+			"addr":   redisAddr,
+			"source": redisMgmt.Source,
+		}).Info("redis ready")
 	}
 
 	var sudoElevations repo.SudoElevationStore

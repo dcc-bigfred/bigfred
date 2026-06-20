@@ -1,4 +1,38 @@
 {
+  "profile": {
+    "title": "Profile",
+    "subtitle": "Your account details for the current session.",
+    "changePin": "Change password",
+    "yes": "Yes",
+    "no": "No",
+    "sudoActive": "Active until {{expiresAt}}",
+    "sudoInactive": "None",
+    "fields": {
+      "login": "Login",
+      "id": "User ID",
+      "role": "Permanent role",
+      "effectiveRole": "Effective role",
+      "isSignalman": "Signalman rights",
+      "status": "Account status",
+      "dccPool": "DCC address pool",
+      "layout": "Active layout (session)",
+      "sudo": "Temporary admin (sudo)",
+      "createdAt": "Created",
+      "updatedAt": "Last updated"
+    }
+  },
+  "changePin": {
+    "title": "Change password",
+    "subtitle": "Enter your current password and pick a new one.",
+    "submit": "Save new password",
+    "success": "Your password has been changed.",
+    "fields": {
+      "currentPin": "Current password",
+      "newPin": "New password",
+      "confirmPin": "Confirm new password",
+      "confirmMismatch": "Passwords do not match."
+    }
+  },
   "admin": {
     "title": "Users",
     "subtitle": "Manage accounts, roles and system access.",

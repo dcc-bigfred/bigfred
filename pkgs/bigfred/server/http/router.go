@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"io/fs"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -47,6 +48,12 @@ type RouterConfig struct {
 	// Set to false ONLY when the server is reachable over http://
 	// (i.e. local development).
 	SecureCookie bool
+
+	// StaticFS, when non-nil, is the embedded production frontend
+	// bundle (web/dist). It is served as a single-page application at
+	// "/" with an index.html fallback. nil in development builds, where
+	// the SPA is served by the Vite dev server instead.
+	StaticFS fs.FS
 }
 
 // NewRouter wires every HTTP route currently shipped by the bootstrap.
@@ -69,7 +76,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		MaxAge:           300,
 	}))
 
-	authH := NewAuthHandler(cfg.Auth, cfg.Sudo, cfg.SecureCookie)
+	authH := NewAuthHandler(cfg.Auth, cfg.Sudo, cfg.Audit, cfg.SecureCookie)
 	layoutH := NewLayoutHandler(cfg.Layouts, cfg.Auth, cfg.Audit)
 	interlockingH := NewInterlockingHandler(cfg.Interlockings, cfg.Occupancy, cfg.Auth)
 	presenceH := NewPresenceHandler(cfg.Presence, cfg.DccBusLayoutSync)
@@ -117,6 +124,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			r.Get("/audit-log", auditH.List)
 
 			r.Get("/auth/me", authH.Me)
+			r.Put("/auth/me/pin", authH.ChangePIN)
 			r.Get("/auth/me/dcc-pool", vehicleH.ListPool)
 
 			// Vehicle catalogue (own only for now).
@@ -230,6 +238,14 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
 	})
+
+	// Embedded SPA (production builds). Registered last as a catch-all:
+	// chi prefers the more specific /api/v1 and /healthz routes, so this
+	// only handles browser navigations and static asset requests.
+	if cfg.StaticFS != nil {
+		spa := NewSPAHandler(cfg.StaticFS)
+		r.Handle("/*", spa)
+	}
 
 	return r
 }

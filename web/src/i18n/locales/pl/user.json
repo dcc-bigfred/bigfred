@@ -1,4 +1,38 @@
 {
+  "profile": {
+    "title": "Profil",
+    "subtitle": "Dane Twojego konta w bieżącej sesji.",
+    "changePin": "Zmień hasło",
+    "yes": "Tak",
+    "no": "Nie",
+    "sudoActive": "Aktywny do {{expiresAt}}",
+    "sudoInactive": "Brak",
+    "fields": {
+      "login": "Login",
+      "id": "ID użytkownika",
+      "role": "Rola stała",
+      "effectiveRole": "Rola efektywna",
+      "isSignalman": "Uprawnienia dyżurnego",
+      "status": "Status konta",
+      "dccPool": "Pula adresów DCC",
+      "layout": "Aktywna makieta (sesja)",
+      "sudo": "Tymczasowy admin (sudo)",
+      "createdAt": "Utworzono",
+      "updatedAt": "Ostatnia aktualizacja"
+    }
+  },
+  "changePin": {
+    "title": "Zmień hasło",
+    "subtitle": "Wpisz obecne hasło i wybierz nowe.",
+    "submit": "Zapisz nowe hasło",
+    "success": "Hasło zostało zmienione.",
+    "fields": {
+      "currentPin": "Obecne hasło",
+      "newPin": "Nowe hasło",
+      "confirmPin": "Potwierdź nowe hasło",
+      "confirmMismatch": "Hasła nie są identyczne."
+    }
+  },
   "admin": {
     "title": "Użytkownicy",
     "subtitle": "Zarządzaj kontami, rolami oraz dostępem do systemu.",

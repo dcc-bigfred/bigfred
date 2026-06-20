@@ -15,6 +15,11 @@ import react from "@vitejs/plugin-react";
 //
 // `HOST` is set by `make web-dev HOST=…` (default localhost). Use
 // 0.0.0.0 to listen on every interface, or a concrete LAN IP.
+//
+// Vite runs this config in Node, where `process` exists at runtime. We
+// declare it locally instead of pulling in `@types/node` just to type a
+// single env lookup — keeping the frontend's dev dependencies lean.
+declare const process: { env: Record<string, string | undefined> };
 const devHost = process.env.HOST || "localhost";
 
 export default defineConfig({

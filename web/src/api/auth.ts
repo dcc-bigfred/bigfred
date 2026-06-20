@@ -31,6 +31,9 @@ export interface CurrentUser {
    * signalman grants both count.
    */
   isSignalman: boolean;
+  active: boolean;
+  createdAt: string; // ISO-8601
+  updatedAt: string; // ISO-8601
   layoutId: number;
   layoutName: string;
   layoutIsSystem: boolean;
@@ -39,6 +42,11 @@ export interface CurrentUser {
    * none is live.
    */
   sudo: SudoElevation | null;
+}
+
+export interface ChangePinRequest {
+  currentPin: string;
+  newPin: string;
 }
 
 export interface LoginRequest {
@@ -101,6 +109,23 @@ export function useLogout() {
     mutationFn: () => apiFetch<void>("/api/v1/auth/logout", { method: "POST" }),
     onSuccess: () => {
       qc.setQueryData(meQueryKey, null);
+    },
+  });
+}
+
+// useChangePin rotates the caller's password after verifying the
+// current one. On success the cached /me row is invalidated so
+// updatedAt refreshes on the profile page.
+export function useChangePin() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ChangePinRequest) =>
+      apiFetch<void>("/api/v1/auth/me/pin", {
+        method: "PUT",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: meQueryKey });
     },
   });
 }

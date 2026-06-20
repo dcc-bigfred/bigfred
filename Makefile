@@ -23,6 +23,24 @@ server-telemetry:
 server-build:
 	CGO_ENABLED=0 GOOS=linux go build -o bin/loco-server ./pkgs/bigfred/server
 
+# `build-prod` produces the single production binary: it builds the SPA
+# (web/dist) and embeds it into loco-server via go:embed (-tags prod), so
+# one binary serves both the API and the frontend at "/". `web-build` runs
+# first because the go:embed needs web/dist to exist.
+.PHONY: build-prod
+build-prod: web-build
+	CGO_ENABLED=0 go build -tags prod -ldflags="-s -w" -o bin/loco-server ./pkgs/bigfred/server
+
+# `run-prod` builds the embedded production binary and runs it with
+# production defaults: info-level logging, no debug. Override the bind
+# address with HTTP_ADDR, e.g. `make run-prod HTTP_ADDR=0.0.0.0:9090`. Set
+# BIGFRED_JWT_SECRET in the environment so sessions survive restarts.
+HTTP_ADDR ?= 0.0.0.0:8080
+
+.PHONY: run-prod
+run-prod: build-prod
+	./bin/loco-server --http "$(HTTP_ADDR)" --log-level=info --enable-telemetry
+
 # --- BigFred: frontend (Vite + React + MUI) -------------------------------
 # `web-dev` starts Vite on :5173 and proxies /api/v1 to the Go backend
 # on :8080 (see web/vite.config.ts). Run `make server` in another

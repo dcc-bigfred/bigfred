@@ -36,6 +36,7 @@ type RouterConfig struct {
 	Hub              *ws.Hub
 	DccBus           *service.DccBusService
 	Radio            *service.RadioService
+	Audit            *service.AuditService
 
 	// AllowedOrigins is forwarded verbatim to the CORS middleware.
 	// In development the Vite dev server lives on a different port
@@ -69,19 +70,20 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	}))
 
 	authH := NewAuthHandler(cfg.Auth, cfg.Sudo, cfg.SecureCookie)
-	layoutH := NewLayoutHandler(cfg.Layouts, cfg.Auth)
+	layoutH := NewLayoutHandler(cfg.Layouts, cfg.Auth, cfg.Audit)
 	interlockingH := NewInterlockingHandler(cfg.Interlockings, cfg.Occupancy, cfg.Auth)
 	presenceH := NewPresenceHandler(cfg.Presence, cfg.DccBusLayoutSync)
 	vehicleH := NewVehicleHandler(cfg.Vehicles, cfg.LayoutVehicles, cfg.DCCPool, cfg.Auth)
 	functionH := NewFunctionHandler(cfg.Functions, cfg.Auth)
 	templateH := NewVehicleTemplateHandler(cfg.VehicleTemplates, cfg.Auth)
 	trainH := NewTrainHandler(cfg.Trains, cfg.LayoutVehicles, cfg.Auth)
-	rosterH := NewLayoutRosterHandler(cfg.LayoutVehicles, cfg.Auth)
-	userH := NewUserHandler(cfg.Users, cfg.Auth)
+	rosterH := NewLayoutRosterHandler(cfg.LayoutVehicles, cfg.Auth, cfg.Audit)
+	userH := NewUserHandler(cfg.Users, cfg.Auth, cfg.Audit)
 	sudoH := NewSudoHandler(cfg.Sudo, cfg.Auth, cfg.Users, cfg.Presence)
-	commandStationH := NewCommandStationHandler(cfg.CommandStations, cfg.Auth)
+	commandStationH := NewCommandStationHandler(cfg.CommandStations, cfg.Auth, cfg.Audit)
 	diagnosticsH := NewDiagnosticsHandler(cfg.Diagnostics)
 	radioH := NewRadioHandler(cfg.Radio)
+	auditH := NewAuditHandler(cfg.Audit)
 
 	r.Route("/api/v1", func(r chi.Router) {
 		// WebSocket upgrade — auth reads cookie / ?token= inline.
@@ -111,6 +113,8 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		// Authenticated routes share the RequireAuth middleware.
 		r.Group(func(r chi.Router) {
 			r.Use(RequireAuth(cfg.Auth))
+
+			r.Get("/audit-log", auditH.List)
 
 			r.Get("/auth/me", authH.Me)
 			r.Get("/auth/me/dcc-pool", vehicleH.ListPool)

@@ -12,13 +12,14 @@ import (
 // CommandStationHandler bundles REST endpoints for the command-station
 // catalogue.
 type CommandStationHandler struct {
-	svc  *cmd.CommandStation
-	auth *cmd.Auth
+	svc   *cmd.CommandStation
+	auth  *cmd.Auth
+	audit cmd.AuditPublisher
 }
 
 // NewCommandStationHandler returns a CommandStationHandler.
-func NewCommandStationHandler(svc *cmd.CommandStation, auth *cmd.Auth) *CommandStationHandler {
-	return &CommandStationHandler{svc: svc, auth: auth}
+func NewCommandStationHandler(svc *cmd.CommandStation, auth *cmd.Auth, audit cmd.AuditPublisher) *CommandStationHandler {
+	return &CommandStationHandler{svc: svc, auth: auth, audit: audit}
 }
 
 // ListCatalogue handles GET /api/v1/command-stations/catalogue (admin).
@@ -90,6 +91,11 @@ func (h *CommandStationHandler) Update(w http.ResponseWriter, r *http.Request) {
 		writeCommandStationError(w, err)
 		return
 	}
+	if h.audit != nil {
+		_ = h.audit.Publish(r.Context(), 0,
+			cmd.AuditActor{UserID: actor.User.ID, Login: actor.User.Login},
+			"audit_command_station_updated", map[string]string{"name": row.Name})
+	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(protocol.ToCommandStationResponse(row))
 }
@@ -111,9 +117,15 @@ func (h *CommandStationHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 		return
 	}
+	row, getErr := h.svc.Get(r.Context(), id)
 	if err := h.svc.Delete(r.Context(), eff, id); err != nil {
 		writeCommandStationError(w, err)
 		return
+	}
+	if h.audit != nil && getErr == nil {
+		_ = h.audit.Publish(r.Context(), 0,
+			cmd.AuditActor{UserID: actor.User.ID, Login: actor.User.Login},
+			"audit_command_station_deleted", map[string]string{"name": row.Name})
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

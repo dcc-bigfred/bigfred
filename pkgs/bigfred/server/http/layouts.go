@@ -15,13 +15,14 @@ import (
 
 // LayoutHandler bundles the endpoints documented under `/api/v1/layouts*` in §4.1.
 type LayoutHandler struct {
-	svc  *cmd.Layout
-	auth *cmd.Auth
+	svc   *cmd.Layout
+	auth  *cmd.Auth
+	audit cmd.AuditPublisher
 }
 
 // NewLayoutHandler returns a LayoutHandler.
-func NewLayoutHandler(svc *cmd.Layout, auth *cmd.Auth) *LayoutHandler {
-	return &LayoutHandler{svc: svc, auth: auth}
+func NewLayoutHandler(svc *cmd.Layout, auth *cmd.Auth, audit cmd.AuditPublisher) *LayoutHandler {
+	return &LayoutHandler{svc: svc, auth: auth, audit: audit}
 }
 
 // ListForLogin handles the unauthenticated `GET /api/v1/layouts/login`
@@ -297,6 +298,11 @@ func (h *LayoutHandler) Update(w http.ResponseWriter, r *http.Request) {
 		}
 		layout = updated
 	}
+	if h.audit != nil {
+		_ = h.audit.Publish(r.Context(), id,
+			cmd.AuditActor{UserID: actor.User.ID, Login: actor.User.Login},
+			"audit_layout_updated", map[string]string{"name": layout.Name})
+	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(protocol.ToLayoutResponse(layout))
 }
@@ -332,10 +338,16 @@ func (h *LayoutHandler) Lock(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "invalid_id")
 		return
 	}
+	actor, _ := IdentityFromContext(r.Context())
 	layout, err := h.svc.SetLocked(r.Context(), id, true)
 	if err != nil {
 		writeLayoutError(w, err)
 		return
+	}
+	if h.audit != nil {
+		_ = h.audit.Publish(r.Context(), id,
+			cmd.AuditActor{UserID: actor.User.ID, Login: actor.User.Login},
+			"audit_layout_locked", map[string]string{"name": layout.Name})
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(protocol.ToLayoutResponse(layout))
@@ -348,10 +360,16 @@ func (h *LayoutHandler) Unlock(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "invalid_id")
 		return
 	}
+	actor, _ := IdentityFromContext(r.Context())
 	layout, err := h.svc.SetLocked(r.Context(), id, false)
 	if err != nil {
 		writeLayoutError(w, err)
 		return
+	}
+	if h.audit != nil {
+		_ = h.audit.Publish(r.Context(), id,
+			cmd.AuditActor{UserID: actor.User.ID, Login: actor.User.Login},
+			"audit_layout_unlocked", map[string]string{"name": layout.Name})
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(protocol.ToLayoutResponse(layout))

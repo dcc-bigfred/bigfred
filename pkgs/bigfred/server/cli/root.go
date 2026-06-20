@@ -318,6 +318,12 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		dccLayoutSync = service.NewDccBusLayoutSync(dccBusSvc, layoutSvc, hub)
 	}
 
+	var auditSvc *service.AuditService
+	if redisReady {
+		auditSvc = service.NewAuditService(service.AuditServiceConfig{Redis: redisSvc})
+		log.Info("audit service ready (Redis Streams)")
+	}
+
 	var radioStopSvc *service.RadioStopService
 	var estopTargetSvc *service.EStopTargetService
 	if dccBusSvc != nil && redisReady {
@@ -326,6 +332,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 			Redis:  redisSvc,
 			Roster: layoutVehicleSvc,
 			Auth:   authSvc,
+			Audit:  auditSvc,
 			Log:    log,
 		})
 		estopTargetSvc = service.NewEStopTargetService(service.EStopTargetConfig{
@@ -333,6 +340,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 			Roster:      layoutVehicleSvc,
 			Layouts:     layoutSvc,
 			Auth:        authSvc,
+			Audit:       auditSvc,
 			IlkSessions: interlockingSessions,
 			LayoutIlks:  layoutInterlockings,
 			Log:         log,
@@ -373,6 +381,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 			Roster:        layoutVehicleSvc,
 			Auth:          authSvc,
 			Hub:           hub,
+			Audit:         auditSvc,
 		})
 		occupancySvc.SetTakeoverService(takeoverSvc)
 		if err := takeoverSvc.RecoverPending(ctx); err != nil {
@@ -471,6 +480,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		Hub:              hub,
 		DccBus:           dccBusSvc,
 		Radio:            radioSvc,
+		Audit:            auditSvc,
 		AllowedOrigins:   f.AllowedOrigins,
 		SecureCookie:     f.SecureCookie,
 	})

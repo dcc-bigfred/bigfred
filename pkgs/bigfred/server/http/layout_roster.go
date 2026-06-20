@@ -20,13 +20,14 @@ import (
 // session layout (§7a.1). Mismatch returns 422 layout_mismatch — a
 // hand-crafted request cannot peek into another layout's roster.
 type LayoutRosterHandler struct {
-	svc  *service.LayoutVehicleService
-	auth *cmd.Auth
+	svc   *service.LayoutVehicleService
+	auth  *cmd.Auth
+	audit cmd.AuditPublisher
 }
 
 // NewLayoutRosterHandler returns a LayoutRosterHandler.
-func NewLayoutRosterHandler(svc *service.LayoutVehicleService, auth *cmd.Auth) *LayoutRosterHandler {
-	return &LayoutRosterHandler{svc: svc, auth: auth}
+func NewLayoutRosterHandler(svc *service.LayoutVehicleService, auth *cmd.Auth, audit cmd.AuditPublisher) *LayoutRosterHandler {
+	return &LayoutRosterHandler{svc: svc, auth: auth, audit: audit}
 }
 
 // rosterVehicleResponse is the dashboard row shape. We piggy-back on
@@ -186,6 +187,11 @@ func (h *LayoutRosterHandler) AddVehicle(w http.ResponseWriter, r *http.Request)
 		writeLayoutRosterError(w, err)
 		return
 	}
+	if h.audit != nil {
+		_ = h.audit.Publish(r.Context(), layoutID,
+			cmd.AuditActor{UserID: actor.User.ID, Login: actor.User.Login},
+			"audit_roster_vehicle_added", map[string]string{"vehicle": entry.Vehicle.Name})
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(toRosterVehicleResponse(entry, true))
@@ -207,9 +213,22 @@ func (h *LayoutRosterHandler) RemoveVehicle(w http.ResponseWriter, r *http.Reque
 		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 		return
 	}
+	vehicleEntry, _ := h.svc.ListVehicles(r.Context(), layoutID)
+	vehicleName := ""
+	for _, e := range vehicleEntry {
+		if e.Vehicle.ID == vehicleID {
+			vehicleName = e.Vehicle.Name
+			break
+		}
+	}
 	if err := h.svc.RemoveVehicle(r.Context(), layoutID, actor.User.ID, vehicleID, eff); err != nil {
 		writeLayoutRosterError(w, err)
 		return
+	}
+	if h.audit != nil {
+		_ = h.audit.Publish(r.Context(), layoutID,
+			cmd.AuditActor{UserID: actor.User.ID, Login: actor.User.Login},
+			"audit_roster_vehicle_removed", map[string]string{"vehicle": vehicleName})
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -238,6 +257,11 @@ func (h *LayoutRosterHandler) AddTrain(w http.ResponseWriter, r *http.Request) {
 		writeLayoutRosterError(w, err)
 		return
 	}
+	if h.audit != nil {
+		_ = h.audit.Publish(r.Context(), layoutID,
+			cmd.AuditActor{UserID: actor.User.ID, Login: actor.User.Login},
+			"audit_roster_train_added", map[string]string{"train": entry.Train.Name})
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(toRosterTrainResponse(entry, true))
@@ -259,9 +283,22 @@ func (h *LayoutRosterHandler) RemoveTrain(w http.ResponseWriter, r *http.Request
 		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 		return
 	}
+	trainEntries, _ := h.svc.ListTrains(r.Context(), layoutID)
+	trainName := ""
+	for _, e := range trainEntries {
+		if e.Train.ID == trainID {
+			trainName = e.Train.Name
+			break
+		}
+	}
 	if err := h.svc.RemoveTrain(r.Context(), layoutID, actor.User.ID, trainID, eff); err != nil {
 		writeLayoutRosterError(w, err)
 		return
+	}
+	if h.audit != nil {
+		_ = h.audit.Publish(r.Context(), layoutID,
+			cmd.AuditActor{UserID: actor.User.ID, Login: actor.User.Login},
+			"audit_roster_train_removed", map[string]string{"train": trainName})
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

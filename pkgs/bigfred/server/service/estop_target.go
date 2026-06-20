@@ -16,6 +16,7 @@ type EStopTargetConfig struct {
 	Roster      *LayoutVehicleService
 	Layouts     CommandStationIDsForLayout
 	Auth        *cmd.Auth
+	Audit       cmd.AuditPublisher
 	IlkSessions *repo.InterlockingSessions
 	LayoutIlks  *repo.LayoutInterlockings
 	Log         *logrus.Logger
@@ -36,6 +37,7 @@ func NewEStopTargetService(cfg EStopTargetConfig) *EStopTargetService {
 		Roster:      roster,
 		Layouts:     cfg.Layouts,
 		Auth:        cfg.Auth,
+		Audit:       cfg.Audit,
 		IlkSessions: cfg.IlkSessions,
 		LayoutIlks:  cfg.LayoutIlks,
 		Log:         cfg.Log,

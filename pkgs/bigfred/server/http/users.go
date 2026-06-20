@@ -14,13 +14,14 @@ import (
 // with RequireRole(domain.RoleAdmin); UserService re-checks via
 // CanManageUsers for defense in depth.
 type UserHandler struct {
-	svc  *cmd.User
-	auth *cmd.Auth
+	svc   *cmd.User
+	auth  *cmd.Auth
+	audit cmd.AuditPublisher
 }
 
 // NewUserHandler returns a UserHandler.
-func NewUserHandler(svc *cmd.User, auth *cmd.Auth) *UserHandler {
-	return &UserHandler{svc: svc, auth: auth}
+func NewUserHandler(svc *cmd.User, auth *cmd.Auth, audit cmd.AuditPublisher) *UserHandler {
+	return &UserHandler{svc: svc, auth: auth, audit: audit}
 }
 
 // List handles GET /api/v1/users.
@@ -75,6 +76,11 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeUserError(w, err)
 		return
 	}
+	if h.audit != nil {
+		_ = h.audit.Publish(r.Context(), 0,
+			cmd.AuditActor{UserID: actor.User.ID, Login: actor.User.Login},
+			"audit_user_created", map[string]string{"target": row.Login})
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(protocol.ToUserResponse(row, pool))
@@ -111,6 +117,11 @@ func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeUserError(w, err)
 		return
+	}
+	if h.audit != nil {
+		_ = h.audit.Publish(r.Context(), 0,
+			cmd.AuditActor{UserID: actor.User.ID, Login: actor.User.Login},
+			"audit_user_updated", map[string]string{"target": row.Login})
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(protocol.ToUserResponse(row, pool))
@@ -153,6 +164,15 @@ func (h *UserHandler) setActive(w http.ResponseWriter, r *http.Request, active b
 		writeUserError(w, err)
 		return
 	}
+	if h.audit != nil {
+		msg := "audit_user_deactivated"
+		if active {
+			msg = "audit_user_activated"
+		}
+		_ = h.audit.Publish(r.Context(), 0,
+			cmd.AuditActor{UserID: actor.User.ID, Login: actor.User.Login},
+			msg, map[string]string{"target": row.Login})
+	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(protocol.ToUserResponse(row, pool))
 }
@@ -174,9 +194,15 @@ func (h *UserHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 		return
 	}
+	target, _ := h.svc.Get(r.Context(), userID)
 	if err := h.svc.Delete(r.Context(), eff, actor.User.ID, userID); err != nil {
 		writeUserError(w, err)
 		return
+	}
+	if h.audit != nil {
+		_ = h.audit.Publish(r.Context(), 0,
+			cmd.AuditActor{UserID: actor.User.ID, Login: actor.User.Login},
+			"audit_user_deleted", map[string]string{"target": target.Login})
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

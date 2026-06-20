@@ -10,6 +10,16 @@ import (
 	"github.com/keskad/loco/pkgs/bigfred/contract"
 )
 
+const redisProbeTimeout = 300 * time.Millisecond
+
+// RedisManagement describes whether supervisord should spawn redis-server.
+type RedisManagement struct {
+	// Managed is true when loco-server should run redis under supervisord.
+	Managed bool
+	// Source is one of "managed", "explicit-external", or "auto-detected".
+	Source string
+}
+
 // RedisService wraps a singleton go-redis client used by the rest of
 // the server (DccBusService, ws hub fan-in, etc.) so test code and
 // production share one connection pool.
@@ -61,6 +71,39 @@ func (r *RedisService) Addr() string { return r.addr }
 // Ping issues a PING command and returns the round-trip error.
 func (r *RedisService) Ping(ctx context.Context) error {
 	return r.client.Ping(ctx).Err()
+}
+
+// RedisReachable reports whether addr accepts a Redis PING within timeout.
+func RedisReachable(ctx context.Context, cfg RedisServiceConfig, timeout time.Duration) bool {
+	if timeout <= 0 {
+		timeout = redisProbeTimeout
+	}
+	addr := cfg.Addr
+	if addr == "" {
+		addr = "127.0.0.1:6379"
+	}
+	probe := redis.NewClient(&redis.Options{
+		Addr:     addr,
+		DB:       cfg.DB,
+		Password: cfg.Password,
+	})
+	defer probe.Close()
+	probeCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	return probe.Ping(probeCtx).Err() == nil
+}
+
+// ResolveRedisManagement decides whether supervisord should spawn redis-server.
+// Explicit --redis-external always skips the managed daemon. When autoDetect
+// is enabled, an existing instance at cfg.Addr is reused instead of spawning.
+func ResolveRedisManagement(ctx context.Context, cfg RedisServiceConfig, explicitExternal, autoDetect bool) RedisManagement {
+	if explicitExternal {
+		return RedisManagement{Managed: false, Source: "explicit-external"}
+	}
+	if autoDetect && RedisReachable(ctx, cfg, redisProbeTimeout) {
+		return RedisManagement{Managed: false, Source: "auto-detected"}
+	}
+	return RedisManagement{Managed: true, Source: "managed"}
 }
 
 // WaitReady polls Ping until it succeeds or the deadline expires.

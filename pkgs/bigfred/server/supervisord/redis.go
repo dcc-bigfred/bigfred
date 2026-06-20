@@ -5,8 +5,9 @@ import "fmt"
 // RedisConfig collects the few knobs InfraProcesses exposes for the
 // managed redis-server child. Redis is mandatory in BigFred (state
 // cache + cross-process pub/sub between loco-server and dcc-bus); the
-// only way to skip the managed instance is to point loco-server at an
-// external one with --redis-external, which sets RedisConfig.Disable.
+// managed instance is skipped when the operator passes --redis-external,
+// or when --redis-auto-detect finds an existing server at --redis-addr
+// (both set RedisConfig.Disable).
 type RedisConfig struct {
 	// Bin is the absolute or PATH-relative redis-server binary.
 	// Defaults to "redis-server" when empty.

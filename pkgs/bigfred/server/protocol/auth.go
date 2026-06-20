@@ -26,8 +26,17 @@ type MeResponse struct {
 	Role           domain.Role            `json:"role"`
 	EffectiveRole  domain.Role            `json:"effectiveRole"`
 	IsSignalman    bool                   `json:"isSignalman"`
+	Active         bool                   `json:"active"`
+	CreatedAt      time.Time              `json:"createdAt"`
+	UpdatedAt      time.Time              `json:"updatedAt"`
 	LayoutID       uint                   `json:"layoutId"`
 	LayoutName     string                 `json:"layoutName"`
 	LayoutIsSystem bool                   `json:"layoutIsSystem"`
 	Sudo           *SudoElevationResponse `json:"sudo"`
+}
+
+// ChangePINRequest is the PUT /api/v1/auth/me/pin body.
+type ChangePINRequest struct {
+	CurrentPIN string `json:"currentPin"`
+	NewPIN     string `json:"newPin"`
 }

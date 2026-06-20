@@ -19,6 +19,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
+	frontend "github.com/keskad/loco/web"
+
 	dccbuscli "github.com/keskad/loco/pkgs/bigfred/dcc-bus/cli"
 	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
 	httpapi "github.com/keskad/loco/pkgs/bigfred/server/http"
@@ -473,6 +475,16 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		return fmt.Errorf("diagnostics init: %w", err)
 	}
 
+	// In `-tags prod` builds the compiled SPA (web/dist) is embedded and
+	// served at "/". Development builds return (nil, false) and rely on
+	// the Vite dev server instead.
+	staticFS, embedded := frontend.Dist()
+	if embedded {
+		log.Info("serving embedded frontend bundle at /")
+	} else {
+		log.Info("no embedded frontend bundle (dev build) — serve the SPA with `make web-dev`")
+	}
+
 	router := httpapi.NewRouter(httpapi.RouterConfig{
 		Auth:             authSvc,
 		Users:            userSvc,
@@ -496,6 +508,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		Audit:            auditSvc,
 		AllowedOrigins:   f.AllowedOrigins,
 		SecureCookie:     f.SecureCookie,
+		StaticFS:         staticFS,
 	})
 
 	srv := &http.Server{
@@ -574,9 +587,11 @@ func resolveJWTSecret(flag string, log *logrus.Logger) ([]byte, error) {
 	}
 	log.Warn("no JWT secret configured — generated a random one. Existing sessions will not survive a restart. " +
 		"Set --jwt-secret or BIGFRED_JWT_SECRET in production.")
-	// Use the raw bytes (not hex) — the encoding doesn't matter for
-	// HMAC, but the log message above is a strong hint that this is
-	// development-only behaviour.
-	_ = hex.EncodeToString(buf)
-	return buf, nil
+	// Hex-encode the secret so it is ASCII-safe. It is forwarded to each
+	// dcc-bus daemon on the command line and written verbatim into
+	// supervisord.conf, which supervisord parses strictly as UTF-8. Raw
+	// random bytes routinely contain non-UTF-8 sequences (e.g. 0x96) that
+	// make `supervisorctl reread` fail, so the daemon never starts and the
+	// data-plane proxy returns 502. The encoding is irrelevant to HMAC.
+	return []byte(hex.EncodeToString(buf)), nil
 }

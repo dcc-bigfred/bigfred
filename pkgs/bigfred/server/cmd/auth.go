@@ -12,6 +12,7 @@ import (
 	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
 	"github.com/keskad/loco/pkgs/bigfred/server/helpers"
 	"github.com/keskad/loco/pkgs/bigfred/server/repo"
+	"github.com/keskad/loco/pkgs/bigfred/server/validation"
 )
 
 // Identity carries the authenticated caller through HTTP and WS handlers.
@@ -252,6 +253,30 @@ func (a *Auth) VerifyToken(ctx context.Context, raw string) (Identity, error) {
 	}
 
 	return Identity{User: user, Layout: layout}, nil
+}
+
+// ChangePIN rotates the caller's password after verifying the current one.
+func (a *Auth) ChangePIN(ctx context.Context, userID uint, currentPIN, newPIN string) error {
+	user, err := a.users.FindByID(ctx, userID)
+	if err != nil {
+		if errors.Is(err, repo.ErrUserNotFound) {
+			return svcerrors.ErrUserNotFound
+		}
+		return err
+	}
+	if err := verifyPIN(currentPIN, user.PINHash); err != nil {
+		return svcerrors.ErrInvalidCredentials
+	}
+	if err := validation.ValidateUserPIN(newPIN); err != nil {
+		return err
+	}
+	hash, err := helpers.HashPIN(newPIN)
+	if err != nil {
+		return err
+	}
+	user.PINHash = hash
+	user.UpdatedAt = time.Now().UTC()
+	return a.users.Update(ctx, &user)
 }
 
 func verifyPIN(pin, encoded string) error {

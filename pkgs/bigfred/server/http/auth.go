@@ -10,8 +10,8 @@ import (
 	"github.com/keskad/loco/pkgs/bigfred/server/protocol"
 )
 
-// AuthHandler bundles the three endpoints declared under
-// `/api/v1/auth` in §4.1 (login, logout, me).
+// AuthHandler bundles the auth endpoints declared under
+// `/api/v1/auth` in §4.1 (login, logout, me, change-pin).
 //
 // `sudo` is needed so the /me payload exposes the active admin
 // elevation (its `expiresAt` drives the AppBar countdown) and so
@@ -21,13 +21,14 @@ import (
 type AuthHandler struct {
 	auth   *cmd.Auth
 	sudo   *cmd.Sudo
+	audit  cmd.AuditPublisher
 	secure bool // toggles the Secure cookie flag (off in dev over http://)
 }
 
 // NewAuthHandler returns an AuthHandler. `secureCookie` should be
 // true in any production deployment (HTTPS-only).
-func NewAuthHandler(auth *cmd.Auth, sudo *cmd.Sudo, secureCookie bool) *AuthHandler {
-	return &AuthHandler{auth: auth, sudo: sudo, secure: secureCookie}
+func NewAuthHandler(auth *cmd.Auth, sudo *cmd.Sudo, audit cmd.AuditPublisher, secureCookie bool) *AuthHandler {
+	return &AuthHandler{auth: auth, sudo: sudo, audit: audit, secure: secureCookie}
 }
 
 // Login validates credentials, mints a JWT and sets it as a Secure,
@@ -128,6 +129,40 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(h.buildMeResponse(r, id))
 }
 
+// ChangePIN handles PUT /api/v1/auth/me/pin — self-service password
+// rotation after verifying the current PIN.
+func (h *AuthHandler) ChangePIN(w http.ResponseWriter, r *http.Request) {
+	id, ok := IdentityFromContext(r.Context())
+	if !ok {
+		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	var req protocol.ChangePINRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid_body")
+		return
+	}
+	if req.CurrentPIN == "" || req.NewPIN == "" {
+		writeJSONError(w, http.StatusBadRequest, "missing_credentials")
+		return
+	}
+	if err := h.auth.ChangePIN(r.Context(), id.User.ID, req.CurrentPIN, req.NewPIN); err != nil {
+		if status, code := svcerrors.AuthHTTPStatus(err); code != "internal_error" {
+			writeJSONError(w, status, code)
+			return
+		}
+		status, code := svcerrors.UserHTTPStatus(err)
+		writeJSONError(w, status, code)
+		return
+	}
+	if h.audit != nil {
+		_ = h.audit.Publish(r.Context(), 0,
+			cmd.AuditActor{UserID: id.User.ID, Login: id.User.Login},
+			"audit_user_updated", map[string]string{"target": id.User.Login})
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // buildMeResponse runs the per-request derivation that the Login
 // and Me handlers share. Failures inside the auth/sudo lookups fall
 // back to safe defaults (effectiveRole := user.Role, isSignalman :=
@@ -153,6 +188,9 @@ func (h *AuthHandler) buildMeResponse(r *http.Request, id cmd.Identity) protocol
 		Role:           id.User.Role,
 		EffectiveRole:  effectiveRole,
 		IsSignalman:    isSignalman,
+		Active:         id.User.Active,
+		CreatedAt:      id.User.CreatedAt,
+		UpdatedAt:      id.User.UpdatedAt,
 		LayoutID:       id.Layout.ID,
 		LayoutName:     id.Layout.Name,
 		LayoutIsSystem: id.Layout.IsSystem,

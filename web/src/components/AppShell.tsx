@@ -172,8 +172,7 @@ function AppShellContent() {
         id: "profile",
         label: t("nav.account.profile"),
         icon: <PersonIcon fontSize="small" />,
-        disabled: true,
-        tooltip: comingSoon("M2"),
+        onClick: () => navigate("/account/profile"),
       },
       {
         id: "apiKeys",
@@ -186,8 +185,7 @@ function AppShellContent() {
         id: "changePin",
         label: t("nav.account.changePin"),
         icon: <LockResetIcon fontSize="small" />,
-        disabled: true,
-        tooltip: comingSoon("M2"),
+        onClick: () => navigate("/account/change-pin"),
       },
       { id: "divider-1", divider: true },
       {

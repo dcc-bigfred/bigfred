@@ -48,7 +48,7 @@ func BigFredAlloyGeneratedPath(cfg TelemetryConfig) string {
 }
 
 // SupervisordConfig configures the managed supervisord instance plus the
-// BigFred-specific telemetry side-car. Paths default to XDG locations when
+// BigFred-specific telemetry side-car. Paths default to hub /data locations when
 // left empty.
 type SupervisordConfig struct {
 	SupervisordBin   string
@@ -97,7 +97,7 @@ type Supervisor interface {
 	StopProgram(ctx context.Context, name string) error
 }
 
-// NewSupervisordService builds the supervisord facade. Default XDG paths
+// NewSupervisordService builds the supervisord facade. Default hub paths
 // are filled in when unset.
 func NewSupervisordService(cfg SupervisordConfig) (Supervisor, error) {
 	if cfg.ConfigPath == "" {

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -64,7 +65,7 @@ type Manager struct {
 	healthCancel context.CancelFunc
 }
 
-// NewManager builds a manager, filling in default XDG paths when unset.
+// NewManager builds a manager, filling in default hub paths when unset.
 func NewManager(cfg Config) (*Manager, error) {
 	if cfg.ConfigPath == "" {
 		paths, err := DefaultPaths()
@@ -122,6 +123,9 @@ func (s *Manager) Start(ctx context.Context) error {
 	}
 	if err := EnsureDir(s.cfg.LogDir); err != nil {
 		return err
+	}
+	if err := EnsureDir(filepath.Dir(s.cfg.SocketPath)); err != nil {
+		return fmt.Errorf("mkdir socket dir: %w", err)
 	}
 	if s.cfg.Telemetry.Enable {
 		if err := PrepareAlloyTelemetry(s.cfg.Telemetry); err != nil {

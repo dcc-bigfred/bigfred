@@ -1,11 +1,15 @@
 package supervisord
 
-import (
-	"os"
-	"path/filepath"
+// Hub runtime paths for loco-server supervisord (RW partition on the hub image).
+const (
+	DefaultConfigDir  = "/data/etc/supervisord"
+	DefaultConfigFile = "/data/etc/supervisord/supervisord.conf"
+	DefaultSocketPath = "/data/run/supervisord.sock"
+	DefaultPIDFile    = "/data/run/supervisord.pid"
+	DefaultLogDir     = "/data/logs"
 )
 
-// Paths holds XDG-derived locations for a non-root supervisord instance.
+// Paths holds filesystem locations for the managed supervisord instance.
 type Paths struct {
 	ConfigDir  string
 	ConfigPath string
@@ -14,26 +18,13 @@ type Paths struct {
 	LogDir     string
 }
 
-// DefaultPaths returns paths under $XDG_RUNTIME_DIR/loco/supervisord/ and
-// $XDG_CACHE_HOME/loco/supervisord/.
+// DefaultPaths returns hub paths under /data (config, logs, unix socket, pidfile).
 func DefaultPaths() (Paths, error) {
-	cache, err := os.UserCacheDir()
-	if err != nil {
-		return Paths{}, err
-	}
-	logDir := filepath.Join(cache, "loco", "supervisord")
-
-	runtime := os.Getenv("XDG_RUNTIME_DIR")
-	if runtime == "" {
-		runtime = filepath.Join(logDir, "run")
-	}
-	configDir := filepath.Join(runtime, "loco", "supervisord")
-
 	return Paths{
-		ConfigDir:  configDir,
-		ConfigPath: filepath.Join(configDir, "supervisord.conf"),
-		SocketPath: filepath.Join(configDir, "supervisor.sock"),
-		PIDFile:    filepath.Join(configDir, "supervisord.pid"),
-		LogDir:     logDir,
+		ConfigDir:  DefaultConfigDir,
+		ConfigPath: DefaultConfigFile,
+		SocketPath: DefaultSocketPath,
+		PIDFile:    DefaultPIDFile,
+		LogDir:     DefaultLogDir,
 	}, nil
 }

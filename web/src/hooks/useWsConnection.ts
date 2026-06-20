@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 export interface UseWsConnectionOptions {
   /** WebSocket URL to connect to. Pass `null` to stay disconnected. */
   url: string | null;
-  /** Max time to wait while CONNECTING before aborting. Default 250 ms. */
+  /** Max time to wait while CONNECTING before aborting. Default 2 000 ms. */
   connectTimeoutMs?: number;
   /** Delay before the first retry after a disconnect. Default 250 ms. */
   reconnectIntervalMs?: number;
@@ -60,6 +60,18 @@ export interface UseWsConnectionResult {
 
 const DEFAULT_PING_FRAME = JSON.stringify({ type: "ping" });
 
+/** Detach handlers and clear the ref without calling close(). */
+function orphanSocket(
+  socket: WebSocket,
+  socketRef: React.MutableRefObject<WebSocket | null>,
+) {
+  socket.onopen = null;
+  socket.onerror = null;
+  socket.onclose = null;
+  socket.onmessage = null;
+  if (socketRef.current === socket) socketRef.current = null;
+}
+
 /**
  * useWsConnection manages a single WebSocket connection with automatic
  * reconnect, linear backoff, configurable connect timeout and a pong
@@ -71,7 +83,7 @@ const DEFAULT_PING_FRAME = JSON.stringify({ type: "ping" });
  */
 export function useWsConnection({
   url,
-  connectTimeoutMs = 250,
+  connectTimeoutMs = 2_000,
   reconnectIntervalMs = 250,
   reconnectBackoffStepMs = 50,
   reconnectMaxMs = 2_000,
@@ -147,11 +159,6 @@ export function useWsConnection({
       socketRef.current = socket;
       let lastPongAt = Date.now();
 
-      const connectTimeout = window.setTimeout(() => {
-        if (disposed || gen !== connectGenRef.current) return;
-        if (socket.readyState === WebSocket.CONNECTING) socket.close();
-      }, connectTimeoutMs);
-
       const scheduleReconnect = () => {
         if (disposed) return;
         if (hadOpenedRef.current) setReconnecting(true);
@@ -162,6 +169,19 @@ export function useWsConnection({
         );
         reconnectTimerRef.current = window.setTimeout(connect, delay);
       };
+
+      const abortConnecting = () => {
+        if (socket.readyState !== WebSocket.CONNECTING) return;
+        window.clearTimeout(connectTimeout);
+        orphanSocket(socket, socketRef);
+        onCloseRef.current?.();
+        scheduleReconnect();
+      };
+
+      const connectTimeout = window.setTimeout(() => {
+        if (disposed || gen !== connectGenRef.current) return;
+        abortConnecting();
+      }, connectTimeoutMs);
 
       socket.onopen = () => {
         window.clearTimeout(connectTimeout);
@@ -217,17 +237,13 @@ export function useWsConnection({
         window.clearTimeout(connectTimeout);
         window.clearInterval(ping);
         window.clearInterval(pongWatchdog);
-        socket.onopen = null;
-        socket.onerror = null;
-        socket.onclose = null;
-        socket.onmessage = null;
-        if (socketRef.current === socket) socketRef.current = null;
-        if (
-          socket.readyState === WebSocket.CONNECTING ||
-          socket.readyState === WebSocket.OPEN
-        ) {
+        orphanSocket(socket, socketRef);
+        if (socket.readyState === WebSocket.OPEN) {
           socket.close();
         }
+        // CONNECTING sockets are orphaned, not closed, so a superseded
+        // attempt does not trigger the browser warning "WebSocket is
+        // closed before the connection is established".
       };
     };
 

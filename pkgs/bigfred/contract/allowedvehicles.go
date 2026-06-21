@@ -45,7 +45,7 @@ type AllowedVehicles struct {
 // AllowedVehicle ties a DCC address to catalogue metadata dcc-bus
 // needs for subscribe gating and drive-authority checks without SQLite.
 type AllowedVehicle struct {
-	VehicleID   uint   `json:"vehicleId"`
+	VehicleID   string `json:"vehicleId"`
 	Addr        uint16 `json:"addr"`
 	OwnerUserID uint   `json:"ownerUserId"`
 
@@ -74,7 +74,7 @@ type DefinedTrains struct {
 
 // DefinedTrain is one consist on the layout roster.
 type DefinedTrain struct {
-	TrainID     uint                 `json:"trainId"`
+	TrainID     string               `json:"trainId"`
 	OwnerUserID uint                 `json:"ownerUserId"`
 
 	// ControllerUserIDs is the flat set of user ids allowed to drive
@@ -86,7 +86,7 @@ type DefinedTrain struct {
 
 // DefinedTrainMember is one vehicle in consist order.
 type DefinedTrainMember struct {
-	VehicleID uint    `json:"vehicleId"`
+	VehicleID string  `json:"vehicleId"`
 	Position  int     `json:"position"`
 	Reversed         bool    `json:"reversed"`
 	SpeedMultiplier  float64 `json:"speedMultiplier"`

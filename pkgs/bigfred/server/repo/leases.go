@@ -16,30 +16,30 @@ import (
 // differ only in the owning foreign-key column they filter on.
 //
 // Deprecated: prefer VehicleLeaseStore / TrainLeaseStore.
-type Leases[T domain.Lease] interface {
-	ListActive(ctx context.Context, keyIDs []uint, now time.Time) ([]T, error)
+type Leases[T domain.Lease, K ~string] interface {
+	ListActive(ctx context.Context, keyIDs []K, now time.Time) ([]T, error)
 	Insert(ctx context.Context, row *T) error
 }
 
 // leaseRepo is the generic REL-backed Leases implementation. keyColumn
 // is the owning foreign key the rows are filtered on (vehicle_id or
 // train_id).
-type leaseRepo[T domain.Lease] struct {
+type leaseRepo[T domain.Lease, K ~string] struct {
 	repo      rel.Repository
 	keyColumn string
 }
 
 // NewVehicleLeases returns the vehicle lease repository.
 func NewVehicleLeases(r rel.Repository) VehicleLeaseStore {
-	return &leaseRepo[domain.VehicleLease]{repo: r, keyColumn: "vehicle_id"}
+	return &leaseRepo[domain.VehicleLease, domain.VehicleID]{repo: r, keyColumn: "vehicle_id"}
 }
 
 // NewTrainLeases returns the train lease repository.
 func NewTrainLeases(r rel.Repository) TrainLeaseStore {
-	return &leaseRepo[domain.TrainLease]{repo: r, keyColumn: "train_id"}
+	return &leaseRepo[domain.TrainLease, domain.TrainID]{repo: r, keyColumn: "train_id"}
 }
 
-func (l *leaseRepo[T]) ListActive(ctx context.Context, keyIDs []uint, now time.Time) ([]T, error) {
+func (l *leaseRepo[T, K]) ListActive(ctx context.Context, keyIDs []K, now time.Time) ([]T, error) {
 	if len(keyIDs) == 0 {
 		return nil, nil
 	}
@@ -60,13 +60,13 @@ func (l *leaseRepo[T]) ListActive(ctx context.Context, keyIDs []uint, now time.T
 	return active, nil
 }
 
-func (l *leaseRepo[T]) Insert(ctx context.Context, row *T) error {
+func (l *leaseRepo[T, K]) Insert(ctx context.Context, row *T) error {
 	return l.repo.Insert(ctx, row)
 }
 
-func (l *leaseRepo[T]) RequiresJanitor() bool { return true }
+func (l *leaseRepo[T, K]) RequiresJanitor() bool { return true }
 
-func (l *leaseRepo[T]) Revoke(ctx context.Context, keyID uint, now time.Time) error {
+func (l *leaseRepo[T, K]) Revoke(ctx context.Context, keyID K, now time.Time) error {
 	var rows []T
 	if err := l.repo.FindAll(ctx, &rows, where.Eq(l.keyColumn, keyID)); err != nil {
 		return err
@@ -92,6 +92,6 @@ func (l *leaseRepo[T]) Revoke(ctx context.Context, keyID uint, now time.Time) er
 }
 
 var (
-	_ VehicleLeaseStore = (*leaseRepo[domain.VehicleLease])(nil)
-	_ TrainLeaseStore   = (*leaseRepo[domain.TrainLease])(nil)
+	_ VehicleLeaseStore = (*leaseRepo[domain.VehicleLease, domain.VehicleID])(nil)
+	_ TrainLeaseStore   = (*leaseRepo[domain.TrainLease, domain.TrainID])(nil)
 )

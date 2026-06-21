@@ -23,7 +23,7 @@ type Trains struct {
 func NewTrains(r rel.Repository) *Trains { return &Trains{repo: r} }
 
 // FindByID looks up a train by primary key.
-func (t *Trains) FindByID(ctx context.Context, id uint) (domain.Train, error) {
+func (t *Trains) FindByID(ctx context.Context, id domain.TrainID) (domain.Train, error) {
 	var row domain.Train
 	err := t.repo.Find(ctx, &row, where.Eq("id", id))
 	if err != nil {
@@ -73,7 +73,7 @@ func (t *Trains) ListByOwner(ctx context.Context, ownerID uint) ([]domain.Train,
 }
 
 // ListByIDs returns trains by primary-key set.
-func (t *Trains) ListByIDs(ctx context.Context, ids []uint) ([]domain.Train, error) {
+func (t *Trains) ListByIDs(ctx context.Context, ids []domain.TrainID) ([]domain.Train, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
@@ -118,7 +118,7 @@ func NewTrainMembers(r rel.Repository) *TrainMembers { return &TrainMembers{repo
 // ListByTrain returns every member of the train, ordered by Position
 // (so the throttle UI renders the consist top-to-bottom in the right
 // sequence).
-func (m *TrainMembers) ListByTrain(ctx context.Context, trainID uint) ([]domain.TrainMember, error) {
+func (m *TrainMembers) ListByTrain(ctx context.Context, trainID domain.TrainID) ([]domain.TrainMember, error) {
 	var rows []domain.TrainMember
 	err := m.repo.FindAll(ctx, &rows,
 		where.Eq("train_id", trainID),
@@ -133,7 +133,7 @@ func (m *TrainMembers) ListByTrain(ctx context.Context, trainID uint) ([]domain.
 // ListByVehicle returns every train_members row referencing the
 // vehicle. Used to refresh layout train snapshots in Redis when a
 // member's DCC address changes outside the layout vehicle roster.
-func (m *TrainMembers) ListByVehicle(ctx context.Context, vehicleID uint) ([]domain.TrainMember, error) {
+func (m *TrainMembers) ListByVehicle(ctx context.Context, vehicleID domain.VehicleID) ([]domain.TrainMember, error) {
 	var rows []domain.TrainMember
 	err := m.repo.FindAll(ctx, &rows, where.Eq("vehicle_id", vehicleID))
 	if err != nil {
@@ -165,7 +165,7 @@ func (m *TrainMembers) Update(ctx context.Context, row *domain.TrainMember) erro
 
 // CountReferencingVehicle is used by VehicleService.Delete to refuse
 // deleting a vehicle that is still part of any train.
-func (m *TrainMembers) CountReferencingVehicle(ctx context.Context, vehicleID uint) (int, error) {
+func (m *TrainMembers) CountReferencingVehicle(ctx context.Context, vehicleID domain.VehicleID) (int, error) {
 	return m.repo.Count(ctx, "train_members", where.Eq("vehicle_id", vehicleID))
 }
 
@@ -176,7 +176,7 @@ func (m *TrainMembers) Insert(ctx context.Context, row *domain.TrainMember) erro
 
 // DeleteAllForTrain removes every member of a train (used when
 // replacing the entire member list and on train deletion).
-func (m *TrainMembers) DeleteAllForTrain(ctx context.Context, trainID uint) error {
+func (m *TrainMembers) DeleteAllForTrain(ctx context.Context, trainID domain.TrainID) error {
 	var rows []domain.TrainMember
 	if err := m.repo.FindAll(ctx, &rows, where.Eq("train_id", trainID)); err != nil {
 		return err

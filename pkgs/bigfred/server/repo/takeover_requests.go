@@ -73,7 +73,7 @@ func (t *TakeoverRequests) ListGrantedBySignalman(ctx context.Context, signalman
 func (t *TakeoverRequests) FindPendingForTarget(
 	ctx context.Context,
 	target domain.TakeoverTarget,
-	targetID uint,
+	targetID string,
 ) (domain.TakeoverRequest, error) {
 	var row domain.TakeoverRequest
 	if err := t.repo.Find(ctx, &row,

@@ -264,6 +264,11 @@ export interface RadioTarget {
 }
 
 export interface RadioContextEntity {
+  id: string;
+  name: string;
+}
+
+export interface RadioInterlockingEntity {
   id: number;
   name: string;
 }
@@ -276,7 +281,7 @@ export interface RadioContext {
 export interface RadioMessage {
   messageId: string;
   from: RadioUser;
-  fromInterlocking?: RadioContextEntity;
+  fromInterlocking?: RadioInterlockingEntity;
   to: RadioTarget;
   context: RadioContext;
   phrase: RadioPhrase;
@@ -290,8 +295,8 @@ export interface RadioSendTarget {
 }
 
 export interface RadioSendContext {
-  vehicleId?: number;
-  trainId?: number;
+  vehicleId?: string;
+  trainId?: string;
 }
 
 function interlockingRadioKey(id: number) {

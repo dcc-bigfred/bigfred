@@ -75,7 +75,7 @@ func (h *VehicleHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 // Update handles PUT /api/v1/vehicles/{id}.
 func (h *VehicleHandler) Update(w http.ResponseWriter, r *http.Request) {
-	vehicleID, ok := parseUintParam(r, "id")
+	vehicleID, ok := parseVehicleIDParam(r, "id")
 	if !ok {
 		writeJSONError(w, http.StatusBadRequest, "invalid_id")
 		return
@@ -111,7 +111,7 @@ func (h *VehicleHandler) Update(w http.ResponseWriter, r *http.Request) {
 // Delete handles DELETE /api/v1/vehicles/{id}. Cascades the layout
 // roster cleanup so dangling rows never surface on the dashboard.
 func (h *VehicleHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	vehicleID, ok := parseUintParam(r, "id")
+	vehicleID, ok := parseVehicleIDParam(r, "id")
 	if !ok {
 		writeJSONError(w, http.StatusBadRequest, "invalid_id")
 		return

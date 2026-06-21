@@ -94,7 +94,7 @@ interface CopyFunctionsFromProps {
   isLoadingSources: boolean;
   replace: {
     mutate: (
-      body: { templateId: number } | { sourceVehicleId: number },
+      body: { templateId: number } | { sourceVehicleId: string },
       options?: { onSuccess?: () => void },
     ) => void;
     isPending: boolean;

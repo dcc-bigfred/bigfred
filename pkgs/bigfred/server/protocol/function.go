@@ -83,7 +83,7 @@ type FunctionIconResponse struct {
 
 // FunctionCatalogueEntryResponse is one row in the function catalogue.
 type FunctionCatalogueEntryResponse struct {
-	VehicleID   uint               `json:"vehicleId"`
+	VehicleID   string             `json:"vehicleId"`
 	VehicleName string             `json:"vehicleName"`
 	OwnerID     uint               `json:"ownerId"`
 	OwnerLogin  string             `json:"ownerLogin"`
@@ -95,7 +95,7 @@ type FunctionCatalogueEntryResponse struct {
 // ToFunctionCatalogueEntry maps a cmd catalogue row to REST wire shape.
 func ToFunctionCatalogueEntry(row cmd.VehicleFunctionCatalogueEntry) FunctionCatalogueEntryResponse {
 	return FunctionCatalogueEntryResponse{
-		VehicleID:   row.VehicleID,
+		VehicleID:   row.VehicleID.String(),
 		VehicleName: row.VehicleName,
 		OwnerID:     row.OwnerID,
 		OwnerLogin:  row.OwnerLogin,
@@ -108,5 +108,5 @@ func ToFunctionCatalogueEntry(row cmd.VehicleFunctionCatalogueEntry) FunctionCat
 // FunctionReplaceFromRequest is the POST body for attach/copy endpoints.
 type FunctionReplaceFromRequest struct {
 	TemplateID      uint `json:"templateId"`
-	SourceVehicleID uint `json:"sourceVehicleId"`
+	SourceVehicleID string `json:"sourceVehicleId"`
 }

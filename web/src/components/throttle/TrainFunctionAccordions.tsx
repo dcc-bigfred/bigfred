@@ -24,7 +24,7 @@ import {
 
 export interface TrainAccordionMember {
   memberId: number;
-  vehicleId: number;
+  vehicleId: string;
   name: string;
   dccAddress: number | null;
   isDummy: boolean;
@@ -43,7 +43,7 @@ export interface TrainFunctionAccordionsProps {
   disabled?: boolean;
 }
 
-function useMemberFunctions(vehicleId: number): ThrottleCockpitFunction[] {
+function useMemberFunctions(vehicleId: string): ThrottleCockpitFunction[] {
   const fnList = useVehicleFunctions(vehicleId).data ?? [];
   return useMemo(
     () =>

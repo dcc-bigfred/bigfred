@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	"github.com/sirupsen/logrus"
 
@@ -28,7 +27,7 @@ type EStopTargetDccBusPort interface {
 type EStopTargetRosterPort interface {
 	ListVehicles(ctx context.Context, layoutID uint) ([]RosterVehicleEntry, error)
 	ListTrains(ctx context.Context, layoutID uint) ([]RosterTrainEntry, error)
-	LesseesByVehicle(ctx context.Context, vehicleEntries []RosterVehicleEntry, trainEntries []RosterTrainEntry) (map[uint][]uint, error)
+	LesseesByVehicle(ctx context.Context, vehicleEntries []RosterVehicleEntry, trainEntries []RosterTrainEntry) (map[domain.VehicleID][]uint, error)
 }
 
 type EStopTargetLayoutsPort interface {
@@ -80,7 +79,7 @@ func (s *EStopTarget) Trigger(
 	ctx context.Context,
 	sess ControlSession,
 	target domain.TakeoverTarget,
-	targetID uint,
+	targetID string,
 ) (bool, string) {
 	if s.dccBus == nil || s.roster == nil || s.layouts == nil {
 		return false, "dcc_bus_not_configured"
@@ -142,7 +141,7 @@ func (s *EStopTarget) Trigger(
 		_ = s.audit.Publish(ctx, sess.LayoutID(), AuditActor{UserID: sess.UserID(), Login: sess.Login()},
 			"audit_estop_target", map[string]string{
 				"target":   string(target),
-				"targetId": fmt.Sprintf("%d", targetID),
+				"targetId": targetID,
 			})
 	}
 
@@ -159,13 +158,13 @@ func (s *EStopTarget) resolveTarget(
 	ctx context.Context,
 	layoutID uint,
 	target domain.TakeoverTarget,
-	targetID uint,
+	targetID string,
 ) (estopTargetResolved, error) {
 	switch target {
 	case domain.TakeoverTargetVehicle:
-		return s.resolveVehicle(ctx, layoutID, targetID)
+		return s.resolveVehicle(ctx, layoutID, domain.VehicleID(targetID))
 	case domain.TakeoverTargetTrain:
-		return s.resolveTrain(ctx, layoutID, targetID)
+		return s.resolveTrain(ctx, layoutID, domain.TrainID(targetID))
 	default:
 		return estopTargetResolved{}, errEStopTargetInvalidState
 	}
@@ -174,7 +173,7 @@ func (s *EStopTarget) resolveTarget(
 func (s *EStopTarget) resolveVehicle(
 	ctx context.Context,
 	layoutID uint,
-	vehicleID uint,
+	vehicleID domain.VehicleID,
 ) (estopTargetResolved, error) {
 	entries, err := s.roster.ListVehicles(ctx, layoutID)
 	if err != nil {
@@ -213,7 +212,7 @@ func (s *EStopTarget) resolveVehicle(
 func (s *EStopTarget) resolveTrain(
 	ctx context.Context,
 	layoutID uint,
-	trainID uint,
+	trainID domain.TrainID,
 ) (estopTargetResolved, error) {
 	entries, err := s.roster.ListVehicles(ctx, layoutID)
 	if err != nil {
@@ -234,7 +233,7 @@ func (s *EStopTarget) resolveTrain(
 		return estopTargetResolved{}, errEStopTargetNotOnLayout
 	}
 
-	addrByVehicle := make(map[uint]uint16, len(entries))
+	addrByVehicle := make(map[domain.VehicleID]uint16, len(entries))
 	for _, e := range entries {
 		if e.Vehicle.DCCAddress != nil {
 			addrByVehicle[e.Vehicle.ID] = uint16(*e.Vehicle.DCCAddress)

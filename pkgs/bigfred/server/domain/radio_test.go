@@ -18,16 +18,16 @@ func TestValidateTarget(t *testing.T) {
 }
 
 func TestValidateContext(t *testing.T) {
-	if err := ValidateContext(5, 0); err != nil {
+	if err := ValidateContext(VehicleID("V-5"), TrainID("")); err != nil {
 		t.Fatalf("vehicle: %v", err)
 	}
-	if err := ValidateContext(0, 3); err != nil {
+	if err := ValidateContext(VehicleID(""), TrainID("T-3")); err != nil {
 		t.Fatalf("train: %v", err)
 	}
-	if err := ValidateContext(0, 0); err != ErrRadioInvalidContext {
+	if err := ValidateContext(VehicleID(""), TrainID("")); err != ErrRadioInvalidContext {
 		t.Fatalf("none: got %v", err)
 	}
-	if err := ValidateContext(1, 1); err != ErrRadioInvalidContext {
+	if err := ValidateContext(VehicleID("V-1"), TrainID("T-1")); err != ErrRadioInvalidContext {
 		t.Fatalf("both: got %v", err)
 	}
 }

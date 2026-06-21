@@ -53,7 +53,7 @@ type TrainSetSpeed struct {
 
 // Valid reports whether train id and speed are in range.
 func (v TrainSetSpeed) Valid(p contract.TrainSetSpeedWire) bool {
-	if p.TrainID == 0 {
+	if p.TrainID == "" {
 		return false
 	}
 	if v.SpeedSteps == 0 {

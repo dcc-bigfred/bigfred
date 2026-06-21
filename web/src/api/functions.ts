@@ -23,7 +23,7 @@ export interface VehicleTemplate {
 }
 
 export interface FunctionCatalogueEntry {
-  vehicleId: number;
+  vehicleId: string;
   vehicleName: string;
   ownerId: number;
   ownerLogin: string;
@@ -36,7 +36,7 @@ const iconsQueryKey = ["function-icons"] as const;
 const templatesQueryKey = ["vehicle-templates"] as const;
 const catalogueQueryKey = ["vehicles", "function-catalogue"] as const;
 
-export function vehicleFunctionsQueryKey(vehicleId: number) {
+export function vehicleFunctionsQueryKey(vehicleId: string) {
   return ["vehicles", vehicleId, "functions"] as const;
 }
 
@@ -95,12 +95,12 @@ export function useUpdateVehicleTemplate() {
   });
 }
 
-export function useVehicleFunctions(vehicleId: number) {
+export function useVehicleFunctions(vehicleId: string) {
   return useQuery({
     queryKey: vehicleFunctionsQueryKey(vehicleId),
     queryFn: () =>
       apiFetch<DccFunction[]>(`/api/v1/vehicles/${vehicleId}/functions`),
-    enabled: vehicleId > 0,
+    enabled: vehicleId.length > 0,
   });
 }
 
@@ -131,7 +131,7 @@ export interface FunctionUpsertBody {
   position: number;
 }
 
-export function useUpsertVehicleFunction(vehicleId: number) {
+export function useUpsertVehicleFunction(vehicleId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (args: { num: number; body: FunctionUpsertBody }) =>
@@ -149,7 +149,7 @@ export function useUpsertVehicleFunction(vehicleId: number) {
   });
 }
 
-export function useDeleteVehicleFunction(vehicleId: number) {
+export function useDeleteVehicleFunction(vehicleId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (num: number) =>
@@ -165,13 +165,13 @@ export function useDeleteVehicleFunction(vehicleId: number) {
 
 export type FunctionCopySource =
   | { kind: "template"; id: number; name: string; ownerLogin: string }
-  | { kind: "locomotive"; id: number; name: string; ownerLogin: string };
+  | { kind: "locomotive"; id: string; name: string; ownerLogin: string };
 
 export type FunctionReplaceFromBody =
   | { templateId: number }
-  | { sourceVehicleId: number };
+  | { sourceVehicleId: string };
 
-export function useReplaceVehicleFunctionsFromSource(vehicleId: number) {
+export function useReplaceVehicleFunctionsFromSource(vehicleId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: FunctionReplaceFromBody) =>
@@ -189,7 +189,7 @@ export function useReplaceVehicleFunctionsFromSource(vehicleId: number) {
   });
 }
 
-export function useReorderVehicleFunctions(vehicleId: number) {
+export function useReorderVehicleFunctions(vehicleId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (positions: { num: number; position: number }[]) =>

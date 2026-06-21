@@ -55,18 +55,18 @@ type speedRampJob struct {
 // trailing starts or ramping acceleration in cancellable background goroutines.
 type TrainSpeedScheduler struct {
 	mu      sync.Mutex
-	pending map[uint]context.CancelFunc
+	pending map[string]context.CancelFunc
 }
 
 // NewTrainSpeedScheduler returns a scheduler with an empty delay registry.
 func NewTrainSpeedScheduler() *TrainSpeedScheduler {
 	return &TrainSpeedScheduler{
-		pending: make(map[uint]context.CancelFunc),
+		pending: make(map[string]context.CancelFunc),
 	}
 }
 
 // CancelTrain aborts any pending delay/ramp goroutines for the train.
-func (s *TrainSpeedScheduler) CancelTrain(trainID uint) {
+func (s *TrainSpeedScheduler) CancelTrain(trainID string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if cancel, ok := s.pending[trainID]; ok {
@@ -195,7 +195,7 @@ func AccelRampSpeeds(current, target uint8, steps int) []uint8 {
 // cancellable by the next Apply/CancelTrain for the same trainID.
 func (s *TrainSpeedScheduler) Apply(
 	ctx context.Context,
-	trainID uint,
+	trainID string,
 	commandSpeed uint8,
 	leadingWasAtStartSpeed bool,
 	apply TrainMemberSpeedApply,
@@ -273,7 +273,7 @@ func (s *TrainSpeedScheduler) Apply(
 
 func (s *TrainSpeedScheduler) scheduleDelayed(
 	parentCtx context.Context,
-	trainID uint,
+	trainID string,
 	apply TrainMemberSpeedApply,
 	startDelays []startDelayJob,
 	ramps []speedRampJob,

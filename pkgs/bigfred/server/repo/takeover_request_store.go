@@ -13,7 +13,7 @@ type TakeoverRequestStore interface {
 	FindByID(ctx context.Context, id uint) (domain.TakeoverRequest, error)
 	ListPending(ctx context.Context) ([]domain.TakeoverRequest, error)
 	ListGrantedBySignalman(ctx context.Context, signalmanID uint) ([]domain.TakeoverRequest, error)
-	FindPendingForTarget(ctx context.Context, target domain.TakeoverTarget, targetID uint) (domain.TakeoverRequest, error)
+	FindPendingForTarget(ctx context.Context, target domain.TakeoverTarget, targetID string) (domain.TakeoverRequest, error)
 	ListGranted(ctx context.Context) ([]domain.TakeoverRequest, error)
 	RequiresJanitor() bool
 }

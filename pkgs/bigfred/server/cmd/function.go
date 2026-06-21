@@ -33,7 +33,7 @@ type FunctionReorderEntry struct {
 
 // VehicleFunctionCatalogueEntry is one vehicle with its resolved function list.
 type VehicleFunctionCatalogueEntry struct {
-	VehicleID   uint
+	VehicleID   domain.VehicleID
 	VehicleName string
 	OwnerID     uint
 	OwnerLogin  string
@@ -67,7 +67,7 @@ func (f *Function) ListIcons() []domain.FunctionIcon {
 }
 
 // ListForVehicle returns the resolved function list for a vehicle.
-func (f *Function) ListForVehicle(ctx context.Context, vehicleID uint) ([]ResolvedFunction, error) {
+func (f *Function) ListForVehicle(ctx context.Context, vehicleID domain.VehicleID) ([]ResolvedFunction, error) {
 	v, err := f.loadVehicle(ctx, vehicleID)
 	if err != nil {
 		return nil, err
@@ -141,7 +141,7 @@ func (f *Function) ListForTemplate(ctx context.Context, templateID uint) ([]Reso
 func (f *Function) UpsertVehicleSlot(
 	ctx context.Context,
 	actorID uint,
-	vehicleID uint,
+	vehicleID domain.VehicleID,
 	num uint8,
 	in FunctionUpsertInput,
 ) (domain.DccFunction, error) {
@@ -178,7 +178,7 @@ func (f *Function) UpsertVehicleSlot(
 // DeleteVehicleSlot removes one function from a vehicle (owner only).
 func (f *Function) DeleteVehicleSlot(
 	ctx context.Context,
-	actorID, vehicleID uint,
+	actorID uint, vehicleID domain.VehicleID,
 	num uint8,
 ) error {
 	if !domain.ValidFunctionNum(num) {
@@ -209,7 +209,7 @@ func (f *Function) DeleteVehicleSlot(
 // ReorderVehicleSlots updates display order on a vehicle (owner only).
 func (f *Function) ReorderVehicleSlots(
 	ctx context.Context,
-	actorID, vehicleID uint,
+	actorID uint, vehicleID domain.VehicleID,
 	positions []FunctionReorderEntry,
 ) error {
 	v, err := f.loadVehicle(ctx, vehicleID)
@@ -232,7 +232,7 @@ func (f *Function) ReorderVehicleSlots(
 // AttachVehicleToTemplate links a vehicle to a template function list.
 func (f *Function) AttachVehicleToTemplate(
 	ctx context.Context,
-	actorID, vehicleID, templateID uint,
+	actorID uint, vehicleID domain.VehicleID, templateID uint,
 ) ([]ResolvedFunction, error) {
 	if templateID == 0 {
 		return nil, svcerrors.ErrVehicleTemplateNotFound
@@ -266,9 +266,9 @@ func (f *Function) AttachVehicleToTemplate(
 // CopyVehicleFunctionsFromVehicle replaces the target list from a source snapshot.
 func (f *Function) CopyVehicleFunctionsFromVehicle(
 	ctx context.Context,
-	actorID, targetVehicleID, sourceVehicleID uint,
+	actorID uint, targetVehicleID, sourceVehicleID domain.VehicleID,
 ) ([]ResolvedFunction, error) {
-	if sourceVehicleID == 0 || sourceVehicleID == targetVehicleID {
+	if sourceVehicleID.IsZero() || sourceVehicleID == targetVehicleID {
 		return nil, svcerrors.ErrFunctionReplaceSourceInvalid
 	}
 	v, err := f.loadVehicle(ctx, targetVehicleID)
@@ -391,7 +391,7 @@ func (f *Function) ReorderTemplateSlots(
 	}, positions)
 }
 
-func (f *Function) loadVehicle(ctx context.Context, id uint) (domain.Vehicle, error) {
+func (f *Function) loadVehicle(ctx context.Context, id domain.VehicleID) (domain.Vehicle, error) {
 	row, err := f.vehicles.FindByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, repo.ErrVehicleNotFound) {
@@ -446,7 +446,7 @@ func (f *Function) ensureDetached(ctx context.Context, v *domain.Vehicle) error 
 
 func (f *Function) upsertVehicleRow(
 	ctx context.Context,
-	vehicleID uint,
+	vehicleID domain.VehicleID,
 	num uint8,
 	in validation.ValidatedFunction,
 ) (domain.DccFunction, error) {

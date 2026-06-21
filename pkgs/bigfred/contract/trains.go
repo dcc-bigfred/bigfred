@@ -5,7 +5,7 @@ import "math"
 // TrainSetSpeedWire is the inner payload of a train.setSpeed frame on
 // the dcc-bus WebSocket.
 type TrainSetSpeedWire struct {
-	TrainID uint   `json:"trainId"`
+	TrainID string   `json:"trainId"`
 	Speed   uint8  `json:"speed"`
 	Forward bool   `json:"forward"`
 }

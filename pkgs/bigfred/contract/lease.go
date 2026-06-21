@@ -7,17 +7,17 @@ import (
 )
 
 const (
-	VehicleLeaseKeyTmpl = "bigfred:lease:vehicle:%d"
-	TrainLeaseKeyTmpl   = "bigfred:lease:train:%d"
+	VehicleLeaseKeyTmpl = "bigfred:lease:vehicle:%s"
+	TrainLeaseKeyTmpl   = "bigfred:lease:train:%s"
 )
 
 // VehicleLeaseKey returns the Redis key for an active vehicle lease.
-func VehicleLeaseKey(vehicleID uint) string {
+func VehicleLeaseKey(vehicleID string) string {
 	return fmt.Sprintf(VehicleLeaseKeyTmpl, vehicleID)
 }
 
 // TrainLeaseKey returns the Redis key for an active train lease.
-func TrainLeaseKey(trainID uint) string {
+func TrainLeaseKey(trainID string) string {
 	return fmt.Sprintf(TrainLeaseKeyTmpl, trainID)
 }
 

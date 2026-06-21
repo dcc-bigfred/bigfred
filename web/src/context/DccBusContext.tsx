@@ -52,7 +52,7 @@ interface DccBusContextValue {
     emergency?: boolean,
   ) => Promise<{ ok: boolean; error?: string }>;
   setTrainSpeed: (
-    trainId: number,
+    trainId: string,
     speed: number,
     forward: boolean,
   ) => Promise<{ ok: boolean; error?: string }>;
@@ -259,7 +259,7 @@ export function DccBusProvider({
     [send],
   );
   const setTrainSpeed = useCallback(
-    (trainId: number, speed: number, forward: boolean) =>
+    (trainId: string, speed: number, forward: boolean) =>
       send("train.setSpeed", { trainId, speed, forward }),
     [send],
   );

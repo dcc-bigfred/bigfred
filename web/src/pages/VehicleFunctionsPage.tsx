@@ -18,7 +18,7 @@ import FunctionListEditor from "../components/functions/FunctionListEditor";
 
 export default function VehicleFunctionsPage() {
   const { vehicleId: vehicleIdParam } = useParams();
-  const vehicleId = Number(vehicleIdParam);
+  const vehicleId = vehicleIdParam ?? "";
   const navigate = useNavigate();
   const { t } = useTranslation(["vehicle", "function"]);
   const vehicles = useMyVehicles();
@@ -59,7 +59,7 @@ export default function VehicleFunctionsPage() {
     [functions.data],
   );
 
-  if (!vehicleId || Number.isNaN(vehicleId)) {
+  if (!vehicleId) {
     navigate("/my/vehicles");
     return null;
   }

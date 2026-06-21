@@ -9,7 +9,7 @@ import (
 )
 
 type TakeoverControlPort interface {
-	Request(ctx context.Context, layoutID uint, signalman domain.User, target domain.TakeoverTarget, targetID uint) (domain.TakeoverRequest, error)
+	Request(ctx context.Context, layoutID uint, signalman domain.User, target domain.TakeoverTarget, targetID string) (domain.TakeoverRequest, error)
 	Reject(ctx context.Context, requestID, driverID uint) error
 	Cancel(ctx context.Context, requestID, signalmanID uint) error
 	Release(ctx context.Context, requestID, signalmanID uint, reason string) error

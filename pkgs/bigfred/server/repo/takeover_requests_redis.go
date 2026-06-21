@@ -75,7 +75,7 @@ func (r *RedisTakeoverRequests) ListGrantedBySignalman(ctx context.Context, sign
 func (r *RedisTakeoverRequests) FindPendingForTarget(
 	ctx context.Context,
 	target domain.TakeoverTarget,
-	targetID uint,
+	targetID string,
 ) (domain.TakeoverRequest, error) {
 	raw, err := r.client.Get(ctx, contract.TakeoverPendingTargetKey(target, targetID)).Result()
 	if err == redis.Nil {

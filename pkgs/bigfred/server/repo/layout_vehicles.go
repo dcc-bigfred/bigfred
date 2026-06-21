@@ -45,7 +45,7 @@ func (l *LayoutVehicles) ListByLayout(ctx context.Context, layoutID uint) ([]dom
 // ListByVehicle returns every roster row that references the
 // vehicle. Used by the catalogue-side mutation hooks to compute the
 // set of layouts that need a fan-out broadcast.
-func (l *LayoutVehicles) ListByVehicle(ctx context.Context, vehicleID uint) ([]domain.LayoutVehicle, error) {
+func (l *LayoutVehicles) ListByVehicle(ctx context.Context, vehicleID domain.VehicleID) ([]domain.LayoutVehicle, error) {
 	var rows []domain.LayoutVehicle
 	err := l.repo.FindAll(ctx, &rows, where.Eq("vehicle_id", vehicleID))
 	if err != nil {
@@ -56,7 +56,7 @@ func (l *LayoutVehicles) ListByVehicle(ctx context.Context, vehicleID uint) ([]d
 
 // FindByLayoutAndVehicle returns the join row for one (layout,
 // vehicle) pair.
-func (l *LayoutVehicles) FindByLayoutAndVehicle(ctx context.Context, layoutID, vehicleID uint) (domain.LayoutVehicle, error) {
+func (l *LayoutVehicles) FindByLayoutAndVehicle(ctx context.Context, layoutID uint, vehicleID domain.VehicleID) (domain.LayoutVehicle, error) {
 	var row domain.LayoutVehicle
 	err := l.repo.Find(ctx, &row,
 		where.Eq("layout_id", layoutID),
@@ -83,7 +83,7 @@ func (l *LayoutVehicles) Delete(ctx context.Context, row *domain.LayoutVehicle) 
 
 // DeleteAllForVehicle removes every roster row pointing at a
 // vehicle (used when the catalogue row itself is deleted).
-func (l *LayoutVehicles) DeleteAllForVehicle(ctx context.Context, vehicleID uint) error {
+func (l *LayoutVehicles) DeleteAllForVehicle(ctx context.Context, vehicleID domain.VehicleID) error {
 	var rows []domain.LayoutVehicle
 	if err := l.repo.FindAll(ctx, &rows, where.Eq("vehicle_id", vehicleID)); err != nil {
 		return err
@@ -122,7 +122,7 @@ func (l *LayoutTrains) ListByLayout(ctx context.Context, layoutID uint) ([]domai
 
 // ListByTrain returns every roster row referencing the train. Used
 // by the catalogue-side mutation hooks for fan-out broadcasts.
-func (l *LayoutTrains) ListByTrain(ctx context.Context, trainID uint) ([]domain.LayoutTrain, error) {
+func (l *LayoutTrains) ListByTrain(ctx context.Context, trainID domain.TrainID) ([]domain.LayoutTrain, error) {
 	var rows []domain.LayoutTrain
 	err := l.repo.FindAll(ctx, &rows, where.Eq("train_id", trainID))
 	if err != nil {
@@ -133,7 +133,7 @@ func (l *LayoutTrains) ListByTrain(ctx context.Context, trainID uint) ([]domain.
 
 // FindByLayoutAndTrain returns the join row for one (layout, train)
 // pair.
-func (l *LayoutTrains) FindByLayoutAndTrain(ctx context.Context, layoutID, trainID uint) (domain.LayoutTrain, error) {
+func (l *LayoutTrains) FindByLayoutAndTrain(ctx context.Context, layoutID uint, trainID domain.TrainID) (domain.LayoutTrain, error) {
 	var row domain.LayoutTrain
 	err := l.repo.Find(ctx, &row,
 		where.Eq("layout_id", layoutID),
@@ -160,7 +160,7 @@ func (l *LayoutTrains) Delete(ctx context.Context, row *domain.LayoutTrain) erro
 
 // DeleteAllForTrain removes every roster row pointing at a train
 // (used when the train itself is deleted).
-func (l *LayoutTrains) DeleteAllForTrain(ctx context.Context, trainID uint) error {
+func (l *LayoutTrains) DeleteAllForTrain(ctx context.Context, trainID domain.TrainID) error {
 	var rows []domain.LayoutTrain
 	if err := l.repo.FindAll(ctx, &rows, where.Eq("train_id", trainID)); err != nil {
 		return err

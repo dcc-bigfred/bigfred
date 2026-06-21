@@ -79,21 +79,21 @@ func TestSetFunctionValidAndInvalid(t *testing.T) {
 
 func TestTrainSetSpeedValidWithConfiguredSteps(t *testing.T) {
 	v := validation.TrainSetSpeed{SpeedSteps: 128}
-	if !v.Valid(contract.TrainSetSpeedWire{TrainID: 7, Speed: 64}) {
+	if !v.Valid(contract.TrainSetSpeedWire{TrainID: "T-7", Speed: 64}) {
 		t.Fatal("expected in-range train speed to be valid")
 	}
 }
 
 func TestTrainSetSpeedRejectsZeroTrainID(t *testing.T) {
 	v := validation.TrainSetSpeed{SpeedSteps: 128}
-	if v.Valid(contract.TrainSetSpeedWire{TrainID: 0, Speed: 1}) {
+	if v.Valid(contract.TrainSetSpeedWire{TrainID: "", Speed: 1}) {
 		t.Fatal("expected zero train id to be invalid")
 	}
 }
 
 func TestTrainSetSpeedDefaultStepsCap(t *testing.T) {
 	v := validation.TrainSetSpeed{SpeedSteps: 0}
-	if v.Valid(contract.TrainSetSpeedWire{TrainID: 1, Speed: 129}) {
+	if v.Valid(contract.TrainSetSpeedWire{TrainID: "T-1", Speed: 129}) {
 		t.Fatal("expected speed above 128 to be invalid when speed steps unset")
 	}
 }

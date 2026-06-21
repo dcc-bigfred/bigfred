@@ -29,7 +29,7 @@ func TestTrainPolicyCanDriveTrain(t *testing.T) {
 	t.Parallel()
 	p := security.TrainPolicy{}
 	train := contract.DefinedTrain{
-		TrainID: 1,
+		TrainID: "T-1",
 		Members: []contract.DefinedTrainMember{{
 			Addr: ptrUint16(31),
 		}},

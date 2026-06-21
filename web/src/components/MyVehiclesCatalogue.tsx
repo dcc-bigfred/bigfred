@@ -56,7 +56,7 @@ export default function MyVehiclesCatalogue({ layoutId }: Props) {
   const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
 
   const vehicleOnLayout = useMemo(() => {
-    const s = new Set<number>();
+    const s = new Set<string>();
     (layoutVehicles.data ?? []).forEach((v) => s.add(v.id));
     return s;
   }, [layoutVehicles.data]);

@@ -11,7 +11,7 @@ import (
 const (
 	TakeoverNextIDKeyTmpl       = "bigfred:takeover:next_id"
 	TakeoverRequestKeyTmpl      = "bigfred:takeover:req:%d"
-	TakeoverPendingTargetKeyTmpl = "bigfred:takeover:pending:%s:%d"
+	TakeoverPendingTargetKeyTmpl = "bigfred:takeover:pending:%s:%s"
 	TakeoverPendingSetKey       = "bigfred:takeover:pending_ids"
 	TakeoverSignalmanGrantedTmpl = "bigfred:takeover:signalman:%d:granted"
 )
@@ -25,7 +25,7 @@ func TakeoverRequestKey(id uint) string {
 }
 
 // TakeoverPendingTargetKey maps a roster target to a pending request id.
-func TakeoverPendingTargetKey(target domain.TakeoverTarget, targetID uint) string {
+func TakeoverPendingTargetKey(target domain.TakeoverTarget, targetID string) string {
 	return fmt.Sprintf(TakeoverPendingTargetKeyTmpl, string(target), targetID)
 }
 
@@ -42,7 +42,7 @@ type TakeoverRequestWire struct {
 	SignalmanUserID uint                  `json:"signalmanUserId"`
 	DriverUserID    uint                  `json:"driverUserId"`
 	Target          domain.TakeoverTarget `json:"target"`
-	TargetID        uint                  `json:"targetId"`
+	TargetID        string                `json:"targetId"`
 	RequestedAt     time.Time             `json:"requestedAt"`
 	DecisionAt      *time.Time            `json:"decisionAt,omitempty"`
 	AutoGrantAt     time.Time             `json:"autoGrantAt"`

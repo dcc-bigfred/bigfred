@@ -13,7 +13,7 @@ func TestRadioStopCanTriggerDriveScope(t *testing.T) {
 	eff := domain.NewEffectiveRoles(domain.RoleDriver)
 	roster := contract.AllowedVehicles{
 		Vehicles: []contract.AllowedVehicle{{
-			VehicleID:         1,
+			VehicleID:         "V-1",
 			ControllerUserIDs: []uint{42},
 		}},
 	}

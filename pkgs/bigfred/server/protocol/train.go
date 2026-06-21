@@ -8,7 +8,7 @@ import (
 // TrainMemberResponse is one row in a train catalogue response.
 type TrainMemberResponse struct {
 	ID               uint    `json:"id"`
-	VehicleID        uint    `json:"vehicleId"`
+	VehicleID        string  `json:"vehicleId"`
 	Position         int     `json:"position"`
 	Reversed         bool    `json:"reversed"`
 	SpeedMultiplier  float64 `json:"speedMultiplier"`
@@ -28,7 +28,7 @@ func ToTrainMemberResponse(m domain.TrainMember) TrainMemberResponse {
 	}
 	return TrainMemberResponse{
 		ID:               m.ID,
-		VehicleID:        m.VehicleID,
+		VehicleID:        m.VehicleID.String(),
 		Position:         m.Position,
 		Reversed:         m.Reversed,
 		SpeedMultiplier:  mult,
@@ -50,7 +50,7 @@ func rampSteps(steps int) int {
 
 // TrainResponse is the JSON shape for one catalogue train.
 type TrainResponse struct {
-	ID      uint                  `json:"id"`
+	ID      string                `json:"id"`
 	Name    string                `json:"name"`
 	OwnerID uint                  `json:"ownerId"`
 	Members []TrainMemberResponse `json:"members"`
@@ -63,7 +63,7 @@ func ToTrainResponse(d cmd.TrainDetail) TrainResponse {
 		members = append(members, ToTrainMemberResponse(m))
 	}
 	return TrainResponse{
-		ID:      d.Train.ID,
+		ID:      d.Train.ID.String(),
 		Name:    d.Train.Name,
 		OwnerID: d.Train.OwnerUserID,
 		Members: members,
@@ -72,7 +72,7 @@ func ToTrainResponse(d cmd.TrainDetail) TrainResponse {
 
 // TrainMemberRequest is one member in a create/update body.
 type TrainMemberRequest struct {
-	VehicleID        uint    `json:"vehicleId"`
+	VehicleID        string  `json:"vehicleId"`
 	Reversed         bool    `json:"reversed"`
 	SpeedMultiplier  float64 `json:"speedMultiplier,omitempty"`
 	ExcludeFromSpeed bool    `json:"excludeFromSpeed,omitempty"`
@@ -86,7 +86,7 @@ type TrainMemberRequest struct {
 // ToMemberInput maps the HTTP member row to cmd input.
 func (r TrainMemberRequest) ToMemberInput() cmd.TrainMemberInput {
 	return cmd.TrainMemberInput{
-		VehicleID:             r.VehicleID,
+		VehicleID:             domain.VehicleID(r.VehicleID),
 		Reversed:              r.Reversed,
 		SpeedMultiplier:       r.SpeedMultiplier,
 		ExcludeFromSpeed:      r.ExcludeFromSpeed,

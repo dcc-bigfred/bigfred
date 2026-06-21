@@ -3,10 +3,12 @@ package cmd
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
 	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
+	"github.com/keskad/loco/pkgs/bigfred/server/helpers"
 	"github.com/keskad/loco/pkgs/bigfred/server/repo"
 	"github.com/keskad/loco/pkgs/bigfred/server/security"
 	"github.com/keskad/loco/pkgs/bigfred/server/validation"
@@ -14,7 +16,7 @@ import (
 
 // TrainMemberInput is the validated payload of one TrainMember row.
 type TrainMemberInput struct {
-	VehicleID        uint
+	VehicleID        domain.VehicleID
 	Reversed         bool
 	SpeedMultiplier  float64 // 0 → default 1.0
 	ExcludeFromSpeed      bool
@@ -89,7 +91,7 @@ func (t *Train) ListOwned(ctx context.Context, ownerID uint) ([]TrainDetail, err
 }
 
 // Get loads a train with its members.
-func (t *Train) Get(ctx context.Context, id uint) (TrainDetail, error) {
+func (t *Train) Get(ctx context.Context, id domain.TrainID) (TrainDetail, error) {
 	tr, err := t.trains.FindByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, repo.ErrTrainNotFound) {
@@ -105,7 +107,7 @@ func (t *Train) Get(ctx context.Context, id uint) (TrainDetail, error) {
 }
 
 // ListByIDsForLayout bulk-loads trains with members for layout-roster enrichment.
-func (t *Train) ListByIDsForLayout(ctx context.Context, ids []uint) ([]TrainDetail, error) {
+func (t *Train) ListByIDsForLayout(ctx context.Context, ids []domain.TrainID) ([]TrainDetail, error) {
 	trains, err := t.trains.ListByIDs(ctx, ids)
 	if err != nil {
 		return nil, err
@@ -140,24 +142,35 @@ func (t *Train) Create(ctx context.Context, in TrainCreateInput) (TrainDetail, e
 	}
 
 	now := time.Now().UTC()
-	row := domain.Train{
-		OwnerUserID: in.OwnerUserID,
-		Name:        name,
-		CreatedAt:   now,
-		UpdatedAt:   now,
+	for attempt := 0; attempt < domain.MaxCatalogueIDRetries; attempt++ {
+		id, err := domain.NewTrainID()
+		if err != nil {
+			return TrainDetail{}, err
+		}
+		row := domain.Train{
+			ID:          id,
+			Source:      domain.EntitySourceLocal,
+			OwnerUserID: in.OwnerUserID,
+			Name:        name,
+			CreatedAt:   now,
+			UpdatedAt:   now,
+		}
+		if err := t.trains.Insert(ctx, &row); err != nil {
+			if helpers.IsUniqueViolation(err) {
+				continue
+			}
+			return TrainDetail{}, err
+		}
+		if err := t.replaceMembers(ctx, row.ID, in.Members); err != nil {
+			return TrainDetail{}, err
+		}
+		return t.Get(ctx, row.ID)
 	}
-	if err := t.trains.Insert(ctx, &row); err != nil {
-		return TrainDetail{}, err
-	}
-	if err := t.replaceMembers(ctx, row.ID, in.Members); err != nil {
-		return TrainDetail{}, err
-	}
-
-	return t.Get(ctx, row.ID)
+	return TrainDetail{}, fmt.Errorf("train id generation exhausted after %d retries", domain.MaxCatalogueIDRetries)
 }
 
 // Update renames and/or replaces the member list of an existing train.
-func (t *Train) Update(ctx context.Context, actorID, trainID uint, eff domain.EffectiveRoles, in TrainUpdateInput) (TrainDetail, error) {
+func (t *Train) Update(ctx context.Context, actorID uint, trainID domain.TrainID, eff domain.EffectiveRoles, in TrainUpdateInput) (TrainDetail, error) {
 	tr, err := t.trains.FindByID(ctx, trainID)
 	if err != nil {
 		if errors.Is(err, repo.ErrTrainNotFound) {
@@ -206,7 +219,7 @@ func (t *Train) Update(ctx context.Context, actorID, trainID uint, eff domain.Ef
 }
 
 // Delete removes a train and its member rows.
-func (t *Train) Delete(ctx context.Context, actorID, trainID uint, eff domain.EffectiveRoles) (domain.Train, error) {
+func (t *Train) Delete(ctx context.Context, actorID uint, trainID domain.TrainID, eff domain.EffectiveRoles) (domain.Train, error) {
 	tr, err := t.trains.FindByID(ctx, trainID)
 	if err != nil {
 		if errors.Is(err, repo.ErrTrainNotFound) {
@@ -230,7 +243,9 @@ func (t *Train) Delete(ctx context.Context, actorID, trainID uint, eff domain.Ef
 // The leading member's multiplier and speed-control participation are immutable.
 func (t *Train) UpdateMember(
 	ctx context.Context,
-	actorID, trainID, memberID uint,
+	actorID uint,
+	trainID domain.TrainID,
+	memberID uint,
 	eff domain.EffectiveRoles,
 	patch TrainMemberPatchInput,
 ) (domain.TrainMember, error) {
@@ -263,7 +278,7 @@ func (t *Train) UpdateMember(
 	if err != nil {
 		return domain.TrainMember{}, err
 	}
-	vehicleIDs := make([]uint, 0, len(allMembers))
+	vehicleIDs := make([]domain.VehicleID, 0, len(allMembers))
 	for _, m := range allMembers {
 		vehicleIDs = append(vehicleIDs, m.VehicleID)
 	}
@@ -271,7 +286,7 @@ func (t *Train) UpdateMember(
 	if err != nil {
 		return domain.TrainMember{}, err
 	}
-	byID := make(map[uint]domain.Vehicle, len(vehicles))
+	byID := make(map[domain.VehicleID]domain.Vehicle, len(vehicles))
 	for _, v := range vehicles {
 		byID[v.ID] = v
 	}
@@ -333,7 +348,9 @@ func (t *Train) UpdateMember(
 // Deprecated: use UpdateMember. Kept for tests and internal callers.
 func (t *Train) UpdateMemberMultiplier(
 	ctx context.Context,
-	actorID, trainID, memberID uint,
+	actorID uint,
+	trainID domain.TrainID,
+	memberID uint,
 	eff domain.EffectiveRoles,
 	multiplier float64,
 ) (domain.TrainMember, error) {
@@ -356,9 +373,9 @@ func (t *Train) checkTrainMutate(eff domain.EffectiveRoles, actorID, ownerUserID
 }
 
 func (t *Train) validateMembers(ctx context.Context, ownerID uint, members []TrainMemberInput) error {
-	seen := make(map[uint]struct{}, len(members))
+	seen := make(map[domain.VehicleID]struct{}, len(members))
 	for _, m := range members {
-		if m.VehicleID == 0 {
+		if m.VehicleID.IsZero() {
 			return svcerrors.ErrTrainMemberMissing
 		}
 		if _, dup := seen[m.VehicleID]; dup {
@@ -380,7 +397,7 @@ func (t *Train) validateMembers(ctx context.Context, ownerID uint, members []Tra
 	return nil
 }
 
-func (t *Train) replaceMembers(ctx context.Context, trainID uint, members []TrainMemberInput) error {
+func (t *Train) replaceMembers(ctx context.Context, trainID domain.TrainID, members []TrainMemberInput) error {
 	if err := t.members.DeleteAllForTrain(ctx, trainID); err != nil {
 		return err
 	}
@@ -437,11 +454,11 @@ func (t *Train) replaceMembers(ctx context.Context, trainID uint, members []Trai
 
 // LeadingMember returns the first member with a DCC address in Position
 // order, plus whether one was found.
-func LeadingMember(members []domain.TrainMember, vehicles map[uint]domain.Vehicle) (domain.TrainMember, bool) {
+func LeadingMember(members []domain.TrainMember, vehicles map[domain.VehicleID]domain.Vehicle) (domain.TrainMember, bool) {
 	return leadingMember(members, vehicles)
 }
 
-func leadingMember(members []domain.TrainMember, vehicles map[uint]domain.Vehicle) (domain.TrainMember, bool) {
+func leadingMember(members []domain.TrainMember, vehicles map[domain.VehicleID]domain.Vehicle) (domain.TrainMember, bool) {
 	for _, m := range members {
 		v, ok := vehicles[m.VehicleID]
 		if ok && v.DCCAddress != nil && !m.ExcludeFromSpeed {

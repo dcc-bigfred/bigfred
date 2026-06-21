@@ -120,11 +120,11 @@ func (s *Radio) Send(ctx context.Context, in RadioSendInput) (domain.RadioMessag
 		id := in.ToInterlockingID
 		msg.ToInterlockingID = &id
 	}
-	if in.ContextVehicleID != 0 {
+	if !in.ContextVehicleID.IsZero() {
 		id := in.ContextVehicleID
 		msg.ContextVehicleID = &id
 	}
-	if in.ContextTrainID != 0 {
+	if !in.ContextTrainID.IsZero() {
 		id := in.ContextTrainID
 		msg.ContextTrainID = &id
 	}
@@ -250,8 +250,8 @@ func (s *Radio) interlockingStreamKeys(ctx context.Context, layoutID uint) ([]st
 	return keys, nil
 }
 
-func (s *Radio) resolveContextName(ctx context.Context, vehicleID, trainID uint) (string, error) {
-	if vehicleID != 0 {
+func (s *Radio) resolveContextName(ctx context.Context, vehicleID domain.VehicleID, trainID domain.TrainID) (string, error) {
+	if !vehicleID.IsZero() {
 		if s.vehicles == nil {
 			return "", svcerrors.ErrRadioContextUnavailable
 		}
@@ -261,7 +261,7 @@ func (s *Radio) resolveContextName(ctx context.Context, vehicleID, trainID uint)
 		}
 		return v.Name, nil
 	}
-	if trainID != 0 {
+	if !trainID.IsZero() {
 		if s.trains == nil {
 			return "", svcerrors.ErrRadioContextUnavailable
 		}

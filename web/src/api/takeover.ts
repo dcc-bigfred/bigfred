@@ -13,14 +13,14 @@ export interface TakeoverRequestedEvent {
   requestId: number;
   signalman: TakeoverUser;
   target: TakeoverTarget;
-  targetId: number;
+  targetId: string;
   autoGrantAt: number;
 }
 
 export interface TakeoverGrantedEvent {
   requestId: number;
   target: TakeoverTarget;
-  targetId: number;
+  targetId: string;
   signalman: TakeoverUser;
   leaseExpiresAt: number;
 }
@@ -28,7 +28,7 @@ export interface TakeoverGrantedEvent {
 export interface TakeoverReleasedEvent {
   requestId: number;
   target: TakeoverTarget;
-  targetId: number;
+  targetId: string;
   reason?: string;
 }
 
@@ -36,7 +36,7 @@ export function useTakeoverActions() {
   const { sendAction } = useSocket();
 
   const requestTakeover = useCallback(
-    (target: TakeoverTarget, targetId: number) =>
+    (target: TakeoverTarget, targetId: string) =>
       sendAction("takeover.request", { target, targetId }),
     [sendAction],
   );

@@ -10,7 +10,9 @@ import "time"
 // service layer can fetch them with a single dedicated query and the
 // REL Insert/Update calls on Train stay simple.
 type Train struct {
-	ID          uint
+	ID         TrainID
+	ExternalID *string      `db:"external_id"`
+	Source     EntitySource `db:"source"`
 	OwnerUserID uint   `db:"owner_user_id"`
 	Name        string
 	CreatedAt   time.Time `db:"created_at"`
@@ -28,8 +30,8 @@ func (Train) Table() string { return "trains" }
 // that row.
 type TrainMember struct {
 	ID        uint
-	TrainID   uint `db:"train_id"`
-	VehicleID uint `db:"vehicle_id"`
+	TrainID   TrainID   `db:"train_id"`
+	VehicleID VehicleID `db:"vehicle_id"`
 	Position  int
 	Reversed         bool
 	SpeedMultiplier  float64 `db:"speed_multiplier"`

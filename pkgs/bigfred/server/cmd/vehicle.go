@@ -3,10 +3,12 @@ package cmd
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
 	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
+	"github.com/keskad/loco/pkgs/bigfred/server/helpers"
 	"github.com/keskad/loco/pkgs/bigfred/server/repo"
 	"github.com/keskad/loco/pkgs/bigfred/server/security"
 	"github.com/keskad/loco/pkgs/bigfred/server/validation"
@@ -27,7 +29,7 @@ func NewVehicle(v *repo.Vehicles, pool DCCPoolPort, members *repo.TrainMembers) 
 }
 
 // Get loads a vehicle by primary key.
-func (v *Vehicle) Get(ctx context.Context, id uint) (domain.Vehicle, error) {
+func (v *Vehicle) Get(ctx context.Context, id domain.VehicleID) (domain.Vehicle, error) {
 	row, err := v.vehicles.FindByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, repo.ErrVehicleNotFound) {
@@ -71,7 +73,7 @@ func (v *Vehicle) Create(ctx context.Context, in VehicleCreateInput) (domain.Veh
 	number := validation.TrimVehicleNumber(in.Number)
 
 	if in.DCCAddress != nil {
-		if err := v.checkDCCAddress(ctx, in.OwnerUserID, *in.DCCAddress, 0); err != nil {
+		if err := v.checkDCCAddress(ctx, in.OwnerUserID, *in.DCCAddress, ""); err != nil {
 			return domain.Vehicle{}, err
 		}
 	}
@@ -83,22 +85,34 @@ func (v *Vehicle) Create(ctx context.Context, in VehicleCreateInput) (domain.Veh
 	}
 
 	now := time.Now().UTC()
-	row := domain.Vehicle{
-		DCCAddress:              in.DCCAddress,
-		OwnerUserID:             in.OwnerUserID,
-		Name:                    name,
-		Kind:                    in.Kind,
-		Number:                  number,
-		Rp1Function:             rp1Fn,
-		EmergencyLightsFunction: emergFn,
-		DeadManSwitchOption:     dmsOpt,
-		CreatedAt:               now,
-		UpdatedAt:               now,
+	for attempt := 0; attempt < domain.MaxCatalogueIDRetries; attempt++ {
+		id, err := domain.NewVehicleID()
+		if err != nil {
+			return domain.Vehicle{}, err
+		}
+		row := domain.Vehicle{
+			ID:                      id,
+			Source:                  domain.EntitySourceLocal,
+			DCCAddress:              in.DCCAddress,
+			OwnerUserID:             in.OwnerUserID,
+			Name:                    name,
+			Kind:                    in.Kind,
+			Number:                  number,
+			Rp1Function:             rp1Fn,
+			EmergencyLightsFunction: emergFn,
+			DeadManSwitchOption:     dmsOpt,
+			CreatedAt:               now,
+			UpdatedAt:               now,
+		}
+		if err := v.vehicles.Insert(ctx, &row); err != nil {
+			if helpers.IsUniqueViolation(err) {
+				continue
+			}
+			return domain.Vehicle{}, err
+		}
+		return row, nil
 	}
-	if err := v.vehicles.Insert(ctx, &row); err != nil {
-		return domain.Vehicle{}, err
-	}
-	return row, nil
+	return domain.Vehicle{}, fmt.Errorf("vehicle id generation exhausted after %d retries", domain.MaxCatalogueIDRetries)
 }
 
 // VehicleUpdateInput is the validated payload of Vehicle.Update.
@@ -127,7 +141,7 @@ type VehicleAddressPatch struct {
 }
 
 // Update mutates an existing vehicle in place.
-func (v *Vehicle) Update(ctx context.Context, actorID, vehicleID uint, eff domain.EffectiveRoles, in VehicleUpdateInput) (domain.Vehicle, error) {
+func (v *Vehicle) Update(ctx context.Context, actorID uint, vehicleID domain.VehicleID, eff domain.EffectiveRoles, in VehicleUpdateInput) (domain.Vehicle, error) {
 	row, err := v.Get(ctx, vehicleID)
 	if err != nil {
 		return domain.Vehicle{}, err
@@ -191,7 +205,7 @@ func (v *Vehicle) Update(ctx context.Context, actorID, vehicleID uint, eff domai
 }
 
 // Delete removes the vehicle when it is not referenced by any train.
-func (v *Vehicle) Delete(ctx context.Context, actorID, vehicleID uint, eff domain.EffectiveRoles) (domain.Vehicle, error) {
+func (v *Vehicle) Delete(ctx context.Context, actorID uint, vehicleID domain.VehicleID, eff domain.EffectiveRoles) (domain.Vehicle, error) {
 	row, err := v.Get(ctx, vehicleID)
 	if err != nil {
 		return domain.Vehicle{}, err
@@ -225,7 +239,7 @@ func (v *Vehicle) checkVehicleMutate(eff domain.EffectiveRoles, actorID, ownerUs
 	}
 }
 
-func (v *Vehicle) checkDCCAddress(ctx context.Context, ownerID uint, addr uint16, excludeID uint) error {
+func (v *Vehicle) checkDCCAddress(ctx context.Context, ownerID uint, addr uint16, excludeID domain.VehicleID) error {
 	allowed, err := v.pool.AllowsAddress(ctx, ownerID, addr)
 	if err != nil {
 		return err

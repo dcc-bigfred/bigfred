@@ -9,16 +9,16 @@ import (
 
 // VehicleLeaseStore persists active vehicle drive leases.
 type VehicleLeaseStore interface {
-	ListActive(ctx context.Context, vehicleIDs []uint, now time.Time) ([]domain.VehicleLease, error)
+	ListActive(ctx context.Context, vehicleIDs []domain.VehicleID, now time.Time) ([]domain.VehicleLease, error)
 	Insert(ctx context.Context, row *domain.VehicleLease) error
-	Revoke(ctx context.Context, vehicleID uint, now time.Time) error
+	Revoke(ctx context.Context, vehicleID domain.VehicleID, now time.Time) error
 	RequiresJanitor() bool
 }
 
 // TrainLeaseStore persists active train drive leases.
 type TrainLeaseStore interface {
-	ListActive(ctx context.Context, trainIDs []uint, now time.Time) ([]domain.TrainLease, error)
+	ListActive(ctx context.Context, trainIDs []domain.TrainID, now time.Time) ([]domain.TrainLease, error)
 	Insert(ctx context.Context, row *domain.TrainLease) error
-	Revoke(ctx context.Context, trainID uint, now time.Time) error
+	Revoke(ctx context.Context, trainID domain.TrainID, now time.Time) error
 	RequiresJanitor() bool
 }

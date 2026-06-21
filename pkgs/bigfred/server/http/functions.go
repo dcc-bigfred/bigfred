@@ -52,7 +52,7 @@ func (h *FunctionHandler) ListIcons(w http.ResponseWriter, r *http.Request) {
 
 // ListVehicle handles GET /api/v1/vehicles/{id}/functions.
 func (h *FunctionHandler) ListVehicle(w http.ResponseWriter, r *http.Request) {
-	vehicleID, ok := parseUintParam(r, "id")
+	vehicleID, ok := parseVehicleIDParam(r, "id")
 	if !ok {
 		writeJSONError(w, http.StatusBadRequest, "invalid_id")
 		return
@@ -101,7 +101,7 @@ func (h *FunctionHandler) DeleteVehicle(w http.ResponseWriter, r *http.Request) 
 
 // AttachVehicle handles POST /api/v1/vehicles/{id}/functions/attach.
 func (h *FunctionHandler) AttachVehicle(w http.ResponseWriter, r *http.Request) {
-	vehicleID, ok := parseUintParam(r, "id")
+	vehicleID, ok := parseVehicleIDParam(r, "id")
 	if !ok {
 		writeJSONError(w, http.StatusBadRequest, "invalid_id")
 		return
@@ -117,7 +117,7 @@ func (h *FunctionHandler) AttachVehicle(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	fromTemplate := req.TemplateID != 0
-	fromVehicle := req.SourceVehicleID != 0
+	fromVehicle := req.SourceVehicleID != ""
 	if fromTemplate == fromVehicle {
 		writeJSONError(w, http.StatusBadRequest, "invalid_body")
 		return
@@ -132,7 +132,7 @@ func (h *FunctionHandler) AttachVehicle(w http.ResponseWriter, r *http.Request) 
 		)
 	} else {
 		rows, err = h.functions.CopyVehicleFunctionsFromVehicle(
-			r.Context(), actor.User.ID, vehicleID, req.SourceVehicleID,
+			r.Context(), actor.User.ID, vehicleID, domain.VehicleID(req.SourceVehicleID),
 		)
 	}
 	if err != nil {
@@ -145,7 +145,7 @@ func (h *FunctionHandler) AttachVehicle(w http.ResponseWriter, r *http.Request) 
 
 // ReorderVehicle handles POST /api/v1/vehicles/{id}/functions/reorder.
 func (h *FunctionHandler) ReorderVehicle(w http.ResponseWriter, r *http.Request) {
-	vehicleID, ok := parseUintParam(r, "id")
+	vehicleID, ok := parseVehicleIDParam(r, "id")
 	if !ok {
 		writeJSONError(w, http.StatusBadRequest, "invalid_id")
 		return
@@ -243,20 +243,20 @@ func (h *FunctionHandler) ReorderTemplate(w http.ResponseWriter, r *http.Request
 	h.ListTemplate(w, r)
 }
 
-func (h *FunctionHandler) parseVehicleMutation(w http.ResponseWriter, r *http.Request) (vehicleID uint, num uint8, actorID uint, ok bool) {
-	vehicleID, ok = parseUintParam(r, "id")
+func (h *FunctionHandler) parseVehicleMutation(w http.ResponseWriter, r *http.Request) (vehicleID domain.VehicleID, num uint8, actorID uint, ok bool) {
+	vehicleID, ok = parseVehicleIDParam(r, "id")
 	if !ok {
 		writeJSONError(w, http.StatusBadRequest, "invalid_id")
-		return 0, 0, 0, false
+		return "", 0, 0, false
 	}
 	num, ok = parseFunctionNumParam(w, r)
 	if !ok {
-		return 0, 0, 0, false
+		return "", 0, 0, false
 	}
 	actor, ok := IdentityFromContext(r.Context())
 	if !ok {
 		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
-		return 0, 0, 0, false
+		return "", 0, 0, false
 	}
 	return vehicleID, num, actor.User.ID, true
 }

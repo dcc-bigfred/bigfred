@@ -23,7 +23,7 @@ type Vehicles struct {
 func NewVehicles(r rel.Repository) *Vehicles { return &Vehicles{repo: r} }
 
 // FindByID looks up a vehicle by primary key.
-func (v *Vehicles) FindByID(ctx context.Context, id uint) (domain.Vehicle, error) {
+func (v *Vehicles) FindByID(ctx context.Context, id domain.VehicleID) (domain.Vehicle, error) {
 	var row domain.Vehicle
 	err := v.repo.Find(ctx, &row, where.Eq("id", id))
 	if err != nil {
@@ -80,7 +80,7 @@ func (v *Vehicles) ListByOwner(ctx context.Context, ownerID uint) ([]domain.Vehi
 }
 
 // ListByIDs returns vehicles by primary-key set.
-func (v *Vehicles) ListByIDs(ctx context.Context, ids []uint) ([]domain.Vehicle, error) {
+func (v *Vehicles) ListByIDs(ctx context.Context, ids []domain.VehicleID) ([]domain.Vehicle, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}

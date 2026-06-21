@@ -128,7 +128,7 @@ function TakeoverOverlayBody({
   const canClose = speed === 0;
 
   const fnList = useVehicleFunctions(
-    grant.target === "vehicle" ? grant.targetId : 0,
+    grant.target === "vehicle" ? grant.targetId : "",
   ).data ?? [];
   const configuredFunctions = useMemo(
     () =>

@@ -4,12 +4,12 @@ package protocol
 type VehicleChangedPayload struct {
 	LayoutID  uint   `json:"layoutId"`
 	Action    string `json:"action"` // "added" | "removed" | "updated"
-	VehicleID uint   `json:"vehicleId"`
+	VehicleID string `json:"vehicleId"`
 }
 
 // TrainChangedPayload is the JSON body of layout.trainsChanged.
 type TrainChangedPayload struct {
 	LayoutID uint   `json:"layoutId"`
 	Action   string `json:"action"` // "added" | "removed" | "updated"
-	TrainID  uint   `json:"trainId"`
+	TrainID  string `json:"trainId"`
 }

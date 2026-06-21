@@ -9,7 +9,7 @@ export type ThrottleVehicleTarget = {
 
 export type ThrottleTrainTarget = {
   kind: "train";
-  trainId: number;
+  trainId: string;
 };
 
 export type ThrottleTarget = ThrottleVehicleTarget | ThrottleTrainTarget;
@@ -26,7 +26,7 @@ function readStoredTarget(layoutID: number): ThrottleTarget | null {
     if (parsed?.kind === "vehicle" && typeof parsed.dccAddress === "number") {
       return parsed;
     }
-    if (parsed?.kind === "train" && typeof parsed.trainId === "number") {
+    if (parsed?.kind === "train" && typeof parsed.trainId === "string" && parsed.trainId.length > 0) {
       return parsed;
     }
   } catch {
@@ -51,7 +51,7 @@ function writeStoredTarget(layoutID: number, target: ThrottleTarget | null) {
 export function useThrottleTargetSelection(
   layoutID: number,
   vehicleAddresses: number[],
-  trainIds: number[],
+  trainIds: string[],
 ) {
   const [selectedTarget, setSelectedTarget] = useState<ThrottleTarget | null>(
     null,

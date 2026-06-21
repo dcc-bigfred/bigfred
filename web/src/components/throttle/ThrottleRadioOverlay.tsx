@@ -16,7 +16,7 @@ import RadioPhrasePickerDialog from "../interlocking/RadioPhrasePickerDialog";
 
 interface ThrottleRadioOverlayProps {
   layoutId: number;
-  vehicleId: number;
+  vehicleId: string;
   vehicleName: string;
   onClose: () => void;
 }

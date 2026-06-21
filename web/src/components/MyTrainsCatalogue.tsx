@@ -51,7 +51,7 @@ export default function MyTrainsCatalogue({ layoutId }: Props) {
   const [editingTrain, setEditingTrain] = useState<Train | null>(null);
 
   const trainOnLayout = useMemo(() => {
-    const s = new Set<number>();
+    const s = new Set<string>();
     (layoutTrains.data ?? []).forEach((tt) => s.add(tt.id));
     return s;
   }, [layoutTrains.data]);

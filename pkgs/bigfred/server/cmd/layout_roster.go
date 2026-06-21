@@ -72,7 +72,7 @@ func (r *LayoutRoster) ListVehicles(ctx context.Context, layoutID uint) ([]Roste
 	if err != nil {
 		return nil, err
 	}
-	ids := make([]uint, 0, len(rows))
+	ids := make([]domain.VehicleID, 0, len(rows))
 	for _, row := range rows {
 		ids = append(ids, row.VehicleID)
 	}
@@ -80,7 +80,7 @@ func (r *LayoutRoster) ListVehicles(ctx context.Context, layoutID uint) ([]Roste
 	if err != nil {
 		return nil, err
 	}
-	byID := make(map[uint]domain.Vehicle, len(vehicles))
+	byID := make(map[domain.VehicleID]domain.Vehicle, len(vehicles))
 	for _, v := range vehicles {
 		byID[v.ID] = v
 	}
@@ -111,7 +111,7 @@ func (r *LayoutRoster) ListTrains(ctx context.Context, layoutID uint) ([]RosterT
 	if err != nil {
 		return nil, err
 	}
-	ids := make([]uint, 0, len(rows))
+	ids := make([]domain.TrainID, 0, len(rows))
 	for _, row := range rows {
 		ids = append(ids, row.TrainID)
 	}
@@ -119,7 +119,7 @@ func (r *LayoutRoster) ListTrains(ctx context.Context, layoutID uint) ([]RosterT
 	if err != nil {
 		return nil, err
 	}
-	byID := make(map[uint]domain.Train, len(trains))
+	byID := make(map[domain.TrainID]domain.Train, len(trains))
 	for _, t := range trains {
 		byID[t.ID] = t
 	}
@@ -150,7 +150,7 @@ func (r *LayoutRoster) ListTrains(ctx context.Context, layoutID uint) ([]RosterT
 }
 
 // AddVehicle attaches a vehicle to the layout roster (owner-only).
-func (r *LayoutRoster) AddVehicle(ctx context.Context, layoutID, actorID, vehicleID uint) (RosterVehicleEntry, error) {
+func (r *LayoutRoster) AddVehicle(ctx context.Context, layoutID, actorID uint, vehicleID domain.VehicleID) (RosterVehicleEntry, error) {
 	v, err := r.vehicles.FindByID(ctx, vehicleID)
 	if err != nil {
 		if errors.Is(err, repo.ErrVehicleNotFound) {
@@ -189,7 +189,7 @@ func (r *LayoutRoster) AddVehicle(ctx context.Context, layoutID, actorID, vehicl
 }
 
 // RemoveVehicle detaches a vehicle from the layout roster.
-func (r *LayoutRoster) RemoveVehicle(ctx context.Context, layoutID, actorID, vehicleID uint, eff domain.EffectiveRoles) error {
+func (r *LayoutRoster) RemoveVehicle(ctx context.Context, layoutID, actorID uint, vehicleID domain.VehicleID, eff domain.EffectiveRoles) error {
 	row, err := r.layoutVehicles.FindByLayoutAndVehicle(ctx, layoutID, vehicleID)
 	if err != nil {
 		if errors.Is(err, repo.ErrLayoutVehicleNotFound) {
@@ -221,7 +221,7 @@ func (r *LayoutRoster) RemoveVehicle(ctx context.Context, layoutID, actorID, veh
 }
 
 // AddTrain attaches a train to the layout roster (owner-only).
-func (r *LayoutRoster) AddTrain(ctx context.Context, layoutID, actorID, trainID uint) (RosterTrainEntry, error) {
+func (r *LayoutRoster) AddTrain(ctx context.Context, layoutID, actorID uint, trainID domain.TrainID) (RosterTrainEntry, error) {
 	t, err := r.trains.FindByID(ctx, trainID)
 	if err != nil {
 		if errors.Is(err, repo.ErrTrainNotFound) {
@@ -264,7 +264,7 @@ func (r *LayoutRoster) AddTrain(ctx context.Context, layoutID, actorID, trainID 
 }
 
 // RemoveTrain detaches a train from the layout roster.
-func (r *LayoutRoster) RemoveTrain(ctx context.Context, layoutID, actorID, trainID uint, eff domain.EffectiveRoles) error {
+func (r *LayoutRoster) RemoveTrain(ctx context.Context, layoutID, actorID uint, trainID domain.TrainID, eff domain.EffectiveRoles) error {
 	row, err := r.layoutTrains.FindByLayoutAndTrain(ctx, layoutID, trainID)
 	if err != nil {
 		if errors.Is(err, repo.ErrLayoutTrainNotFound) {
@@ -296,7 +296,7 @@ func (r *LayoutRoster) RemoveTrain(ctx context.Context, layoutID, actorID, train
 }
 
 // PurgeVehicle deletes every roster row pointing at a vehicle.
-func (r *LayoutRoster) PurgeVehicle(ctx context.Context, vehicleID uint) error {
+func (r *LayoutRoster) PurgeVehicle(ctx context.Context, vehicleID domain.VehicleID) error {
 	rows, err := r.layoutVehicles.ListByVehicle(ctx, vehicleID)
 	if err != nil {
 		return err
@@ -311,7 +311,7 @@ func (r *LayoutRoster) PurgeVehicle(ctx context.Context, vehicleID uint) error {
 }
 
 // PurgeTrain deletes every roster row pointing at a train.
-func (r *LayoutRoster) PurgeTrain(ctx context.Context, trainID uint) error {
+func (r *LayoutRoster) PurgeTrain(ctx context.Context, trainID domain.TrainID) error {
 	rows, err := r.layoutTrains.ListByTrain(ctx, trainID)
 	if err != nil {
 		return err
@@ -326,7 +326,7 @@ func (r *LayoutRoster) PurgeTrain(ctx context.Context, trainID uint) error {
 }
 
 // BroadcastVehicleUpdated notifies dashboards after a catalogue vehicle update.
-func (r *LayoutRoster) BroadcastVehicleUpdated(ctx context.Context, vehicleID uint) error {
+func (r *LayoutRoster) BroadcastVehicleUpdated(ctx context.Context, vehicleID domain.VehicleID) error {
 	rows, err := r.layoutVehicles.ListByVehicle(ctx, vehicleID)
 	if err != nil {
 		return err
@@ -341,7 +341,7 @@ func (r *LayoutRoster) BroadcastVehicleUpdated(ctx context.Context, vehicleID ui
 }
 
 // BroadcastTrainUpdated notifies dashboards and republishes Redis train snapshots.
-func (r *LayoutRoster) BroadcastTrainUpdated(ctx context.Context, trainID uint) error {
+func (r *LayoutRoster) BroadcastTrainUpdated(ctx context.Context, trainID domain.TrainID) error {
 	rows, err := r.layoutTrains.ListByTrain(ctx, trainID)
 	if err != nil {
 		return err
@@ -357,7 +357,7 @@ func (r *LayoutRoster) BroadcastTrainUpdated(ctx context.Context, trainID uint) 
 	return nil
 }
 
-func (r *LayoutRoster) broadcastVehicleChanged(layoutID, vehicleID uint, action string) {
+func (r *LayoutRoster) broadcastVehicleChanged(layoutID uint, vehicleID domain.VehicleID, action string) {
 	if r.hub != nil {
 		r.hub.BroadcastVehicleChanged(layoutID, vehicleID, action)
 	}
@@ -366,7 +366,7 @@ func (r *LayoutRoster) broadcastVehicleChanged(layoutID, vehicleID uint, action 
 	}
 }
 
-func (r *LayoutRoster) broadcastTrainChanged(layoutID, trainID uint, action string) {
+func (r *LayoutRoster) broadcastTrainChanged(layoutID uint, trainID domain.TrainID, action string) {
 	if r.hub != nil {
 		r.hub.BroadcastTrainChanged(layoutID, trainID, action)
 	}

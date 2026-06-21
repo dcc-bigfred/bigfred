@@ -101,7 +101,7 @@ func New(ctx context.Context, log *logrus.Logger, cfg Config) (*Daemon, error) {
 		return nil, errors.New("dcc-bus: --jwt-secret is required")
 	}
 	if cfg.RedisAddr == "" {
-		cfg.RedisAddr = "127.0.0.1:6380"
+		cfg.RedisAddr = "127.0.0.1:6379"
 	}
 	if cfg.BindAddr == "" {
 		cfg.BindAddr = "127.0.0.1"

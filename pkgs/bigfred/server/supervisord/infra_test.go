@@ -27,7 +27,7 @@ func TestDefaultInfraProcesses_includesAlloyWhenEnabled(t *testing.T) {
 
 func TestDefaultInfraProcesses_redisAndAlloy(t *testing.T) {
 	st := DefaultInfraProcesses(InfraConfig{
-		Redis: RedisConfig{Port: 6380},
+		Redis: RedisConfig{Port: 6379},
 		Telemetry: TelemetryConfig{
 			Enable: true,
 		},

@@ -40,7 +40,7 @@ type Flags struct {
 	PollIntervalMs uint
 
 	EnableTelemetry bool
-	OTLPEndpoint   string
+	OTLPEndpoint    string
 
 	AllowedOrigins []string
 }
@@ -100,7 +100,7 @@ should rarely be invoked manually.`,
 	cmd.Flags().UintVar(&f.CommandStationID, "command-station-id", 0, "command station id this daemon talks to (required)")
 	cmd.Flags().StringVar(&f.BindAddr, "bind", "127.0.0.1", "interface to bind the WebSocket listener on")
 	cmd.Flags().Uint16Var(&f.Port, "port", 0, "TCP port to expose the WebSocket on (required; allocated by loco-server)")
-	cmd.Flags().StringVar(&f.RedisAddr, "redis-addr", "127.0.0.1:6380", "redis host:port used for state cache and pub/sub")
+	cmd.Flags().StringVar(&f.RedisAddr, "redis-addr", "127.0.0.1:6379", "redis host:port used for state cache and pub/sub")
 	cmd.Flags().StringVar(&f.StationName, FlagStationName, "", "command station display name (required; set by loco-server)")
 	cmd.Flags().StringVar(&f.StationKind, FlagStationKind, "", "driver kind: z21 | loconet_serial | loconet_tcp (required)")
 	cmd.Flags().StringVar(&f.StationURI, FlagStationURI, "", "connection URI for the command station (required)")

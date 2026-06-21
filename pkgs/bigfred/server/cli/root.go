@@ -55,7 +55,8 @@ type Flags struct {
 	RedisAddr       string
 	RedisExternal   bool
 	RedisAutoDetect bool
-	RedisPersist    bool
+	RedisRDBSave    []string
+	RedisNoPersist  bool
 
 	EnableTelemetry bool
 	TelemetryConfig string
@@ -102,8 +103,8 @@ real-time throttle commands.`,
 		"redis-server binary path (PATH-relative or absolute) used by the managed daemon")
 	cmd.Flags().StringVar(&f.RedisBindAddr, "redis-bind", "127.0.0.1",
 		"interface the managed redis-server binds on; loopback by default")
-	cmd.Flags().Uint16Var(&f.RedisPort, "redis-port", 6380,
-		"TCP port the managed redis-server listens on (default 6380 to avoid colliding with a system redis on 6379)")
+	cmd.Flags().Uint16Var(&f.RedisPort, "redis-port", 6379,
+		"TCP port the managed redis-server listens on")
 	cmd.Flags().StringVar(&f.RedisDataDir, "redis-data-dir", "",
 		"working directory for redis-server (defaults to the supervisord config directory)")
 	cmd.Flags().StringVar(&f.RedisAddr, "redis-addr", "",
@@ -112,8 +113,10 @@ real-time throttle commands.`,
 		"do not spawn a managed redis-server; dial --redis-addr instead (operator runs Redis out-of-band)")
 	cmd.Flags().BoolVar(&f.RedisAutoDetect, "redis-auto-detect", true,
 		"skip spawning managed redis-server when --redis-addr already accepts PING")
-	cmd.Flags().BoolVar(&f.RedisPersist, "redis-persist", false,
-		"keep RDB snapshots / AOF for the managed redis-server; off by default because dcc-bus rebuilds state cheaply")
+	cmd.Flags().StringSliceVar(&f.RedisRDBSave, "redis-rdb-save", nil,
+		"RDB snapshot rules as seconds:changes (repeatable); default save 60 100; pass \"\" to disable")
+	cmd.Flags().BoolVar(&f.RedisNoPersist, "redis-no-persist", false,
+		"disable RDB snapshots for the managed redis-server (ephemeral mode)")
 	cmd.Flags().BoolVar(&f.EnableTelemetry, "enable-telemetry", false,
 		"start Grafana Alloy via supervisord and enable dcc-bus metric export")
 	cmd.Flags().StringVar(&f.TelemetryConfig, "telemetry-config", service.DefaultTelemetryConfigPath,
@@ -192,6 +195,11 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	redisSvc := service.NewRedisService(redisCfg)
 	defer func() { _ = redisSvc.Close() }()
 
+	redisRDBSavePoints, err := supervisord.ResolveRDBSavePoints(f.RedisNoPersist, f.RedisRDBSave)
+	if err != nil {
+		return err
+	}
+
 	var supSvc service.Supervisor
 	if !f.NoSupervisor {
 		supPaths, err := supervisord.DefaultPaths()
@@ -205,12 +213,12 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		}
 		initial := service.DefaultInfraProcesses(service.InfraConfig{
 			Redis: service.RedisConfig{
-				Bin:                  f.RedisBin,
-				BindAddr:             f.RedisBindAddr,
-				Port:                 f.RedisPort,
-				DataDir:              f.RedisDataDir,
-				EphemeralPersistence: !f.RedisPersist,
-				Disable:              !redisMgmt.Managed,
+				Bin:           f.RedisBin,
+				BindAddr:      f.RedisBindAddr,
+				Port:          f.RedisPort,
+				DataDir:       f.RedisDataDir,
+				RDBSavePoints: redisRDBSavePoints,
+				Disable:       !redisMgmt.Managed,
 			},
 			Telemetry: telemetryCfg,
 		})

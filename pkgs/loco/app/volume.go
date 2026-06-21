@@ -43,9 +43,9 @@ func (app *LocoApp) SetVolumeAction(locoId uint8, percent uint8, timeout time.Du
 	return decoder.SetVolume(percent)
 }
 
-func (app *LocoApp) GetVolumeAction(locoId uint8, timeout time.Duration) error {
+func (app *LocoApp) GetVolumeAction(locoId uint8, timeout time.Duration) (uint8, error) {
 	if cmdErr := app.InitializeCommandStation(); cmdErr != nil {
-		return cmdErr
+		return 0, cmdErr
 	}
 	defer app.Station.CleanUp()
 
@@ -53,35 +53,18 @@ func (app *LocoApp) GetVolumeAction(locoId uint8, timeout time.Duration) error {
 
 	decoder, err := decoders.Detect(cv)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
-	percent, err := decoder.GetVolume()
-	if err != nil {
-		return err
-	}
-
-	app.P.Printf("%d\n", percent)
-	return nil
+	return decoder.GetVolume()
 }
 
-func (app *LocoApp) DetectDecoderAction(locoId uint8, timeout time.Duration) error {
+func (app *LocoApp) DetectDecoderAction(locoId uint8, timeout time.Duration) (decoders.Identification, error) {
 	if cmdErr := app.InitializeCommandStation(); cmdErr != nil {
-		return cmdErr
+		return decoders.Identification{}, cmdErr
 	}
 	defer app.Station.CleanUp()
 
 	cv := newProgrammingCV(app, locoId, timeout)
-
-	id, err := decoders.Identify(cv)
-	if err != nil {
-		return err
-	}
-
-	if id.SoftwareVersion >= 0 {
-		app.P.Printf("cv7=%d\n", id.SoftwareVersion)
-	}
-	app.P.Printf("cv8=%d\n", id.ManufacturerID)
-	app.P.Printf("decoder=%s\n", id.Name)
-	return nil
+	return decoders.Identify(cv)
 }

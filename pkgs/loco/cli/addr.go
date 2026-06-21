@@ -10,13 +10,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const (
-	shortAddressMin = 1
-	shortAddressMax = 127
-	longAddressMin  = 0
-	longAddressMax  = 10239
-)
-
 func NewAddrCommand(app *app.LocoApp) *cobra.Command {
 	command := &cobra.Command{
 		Use:   "addr",
@@ -48,11 +41,16 @@ func NewAddrGetCommand(app *app.LocoApp) *cobra.Command {
 				return err
 			}
 
-			return app.GetAddrAction(
+			info, err := app.GetAddrAction(
 				cmdArgs.LocoId,
 				time.Second*time.Duration(cmdArgs.Timeout),
 				cmdArgs.Retries,
 			)
+			if err != nil {
+				return err
+			}
+			printAddressInfo(info)
+			return nil
 		},
 	}
 
@@ -118,15 +116,5 @@ func NewAddrSetCommand(app *app.LocoApp) *cobra.Command {
 }
 
 func addressToCVString(addr uint16) (string, error) {
-	if addr < longAddressMin || addr > longAddressMax {
-		return "", fmt.Errorf("address %d out of range (%d-%d)", addr, longAddressMin, longAddressMax)
-	}
-
-	if addr >= shortAddressMin && addr <= shortAddressMax {
-		return fmt.Sprintf("cv1=%d, cv17=0, cv18=0, cv29=0", addr), nil
-	}
-
-	cv17 := 192 + (addr / 256)
-	cv18 := addr % 256
-	return fmt.Sprintf("cv17=%d, cv18=%d, cv29=32", cv17, cv18), nil
+	return app.AddressToCVString(addr)
 }

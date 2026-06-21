@@ -106,7 +106,12 @@ func NewLNCVSetCommand(loc *locoapp.LocoApp) *cobra.Command {
 
 			conn := cmdArgs.connArgs(cv)
 			conn.Device = resolveLncvDevice(loc, cmdArgs.Device)
-			return rbapp.LNCVSet(loc, conn, val)
+			result, err := rbapp.LNCVSet(conn, val)
+			if err != nil {
+				return err
+			}
+			printLNCVWriteResult(result)
+			return nil
 		},
 	}
 
@@ -135,8 +140,12 @@ func NewLNCVGetCommand(loc *locoapp.LocoApp) *cobra.Command {
 
 			conn := cmdArgs.connArgs(cv)
 			conn.Device = resolveLncvDevice(loc, cmdArgs.Device)
-			_, err = rbapp.LNCVGet(loc, conn)
-			return err
+			val, err := rbapp.LNCVGet(conn)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("%d\n", val)
+			return nil
 		},
 	}
 

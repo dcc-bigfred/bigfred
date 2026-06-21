@@ -5,9 +5,17 @@ import (
 	"time"
 
 	"github.com/keskad/loco/pkgs/loco/commandstation"
+	"github.com/keskad/loco/pkgs/loco/syntax"
 )
 
 const cv29LongAddressBit = 32
+
+const (
+	shortAddressMin = 1
+	shortAddressMax = 127
+	longAddressMin  = 0
+	longAddressMax  = 10239
+)
 
 // AddressInfo holds decoded locomotive address data read from CVs.
 type AddressInfo struct {
@@ -39,6 +47,21 @@ func addressFromCVs(cv1, cv17, cv18, cv29 int) (AddressInfo, error) {
 	return info, nil
 }
 
+// AddressToCVString builds CV write assignments for programming a decoder address.
+func AddressToCVString(addr uint16) (string, error) {
+	if addr < longAddressMin || addr > longAddressMax {
+		return "", fmt.Errorf("address %d out of range (%d-%d)", addr, longAddressMin, longAddressMax)
+	}
+
+	if addr >= shortAddressMin && addr <= shortAddressMax {
+		return fmt.Sprintf("cv1=%d, cv17=0, cv18=0, cv29=0", addr), nil
+	}
+
+	cv17 := 192 + (addr / 256)
+	cv18 := addr % 256
+	return fmt.Sprintf("cv17=%d, cv18=%d, cv29=32", cv17, cv18), nil
+}
+
 func (app *LocoApp) readProgCV(locoId uint8, num uint16, timeout time.Duration, retries uint8) (int, error) {
 	return app.Station.ReadCV(
 		progModeForLoco(locoId),
@@ -51,39 +74,62 @@ func (app *LocoApp) readProgCV(locoId uint8, num uint16, timeout time.Duration, 
 	)
 }
 
-func (app *LocoApp) GetAddrAction(locoId uint8, timeout time.Duration, retries uint8) error {
-	if cmdErr := app.InitializeCommandStation(); cmdErr != nil {
-		return cmdErr
-	}
-	defer app.Station.CleanUp()
+func (app *LocoApp) writeProgCV(locoId uint8, num uint16, value int, timeout time.Duration) error {
+	return app.Station.WriteCV(
+		progModeForLoco(locoId),
+		commandstation.LocoCV{
+			LocoId: commandstation.LocoAddr(locoId),
+			Cv:     commandstation.CV{Num: commandstation.CVNum(num), Value: value},
+		},
+		commandstation.Timeout(timeout),
+	)
+}
 
+func (app *LocoApp) readAddressInfo(locoId uint8, timeout time.Duration, retries uint8) (AddressInfo, error) {
 	cv1, err := app.readProgCV(locoId, 1, timeout, retries)
 	if err != nil {
-		return fmt.Errorf("failed to read CV1: %w", err)
+		return AddressInfo{}, fmt.Errorf("failed to read CV1: %w", err)
 	}
 	cv17, err := app.readProgCV(locoId, 17, timeout, retries)
 	if err != nil {
-		return fmt.Errorf("failed to read CV17: %w", err)
+		return AddressInfo{}, fmt.Errorf("failed to read CV17: %w", err)
 	}
 	cv18, err := app.readProgCV(locoId, 18, timeout, retries)
 	if err != nil {
-		return fmt.Errorf("failed to read CV18: %w", err)
+		return AddressInfo{}, fmt.Errorf("failed to read CV18: %w", err)
 	}
 	cv29, err := app.readProgCV(locoId, 29, timeout, retries)
 	if err != nil {
-		return fmt.Errorf("failed to read CV29: %w", err)
+		return AddressInfo{}, fmt.Errorf("failed to read CV29: %w", err)
 	}
+	return addressFromCVs(cv1, cv17, cv18, cv29)
+}
 
-	info, err := addressFromCVs(cv1, cv17, cv18, cv29)
+func (app *LocoApp) writeAddress(locoId uint8, addr uint16, timeout time.Duration, settle time.Duration) error {
+	cvString, err := AddressToCVString(addr)
 	if err != nil {
 		return err
 	}
 
-	app.P.Printf("cv1=%d\n", info.CV1)
-	app.P.Printf("cv17=%d\n", info.CV17)
-	app.P.Printf("cv18=%d\n", info.CV18)
-	app.P.Printf("cv29=%d\n", info.CV29)
-	app.P.Printf("address=%d\n", info.Address)
-	app.P.Printf("type=%s\n", info.Type)
+	entries, err := syntax.ParseCVString(cvString, ",")
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		if err := app.writeProgCV(locoId, entry.Number, int(entry.Value), timeout); err != nil {
+			return fmt.Errorf("failed to write CV%d: %w", entry.Number, err)
+		}
+		time.Sleep(settle)
+	}
 	return nil
+}
+
+func (app *LocoApp) GetAddrAction(locoId uint8, timeout time.Duration, retries uint8) (AddressInfo, error) {
+	if cmdErr := app.InitializeCommandStation(); cmdErr != nil {
+		return AddressInfo{}, cmdErr
+	}
+	defer app.Station.CleanUp()
+
+	return app.readAddressInfo(locoId, timeout, retries)
 }

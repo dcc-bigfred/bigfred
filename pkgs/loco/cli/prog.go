@@ -25,6 +25,7 @@ func NewProgCommand(app *app.LocoApp) *cobra.Command {
 	command.AddCommand(NewProgVolumeCommand(app))
 	command.AddCommand(NewProgBrightnessCommand(app))
 	command.AddCommand(NewAddrCommand(app))
+	command.AddCommand(NewProgFactoryResetCommand(app))
 	command.AddCommand(NewProgDetectDecoderCommand(app))
 	return command
 }
@@ -95,7 +96,12 @@ func NewProgVolumeGetCommand(app *app.LocoApp) *cobra.Command {
 				return err
 			}
 
-			return app.GetVolumeAction(cmdArgs.LocoId, time.Second*time.Duration(cmdArgs.Timeout))
+			percent, err := app.GetVolumeAction(cmdArgs.LocoId, time.Second*time.Duration(cmdArgs.Timeout))
+			if err != nil {
+				return err
+			}
+			fmt.Printf("%d\n", percent)
+			return nil
 		},
 	}
 
@@ -182,7 +188,12 @@ func NewProgBrightnessGetCommand(app *app.LocoApp) *cobra.Command {
 				return fmt.Errorf("invalid output number %q: %w", args[0], err)
 			}
 
-			return app.GetBrightnessAction(cmdArgs.LocoId, uint8(output64), time.Second*time.Duration(cmdArgs.Timeout))
+			percent, err := app.GetBrightnessAction(cmdArgs.LocoId, uint8(output64), time.Second*time.Duration(cmdArgs.Timeout))
+			if err != nil {
+				return err
+			}
+			fmt.Printf("%d\n", percent)
+			return nil
 		},
 	}
 
@@ -209,7 +220,12 @@ func NewProgBrightnessListCommand(app *app.LocoApp) *cobra.Command {
 				return err
 			}
 
-			return app.ListBrightnessAction(cmdArgs.LocoId, time.Second*time.Duration(cmdArgs.Timeout))
+			levels, err := app.ListBrightnessAction(cmdArgs.LocoId, time.Second*time.Duration(cmdArgs.Timeout))
+			if err != nil {
+				return err
+			}
+			printBrightnessLevels(levels)
+			return nil
 		},
 	}
 
@@ -241,11 +257,24 @@ Turn on all light functions on the locomotive before the test starts.`,
 				return err
 			}
 
-			return app.TestBrightnessAction(
+			fmt.Printf("Turn on all light functions on the locomotive before the test starts.\n")
+			if cmdArgs.Pause > 0 {
+				fmt.Printf("Starting in %d seconds…\n", cmdArgs.Pause)
+				time.Sleep(time.Second * time.Duration(cmdArgs.Pause))
+			}
+
+			fmt.Printf("Running brightness test…\n")
+			snapshot, err := app.TestBrightnessAction(
 				cmdArgs.LocoId,
 				time.Second*time.Duration(cmdArgs.Timeout),
-				time.Second*time.Duration(cmdArgs.Pause),
 			)
+			if err != nil {
+				return err
+			}
+
+			printBrightnessSnapshot(snapshot)
+			fmt.Printf("Brightness test complete.\n")
+			return nil
 		},
 	}
 
@@ -253,6 +282,57 @@ Turn on all light functions on the locomotive before the test starts.`,
 	command.Flags().Uint16VarP(&cmdArgs.Timeout, "timeout", "", 10, "Connection timeout")
 	command.Flags().Uint8VarP(&cmdArgs.LocoId, "loco", "l", 0, progLocoFlagUsage)
 	command.Flags().Uint16VarP(&cmdArgs.Pause, "pause", "", 5, "Seconds to wait after the reminder before starting the test")
+
+	return command
+}
+
+func NewProgFactoryResetCommand(app *app.LocoApp) *cobra.Command {
+	type Args struct {
+		LocoId       uint8
+		Timeout      uint16
+		Settle       uint16
+		Recovery     uint16
+		Retries      uint8
+		PreserveAddr bool
+	}
+
+	cmdArgs := Args{Settle: 300, Recovery: 2}
+	command := &cobra.Command{
+		Use:   "factory-reset",
+		Short: "Reset the decoder to factory defaults (CV8)",
+		Long: `Factory reset via CV8 write, decoder-specific:
+  RailBOX RB23xx: CV8 = 1
+  ESU LokSound 5: CV8 = 8
+  ZIMO MS/MN:     CV8 = 8`,
+		Args: cobra.NoArgs,
+		RunE: func(command *cobra.Command, args []string) error {
+			if err := app.Initialize(); err != nil {
+				return err
+			}
+
+			result, err := app.FactoryResetAction(
+				cmdArgs.LocoId,
+				cmdArgs.PreserveAddr,
+				time.Second*time.Duration(cmdArgs.Timeout),
+				time.Millisecond*time.Duration(cmdArgs.Settle),
+				time.Second*time.Duration(cmdArgs.Recovery),
+				cmdArgs.Retries,
+			)
+			if err != nil {
+				return err
+			}
+			printFactoryResetResult(result)
+			return nil
+		},
+	}
+
+	command.Flags().BoolVarP(&app.Debug, "debug", "v", false, "Increase verbosity to the debug level")
+	command.Flags().Uint16VarP(&cmdArgs.Timeout, "timeout", "", 10, "Connection timeout")
+	command.Flags().Uint16VarP(&cmdArgs.Settle, "settle", "", 300, "Time in milliseconds between CV writes")
+	command.Flags().Uint16VarP(&cmdArgs.Recovery, "recovery", "", 2, "Seconds to wait after reset before restoring address")
+	command.Flags().Uint8VarP(&cmdArgs.Retries, "retry", "", 0, "Retry CV reads before reset")
+	command.Flags().Uint8VarP(&cmdArgs.LocoId, "loco", "l", 0, progLocoFlagUsage)
+	command.Flags().BoolVar(&cmdArgs.PreserveAddr, "preserve-addr", false, "Restore the locomotive address after reset")
 
 	return command
 }
@@ -273,7 +353,12 @@ func NewProgDetectDecoderCommand(app *app.LocoApp) *cobra.Command {
 				return err
 			}
 
-			return app.DetectDecoderAction(cmdArgs.LocoId, time.Second*time.Duration(cmdArgs.Timeout))
+			id, err := app.DetectDecoderAction(cmdArgs.LocoId, time.Second*time.Duration(cmdArgs.Timeout))
+			if err != nil {
+				return err
+			}
+			printDecoderIdentification(id)
+			return nil
 		},
 	}
 

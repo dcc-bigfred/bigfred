@@ -21,9 +21,9 @@ func (app *LocoApp) SetBrightnessAction(locoId uint8, output uint8, percent uint
 	return decoder.SetBrightness(output, percent)
 }
 
-func (app *LocoApp) GetBrightnessAction(locoId uint8, output uint8, timeout time.Duration) error {
+func (app *LocoApp) GetBrightnessAction(locoId uint8, output uint8, timeout time.Duration) (uint8, error) {
 	if cmdErr := app.InitializeCommandStation(); cmdErr != nil {
-		return cmdErr
+		return 0, cmdErr
 	}
 	defer app.Station.CleanUp()
 
@@ -31,21 +31,15 @@ func (app *LocoApp) GetBrightnessAction(locoId uint8, output uint8, timeout time
 
 	decoder, err := decoders.DetectBrightness(cv)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
-	percent, err := decoder.GetBrightness(output)
-	if err != nil {
-		return err
-	}
-
-	app.P.Printf("%d\n", percent)
-	return nil
+	return decoder.GetBrightness(output)
 }
 
-func (app *LocoApp) ListBrightnessAction(locoId uint8, timeout time.Duration) error {
+func (app *LocoApp) ListBrightnessAction(locoId uint8, timeout time.Duration) ([]OutputBrightnessLevel, error) {
 	if cmdErr := app.InitializeCommandStation(); cmdErr != nil {
-		return cmdErr
+		return nil, cmdErr
 	}
 	defer app.Station.CleanUp()
 
@@ -53,22 +47,26 @@ func (app *LocoApp) ListBrightnessAction(locoId uint8, timeout time.Duration) er
 
 	decoder, err := decoders.DetectBrightness(cv)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
+	levels := make([]OutputBrightnessLevel, 0, len(decoder.Outputs()))
 	for _, output := range decoder.Outputs() {
 		percent, err := decoder.GetBrightness(output)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		app.P.Printf("output=%d brightness=%d\n", output, percent)
+		levels = append(levels, OutputBrightnessLevel{
+			Output:     output,
+			Brightness: percent,
+		})
 	}
-	return nil
+	return levels, nil
 }
 
-func (app *LocoApp) TestBrightnessAction(locoId uint8, timeout time.Duration, pause time.Duration) error {
+func (app *LocoApp) TestBrightnessAction(locoId uint8, timeout time.Duration) ([]decoders.OutputBrightness, error) {
 	if cmdErr := app.InitializeCommandStation(); cmdErr != nil {
-		return cmdErr
+		return nil, cmdErr
 	}
 	defer app.Station.CleanUp()
 
@@ -76,31 +74,8 @@ func (app *LocoApp) TestBrightnessAction(locoId uint8, timeout time.Duration, pa
 
 	decoder, err := decoders.DetectBrightness(cv)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	app.P.Printf("Turn on all light functions on the locomotive before the test starts.\n")
-	if pause > 0 {
-		app.P.Printf("Starting in %d seconds…\n", int(pause.Seconds()))
-		time.Sleep(pause)
-	}
-
-	snapshot, err := decoder.SnapshotBrightness()
-	if err != nil {
-		return err
-	}
-
-	app.P.Printf("Saved brightness values:\n")
-	for _, state := range snapshot {
-		app.P.Printf("output=%d cv%d=%d\n", state.Output, state.CV, state.Value)
-	}
-
-	app.P.Printf("Running brightness test…\n")
-	_, err = decoders.RunBrightnessTest(decoder, time.Sleep)
-	if err != nil {
-		return err
-	}
-
-	app.P.Printf("Brightness test complete.\n")
-	return nil
+	return decoders.RunBrightnessTest(decoder, time.Sleep)
 }

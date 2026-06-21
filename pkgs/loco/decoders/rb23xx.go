@@ -26,6 +26,18 @@ func WithTimeout(seconds uint16) Option {
 
 type RailboxRB23xx struct {
 	client *http.Client
+	cv     CVAccess
+}
+
+const (
+	railboxRB23xxVolumeCV    uint16 = 203
+	railboxRB23xxVolumeMaxCV uint8  = 64 // 64 = 100% (values above may distort)
+)
+
+func WithCVAccess(cv CVAccess) Option {
+	return func(d *RailboxRB23xx) {
+		d.cv = cv
+	}
 }
 
 func NewRailboxRB23xx(opts ...Option) *RailboxRB23xx {
@@ -51,6 +63,27 @@ func (d *RailboxRB23xx) httpGet(endpoint string) (*http.Response, error) {
 		return nil, fmt.Errorf("cannot connect to loco wifi (are you connected to loco wifi? is loco wifi function on?): %w", err)
 	}
 	return resp, nil
+}
+
+func (d *RailboxRB23xx) SetVolume(percent uint8) error {
+	if d.cv == nil {
+		return fmt.Errorf("CV access not configured")
+	}
+	if err := validatePercent(percent); err != nil {
+		return err
+	}
+	return d.cv.WriteCV(railboxRB23xxVolumeCV, percentToCV(percent, railboxRB23xxVolumeMaxCV))
+}
+
+func (d *RailboxRB23xx) GetVolume() (uint8, error) {
+	if d.cv == nil {
+		return 0, fmt.Errorf("CV access not configured")
+	}
+	cv, err := d.cv.ReadCV(railboxRB23xxVolumeCV)
+	if err != nil {
+		return 0, fmt.Errorf("failed to read CV%d (master volume): %w", railboxRB23xxVolumeCV, err)
+	}
+	return cvToPercent(cv, int(railboxRB23xxVolumeMaxCV)), nil
 }
 
 func (d *RailboxRB23xx) ClearSoundSlot(slot uint8) error {

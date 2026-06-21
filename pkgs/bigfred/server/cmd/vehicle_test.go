@@ -105,6 +105,9 @@ func TestVehicleCreateAcceptsDummy(t *testing.T) {
 	if !v.IsDummy() {
 		t.Fatalf("expected IsDummy true")
 	}
+	if !v.ID.Valid() {
+		t.Fatalf("expected V- prefixed catalogue id, got %q", v.ID)
+	}
 }
 
 func TestVehicleCreateRejectsOutsidePool(t *testing.T) {

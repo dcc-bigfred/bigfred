@@ -36,7 +36,7 @@ type TakeoverRequest struct {
 	SignalmanUserID uint           `db:"signalman_user_id"`
 	DriverUserID    uint           `db:"driver_user_id"`
 	Target          TakeoverTarget `db:"target"`
-	TargetID        uint           `db:"target_id"`
+	TargetID        string         `db:"target_id"`
 	RequestedAt     time.Time      `db:"requested_at"`
 	DecisionAt      *time.Time     `db:"decision_at"`
 	AutoGrantAt     time.Time      `db:"auto_grant_at"`

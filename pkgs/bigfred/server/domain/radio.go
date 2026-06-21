@@ -143,8 +143,8 @@ type RadioMessage struct {
 	ToUserID             *uint
 	ToInterlockingID     *uint
 
-	ContextVehicleID *uint
-	ContextTrainID   *uint
+	ContextVehicleID *VehicleID
+	ContextTrainID   *TrainID
 	ContextName      string
 
 	Phrase RadioPhrase
@@ -170,9 +170,9 @@ func ValidateTarget(toUserID, toInterlockingID uint) error {
 }
 
 // ValidateContext enforces exactly-one on ContextVehicleID / ContextTrainID.
-func ValidateContext(vehicleID, trainID uint) error {
-	hasVehicle := vehicleID != 0
-	hasTrain := trainID != 0
+func ValidateContext(vehicleID VehicleID, trainID TrainID) error {
+	hasVehicle := !vehicleID.IsZero()
+	hasTrain := !trainID.IsZero()
 	if hasVehicle == hasTrain {
 		return ErrRadioInvalidContext
 	}

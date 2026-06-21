@@ -179,7 +179,7 @@ func (p eStopTargetControlPort) Trigger(
 	ctx context.Context,
 	sess cmd.ControlSession,
 	target domain.TakeoverTarget,
-	targetID uint,
+	targetID string,
 ) (bool, string) {
 	wrapped, ok := sess.(controlSession)
 	if !ok {

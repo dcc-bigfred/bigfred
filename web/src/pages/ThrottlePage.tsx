@@ -367,14 +367,14 @@ function useCockpitVehicles(layoutID: number) {
 }
 
 function useCockpitConfiguredFunctions(
-  vehicles: { id: number; dccAddress: number }[],
+  vehicles: { id: string; dccAddress: number }[],
   selectedAddr: number | null,
 ): ThrottleCockpitFunction[] {
   const vehicleId =
     selectedAddr != null
       ? vehicles.find((v) => v.dccAddress === selectedAddr)?.id
       : undefined;
-  const fnList = useVehicleFunctions(vehicleId ?? 0).data ?? [];
+  const fnList = useVehicleFunctions(vehicleId ?? "").data ?? [];
   return useMemo(
     () =>
       [...fnList]
@@ -391,7 +391,7 @@ function useCockpitConfiguredFunctions(
 function useSelectedDriveContext(
   layoutID: number,
   selectedAddr: number | null,
-): { vehicleId: number | null; vehicleName: string | null } {
+): { vehicleId: string | null; vehicleName: string | null } {
   const roster = useLayoutVehicles(layoutID).data ?? [];
   const vehicle =
     selectedAddr != null
@@ -428,7 +428,7 @@ function trainMemberDccAddresses(members: TrainMemberContext[]): number[] {
   return members.flatMap((m) => (m.dccAddress != null ? [m.dccAddress] : []));
 }
 
-function findLeadingMember(train: RosterTrain, vehiclesById: Map<number, { name: string; dccAddress: number | null }>) {
+function findLeadingMember(train: RosterTrain, vehiclesById: Map<string, { name: string; dccAddress: number | null }>) {
   const sorted = [...train.members].sort((a, b) => a.position - b.position);
   for (const m of sorted) {
     if (m.excludeFromSpeed) continue;
@@ -440,7 +440,7 @@ function findLeadingMember(train: RosterTrain, vehiclesById: Map<number, { name:
   return null;
 }
 
-function useSelectedTrainContext(layoutID: number, trainId: number | null) {
+function useSelectedTrainContext(layoutID: number, trainId: string | null) {
   const trains = useLayoutTrains(layoutID).data ?? [];
   const vehicles = useLayoutVehicles(layoutID).data ?? [];
   return useMemo(() => {

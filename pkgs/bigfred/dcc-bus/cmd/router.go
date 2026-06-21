@@ -169,7 +169,7 @@ func (r *Router) ApplyDefinedTrains(snap contract.DefinedTrains) {
 	}).Info("dcc-bus defined trains updated")
 }
 
-func (r *Router) findDefinedTrain(trainID uint) (contract.DefinedTrain, bool) {
+func (r *Router) findDefinedTrain(trainID string) (contract.DefinedTrain, bool) {
 	r.trainsMu.RLock()
 	defer r.trainsMu.RUnlock()
 	for _, t := range r.trains {

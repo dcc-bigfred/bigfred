@@ -41,7 +41,7 @@ type rosterVehicleResponse struct {
 
 // rosterTrainResponse is the train-shaped sibling.
 type rosterTrainResponse struct {
-	ID         uint                           `json:"id"`
+	ID         string                         `json:"id"`
 	Name       string                         `json:"name"`
 	OwnerID    uint                           `json:"ownerId"`
 	OwnerLogin string                         `json:"ownerLogin"`
@@ -65,7 +65,7 @@ func toRosterTrainResponse(e service.RosterTrainEntry, canDrive bool) rosterTrai
 		members = append(members, protocol.ToTrainMemberResponse(m))
 	}
 	return rosterTrainResponse{
-		ID:         e.Train.ID,
+		ID:         e.Train.ID.String(),
 		Name:       e.Train.Name,
 		OwnerID:    e.Train.OwnerUserID,
 		OwnerLogin: e.OwnerLogin,
@@ -164,7 +164,7 @@ func (h *LayoutRosterHandler) ListTrains(w http.ResponseWriter, r *http.Request)
 }
 
 type addVehicleRosterRequest struct {
-	VehicleID uint `json:"vehicleId"`
+	VehicleID string `json:"vehicleId"`
 }
 
 // AddVehicle handles POST /api/v1/layouts/{id}/vehicles.
@@ -178,11 +178,16 @@ func (h *LayoutRosterHandler) AddVehicle(w http.ResponseWriter, r *http.Request)
 		writeJSONError(w, http.StatusBadRequest, "invalid_body")
 		return
 	}
-	if req.VehicleID == 0 {
+	if req.VehicleID == "" {
 		writeJSONError(w, http.StatusBadRequest, "invalid_id")
 		return
 	}
-	entry, err := h.svc.AddVehicle(r.Context(), layoutID, actor.User.ID, req.VehicleID)
+	vehicleID, ok := domain.ParseVehicleID(req.VehicleID)
+	if !ok {
+		writeJSONError(w, http.StatusBadRequest, "invalid_id")
+		return
+	}
+	entry, err := h.svc.AddVehicle(r.Context(), layoutID, actor.User.ID, vehicleID)
 	if err != nil {
 		writeLayoutRosterError(w, err)
 		return
@@ -203,7 +208,7 @@ func (h *LayoutRosterHandler) RemoveVehicle(w http.ResponseWriter, r *http.Reque
 	if !ok {
 		return
 	}
-	vehicleID, ok := parseUintParam(r, "vehicleId")
+	vehicleID, ok := parseVehicleIDParam(r, "vehicleId")
 	if !ok {
 		writeJSONError(w, http.StatusBadRequest, "invalid_id")
 		return
@@ -234,7 +239,7 @@ func (h *LayoutRosterHandler) RemoveVehicle(w http.ResponseWriter, r *http.Reque
 }
 
 type addTrainRosterRequest struct {
-	TrainID uint `json:"trainId"`
+	TrainID string `json:"trainId"`
 }
 
 // AddTrain handles POST /api/v1/layouts/{id}/trains.
@@ -248,11 +253,16 @@ func (h *LayoutRosterHandler) AddTrain(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "invalid_body")
 		return
 	}
-	if req.TrainID == 0 {
+	if req.TrainID == "" {
 		writeJSONError(w, http.StatusBadRequest, "invalid_id")
 		return
 	}
-	entry, err := h.svc.AddTrain(r.Context(), layoutID, actor.User.ID, req.TrainID)
+	trainID, ok := domain.ParseTrainID(req.TrainID)
+	if !ok {
+		writeJSONError(w, http.StatusBadRequest, "invalid_id")
+		return
+	}
+	entry, err := h.svc.AddTrain(r.Context(), layoutID, actor.User.ID, trainID)
 	if err != nil {
 		writeLayoutRosterError(w, err)
 		return
@@ -273,7 +283,7 @@ func (h *LayoutRosterHandler) RemoveTrain(w http.ResponseWriter, r *http.Request
 	if !ok {
 		return
 	}
-	trainID, ok := parseUintParam(r, "trainId")
+	trainID, ok := parseTrainIDParam(r, "trainId")
 	if !ok {
 		writeJSONError(w, http.StatusBadRequest, "invalid_id")
 		return

@@ -44,7 +44,7 @@ export default function TrainDialog({ open, train, onClose }: Props) {
 
   const [name, setName] = useState("");
   const [members, setMembers] = useState<TrainMemberInput[]>([]);
-  const [picker, setPicker] = useState<number | "">("");
+  const [picker, setPicker] = useState<string>("");
 
   const create = useCreateTrain();
   const update = useUpdateTrain();
@@ -76,7 +76,7 @@ export default function TrainDialog({ open, train, onClose }: Props) {
     return vehicles.data.filter((v) => !taken.has(v.id));
   }, [vehicles.data, members]);
 
-  const labelFor = (vehicleId: number) => {
+  const labelFor = (vehicleId: string) => {
     const v = vehicles.data?.find((x) => x.id === vehicleId);
     if (!v) return `#${vehicleId}`;
     const dcc = v.dccAddress != null ? ` · DCC ${v.dccAddress}` : "";
@@ -85,7 +85,7 @@ export default function TrainDialog({ open, train, onClose }: Props) {
 
   const onAddMember = () => {
     if (picker === "") return;
-    setMembers((prev) => [...prev, { vehicleId: Number(picker), reversed: false }]);
+    setMembers((prev) => [...prev, { vehicleId: picker, reversed: false }]);
     setPicker("");
   };
 
@@ -229,16 +229,14 @@ export default function TrainDialog({ open, train, onClose }: Props) {
               <TextField
                 select
                 value={picker}
-                onChange={(e) =>
-                  setPicker(e.target.value === "" ? "" : Number(e.target.value))
-                }
+                onChange={(e) => setPicker(e.target.value)}
                 label={t("vehicle:trainDialog.addMember")}
                 size="small"
                 sx={{ flexGrow: 1 }}
                 disabled={availableForPicker.length === 0}
               >
                 {availableForPicker.map((v) => (
-                  <MenuItem key={v.id} value={String(v.id)}>
+                  <MenuItem key={v.id} value={v.id}>
                     {labelFor(v.id)}
                   </MenuItem>
                 ))}

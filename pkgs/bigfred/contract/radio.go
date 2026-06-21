@@ -55,7 +55,7 @@ type RadioContextWire struct {
 
 // RadioContextEntityWire is a context id + display name pair.
 type RadioContextEntityWire struct {
-	ID   uint   `json:"id"`
+	ID   string `json:"id"`
 	Name string `json:"name"`
 }
 
@@ -84,8 +84,8 @@ type RadioSendPayload struct {
 		InterlockingID *uint `json:"interlockingId"`
 	} `json:"to"`
 	Context struct {
-		VehicleID *uint `json:"vehicleId"`
-		TrainID   *uint `json:"trainId"`
+		VehicleID *string `json:"vehicleId"`
+		TrainID   *string `json:"trainId"`
 	} `json:"context"`
 	Phrase domain.RadioPhrase `json:"phrase"`
 	Note   string             `json:"note,omitempty"`
@@ -129,13 +129,13 @@ func MessageWireFromDomain(msg domain.RadioMessage) RadioMessageWire {
 	}
 	if msg.ContextVehicleID != nil {
 		out.Context.Vehicle = &RadioContextEntityWire{
-			ID:   *msg.ContextVehicleID,
+			ID:   msg.ContextVehicleID.String(),
 			Name: msg.ContextName,
 		}
 	}
 	if msg.ContextTrainID != nil {
 		out.Context.Train = &RadioContextEntityWire{
-			ID:   *msg.ContextTrainID,
+			ID:   msg.ContextTrainID.String(),
 			Name: msg.ContextName,
 		}
 	}

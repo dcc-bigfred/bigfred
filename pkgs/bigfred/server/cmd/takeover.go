@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 
@@ -182,13 +181,13 @@ func (s *Takeover) grantLeaseExpired(ctx context.Context, row domain.TakeoverReq
 	}
 	switch row.Target {
 	case domain.TakeoverTargetVehicle:
-		rows, err := s.vehicleLeases.ListActive(ctx, []uint{row.TargetID}, now)
+		rows, err := s.vehicleLeases.ListActive(ctx, []domain.VehicleID{domain.VehicleID(row.TargetID)}, now)
 		if err != nil || len(rows) == 0 {
 			return true
 		}
 		return !rows[0].IsActive(now)
 	case domain.TakeoverTargetTrain:
-		rows, err := s.trainLeases.ListActive(ctx, []uint{row.TargetID}, now)
+		rows, err := s.trainLeases.ListActive(ctx, []domain.TrainID{domain.TrainID(row.TargetID)}, now)
 		if err != nil || len(rows) == 0 {
 			return true
 		}
@@ -204,7 +203,7 @@ func (s *Takeover) Request(
 	layoutID uint,
 	signalman domain.User,
 	target domain.TakeoverTarget,
-	targetID uint,
+	targetID string,
 ) (domain.TakeoverRequest, error) {
 	if s.requests == nil {
 		return domain.TakeoverRequest{}, ErrTakeoverNotConfigured
@@ -347,9 +346,9 @@ func (s *Takeover) release(ctx context.Context, row domain.TakeoverRequest, now 
 	if row.State == domain.TakeoverStateGranted {
 		switch row.Target {
 		case domain.TakeoverTargetVehicle:
-			_ = s.vehicleLeases.Revoke(ctx, row.TargetID, now)
+			_ = s.vehicleLeases.Revoke(ctx, domain.VehicleID(row.TargetID), now)
 		case domain.TakeoverTargetTrain:
-			_ = s.trainLeases.Revoke(ctx, row.TargetID, now)
+			_ = s.trainLeases.Revoke(ctx, domain.TrainID(row.TargetID), now)
 		}
 	}
 	row.State = domain.TakeoverStateReleased
@@ -387,12 +386,12 @@ func (s *Takeover) autoGrant(ctx context.Context, requestID uint) error {
 
 	switch row.Target {
 	case domain.TakeoverTargetVehicle:
-		ownerID, err := s.vehicleOwnerID(ctx, row.TargetID)
+		ownerID, err := s.vehicleOwnerID(ctx, domain.VehicleID(row.TargetID))
 		if err != nil {
 			return err
 		}
 		lease := domain.VehicleLease{
-			VehicleID:  row.TargetID,
+			VehicleID:  domain.VehicleID(row.TargetID),
 			FromUserID: ownerID,
 			ToUserID:   row.SignalmanUserID,
 			StartedAt:  now,
@@ -402,12 +401,12 @@ func (s *Takeover) autoGrant(ctx context.Context, requestID uint) error {
 			return err
 		}
 	case domain.TakeoverTargetTrain:
-		ownerID, err := s.trainOwnerID(ctx, row.TargetID)
+		ownerID, err := s.trainOwnerID(ctx, domain.TrainID(row.TargetID))
 		if err != nil {
 			return err
 		}
 		lease := domain.TrainLease{
-			TrainID:    row.TargetID,
+			TrainID:    domain.TrainID(row.TargetID),
 			FromUserID: ownerID,
 			ToUserID:   row.SignalmanUserID,
 			StartedAt:  now,
@@ -422,8 +421,6 @@ func (s *Takeover) autoGrant(ctx context.Context, requestID uint) error {
 
 	row.State = domain.TakeoverStateGranted
 	row.DecisionAt = &now
-	leaseID := row.TargetID
-	row.GrantedLeaseID = &leaseID
 	if err := s.requests.Update(ctx, &row); err != nil {
 		return err
 	}
@@ -530,24 +527,24 @@ func (s *Takeover) resolveDriverOnLayout(
 	ctx context.Context,
 	layoutID uint,
 	target domain.TakeoverTarget,
-	targetID uint,
+	targetID string,
 ) (uint, error) {
 	switch target {
 	case domain.TakeoverTargetVehicle:
-		ownerID, err := s.vehicleOwnerID(ctx, targetID)
+		ownerID, err := s.vehicleOwnerID(ctx, domain.VehicleID(targetID))
 		if err != nil {
 			return 0, err
 		}
-		if !s.vehicleOnLayout(ctx, layoutID, targetID) {
+		if !s.vehicleOnLayout(ctx, layoutID, domain.VehicleID(targetID)) {
 			return 0, ErrTakeoverTargetNotOnLayout
 		}
 		return ownerID, nil
 	case domain.TakeoverTargetTrain:
-		ownerID, err := s.trainOwnerID(ctx, targetID)
+		ownerID, err := s.trainOwnerID(ctx, domain.TrainID(targetID))
 		if err != nil {
 			return 0, err
 		}
-		if !s.trainOnLayout(ctx, layoutID, targetID) {
+		if !s.trainOnLayout(ctx, layoutID, domain.TrainID(targetID)) {
 			return 0, ErrTakeoverTargetNotOnLayout
 		}
 		return ownerID, nil
@@ -556,7 +553,7 @@ func (s *Takeover) resolveDriverOnLayout(
 	}
 }
 
-func (s *Takeover) vehicleOwnerID(ctx context.Context, vehicleID uint) (uint, error) {
+func (s *Takeover) vehicleOwnerID(ctx context.Context, vehicleID domain.VehicleID) (uint, error) {
 	if s.vehicles == nil {
 		return 0, ErrTakeoverNotConfigured
 	}
@@ -567,7 +564,7 @@ func (s *Takeover) vehicleOwnerID(ctx context.Context, vehicleID uint) (uint, er
 	return v.OwnerUserID, nil
 }
 
-func (s *Takeover) trainOwnerID(ctx context.Context, trainID uint) (uint, error) {
+func (s *Takeover) trainOwnerID(ctx context.Context, trainID domain.TrainID) (uint, error) {
 	if s.trains == nil {
 		return 0, ErrTakeoverNotConfigured
 	}
@@ -578,7 +575,7 @@ func (s *Takeover) trainOwnerID(ctx context.Context, trainID uint) (uint, error)
 	return t.OwnerUserID, nil
 }
 
-func (s *Takeover) vehicleOnLayout(ctx context.Context, layoutID, vehicleID uint) bool {
+func (s *Takeover) vehicleOnLayout(ctx context.Context, layoutID uint, vehicleID domain.VehicleID) bool {
 	if s.roster == nil {
 		return false
 	}
@@ -594,7 +591,7 @@ func (s *Takeover) vehicleOnLayout(ctx context.Context, layoutID, vehicleID uint
 	return false
 }
 
-func (s *Takeover) trainOnLayout(ctx context.Context, layoutID, trainID uint) bool {
+func (s *Takeover) trainOnLayout(ctx context.Context, layoutID uint, trainID domain.TrainID) bool {
 	if s.roster == nil {
 		return false
 	}
@@ -610,22 +607,22 @@ func (s *Takeover) trainOnLayout(ctx context.Context, layoutID, trainID uint) bo
 	return false
 }
 
-func (s *Takeover) targetName(ctx context.Context, target domain.TakeoverTarget, targetID uint) string {
+func (s *Takeover) targetName(ctx context.Context, target domain.TakeoverTarget, targetID string) string {
 	switch target {
 	case domain.TakeoverTargetVehicle:
 		if s.vehicles != nil {
-			if v, err := s.vehicles.FindByID(ctx, targetID); err == nil {
+			if v, err := s.vehicles.FindByID(ctx, domain.VehicleID(targetID)); err == nil {
 				return v.Name
 			}
 		}
 	case domain.TakeoverTargetTrain:
 		if s.trains != nil {
-			if t, err := s.trains.FindByID(ctx, targetID); err == nil {
+			if t, err := s.trains.FindByID(ctx, domain.TrainID(targetID)); err == nil {
 				return t.Name
 			}
 		}
 	}
-	return fmt.Sprintf("#%d", targetID)
+	return targetID
 }
 
 type takeoverDeniedError struct{ code string }

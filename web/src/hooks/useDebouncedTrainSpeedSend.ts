@@ -5,7 +5,7 @@ import { useRetryingSend } from "./useRetryingSend";
 const DEBOUNCE_MS = 120;
 
 type TrainSpeedSender = (
-  trainId: number,
+  trainId: string,
   speed: number,
   forward: boolean,
 ) => Promise<{ ok: boolean; error?: string }>;
@@ -18,7 +18,7 @@ type TrainSpeedSender = (
 export function useDebouncedTrainSpeedSend(sendTrainSpeed: TrainSpeedSender) {
   const timerRef = useRef<number | null>(null);
   const pendingRef = useRef<{
-    trainId: number;
+    trainId: string;
     speed: number;
     forward: boolean;
   } | null>(null);
@@ -37,7 +37,7 @@ export function useDebouncedTrainSpeedSend(sendTrainSpeed: TrainSpeedSender) {
   }, [dispatch]);
 
   const sendSpeedNow = useCallback(
-    (trainId: number, speed: number, forward: boolean) => {
+    (trainId: string, speed: number, forward: boolean) => {
       if (timerRef.current != null) {
         window.clearTimeout(timerRef.current);
         timerRef.current = null;
@@ -49,7 +49,7 @@ export function useDebouncedTrainSpeedSend(sendTrainSpeed: TrainSpeedSender) {
   );
 
   const queueSpeed = useCallback(
-    (trainId: number, speed: number, forward: boolean) => {
+    (trainId: string, speed: number, forward: boolean) => {
       // Stop retrying the previous move immediately, even before this one
       // flushes, so a stale speed cannot land on top of the new target.
       cancel();

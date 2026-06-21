@@ -22,9 +22,10 @@ func TestRedisVehicleLeasesInsertListRevoke(t *testing.T) {
 	store := repo.NewRedisVehicleLeases(redis.NewClient(&redis.Options{Addr: mr.Addr()}))
 	ctx := context.Background()
 	now := time.Now().UTC()
+	vehicleID := domain.VehicleID("V-9")
 
 	row := domain.VehicleLease{
-		VehicleID:  9,
+		VehicleID:  vehicleID,
 		FromUserID: 1,
 		ToUserID:   2,
 		StartedAt:  now,
@@ -33,17 +34,17 @@ func TestRedisVehicleLeasesInsertListRevoke(t *testing.T) {
 	if err := store.Insert(ctx, &row); err != nil {
 		t.Fatalf("insert: %v", err)
 	}
-	active, err := store.ListActive(ctx, []uint{9}, now)
+	active, err := store.ListActive(ctx, []domain.VehicleID{vehicleID}, now)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
 	if len(active) != 1 || active[0].ToUserID != 2 {
 		t.Fatalf("active = %+v", active)
 	}
-	if err := store.Revoke(ctx, 9, now); err != nil {
+	if err := store.Revoke(ctx, vehicleID, now); err != nil {
 		t.Fatalf("revoke: %v", err)
 	}
-	active, err = store.ListActive(ctx, []uint{9}, now)
+	active, err = store.ListActive(ctx, []domain.VehicleID{vehicleID}, now)
 	if err != nil {
 		t.Fatalf("list after revoke: %v", err)
 	}
@@ -69,7 +70,7 @@ func TestRedisTakeoverRequestsPendingGrantDelete(t *testing.T) {
 		SignalmanUserID: 5,
 		DriverUserID:    7,
 		Target:          domain.TakeoverTargetVehicle,
-		TargetID:        42,
+		TargetID:        "V-42",
 		RequestedAt:     now,
 		AutoGrantAt:     now.Add(15 * time.Second),
 		State:           domain.TakeoverStatePending,
@@ -80,14 +81,12 @@ func TestRedisTakeoverRequestsPendingGrantDelete(t *testing.T) {
 	if row.ID == 0 {
 		t.Fatal("expected assigned id")
 	}
-	if _, err := store.FindPendingForTarget(ctx, domain.TakeoverTargetVehicle, 42); err != nil {
+	if _, err := store.FindPendingForTarget(ctx, domain.TakeoverTargetVehicle, "V-42"); err != nil {
 		t.Fatalf("find pending for target: %v", err)
 	}
 	decision := now
 	row.State = domain.TakeoverStateGranted
 	row.DecisionAt = &decision
-	leaseID := row.TargetID
-	row.GrantedLeaseID = &leaseID
 	if err := store.Update(ctx, &row); err != nil {
 		t.Fatalf("grant update: %v", err)
 	}

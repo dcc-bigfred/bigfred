@@ -9,7 +9,7 @@ import (
 // catalogue vehicle. DCCAddress is a pointer so the dummy case
 // ("DCC: —") is representable.
 type VehicleResponse struct {
-	ID         uint               `json:"id"`
+	ID         string             `json:"id"`
 	Name       string             `json:"name"`
 	Kind       domain.VehicleKind `json:"kind"`
 	Number     string             `json:"number"`
@@ -25,7 +25,7 @@ type VehicleResponse struct {
 // ToVehicleResponse maps a domain row to the REST wire shape.
 func ToVehicleResponse(v domain.Vehicle) VehicleResponse {
 	return VehicleResponse{
-		ID:                      v.ID,
+		ID:                      v.ID.String(),
 		Name:                    v.Name,
 		Kind:                    v.Kind,
 		Number:                  v.Number,

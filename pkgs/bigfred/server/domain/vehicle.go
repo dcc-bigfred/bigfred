@@ -91,7 +91,9 @@ func IsValidDccFunctionNum(n uint8) bool { return n <= 31 }
 // separate column from Name so the UI can render it as a small mono
 // caption next to the user-given Name.
 type Vehicle struct {
-	ID          uint
+	ID         VehicleID
+	ExternalID *string      `db:"external_id"`
+	Source     EntitySource `db:"source"`
 	DCCAddress  *uint16 `db:"dcc_address"`
 	OwnerUserID uint    `db:"owner_user_id"`
 	Name        string

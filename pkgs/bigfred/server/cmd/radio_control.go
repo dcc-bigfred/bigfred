@@ -23,8 +23,8 @@ type RadioSendInput struct {
 	FromLogin        string
 	ToUserID         uint
 	ToInterlockingID uint
-	ContextVehicleID uint
-	ContextTrainID   uint
+	ContextVehicleID domain.VehicleID
+	ContextTrainID   domain.TrainID
 	Phrase           domain.RadioPhrase
 	Note             string
 }
@@ -70,12 +70,17 @@ func (h *RadioControl) handleSend(ctx context.Context, c ControlClient, env Cont
 	if p.To.InterlockingID != nil {
 		toIlk = *p.To.InterlockingID
 	}
-	var ctxVehicle, ctxTrain uint
+	var ctxVehicle domain.VehicleID
+	var ctxTrain domain.TrainID
 	if p.Context.VehicleID != nil {
-		ctxVehicle = *p.Context.VehicleID
+		if id, ok := domain.ParseVehicleID(*p.Context.VehicleID); ok {
+			ctxVehicle = id
+		}
 	}
 	if p.Context.TrainID != nil {
-		ctxTrain = *p.Context.TrainID
+		if id, ok := domain.ParseTrainID(*p.Context.TrainID); ok {
+			ctxTrain = id
+		}
 	}
 
 	_, err := h.radio.Send(ctx, RadioSendInput{

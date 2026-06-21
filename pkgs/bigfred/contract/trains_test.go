@@ -33,13 +33,13 @@ func TestDefinedTrainLeadingMember(t *testing.T) {
 	addr3 := uint16(3)
 	train := contract.DefinedTrain{
 		Members: []contract.DefinedTrainMember{
-			{VehicleID: 10, Position: 0, Addr: nil},
-			{VehicleID: 11, Position: 1, Addr: &addr1},
-			{VehicleID: 12, Position: 2, Addr: &addr3},
+			{VehicleID: "V-10", Position: 0, Addr: nil},
+			{VehicleID: "V-11", Position: 1, Addr: &addr1},
+			{VehicleID: "V-12", Position: 2, Addr: &addr3},
 		},
 	}
 	leading, ok := train.LeadingMember()
-	if !ok || leading.VehicleID != 11 || leading.Addr == nil || *leading.Addr != 1 {
+	if !ok || leading.VehicleID != "V-11" || leading.Addr == nil || *leading.Addr != 1 {
 		t.Fatalf("LeadingMember() = %+v, %v", leading, ok)
 	}
 }
@@ -49,12 +49,12 @@ func TestDefinedTrainLeadingMemberSkipsExcluded(t *testing.T) {
 	addr3 := uint16(3)
 	train := contract.DefinedTrain{
 		Members: []contract.DefinedTrainMember{
-			{VehicleID: 11, Position: 0, Addr: &addr1, ExcludeFromSpeed: true},
-			{VehicleID: 12, Position: 1, Addr: &addr3},
+			{VehicleID: "V-11", Position: 0, Addr: &addr1, ExcludeFromSpeed: true},
+			{VehicleID: "V-12", Position: 1, Addr: &addr3},
 		},
 	}
 	leading, ok := train.LeadingMember()
-	if !ok || leading.VehicleID != 12 {
+	if !ok || leading.VehicleID != "V-12" {
 		t.Fatalf("LeadingMember() = %+v, %v", leading, ok)
 	}
 }

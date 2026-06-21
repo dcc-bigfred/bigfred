@@ -48,7 +48,7 @@ func (s *EStopTargetService) Trigger(
 	ctx context.Context,
 	sess *ws.DriveSession,
 	target domain.TakeoverTarget,
-	targetID uint,
+	targetID string,
 ) (bool, string) {
 	return s.core.Trigger(ctx, controlSession{session: sess}, target, targetID)
 }
@@ -69,6 +69,6 @@ func (r eStopTargetRoster) LesseesByVehicle(
 	ctx context.Context,
 	vehicleEntries []cmd.RosterVehicleEntry,
 	trainEntries []cmd.RosterTrainEntry,
-) (map[uint][]uint, error) {
+) (map[domain.VehicleID][]uint, error) {
 	return r.roster.LayoutRosterSnapshot.LesseesByVehicle(ctx, vehicleEntries, trainEntries)
 }

@@ -9,7 +9,7 @@ func TestAllowedVehiclesRoundTrip(t *testing.T) {
 		LayoutID:  7,
 		UpdatedAt: 1,
 		Vehicles: []AllowedVehicle{{
-			VehicleID:         10,
+			VehicleID:         "V-10",
 			Addr:              3,
 			OwnerUserID:       5,
 			ControllerUserIDs: []uint{5},
@@ -33,10 +33,10 @@ func TestDefinedTrainsRoundTrip(t *testing.T) {
 	in := DefinedTrains{
 		LayoutID: 1,
 		Trains: []DefinedTrain{{
-			TrainID:     2,
+			TrainID:     "T-2",
 			OwnerUserID: 3,
 			Members: []DefinedTrainMember{{
-				VehicleID: 9,
+				VehicleID: "V-9",
 				Position:  0,
 				Addr:      &addr,
 			}},

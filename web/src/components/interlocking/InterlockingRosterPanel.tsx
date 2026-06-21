@@ -49,7 +49,7 @@ type RosterRow =
       kind: "vehicle";
       key: string;
       ownerUserId: number;
-      entityId: number;
+      entityId: string;
       login: string;
       name: string;
       addresses: number[];
@@ -58,7 +58,7 @@ type RosterRow =
       kind: "train";
       key: string;
       ownerUserId: number;
-      entityId: number;
+      entityId: string;
       login: string;
       name: string;
       addresses: number[];
@@ -81,7 +81,7 @@ function vehicleRow(v: RosterVehicle): RosterRow | null {
 
 function trainRow(
   t: RosterTrain,
-  addrByVehicle: Map<number, number>,
+  addrByVehicle: Map<string, number>,
 ): RosterRow {
   const addresses: number[] = [];
   for (const m of t.members) {
@@ -115,7 +115,7 @@ export default function InterlockingRosterPanel({
   const [query, setQuery] = useState("");
   const [stopConfirm, setStopConfirm] = useState<{
     target: "vehicle" | "train";
-    targetId: number;
+    targetId: string;
     label: string;
   } | null>(null);
   const [stopBusy, setStopBusy] = useState(false);
@@ -129,7 +129,7 @@ export default function InterlockingRosterPanel({
   } | null>(null);
 
   const rows = useMemo(() => {
-    const addrByVehicle = new Map<number, number>();
+    const addrByVehicle = new Map<string, number>();
     for (const v of vehicles) {
       if (v.dccAddress != null) {
         addrByVehicle.set(v.id, v.dccAddress);

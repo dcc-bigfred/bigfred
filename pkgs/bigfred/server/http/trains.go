@@ -75,7 +75,7 @@ func (h *TrainHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 // Update handles PUT /api/v1/trains/{id}.
 func (h *TrainHandler) Update(w http.ResponseWriter, r *http.Request) {
-	trainID, ok := parseUintParam(r, "id")
+	trainID, ok := parseTrainIDParam(r, "id")
 	if !ok {
 		writeJSONError(w, http.StatusBadRequest, "invalid_id")
 		return
@@ -111,7 +111,7 @@ func (h *TrainHandler) Update(w http.ResponseWriter, r *http.Request) {
 // Delete handles DELETE /api/v1/trains/{id}. Cascades the layout
 // roster cleanup.
 func (h *TrainHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	trainID, ok := parseUintParam(r, "id")
+	trainID, ok := parseTrainIDParam(r, "id")
 	if !ok {
 		writeJSONError(w, http.StatusBadRequest, "invalid_id")
 		return
@@ -139,7 +139,7 @@ func (h *TrainHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 // PatchMember handles PATCH /api/v1/trains/{id}/members/{memberId}.
 func (h *TrainHandler) PatchMember(w http.ResponseWriter, r *http.Request) {
-	trainID, ok := parseUintParam(r, "id")
+	trainID, ok := parseTrainIDParam(r, "id")
 	if !ok {
 		writeJSONError(w, http.StatusBadRequest, "invalid_id")
 		return

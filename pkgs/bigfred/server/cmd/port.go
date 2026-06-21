@@ -29,15 +29,15 @@ type DCCPoolManagerPort interface {
 
 // LayoutRosterHubPort fans out layout roster WS events without importing ws.
 type LayoutRosterHubPort interface {
-	BroadcastVehicleChanged(layoutID, vehicleID uint, action string)
-	BroadcastTrainChanged(layoutID, trainID uint, action string)
+	BroadcastVehicleChanged(layoutID uint, vehicleID domain.VehicleID, action string)
+	BroadcastTrainChanged(layoutID uint, trainID domain.TrainID, action string)
 }
 
 // LayoutRosterSyncPort republishes Redis roster snapshots for dcc-bus.
 type LayoutRosterSyncPort interface {
 	SyncLayout(ctx context.Context, layoutID uint) error
-	SyncForTrain(ctx context.Context, trainID uint) error
-	SyncForVehicleInTrains(ctx context.Context, vehicleID uint) error
+	SyncForTrain(ctx context.Context, trainID domain.TrainID) error
+	SyncForVehicleInTrains(ctx context.Context, vehicleID domain.VehicleID) error
 }
 
 // SudoHubPort fans out auth elevation changes without importing ws.
@@ -59,7 +59,7 @@ type RadioStopControlPort interface {
 
 // EStopTargetControlPort handles per-target emergency stop from the control WS.
 type EStopTargetControlPort interface {
-	Trigger(ctx context.Context, sess ControlSession, target domain.TakeoverTarget, targetID uint) (bool, string)
+	Trigger(ctx context.Context, sess ControlSession, target domain.TakeoverTarget, targetID string) (bool, string)
 }
 
 // CommandStationDccSyncPort observes command-station catalogue changes.

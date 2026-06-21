@@ -16,7 +16,7 @@ type Lease interface {
 // Edit rights stay with the owner (§3a.1).
 type VehicleLease struct {
 	ID         uint
-	VehicleID  uint       `db:"vehicle_id"`
+	VehicleID  VehicleID  `db:"vehicle_id"`
 	FromUserID uint       `db:"from_user_id"`
 	ToUserID   uint       `db:"to_user_id"`
 	StartedAt  time.Time  `db:"started_at"`
@@ -29,7 +29,7 @@ func (VehicleLease) Table() string { return "vehicle_leases" }
 // TrainLease grants a time-bounded right to drive an entire train.
 type TrainLease struct {
 	ID         uint
-	TrainID    uint       `db:"train_id"`
+	TrainID    TrainID    `db:"train_id"`
 	FromUserID uint       `db:"from_user_id"`
 	ToUserID   uint       `db:"to_user_id"`
 	StartedAt  time.Time  `db:"started_at"`
@@ -53,7 +53,7 @@ func (l TrainLease) IsActive(now time.Time) bool {
 // projection (§4.3). It is the value stored in per-train lessee maps
 // returned by layout roster resolution.
 type TrainLessee struct {
-	TrainID  uint
+	TrainID  TrainID
 	ToUserID uint
 }
 

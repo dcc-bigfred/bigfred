@@ -53,8 +53,8 @@ func (s *LayoutRosterSnapshot) SetPublisher(p LayoutRosterSnapshotPublisher) {
 
 // SyncLayoutRosterForTrain republishes roster snapshots on every layout
 // that has trainID on its roster.
-func (s *LayoutRosterSnapshot) SyncLayoutRosterForTrain(ctx context.Context, trainID uint) error {
-	if s == nil || s.publisher == nil || s.layoutTrains == nil || trainID == 0 {
+func (s *LayoutRosterSnapshot) SyncLayoutRosterForTrain(ctx context.Context, trainID domain.TrainID) error {
+	if s == nil || s.publisher == nil || s.layoutTrains == nil || trainID.IsZero() {
 		return nil
 	}
 	rows, err := s.layoutTrains.ListByTrain(ctx, trainID)
@@ -76,15 +76,15 @@ func (s *LayoutRosterSnapshot) SyncLayoutRosterForTrain(ctx context.Context, tra
 
 // SyncRosterForVehicleInTrains refreshes snapshots for layouts whose
 // roster trains include vehicleID.
-func (s *LayoutRosterSnapshot) SyncRosterForVehicleInTrains(ctx context.Context, vehicleID uint) error {
-	if s == nil || s.publisher == nil || s.members == nil || vehicleID == 0 {
+func (s *LayoutRosterSnapshot) SyncRosterForVehicleInTrains(ctx context.Context, vehicleID domain.VehicleID) error {
+	if s == nil || s.publisher == nil || s.members == nil || vehicleID.IsZero() {
 		return nil
 	}
 	memberRows, err := s.members.ListByVehicle(ctx, vehicleID)
 	if err != nil {
 		return err
 	}
-	seenTrain := make(map[uint]struct{}, len(memberRows))
+	seenTrain := make(map[domain.TrainID]struct{}, len(memberRows))
 	for _, m := range memberRows {
 		if _, ok := seenTrain[m.TrainID]; ok {
 			continue
@@ -143,7 +143,7 @@ func (s *LayoutRosterSnapshot) BuildAllowedVehiclesSnapshot(ctx context.Context,
 			continue
 		}
 		out.Vehicles = append(out.Vehicles, contract.AllowedVehicle{
-			VehicleID:               e.Vehicle.ID,
+			VehicleID:               e.Vehicle.ID.String(),
 			Addr:                    *e.Vehicle.DCCAddress,
 			OwnerUserID:             e.Vehicle.OwnerUserID,
 			ControllerUserIDs:       helpers.MergeUserIDs(e.Vehicle.OwnerUserID, lesseesByVehicle[e.Vehicle.ID]...),
@@ -161,12 +161,12 @@ func (s *LayoutRosterSnapshot) LesseesByVehicle(
 	ctx context.Context,
 	vehicleEntries []RosterVehicleEntry,
 	trainEntries []RosterTrainEntry,
-) (map[uint][]uint, error) {
+) (map[domain.VehicleID][]uint, error) {
 	now := time.Now().UTC()
-	lesseesByVehicle := make(map[uint][]uint)
+	lesseesByVehicle := make(map[domain.VehicleID][]uint)
 
 	if s.vehicleLeases != nil && len(vehicleEntries) > 0 {
-		vehicleIDs := make([]uint, 0, len(vehicleEntries))
+		vehicleIDs := make([]domain.VehicleID, 0, len(vehicleEntries))
 		for _, e := range vehicleEntries {
 			vehicleIDs = append(vehicleIDs, e.Vehicle.ID)
 		}
@@ -180,7 +180,7 @@ func (s *LayoutRosterSnapshot) LesseesByVehicle(
 	}
 
 	if s.trainLeases != nil && len(trainEntries) > 0 {
-		trainIDs := make([]uint, 0, len(trainEntries))
+		trainIDs := make([]domain.TrainID, 0, len(trainEntries))
 		for _, e := range trainEntries {
 			trainIDs = append(trainIDs, e.Train.ID)
 		}
@@ -188,7 +188,7 @@ func (s *LayoutRosterSnapshot) LesseesByVehicle(
 		if err != nil {
 			return nil, err
 		}
-		trainLessee := make(map[uint]uint, len(rows))
+		trainLessee := make(map[domain.TrainID]uint, len(rows))
 		for _, lease := range rows {
 			trainLessee[lease.TrainID] = lease.ToUserID
 		}
@@ -213,13 +213,13 @@ func (s *LayoutRosterSnapshot) BuildDefinedTrainsSnapshot(ctx context.Context, l
 	if err != nil {
 		return contract.DefinedTrains{}, err
 	}
-	vehicleIDs := make([]uint, 0)
+	vehicleIDs := make([]domain.VehicleID, 0)
 	for _, e := range entries {
 		for _, m := range e.Members {
 			vehicleIDs = append(vehicleIDs, m.VehicleID)
 		}
 	}
-	byVehicle := map[uint]domain.Vehicle{}
+	byVehicle := map[domain.VehicleID]domain.Vehicle{}
 	if len(vehicleIDs) > 0 {
 		rows, err := s.vehicles.ListByIDs(ctx, vehicleIDs)
 		if err != nil {
@@ -242,7 +242,7 @@ func (s *LayoutRosterSnapshot) BuildDefinedTrainsSnapshot(ctx context.Context, l
 	}
 	for _, e := range entries {
 		dt := contract.DefinedTrain{
-			TrainID:           e.Train.ID,
+			TrainID:           e.Train.ID.String(),
 			OwnerUserID:       e.Train.OwnerUserID,
 			ControllerUserIDs: helpers.MergeUserIDs(e.Train.OwnerUserID, domain.TrainLesseeUserIDs(trainLessees[e.Train.ID])...),
 			Members:           make([]contract.DefinedTrainMember, 0, len(e.Members)),
@@ -253,7 +253,7 @@ func (s *LayoutRosterSnapshot) BuildDefinedTrainsSnapshot(ctx context.Context, l
 				mult = 1.0
 			}
 			member := contract.DefinedTrainMember{
-				VehicleID:        m.VehicleID,
+				VehicleID:        m.VehicleID.String(),
 				Position:         m.Position,
 				Reversed:         m.Reversed,
 				SpeedMultiplier:  mult,
@@ -279,12 +279,12 @@ func (s *LayoutRosterSnapshot) BuildDefinedTrainsSnapshot(ctx context.Context, l
 func (s *LayoutRosterSnapshot) TrainLessees(
 	ctx context.Context,
 	trainEntries []RosterTrainEntry,
-) (map[uint][]domain.TrainLessee, error) {
-	lesseesByTrain := make(map[uint][]domain.TrainLessee)
+) (map[domain.TrainID][]domain.TrainLessee, error) {
+	lesseesByTrain := make(map[domain.TrainID][]domain.TrainLessee)
 	if s.trainLeases == nil || len(trainEntries) == 0 {
 		return lesseesByTrain, nil
 	}
-	trainIDs := make([]uint, 0, len(trainEntries))
+	trainIDs := make([]domain.TrainID, 0, len(trainEntries))
 	for _, e := range trainEntries {
 		trainIDs = append(trainIDs, e.Train.ID)
 	}

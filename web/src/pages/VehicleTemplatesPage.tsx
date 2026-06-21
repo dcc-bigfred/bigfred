@@ -55,7 +55,7 @@ type TemplateTableRow = {
 type LocomotiveTableRow = {
   rowKey: string;
   rowType: "locomotive";
-  vehicleId: number;
+  vehicleId: string;
   ownerId: number;
   name: string;
   ownerLogin: string;

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
+	"github.com/keskad/loco/pkgs/bigfred/server/domain"
 	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
 	"github.com/keskad/loco/pkgs/bigfred/server/protocol"
 	"github.com/keskad/loco/pkgs/bigfred/server/repo"
@@ -79,25 +80,25 @@ type layoutRosterHub struct {
 	hub *ws.Hub
 }
 
-func (h layoutRosterHub) BroadcastVehicleChanged(layoutID, vehicleID uint, action string) {
+func (h layoutRosterHub) BroadcastVehicleChanged(layoutID uint, vehicleID domain.VehicleID, action string) {
 	if h.hub == nil {
 		return
 	}
 	h.hub.BroadcastToLayout(layoutID, "layout.vehiclesChanged", protocol.VehicleChangedPayload{
 		LayoutID:  layoutID,
 		Action:    action,
-		VehicleID: vehicleID,
+		VehicleID: vehicleID.String(),
 	})
 }
 
-func (h layoutRosterHub) BroadcastTrainChanged(layoutID, trainID uint, action string) {
+func (h layoutRosterHub) BroadcastTrainChanged(layoutID uint, trainID domain.TrainID, action string) {
 	if h.hub == nil {
 		return
 	}
 	h.hub.BroadcastToLayout(layoutID, "layout.trainsChanged", protocol.TrainChangedPayload{
 		LayoutID: layoutID,
 		Action:   action,
-		TrainID:  trainID,
+		TrainID:  trainID.String(),
 	})
 }
 
@@ -109,10 +110,10 @@ func (a layoutRosterSyncAdapter) SyncLayout(ctx context.Context, layoutID uint) 
 	return a.s.SyncLayoutRosterToRedis(ctx, layoutID)
 }
 
-func (a layoutRosterSyncAdapter) SyncForTrain(ctx context.Context, trainID uint) error {
+func (a layoutRosterSyncAdapter) SyncForTrain(ctx context.Context, trainID domain.TrainID) error {
 	return a.s.SyncLayoutRosterForTrain(ctx, trainID)
 }
 
-func (a layoutRosterSyncAdapter) SyncForVehicleInTrains(ctx context.Context, vehicleID uint) error {
+func (a layoutRosterSyncAdapter) SyncForVehicleInTrains(ctx context.Context, vehicleID domain.VehicleID) error {
 	return a.s.SyncRosterForVehicleInTrains(ctx, vehicleID)
 }

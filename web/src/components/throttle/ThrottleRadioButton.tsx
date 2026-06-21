@@ -8,7 +8,7 @@ import ThrottleRadioOverlay from "./ThrottleRadioOverlay";
 
 interface ThrottleRadioButtonProps {
   layoutId: number;
-  vehicleId: number | null;
+  vehicleId: string | null;
   vehicleName: string | null;
 }
 

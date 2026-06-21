@@ -102,6 +102,7 @@ func register(m *migrator.Migrator) {
 	m.Register(migrationVersion(20260617, 15), seedRailboxRb23xxSu45TemplateUp, seedRailboxRb23xxSu45TemplateDown)
 	m.Register(migrationVersion(20260617, 16), seedRailboxRb23xxBr232LudmilaTemplateUp, seedRailboxRb23xxBr232LudmilaTemplateDown)
 	m.Register(migrationVersion(20260617, 17), seedRailboxRb23xxTp1TemplateUp, seedRailboxRb23xxTp1TemplateDown)
+	m.Register(migrationVersion(20260621, 1), migrateVehicleTrainStringIDsUp, migrateVehicleTrainStringIDsDown)
 }
 
 // createCommandStationsUp installs the `command_stations` catalogue

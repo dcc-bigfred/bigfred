@@ -36,13 +36,13 @@ export interface ThrottleCockpitFunction {
 }
 
 export interface ThrottleCockpitVehicle {
-  id: number;
+  id: string;
   name: string;
   dccAddress: number;
 }
 
 export interface ThrottleCockpitTrain {
-  id: number;
+  id: string;
   name: string;
 }
 
@@ -160,8 +160,8 @@ export default function ThrottleCockpit({
       return;
     }
     if (raw.startsWith("t:")) {
-      const trainId = Number(raw.slice(2));
-      if (Number.isFinite(trainId) && trainId > 0) {
+      const trainId = raw.slice(2);
+      if (trainId.length > 0) {
         onSelectTarget({ kind: "train", trainId });
       }
     }

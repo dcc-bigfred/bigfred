@@ -28,7 +28,7 @@ type TakeoverUserWire struct {
 // TakeoverRequestPayload is the client → server takeover.request body.
 type TakeoverRequestPayload struct {
 	Target   domain.TakeoverTarget `json:"target"`
-	TargetID uint                  `json:"targetId"`
+	TargetID string                  `json:"targetId"`
 }
 
 // TakeoverRequestIDPayload carries a request id on reject/cancel/release.
@@ -41,7 +41,7 @@ type TakeoverRequestedWire struct {
 	RequestID  uint                  `json:"requestId"`
 	Signalman  TakeoverUserWire      `json:"signalman"`
 	Target     domain.TakeoverTarget `json:"target"`
-	TargetID   uint                  `json:"targetId"`
+	TargetID   string                `json:"targetId"`
 	AutoGrantAt int64                `json:"autoGrantAt"`
 }
 
@@ -49,7 +49,7 @@ type TakeoverRequestedWire struct {
 type TakeoverGrantedWire struct {
 	RequestID       uint                  `json:"requestId"`
 	Target          domain.TakeoverTarget `json:"target"`
-	TargetID        uint                  `json:"targetId"`
+	TargetID        string                `json:"targetId"`
 	Signalman       TakeoverUserWire      `json:"signalman"`
 	LeaseExpiresAt  int64                 `json:"leaseExpiresAt"`
 }
@@ -58,7 +58,7 @@ type TakeoverGrantedWire struct {
 type TakeoverReleasedWire struct {
 	RequestID uint                  `json:"requestId"`
 	Target    domain.TakeoverTarget `json:"target"`
-	TargetID  uint                  `json:"targetId"`
+	TargetID  string                `json:"targetId"`
 	Reason    string                `json:"reason,omitempty"`
 }
 

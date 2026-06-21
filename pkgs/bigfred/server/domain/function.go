@@ -9,7 +9,7 @@ type FunctionIcon string
 // Exactly one of VehicleID or TemplateID is non-nil per row.
 type DccFunction struct {
 	ID         uint
-	VehicleID  *uint `db:"vehicle_id"`
+	VehicleID  *VehicleID `db:"vehicle_id"`
 	TemplateID *uint `db:"template_id"`
 	Num        uint8
 	Name       string

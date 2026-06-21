@@ -24,13 +24,13 @@ var _ VehicleLeaseStore = (*RedisVehicleLeases)(nil)
 
 func (r *RedisVehicleLeases) RequiresJanitor() bool { return false }
 
-func (r *RedisVehicleLeases) ListActive(ctx context.Context, vehicleIDs []uint, now time.Time) ([]domain.VehicleLease, error) {
+func (r *RedisVehicleLeases) ListActive(ctx context.Context, vehicleIDs []domain.VehicleID, now time.Time) ([]domain.VehicleLease, error) {
 	if len(vehicleIDs) == 0 {
 		return nil, nil
 	}
 	keys := make([]string, len(vehicleIDs))
 	for i, id := range vehicleIDs {
-		keys[i] = contract.VehicleLeaseKey(id)
+		keys[i] = contract.VehicleLeaseKey(id.String())
 	}
 	vals, err := r.client.MGet(ctx, keys...).Result()
 	if err != nil {
@@ -80,15 +80,11 @@ func (r *RedisVehicleLeases) Insert(ctx context.Context, row *domain.VehicleLeas
 	if ttl <= 0 {
 		ttl = time.Second
 	}
-	if err := r.client.Set(ctx, contract.VehicleLeaseKey(row.VehicleID), payload, ttl).Err(); err != nil {
-		return err
-	}
-	row.ID = row.VehicleID
-	return nil
+	return r.client.Set(ctx, contract.VehicleLeaseKey(row.VehicleID.String()), payload, ttl).Err()
 }
 
-func (r *RedisVehicleLeases) Revoke(ctx context.Context, vehicleID uint, _ time.Time) error {
-	return r.client.Del(ctx, contract.VehicleLeaseKey(vehicleID)).Err()
+func (r *RedisVehicleLeases) Revoke(ctx context.Context, vehicleID domain.VehicleID, _ time.Time) error {
+	return r.client.Del(ctx, contract.VehicleLeaseKey(vehicleID.String())).Err()
 }
 
 // RedisTrainLeases stores active train leases in Redis with key TTL.
@@ -105,13 +101,13 @@ var _ TrainLeaseStore = (*RedisTrainLeases)(nil)
 
 func (r *RedisTrainLeases) RequiresJanitor() bool { return false }
 
-func (r *RedisTrainLeases) ListActive(ctx context.Context, trainIDs []uint, now time.Time) ([]domain.TrainLease, error) {
+func (r *RedisTrainLeases) ListActive(ctx context.Context, trainIDs []domain.TrainID, now time.Time) ([]domain.TrainLease, error) {
 	if len(trainIDs) == 0 {
 		return nil, nil
 	}
 	keys := make([]string, len(trainIDs))
 	for i, id := range trainIDs {
-		keys[i] = contract.TrainLeaseKey(id)
+		keys[i] = contract.TrainLeaseKey(id.String())
 	}
 	vals, err := r.client.MGet(ctx, keys...).Result()
 	if err != nil {
@@ -161,13 +157,9 @@ func (r *RedisTrainLeases) Insert(ctx context.Context, row *domain.TrainLease) e
 	if ttl <= 0 {
 		ttl = time.Second
 	}
-	if err := r.client.Set(ctx, contract.TrainLeaseKey(row.TrainID), payload, ttl).Err(); err != nil {
-		return err
-	}
-	row.ID = row.TrainID
-	return nil
+	return r.client.Set(ctx, contract.TrainLeaseKey(row.TrainID.String()), payload, ttl).Err()
 }
 
-func (r *RedisTrainLeases) Revoke(ctx context.Context, trainID uint, _ time.Time) error {
-	return r.client.Del(ctx, contract.TrainLeaseKey(trainID)).Err()
+func (r *RedisTrainLeases) Revoke(ctx context.Context, trainID domain.TrainID, _ time.Time) error {
+	return r.client.Del(ctx, contract.TrainLeaseKey(trainID.String())).Err()
 }

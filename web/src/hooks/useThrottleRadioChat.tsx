@@ -7,7 +7,7 @@ import ThrottleRadioButton from "../components/throttle/ThrottleRadioButton";
 
 interface ThrottleRadioHeaderArgs {
   layoutId: number;
-  vehicleId: number | null;
+  vehicleId: string | null;
   vehicleName: string | null;
   radio: DriverRadioInbound;
 }

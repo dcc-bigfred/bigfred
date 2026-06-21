@@ -14,7 +14,7 @@ import "time"
 type LayoutVehicle struct {
 	ID            uint
 	LayoutID      uint      `db:"layout_id"`
-	VehicleID     uint      `db:"vehicle_id"`
+	VehicleID     VehicleID `db:"vehicle_id"`
 	AddedByUserID uint      `db:"added_by_user_id"` // must equal Vehicle.OwnerUserID at insert time
 	AddedAt       time.Time `db:"added_at"`
 }
@@ -31,7 +31,7 @@ func (LayoutVehicle) Table() string { return "layout_vehicles" }
 type LayoutTrain struct {
 	ID            uint
 	LayoutID      uint      `db:"layout_id"`
-	TrainID       uint      `db:"train_id"`
+	TrainID       TrainID   `db:"train_id"`
 	AddedByUserID uint      `db:"added_by_user_id"` // must equal Train.OwnerUserID at insert time
 	AddedAt       time.Time `db:"added_at"`
 }

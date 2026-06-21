@@ -43,7 +43,7 @@ export const DEFAULT_DEADMAN_SWITCH_OPTION: DeadManSwitchOption = "stop";
 // is nullable because dummy vehicles (unpowered wagons, visual
 // fillers) live in the catalogue without a DCC decoder.
 export interface Vehicle {
-  id: number;
+  id: string;
   name: string;
   kind: VehicleKind;
   number: string;
@@ -121,7 +121,7 @@ export function useCreateVehicle() {
 }
 
 export interface VehicleUpdateBody {
-  id: number;
+  id: string;
   name?: string;
   kind?: VehicleKind;
   number?: string;
@@ -170,7 +170,7 @@ export function useUpdateVehicle() {
 export function useDeleteVehicle() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: number) =>
+    mutationFn: (id: string) =>
       apiFetch<void>(`/api/v1/vehicles/${id}`, { method: "DELETE" }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: vehiclesQueryKey });
@@ -184,7 +184,7 @@ export function useDeleteVehicle() {
 
 export interface TrainMember {
   id: number;
-  vehicleId: number;
+  vehicleId: string;
   position: number;
   reversed: boolean;
   speedMultiplier: number;
@@ -197,7 +197,7 @@ export interface TrainMember {
 }
 
 export interface Train {
-  id: number;
+  id: string;
   name: string;
   ownerId: number;
   members: TrainMember[];
@@ -214,7 +214,7 @@ export function useMyTrains() {
 }
 
 export interface TrainMemberInput {
-  vehicleId: number;
+  vehicleId: string;
   reversed: boolean;
   speedMultiplier?: number;
 }
@@ -239,7 +239,7 @@ export function useCreateTrain() {
 }
 
 export interface TrainUpdateBody {
-  id: number;
+  id: string;
   name?: string;
   members?: TrainMemberInput[];
 }
@@ -268,7 +268,7 @@ export function useUpdateTrain() {
 export function useDeleteTrain() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: number) =>
+    mutationFn: (id: string) =>
       apiFetch<void>(`/api/v1/trains/${id}`, { method: "DELETE" }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: trainsQueryKey });
@@ -287,7 +287,7 @@ export interface RosterVehicle extends Vehicle {
 }
 
 export interface RosterTrain {
-  id: number;
+  id: string;
   name: string;
   ownerId: number;
   ownerLogin: string;
@@ -360,7 +360,7 @@ export function useLayoutTrains(layoutId: number | null) {
 export function useAddVehicleToRoster() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (args: { layoutId: number; vehicleId: number }) =>
+    mutationFn: (args: { layoutId: number; vehicleId: string }) =>
       apiFetch<RosterVehicle>(
         `/api/v1/layouts/${args.layoutId}/vehicles`,
         {
@@ -379,7 +379,7 @@ export function useAddVehicleToRoster() {
 export function useRemoveVehicleFromRoster() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (args: { layoutId: number; vehicleId: number }) =>
+    mutationFn: (args: { layoutId: number; vehicleId: string }) =>
       apiFetch<void>(
         `/api/v1/layouts/${args.layoutId}/vehicles/${args.vehicleId}`,
         { method: "DELETE" },
@@ -395,7 +395,7 @@ export function useRemoveVehicleFromRoster() {
 export function useAddTrainToRoster() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (args: { layoutId: number; trainId: number }) =>
+    mutationFn: (args: { layoutId: number; trainId: string }) =>
       apiFetch<RosterTrain>(
         `/api/v1/layouts/${args.layoutId}/trains`,
         {
@@ -414,7 +414,7 @@ export function useAddTrainToRoster() {
 export function useRemoveTrainFromRoster() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (args: { layoutId: number; trainId: number }) =>
+    mutationFn: (args: { layoutId: number; trainId: string }) =>
       apiFetch<void>(
         `/api/v1/layouts/${args.layoutId}/trains/${args.trainId}`,
         { method: "DELETE" },
@@ -442,7 +442,7 @@ export function usePatchTrainMemberSettings() {
       brakeRampMs,
       brakeRampMaxSteps,
     }: {
-      trainId: number;
+      trainId: string;
       memberId: number;
       speedMultiplier?: number;
       excludeFromSpeed?: boolean;

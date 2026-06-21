@@ -7,7 +7,7 @@ export function useEstopTargetActions() {
   const { sendAction } = useSocket();
 
   const estopTarget = useCallback(
-    (target: TakeoverTarget, targetId: number) =>
+    (target: TakeoverTarget, targetId: string) =>
       sendAction("system.estopTarget", { target, targetId }),
     [sendAction],
   );

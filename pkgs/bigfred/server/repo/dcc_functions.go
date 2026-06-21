@@ -23,7 +23,7 @@ type DccFunctions struct {
 func NewDccFunctions(r rel.Repository) *DccFunctions { return &DccFunctions{repo: r} }
 
 // ListByVehicleID returns rows owned by a vehicle, sorted by position.
-func (f *DccFunctions) ListByVehicleID(ctx context.Context, vehicleID uint) ([]domain.DccFunction, error) {
+func (f *DccFunctions) ListByVehicleID(ctx context.Context, vehicleID domain.VehicleID) ([]domain.DccFunction, error) {
 	var rows []domain.DccFunction
 	err := f.repo.FindAll(ctx, &rows,
 		where.Eq("vehicle_id", vehicleID),
@@ -51,7 +51,7 @@ func (f *DccFunctions) ListByTemplateID(ctx context.Context, templateID uint) ([
 }
 
 // FindByVehicleAndNum looks up one vehicle-owned slot.
-func (f *DccFunctions) FindByVehicleAndNum(ctx context.Context, vehicleID uint, num uint8) (domain.DccFunction, error) {
+func (f *DccFunctions) FindByVehicleAndNum(ctx context.Context, vehicleID domain.VehicleID, num uint8) (domain.DccFunction, error) {
 	var row domain.DccFunction
 	err := f.repo.Find(ctx, &row,
 		where.Eq("vehicle_id", vehicleID).AndEq("num", num),
@@ -96,7 +96,7 @@ func (f *DccFunctions) Delete(ctx context.Context, row *domain.DccFunction) erro
 }
 
 // DeleteAllByVehicleID removes every function row for a vehicle.
-func (f *DccFunctions) DeleteAllByVehicleID(ctx context.Context, vehicleID uint) error {
+func (f *DccFunctions) DeleteAllByVehicleID(ctx context.Context, vehicleID domain.VehicleID) error {
 	rows, err := f.ListByVehicleID(ctx, vehicleID)
 	if err != nil {
 		return err

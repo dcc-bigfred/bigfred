@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 
-function storageKey(trainId: number): string {
+function storageKey(trainId: string): string {
   return `bigfred.throttle.train.${trainId}.expanded`;
 }
 
-function readExpanded(trainId: number): number[] {
+function readExpanded(trainId: string): number[] {
   try {
     const raw = sessionStorage.getItem(storageKey(trainId));
     if (!raw) return [];
@@ -16,7 +16,7 @@ function readExpanded(trainId: number): number[] {
   }
 }
 
-function writeExpanded(trainId: number, memberIds: number[]) {
+function writeExpanded(trainId: string, memberIds: number[]) {
   try {
     sessionStorage.setItem(storageKey(trainId), JSON.stringify(memberIds));
   } catch {
@@ -25,7 +25,7 @@ function writeExpanded(trainId: number, memberIds: number[]) {
 }
 
 /** Remembers which train-member function accordions are expanded. */
-export function useTrainAccordionExpanded(trainId: number | null) {
+export function useTrainAccordionExpanded(trainId: string | null) {
   const [expandedMemberIds, setExpandedMemberIds] = useState<number[]>([]);
 
   useEffect(() => {

@@ -9,7 +9,7 @@ const TypeSystemEStopTarget = "system.estopTarget"
 // EStopTargetPayload is the client → server estopTarget body.
 type EStopTargetPayload struct {
 	Target   domain.TakeoverTarget `json:"target"`
-	TargetID uint                  `json:"targetId"`
+	TargetID string                  `json:"targetId"`
 }
 
 // EStopTargetCommandWire is the loco-server → daemon control command

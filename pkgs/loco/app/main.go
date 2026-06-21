@@ -10,10 +10,9 @@ import (
 )
 
 //
-// Actions - a controller level
-// prints are allowed only via Printer interface
+// Actions - a controller level that performs operations and returns results.
 //
-// The controller level is intended to provide a layer of performing actions - everything needed to perform a single action e.g. Read list of given CV's
+// Console output belongs in the CLI layer (loco/cli, rb/cli).
 //
 
 type LocoApp struct {

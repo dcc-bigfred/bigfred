@@ -103,7 +103,11 @@ func NewGetCommand(app *app.LocoApp) *cobra.Command {
 				return parseErr
 			}
 
-			return app.ReadCVAction(track, cmdArgs.LocoId, cvString, cmdArgs.Verify, time.Second*time.Duration(cmdArgs.Timeout), cmdArgs.Retries)
+			reads, err := app.ReadCVAction(track, cmdArgs.LocoId, cvString, cmdArgs.Verify, time.Second*time.Duration(cmdArgs.Timeout), cmdArgs.Retries)
+			if err != nil {
+				return err
+			}
+			return printCVReads(reads)
 		},
 	}
 

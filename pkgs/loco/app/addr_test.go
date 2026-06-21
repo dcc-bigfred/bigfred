@@ -41,3 +41,43 @@ func TestAddressFromCVs_LongAddressZero(t *testing.T) {
 		t.Fatalf("got address=%d type=%s, want 0 long", info.Address, info.Type)
 	}
 }
+
+func TestAddressToCVString_ShortAddress(t *testing.T) {
+	cvString, err := AddressToCVString(125)
+	if err != nil {
+		t.Fatalf("AddressToCVString: %v", err)
+	}
+	if cvString != "cv1=125, cv17=0, cv18=0, cv29=0" {
+		t.Fatalf("got %q", cvString)
+	}
+}
+
+func TestAddressToCVString_LongAddress(t *testing.T) {
+	cvString, err := AddressToCVString(178)
+	if err != nil {
+		t.Fatalf("AddressToCVString: %v", err)
+	}
+	if cvString != "cv17=192, cv18=178, cv29=32" {
+		t.Fatalf("got %q", cvString)
+	}
+}
+
+func TestAddressToCVString_LongAddressUpperBoundary(t *testing.T) {
+	cvString, err := AddressToCVString(10239)
+	if err != nil {
+		t.Fatalf("AddressToCVString: %v", err)
+	}
+	if cvString != "cv17=231, cv18=255, cv29=32" {
+		t.Fatalf("got %q", cvString)
+	}
+}
+
+func TestAddressToCVString_LongAddressZero(t *testing.T) {
+	cvString, err := AddressToCVString(0)
+	if err != nil {
+		t.Fatalf("AddressToCVString: %v", err)
+	}
+	if cvString != "cv17=192, cv18=0, cv29=32" {
+		t.Fatalf("got %q", cvString)
+	}
+}

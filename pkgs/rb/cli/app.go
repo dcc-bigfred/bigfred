@@ -37,11 +37,16 @@ func NewAppCpCommand(a *locoapp.LocoApp) *cobra.Command {
 			if cmdArgs.LocoName == "" {
 				return fmt.Errorf("--src is required")
 			}
-			return a.RailroadCp(locoapp.RailroadCpArgs{
+			result, err := a.RailroadCp(locoapp.RailroadCpArgs{
 				SrcFile:  args[0],
 				DstFile:  args[1],
 				LocoName: cmdArgs.LocoName,
 			})
+			if err != nil {
+				return err
+			}
+			printRailroadCpResult(result)
+			return nil
 		},
 	}
 

@@ -84,7 +84,12 @@ func NewFnListCommand(app *app.LocoApp) *cobra.Command {
 				return err
 			}
 
-			return app.ListFnAction(cmdArgs.LocoId)
+			functions, err := app.ListFnAction(cmdArgs.LocoId)
+			if err != nil {
+				return err
+			}
+			printActiveFunctions(functions)
+			return nil
 		},
 	}
 

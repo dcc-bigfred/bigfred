@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/keskad/loco/pkgs/loco/app"
 	"github.com/keskad/loco/pkgs/loco/commandstation"
 )
 
@@ -20,6 +19,16 @@ type LNCVArgs struct {
 	// SelfConfig writes the adapter's own configuration (e.g. Uhlenbrock 63120
 	// CV2 baud / CV4 mode), which is applied without an acknowledge.
 	SelfConfig bool
+}
+
+// LNCVWriteResult describes a completed LNCV write.
+type LNCVWriteResult struct {
+	CV           int
+	Value        int
+	Article      int
+	ModuleAddr   int
+	SelfConfig   bool
+	AppliedNoAck bool
 }
 
 func openLNCVLocoNet(args LNCVArgs) (*commandstation.LocoNet, error) {
@@ -41,52 +50,48 @@ func openLNCVLocoNet(args LNCVArgs) (*commandstation.LocoNet, error) {
 }
 
 // LNCVSet opens a LocoNet serial link and writes one LNCV on the target module.
-func LNCVSet(loc *app.LocoApp, args LNCVArgs, value int) error {
+func LNCVSet(args LNCVArgs, value int) (LNCVWriteResult, error) {
 	ln, err := openLNCVLocoNet(args)
 	if err != nil {
-		return err
+		return LNCVWriteResult{}, err
 	}
 	defer ln.CleanUp()
 
 	article := commandstation.NormalizeLncvArticle(args.Article)
+	result := LNCVWriteResult{
+		CV:         args.CV,
+		Value:      value,
+		Article:    article,
+		ModuleAddr: args.ModuleAddr,
+		SelfConfig: args.SelfConfig,
+	}
 
 	if args.SelfConfig {
 		err := ln.SetLNCVSelfConfig(args.Article, args.ModuleAddr, args.CV, value)
 		switch {
 		case errors.Is(err, commandstation.ErrLncvAppliedNoAck):
-			_, _ = loc.P.Printf("LNCV %d = %d sent to adapter (article %d). The adapter applies "+
-				"self-configuration without an acknowledge; reconnect with the new settings to verify.\n",
-				args.CV, value, article)
-			return nil
+			result.AppliedNoAck = true
+			return result, nil
 		case err != nil:
-			return err
+			return LNCVWriteResult{}, err
 		}
-		_, _ = loc.P.Printf("LNCV %d = %d written and acknowledged (article %d)\n", args.CV, value, article)
-		return nil
+		return result, nil
 	}
 
 	if err := ln.SetLNCV(args.Article, args.ModuleAddr, args.CV, value); err != nil {
-		return err
+		return LNCVWriteResult{}, err
 	}
 
-	_, _ = loc.P.Printf("LNCV %d = %d written (article %d, module %d)\n",
-		args.CV, value, article, args.ModuleAddr)
-	return nil
+	return result, nil
 }
 
 // LNCVGet reads one LNCV from a LocoNet module.
-func LNCVGet(loc *app.LocoApp, args LNCVArgs) (int, error) {
+func LNCVGet(args LNCVArgs) (int, error) {
 	ln, err := openLNCVLocoNet(args)
 	if err != nil {
 		return 0, err
 	}
 	defer ln.CleanUp()
 
-	val, err := ln.ReadLNCV(args.Article, args.ModuleAddr, args.CV)
-	if err != nil {
-		return 0, err
-	}
-
-	_, _ = loc.P.Printf("%d\n", val)
-	return val, nil
+	return ln.ReadLNCV(args.Article, args.ModuleAddr, args.CV)
 }

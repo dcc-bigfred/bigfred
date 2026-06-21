@@ -36,17 +36,6 @@ func TestDetect(t *testing.T) {
 	}
 }
 
-func TestDetectReadsCV8(t *testing.T) {
-	cv := &fakeCV{values: map[uint16]int{7: 5, 8: ManufacturerESU}}
-	decoder, err := Detect(cv)
-	if err != nil {
-		t.Fatalf("Detect: %v", err)
-	}
-	if _, ok := decoder.(*LokSoundv5); !ok {
-		t.Fatalf("expected *LokSoundv5, got %T", decoder)
-	}
-}
-
 func TestIdentify(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -79,6 +68,49 @@ func TestIdentify(t *testing.T) {
 			}
 			if id.ManufacturerID != tt.cv8 {
 				t.Fatalf("ManufacturerID = %d, want %d", id.ManufacturerID, tt.cv8)
+			}
+		})
+	}
+}
+
+func TestDetectReadsCV8(t *testing.T) {
+	cv := &fakeCV{values: map[uint16]int{7: 5, 8: ManufacturerESU}}
+	decoder, err := Detect(cv)
+	if err != nil {
+		t.Fatalf("Detect: %v", err)
+	}
+	if _, ok := decoder.(*LokSoundv5); !ok {
+		t.Fatalf("expected *LokSoundv5, got %T", decoder)
+	}
+}
+
+func TestDetectBrightness(t *testing.T) {
+	tests := []struct {
+		name    string
+		cv8     int
+		wantErr bool
+	}{
+		{"railbox", ManufacturerRailBOX, false},
+		{"esu", ManufacturerESU, false},
+		{"zimo", ManufacturerZIMO, true},
+		{"unknown", 99, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cv := &fakeCV{values: map[uint16]int{7: 10, 8: tt.cv8}}
+			got, err := DetectBrightness(cv)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("DetectBrightness: %v", err)
+			}
+			if got == nil {
+				t.Fatal("expected decoder, got nil")
 			}
 		})
 	}

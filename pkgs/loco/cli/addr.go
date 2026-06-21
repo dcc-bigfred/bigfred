@@ -20,18 +20,53 @@ const (
 func NewAddrCommand(app *app.LocoApp) *cobra.Command {
 	command := &cobra.Command{
 		Use:   "addr",
-		Short: "Set locomotive short or long DCC address",
+		Short: "Get or set locomotive short or long DCC address",
 		RunE: func(command *cobra.Command, args []string) error {
 			return errors.New("please select a command")
 		},
 	}
 
+	command.AddCommand(NewAddrGetCommand(app))
 	command.AddCommand(NewAddrSetCommand(app))
+	return command
+}
+
+func NewAddrGetCommand(app *app.LocoApp) *cobra.Command {
+	type GetArgs struct {
+		LocoId  uint8
+		Timeout uint16
+		Retries uint8
+	}
+
+	cmdArgs := GetArgs{}
+	command := &cobra.Command{
+		Use:   "get",
+		Short: "Read decoder address from CV1, CV17, CV18 and CV29",
+		Args:  cobra.NoArgs,
+		RunE: func(command *cobra.Command, args []string) error {
+			if err := app.Initialize(); err != nil {
+				return err
+			}
+
+			return app.GetAddrAction(
+				cmdArgs.LocoId,
+				time.Second*time.Duration(cmdArgs.Timeout),
+				cmdArgs.Retries,
+			)
+		},
+	}
+
+	command.Flags().BoolVarP(&app.Debug, "debug", "v", false, "Increase verbosity to the debug level")
+	command.Flags().Uint16VarP(&cmdArgs.Timeout, "timeout", "", 10, "Connection timeout")
+	command.Flags().Uint8VarP(&cmdArgs.Retries, "retry", "", 0, "Retry request multiple times if required")
+	command.Flags().Uint8VarP(&cmdArgs.LocoId, "loco", "l", 0, progLocoFlagUsage)
+
 	return command
 }
 
 func NewAddrSetCommand(app *app.LocoApp) *cobra.Command {
 	type SetArgs struct {
+		LocoId  uint8
 		Verify  bool
 		Timeout uint16
 		Settle  uint16
@@ -57,9 +92,14 @@ func NewAddrSetCommand(app *app.LocoApp) *cobra.Command {
 				return buildErr
 			}
 
+			track, trackErr := TrackOrDefault("", cmdArgs.LocoId)
+			if trackErr != nil {
+				return trackErr
+			}
+
 			return app.SendCVAction(
-				"prog",
-				0,
+				track,
+				cmdArgs.LocoId,
 				cvString,
 				cmdArgs.Verify,
 				time.Second*time.Duration(cmdArgs.Timeout),
@@ -72,6 +112,7 @@ func NewAddrSetCommand(app *app.LocoApp) *cobra.Command {
 	command.Flags().Uint16VarP(&cmdArgs.Timeout, "timeout", "", 10, "Connection timeout")
 	command.Flags().Uint16VarP(&cmdArgs.Settle, "settle", "", 300, "Time in miliseconds between writes")
 	command.Flags().BoolVarP(&cmdArgs.Verify, "verify", "", false, "Verify the value after writting")
+	command.Flags().Uint8VarP(&cmdArgs.LocoId, "loco", "l", 0, progLocoFlagUsage)
 
 	return command
 }

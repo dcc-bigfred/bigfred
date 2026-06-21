@@ -13,6 +13,12 @@
     "delete": "Delete",
     "confirm": "Confirm"
   },
+  "keypad": {
+    "groupLabel": "Numeric keypad",
+    "digit": "Digit {{digit}}",
+    "backspace": "Delete last digit",
+    "activeField": "Entering: {{label}}"
+  },
   "language": {
     "menuLabel": "Language",
     "current": "Current language",

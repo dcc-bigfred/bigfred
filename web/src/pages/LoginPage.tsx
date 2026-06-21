@@ -19,6 +19,9 @@ import { ApiError } from "../api/client";
 import { useLogin, useMe } from "../api/auth";
 import { useLoginLayouts, type LoginLayout } from "../api/layouts";
 import LanguageMenu from "../components/LanguageMenu";
+import NumericKeypad, {
+  sanitizePinDigits,
+} from "../components/NumericKeypad";
 
 interface LocationState {
   from?: { pathname?: string };
@@ -120,12 +123,14 @@ export default function LoginPage() {
     <Box
       sx={{
         position: "relative",
-        minHeight: "100vh",
+        minHeight: "100dvh",
         display: "flex",
-        alignItems: "center",
+        alignItems: "flex-start",
         justifyContent: "center",
+        overflowY: "auto",
         bgcolor: "background.default",
-        p: 2,
+        py: { xs: 3, sm: 4 },
+        px: 2,
       }}
     >
       <Box
@@ -162,22 +167,10 @@ export default function LoginPage() {
                   fullWidth
                   required
                 />
-                <TextField
-                  label={t("login.fields.pin")}
-                  type="password"
-                  value={pin}
-                  onChange={(e) => setPin(e.target.value)}
-                  autoComplete="current-password"
-                  inputProps={{ inputMode: "text" }}
-                  fullWidth
-                  required
-                />
 
-                {/* Layout picker — §7a.1. Disabled until the public
-                    dropdown payload arrives so the user can never
-                    accidentally submit `layoutId === 0`. Errors loading
-                    the list surface as an Alert below; the submit
-                    button is then disabled too. */}
+                {/* Layout picker — §7a.1. Placed above the PIN so the
+                    password field and on-screen keypad stay together
+                    near the submit button on short viewports. */}
                 <TextField
                   select
                   label={t("layout:loginPicker.label")}
@@ -211,6 +204,24 @@ export default function LoginPage() {
                     </MenuItem>
                   ))}
                 </TextField>
+
+                <TextField
+                  label={t("login.fields.pin")}
+                  type="password"
+                  value={pin}
+                  onChange={(e) => setPin(sanitizePinDigits(e.target.value))}
+                  autoComplete="current-password"
+                  inputMode="numeric"
+                  fullWidth
+                  required
+                />
+                <NumericKeypad
+                  disabled={loginMut.isPending}
+                  onDigit={(digit) =>
+                    setPin((prev) => sanitizePinDigits(prev + digit))
+                  }
+                  onBackspace={() => setPin((prev) => prev.slice(0, -1))}
+                />
 
                 {errMessage && <Alert severity="error">{errMessage}</Alert>}
 

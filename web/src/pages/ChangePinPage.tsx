@@ -15,8 +15,14 @@ import { Link as RouterLink, useNavigate } from "react-router-dom";
 
 import { useChangePin } from "../api/auth";
 import { ApiError } from "../api/client";
+import NumericKeypad, {
+  NumericKeypadCaption,
+  sanitizePinDigits,
+} from "../components/NumericKeypad";
 
 const PIN_PATTERN = /^\d{4,12}$/;
+
+type PinField = "current" | "new" | "confirm";
 
 export default function ChangePinPage() {
   const { t } = useTranslation(["user", "common", "errors"]);
@@ -26,6 +32,7 @@ export default function ChangePinPage() {
   const [currentPin, setCurrentPin] = useState("");
   const [newPin, setNewPin] = useState("");
   const [confirmPin, setConfirmPin] = useState("");
+  const [activeField, setActiveField] = useState<PinField>("current");
 
   const currentValid = currentPin.length > 0;
   const newValid = PIN_PATTERN.test(newPin);
@@ -41,6 +48,18 @@ export default function ChangePinPage() {
     }
     return t("errors:network");
   };
+
+  const pinFieldLabels: Record<PinField, string> = {
+    current: t("user:changePin.fields.currentPin"),
+    new: t("user:changePin.fields.newPin"),
+    confirm: t("user:changePin.fields.confirmPin"),
+  };
+
+  const setActivePin = {
+    current: setCurrentPin,
+    new: setNewPin,
+    confirm: setConfirmPin,
+  }[activeField];
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,7 +110,10 @@ export default function ChangePinPage() {
                 inputMode="numeric"
                 autoComplete="current-password"
                 value={currentPin}
-                onChange={(e) => setCurrentPin(e.target.value)}
+                onFocus={() => setActiveField("current")}
+                onChange={(e) =>
+                  setCurrentPin(sanitizePinDigits(e.target.value))
+                }
                 fullWidth
                 required
               />
@@ -102,7 +124,8 @@ export default function ChangePinPage() {
                 inputMode="numeric"
                 autoComplete="new-password"
                 value={newPin}
-                onChange={(e) => setNewPin(e.target.value)}
+                onFocus={() => setActiveField("new")}
+                onChange={(e) => setNewPin(sanitizePinDigits(e.target.value))}
                 helperText={t("user:admin.dialogs.fields.pinCreateHelp")}
                 error={newPin.length > 0 && !newValid}
                 fullWidth
@@ -115,7 +138,10 @@ export default function ChangePinPage() {
                 inputMode="numeric"
                 autoComplete="new-password"
                 value={confirmPin}
-                onChange={(e) => setConfirmPin(e.target.value)}
+                onFocus={() => setActiveField("confirm")}
+                onChange={(e) =>
+                  setConfirmPin(sanitizePinDigits(e.target.value))
+                }
                 error={confirmPin.length > 0 && confirmPin !== newPin}
                 helperText={
                   confirmPin.length > 0 && confirmPin !== newPin
@@ -125,6 +151,21 @@ export default function ChangePinPage() {
                 fullWidth
                 required
               />
+
+              <Box sx={{ pt: 0.5 }}>
+                <NumericKeypadCaption
+                  label={t("common:keypad.activeField", {
+                    label: pinFieldLabels[activeField],
+                  })}
+                />
+                <NumericKeypad
+                  disabled={changePin.isPending}
+                  onDigit={(digit) =>
+                    setActivePin((prev) => sanitizePinDigits(prev + digit))
+                  }
+                  onBackspace={() => setActivePin((prev) => prev.slice(0, -1))}
+                />
+              </Box>
 
               <Stack direction="row" spacing={2} justifyContent="flex-end">
                 <Button component={RouterLink} to="/account/profile">

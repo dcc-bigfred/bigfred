@@ -13,6 +13,12 @@
     "delete": "Usuń",
     "confirm": "Potwierdź"
   },
+  "keypad": {
+    "groupLabel": "Klawiatura numeryczna",
+    "digit": "Cyfra {{digit}}",
+    "backspace": "Usuń ostatnią cyfrę",
+    "activeField": "Wpisujesz: {{label}}"
+  },
   "language": {
     "menuLabel": "Język",
     "current": "Aktualny język",

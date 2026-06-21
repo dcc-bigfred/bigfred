@@ -83,3 +83,22 @@ func Detect(cv CVAccess) (VolumeChangeable, error) {
 		return nil, fmt.Errorf("unsupported decoder (CV7=%d, CV8=%d)", id.SoftwareVersion, id.ManufacturerID)
 	}
 }
+
+// DetectBrightness reads CV7 and CV8 to identify the decoder and returns a BrightnessChangeable implementation.
+func DetectBrightness(cv CVAccess) (BrightnessChangeable, error) {
+	id, err := Identify(cv)
+	if err != nil {
+		return nil, err
+	}
+
+	switch id.Kind {
+	case DecoderRailBOX:
+		return NewRailboxRB23xx(WithCVAccess(cv)), nil
+	case DecoderESU:
+		return NewLokSoundv5(cv), nil
+	case DecoderZIMO:
+		return nil, fmt.Errorf("output brightness is not supported on ZIMO decoders")
+	default:
+		return nil, fmt.Errorf("unsupported decoder (CV7=%d, CV8=%d)", id.SoftwareVersion, id.ManufacturerID)
+	}
+}

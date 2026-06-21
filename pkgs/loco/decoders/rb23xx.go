@@ -30,9 +30,18 @@ type RailboxRB23xx struct {
 }
 
 const (
-	railboxRB23xxVolumeCV    uint16 = 203
-	railboxRB23xxVolumeMaxCV uint8  = 64 // 64 = 100% (values above may distort)
+	railboxRB23xxVolumeCV           uint16 = 203
+	railboxRB23xxVolumeMaxCV        uint8  = 64 // 64 = 100% (values above may distort)
+	railboxRB23xxBrightnessMaxCV    uint8  = 255
+	railboxRB23xxBrightnessOutputMax uint8  = 11
 )
+
+var railboxRB23xxBrightnessCVs = map[uint8]uint16{
+	1: 119, 2: 120, 3: 121, 4: 122, 5: 123, 6: 124, 7: 125,
+	8: 219, 9: 220, 10: 221, 11: 222,
+}
+
+var railboxRB23xxOutputs = []uint8{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}
 
 func WithCVAccess(cv CVAccess) Option {
 	return func(d *RailboxRB23xx) {
@@ -84,6 +93,73 @@ func (d *RailboxRB23xx) GetVolume() (uint8, error) {
 		return 0, fmt.Errorf("failed to read CV%d (master volume): %w", railboxRB23xxVolumeCV, err)
 	}
 	return cvToPercent(cv, int(railboxRB23xxVolumeMaxCV)), nil
+}
+
+func (d *RailboxRB23xx) Outputs() []uint8 {
+	return append([]uint8(nil), railboxRB23xxOutputs...)
+}
+
+func (d *RailboxRB23xx) brightnessCVForOutput(output uint8) (uint16, error) {
+	if d.cv == nil {
+		return 0, fmt.Errorf("CV access not configured")
+	}
+	cv, ok := railboxRB23xxBrightnessCVs[output]
+	if !ok {
+		return 0, fmt.Errorf("output %d is out of range (valid: 1-%d)", output, railboxRB23xxBrightnessOutputMax)
+	}
+	return cv, nil
+}
+
+func (d *RailboxRB23xx) SetBrightness(output uint8, percent uint8) error {
+	if err := validateBrightnessPercent(percent); err != nil {
+		return err
+	}
+	cv, err := d.brightnessCVForOutput(output)
+	if err != nil {
+		return err
+	}
+	return d.cv.WriteCV(cv, percentToCV(percent, railboxRB23xxBrightnessMaxCV))
+}
+
+func (d *RailboxRB23xx) GetBrightness(output uint8) (uint8, error) {
+	cv, err := d.brightnessCVForOutput(output)
+	if err != nil {
+		return 0, err
+	}
+	value, err := d.cv.ReadCV(cv)
+	if err != nil {
+		return 0, fmt.Errorf("failed to read CV%d (output %d brightness): %w", cv, output, err)
+	}
+	return cvToPercent(value, int(railboxRB23xxBrightnessMaxCV)), nil
+}
+
+func (d *RailboxRB23xx) SetBrightnessRaw(output uint8, value int) error {
+	cv, err := d.brightnessCVForOutput(output)
+	if err != nil {
+		return err
+	}
+	return d.cv.WriteCV(cv, value)
+}
+
+func (d *RailboxRB23xx) SnapshotBrightness() ([]OutputBrightness, error) {
+	states := make([]OutputBrightness, 0, len(railboxRB23xxOutputs))
+	for _, output := range d.Outputs() {
+		cv, err := d.brightnessCVForOutput(output)
+		if err != nil {
+			return nil, err
+		}
+		value, err := d.cv.ReadCV(cv)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read CV%d (output %d brightness): %w", cv, output, err)
+		}
+		states = append(states, OutputBrightness{
+			Output:  output,
+			CV:      cv,
+			Value:   value,
+			Percent: cvToPercent(value, int(railboxRB23xxBrightnessMaxCV)),
+		})
+	}
+	return states, nil
 }
 
 func (d *RailboxRB23xx) ClearSoundSlot(slot uint8) error {

@@ -34,12 +34,7 @@ func (app *LocoApp) SetVolumeAction(locoId uint8, percent uint8, timeout time.Du
 	}
 	defer app.Station.CleanUp()
 
-	cv := &stationCV{
-		station: app.Station,
-		mode:    commandstation.ProgrammingTrackMode,
-		locoId:  commandstation.LocoAddr(locoId),
-		timeout: timeout,
-	}
+	cv := newProgrammingCV(app, locoId, timeout)
 
 	decoder, err := decoders.Detect(cv)
 	if err != nil {
@@ -54,12 +49,7 @@ func (app *LocoApp) GetVolumeAction(locoId uint8, timeout time.Duration) error {
 	}
 	defer app.Station.CleanUp()
 
-	cv := &stationCV{
-		station: app.Station,
-		mode:    commandstation.ProgrammingTrackMode,
-		locoId:  commandstation.LocoAddr(locoId),
-		timeout: timeout,
-	}
+	cv := newProgrammingCV(app, locoId, timeout)
 
 	decoder, err := decoders.Detect(cv)
 	if err != nil {
@@ -81,12 +71,7 @@ func (app *LocoApp) DetectDecoderAction(locoId uint8, timeout time.Duration) err
 	}
 	defer app.Station.CleanUp()
 
-	cv := &stationCV{
-		station: app.Station,
-		mode:    commandstation.ProgrammingTrackMode,
-		locoId:  commandstation.LocoAddr(locoId),
-		timeout: timeout,
-	}
+	cv := newProgrammingCV(app, locoId, timeout)
 
 	id, err := decoders.Identify(cv)
 	if err != nil {

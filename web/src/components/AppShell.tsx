@@ -33,6 +33,7 @@ import { useTranslation } from "react-i18next";
 import { useLogout, useMe } from "../api/auth";
 import { getUserName } from "../utils/getUserName";
 import { SocketProvider } from "../context/SocketContext";
+import { useSessionExpiryRedirect } from "../hooks/useSessionExpiryRedirect";
 import LanguageMenu from "./LanguageMenu";
 import { useSudoMobileMenuItems } from "./SudoIndicator";
 import MobileNavDrawer, { type MobileNavSection } from "./MobileNavDrawer";
@@ -56,6 +57,7 @@ import FullscreenToggleButton from "./throttle/FullscreenToggleButton";
 // that don't belong in a side drawer.
 export default function AppShell() {
   const me = useMe().data;
+  useSessionExpiryRedirect();
 
   return (
     <SocketProvider enabled={!!me}>

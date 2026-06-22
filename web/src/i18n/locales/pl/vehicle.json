@@ -64,6 +64,25 @@
       "lendOwnerOnly": "Tylko właściciel może wypożyczyć pojazd"
     }
   },
+  "trainCatalogue": {
+    "title": "Dostępne składy",
+    "intro": "Przeglądaj wszystkie zarejestrowane składy. Możesz modyfikować tylko własne składy lub — jako administrator — składy innych użytkowników.",
+    "searchLabel": "Szukaj",
+    "searchPlaceholder": "Nazwa, właściciel…",
+    "empty": "Nie zarejestrowano jeszcze żadnych składów.",
+    "noResults": "Brak składów pasujących do wyszukiwania.",
+    "pagination": "{{from}}–{{to}} z {{count}}",
+    "onLayout": {
+      "yes": "Tak",
+      "no": "Nie"
+    },
+    "columns": {
+      "name": "Nazwa",
+      "members": "Pojazdy",
+      "onLayout": "Na makiecie",
+      "actions": "Akcje"
+    }
+  },
   "trainList": {
     "title": "Moje składy",
     "intro": "Zarządzaj swoimi składami. Skład to pociąg złożony z wielu pojazdów, które jadą wspólnie i identyfikują się jako jeden pociąg. Skład dodany do makiety można sterować jako całością — wtedy wszystkie pojazdy poruszają się wspólnie, nawet jeśli jest to wiele pojazdów silnikowych. Składy można programować — na przykład włączać sekwencyjnie światła w wagonach czy odtwarzać dźwięki w różnych pojazdach poza samą lokomotywą ciągnącą skład.",

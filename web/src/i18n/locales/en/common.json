@@ -54,7 +54,8 @@
     },
     "fleet": {
       "menuLabel": "Fleet",
-      "availableVehicles": "Available vehicles"
+      "availableVehicles": "Available vehicles",
+      "availableTrains": "Available trains"
     },
     "account": {
       "menuLabel": "Account",

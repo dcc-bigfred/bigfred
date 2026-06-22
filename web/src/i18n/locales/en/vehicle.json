@@ -64,6 +64,25 @@
       "lendOwnerOnly": "Only the owner can lend out this vehicle"
     }
   },
+  "trainCatalogue": {
+    "title": "Available trains",
+    "intro": "Browse every registered train. You can modify only your own consists — or, as an admin, other users' trains.",
+    "searchLabel": "Search",
+    "searchPlaceholder": "Name, owner…",
+    "empty": "No trains have been registered yet.",
+    "noResults": "No trains match your search.",
+    "pagination": "{{from}}–{{to}} of {{count}}",
+    "onLayout": {
+      "yes": "Yes",
+      "no": "No"
+    },
+    "columns": {
+      "name": "Name",
+      "members": "Vehicles",
+      "onLayout": "On layout",
+      "actions": "Actions"
+    }
+  },
   "trainList": {
     "title": "My trains",
     "intro": "Manage your trains. A train is a consist of multiple vehicles that move together and are identified as one train. A train added to the layout can be controlled as a whole — then all vehicles move together, even when there are several powered vehicles. Trains can be programmed — for example, to turn wagon lights on in sequence or play sounds in different vehicles beyond the locomotive pulling the consist.",

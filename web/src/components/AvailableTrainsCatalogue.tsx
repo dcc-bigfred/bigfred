@@ -28,18 +28,18 @@ import { useMe } from "../api/auth";
 import { ApiError } from "../api/client";
 import { lendableTargetKey, useGrantedLeases } from "../api/leases";
 import {
-  useAddVehicleToRoster,
-  useDeleteVehicle,
-  useRemoveVehicleFromRoster,
-  useVehicleCatalogue,
-  type CatalogueVehicle,
+  useAddTrainToRoster,
+  useDeleteTrain,
+  useRemoveTrainFromRoster,
+  useTrainCatalogue,
+  type CatalogueTrain,
 } from "../api/vehicles";
 import { getUserName } from "../utils/getUserName";
 import {
   isTargetLeased,
-  isVehicleLendable,
+  isTrainLendable,
   showLendButton,
-  vehicleLendTooltip,
+  trainLendTooltip,
 } from "../utils/lendAction";
 import {
   canAddToLayout,
@@ -47,7 +47,7 @@ import {
   hasEffectiveAdmin,
 } from "../utils/rosterPermissions";
 import LeaseCreateDialog from "./leases/LeaseCreateDialog";
-import VehicleDialog from "./VehicleDialog";
+import TrainDialog from "./TrainDialog";
 
 const ROWS_PER_PAGE = 10;
 
@@ -55,22 +55,22 @@ interface Props {
   layoutId: number;
 }
 
-export default function AvailableVehiclesCatalogue({ layoutId }: Props) {
+export default function AvailableTrainsCatalogue({ layoutId }: Props) {
   const { t } = useTranslation(["vehicle", "errors", "common", "rentals"]);
   const me = useMe().data;
-  const vehicles = useVehicleCatalogue(layoutId);
-  const addVehicleToRoster = useAddVehicleToRoster();
-  const removeVehicleFromRoster = useRemoveVehicleFromRoster();
-  const deleteVehicleMut = useDeleteVehicle();
+  const trains = useTrainCatalogue(layoutId);
+  const addTrainToRoster = useAddTrainToRoster();
+  const removeTrainFromRoster = useRemoveTrainFromRoster();
+  const deleteTrainMut = useDeleteTrain();
   const grantedLeases = useGrantedLeases();
 
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(0);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingVehicle, setEditingVehicle] = useState<CatalogueVehicle | null>(null);
+  const [editingTrain, setEditingTrain] = useState<CatalogueTrain | null>(null);
   const [leaseDialogOpen, setLeaseDialogOpen] = useState(false);
   const [leaseInitialTarget, setLeaseInitialTarget] = useState<{
-    kind: "vehicle";
+    kind: "train";
     targetId: string;
   } | null>(null);
 
@@ -80,7 +80,7 @@ export default function AvailableVehiclesCatalogue({ layoutId }: Props) {
 
   const isAdmin = hasEffectiveAdmin(me);
   const ownsRow = (ownerId: number) => me?.id === ownerId;
-  const canMutateVehicle = (ownerId: number) => ownsRow(ownerId) || isAdmin;
+  const canMutateTrain = (ownerId: number) => ownsRow(ownerId) || isAdmin;
 
   const leasedTargetKeys = useMemo(() => {
     const s = new Set<string>();
@@ -90,28 +90,21 @@ export default function AvailableVehiclesCatalogue({ layoutId }: Props) {
 
   const filteredRows = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const rows = vehicles.data ?? [];
+    const rows = trains.data ?? [];
     if (!q) {
       return rows;
     }
-    return rows.filter((v) => {
+    return rows.filter((tr) => {
       const ownerLabel = getUserName({
-        login: v.ownerLogin,
-        organization: v.ownerOrganization,
+        login: tr.ownerLogin,
+        organization: tr.ownerOrganization,
       }).toLowerCase();
-      const kindLabel = t(`vehicle:kind.${v.kind}` as const).toLowerCase();
-      const haystack = [
-        v.name,
-        v.number,
-        v.dccAddress != null ? String(v.dccAddress) : "",
-        kindLabel,
-        ownerLabel,
-      ]
+      const haystack = [tr.name, ownerLabel, String(tr.members.length)]
         .join(" ")
         .toLowerCase();
       return haystack.includes(q);
     });
-  }, [vehicles.data, query, t]);
+  }, [trains.data, query]);
 
   const pagedRows = useMemo(() => {
     const start = page * ROWS_PER_PAGE;
@@ -120,9 +113,9 @@ export default function AvailableVehiclesCatalogue({ layoutId }: Props) {
 
   const mutationError = (() => {
     const err =
-      addVehicleToRoster.error ??
-      removeVehicleFromRoster.error ??
-      deleteVehicleMut.error;
+      addTrainToRoster.error ??
+      removeTrainFromRoster.error ??
+      deleteTrainMut.error;
     if (!err) return null;
     if (err instanceof ApiError) {
       const key = `errors:${err.code}` as const;
@@ -133,27 +126,20 @@ export default function AvailableVehiclesCatalogue({ layoutId }: Props) {
     return t("errors:network");
   })();
 
-  const onDeleteVehicle = (v: CatalogueVehicle) => {
-    if (!window.confirm(t("vehicle:list.deleteConfirm", { name: v.name }))) {
+  const onDeleteTrain = (tr: CatalogueTrain) => {
+    if (!window.confirm(t("vehicle:trainList.deleteConfirm", { name: tr.name }))) {
       return;
     }
-    deleteVehicleMut.mutate(v.id);
+    deleteTrainMut.mutate(tr.id);
   };
-
-  const renderDCC = (vehicle: { dccAddress: number | null }) =>
-    vehicle.dccAddress != null ? (
-      String(vehicle.dccAddress)
-    ) : (
-      <Chip size="small" label={t("vehicle:dummyBadge")} />
-    );
 
   const renderOnLayout = (onLayout: boolean) => (
     <Chip
       size="small"
       label={
         onLayout
-          ? t("vehicle:catalogue.onLayout.yes")
-          : t("vehicle:catalogue.onLayout.no")
+          ? t("vehicle:trainCatalogue.onLayout.yes")
+          : t("vehicle:trainCatalogue.onLayout.no")
       }
       color={onLayout ? "success" : "default"}
       variant={onLayout ? "filled" : "outlined"}
@@ -161,9 +147,9 @@ export default function AvailableVehiclesCatalogue({ layoutId }: Props) {
   );
 
   const emptyMessage =
-    (vehicles.data ?? []).length === 0
-      ? t("vehicle:catalogue.empty")
-      : t("vehicle:catalogue.noResults");
+    (trains.data ?? []).length === 0
+      ? t("vehicle:trainCatalogue.empty")
+      : t("vehicle:trainCatalogue.noResults");
 
   return (
     <>
@@ -174,8 +160,8 @@ export default function AvailableVehiclesCatalogue({ layoutId }: Props) {
           <TextField
             fullWidth
             size="small"
-            label={t("vehicle:catalogue.searchLabel")}
-            placeholder={t("vehicle:catalogue.searchPlaceholder")}
+            label={t("vehicle:trainCatalogue.searchLabel")}
+            placeholder={t("vehicle:trainCatalogue.searchPlaceholder")}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -184,92 +170,90 @@ export default function AvailableVehiclesCatalogue({ layoutId }: Props) {
           <Table size="small">
             <TableHead>
               <TableRow>
-                <TableCell>{t("vehicle:catalogue.columns.name")}</TableCell>
-                <TableCell>{t("vehicle:catalogue.columns.number")}</TableCell>
-                <TableCell>{t("vehicle:catalogue.columns.dccAddress")}</TableCell>
-                <TableCell>{t("vehicle:catalogue.columns.onLayout")}</TableCell>
+                <TableCell>{t("vehicle:trainCatalogue.columns.name")}</TableCell>
+                <TableCell>{t("vehicle:trainCatalogue.columns.members")}</TableCell>
+                <TableCell>{t("vehicle:trainCatalogue.columns.onLayout")}</TableCell>
                 <TableCell align="right">
-                  {t("vehicle:catalogue.columns.actions")}
+                  {t("vehicle:trainCatalogue.columns.actions")}
                 </TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {vehicles.isLoading ? (
+              {trains.isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={5} align="center" sx={{ py: 3, color: "text.secondary" }}>
+                  <TableCell colSpan={4} align="center" sx={{ py: 3, color: "text.secondary" }}>
                     {t("common:loading")}
                   </TableCell>
                 </TableRow>
               ) : pagedRows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} align="center" sx={{ py: 3, color: "text.secondary" }}>
+                  <TableCell colSpan={4} align="center" sx={{ py: 3, color: "text.secondary" }}>
                     {emptyMessage}
                   </TableCell>
                 </TableRow>
               ) : (
-                pagedRows.map((v) => {
-                  const isOwner = ownsRow(v.ownerId);
-                  const leased = isTargetLeased(leasedTargetKeys, "vehicle", v.id);
-                  const lendable = isVehicleLendable(isAdmin, {
+                pagedRows.map((tr) => {
+                  const isOwner = ownsRow(tr.ownerId);
+                  const leased = isTargetLeased(leasedTargetKeys, "train", tr.id);
+                  const lendable = isTrainLendable(isAdmin, {
                     isOwner,
-                    onLayout: v.onLayout,
-                    dccAddress: v.dccAddress,
+                    onLayout: tr.onLayout,
                     leased,
                   });
-                  const lendTitle = vehicleLendTooltip(t, isAdmin, {
+                  const lendTitle = trainLendTooltip(t, isAdmin, {
                     isOwner,
-                    onLayout: v.onLayout,
-                    dccAddress: v.dccAddress,
+                    onLayout: tr.onLayout,
                     leased,
                   });
                   return (
-                    <TableRow key={v.id}>
+                    <TableRow key={tr.id}>
                       <TableCell>
                         <Stack spacing={0.25}>
-                          <Typography variant="body2">{v.name}</Typography>
+                          <Typography variant="body2">{tr.name}</Typography>
                           <Typography variant="caption" color="text.secondary" noWrap>
                             {getUserName({
-                              login: v.ownerLogin,
-                              organization: v.ownerOrganization,
+                              login: tr.ownerLogin,
+                              organization: tr.ownerOrganization,
                             })}
                           </Typography>
                         </Stack>
                       </TableCell>
-                      <TableCell>{v.number || "—"}</TableCell>
-                      <TableCell>{renderDCC(v)}</TableCell>
-                      <TableCell>{renderOnLayout(v.onLayout)}</TableCell>
+                      <TableCell>
+                        {t("vehicle:trainList.membersCount", { count: tr.members.length })}
+                      </TableCell>
+                      <TableCell>{renderOnLayout(tr.onLayout)}</TableCell>
                       <TableCell align="right">
                         <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                          {v.onLayout ? (
-                            canRemoveFromLayout(me, v.ownerId) ? (
+                          {tr.onLayout ? (
+                            canRemoveFromLayout(me, tr.ownerId) ? (
                               <Tooltip title={t("vehicle:roster.removeButton")}>
                                 <IconButton
                                   size="small"
                                   onClick={() =>
-                                    removeVehicleFromRoster.mutate({
+                                    removeTrainFromRoster.mutate({
                                       layoutId,
-                                      vehicleId: v.id,
+                                      trainId: tr.id,
                                     })
                                   }
-                                  disabled={removeVehicleFromRoster.isPending}
+                                  disabled={removeTrainFromRoster.isPending}
                                   aria-label={t("vehicle:roster.removeButton")}
                                 >
                                   <RemoveCircleOutlineIcon fontSize="small" />
                                 </IconButton>
                               </Tooltip>
                             ) : null
-                          ) : canAddToLayout(me, v.ownerId) ? (
-                            <Tooltip title={t("vehicle:list.actions.addToLayout")}>
+                          ) : canAddToLayout(me, tr.ownerId) ? (
+                            <Tooltip title={t("vehicle:trainList.actions.addToLayout")}>
                               <IconButton
                                 size="small"
                                 onClick={() =>
-                                  addVehicleToRoster.mutate({
+                                  addTrainToRoster.mutate({
                                     layoutId,
-                                    vehicleId: v.id,
+                                    trainId: tr.id,
                                   })
                                 }
-                                disabled={addVehicleToRoster.isPending}
-                                aria-label={t("vehicle:list.actions.addToLayout")}
+                                disabled={addTrainToRoster.isPending}
+                                aria-label={t("vehicle:trainList.actions.addToLayout")}
                               >
                                 <PlaylistAddIcon fontSize="small" />
                               </IconButton>
@@ -283,8 +267,8 @@ export default function AvailableVehiclesCatalogue({ layoutId }: Props) {
                                   disabled={!lendable}
                                   onClick={() => {
                                     setLeaseInitialTarget({
-                                      kind: "vehicle",
-                                      targetId: v.id,
+                                      kind: "train",
+                                      targetId: tr.id,
                                     });
                                     setLeaseDialogOpen(true);
                                   }}
@@ -295,25 +279,25 @@ export default function AvailableVehiclesCatalogue({ layoutId }: Props) {
                               </span>
                             </Tooltip>
                           )}
-                          {canMutateVehicle(v.ownerId) && (
+                          {canMutateTrain(tr.ownerId) && (
                             <>
-                              <Tooltip title={t("vehicle:list.actions.edit")}>
+                              <Tooltip title={t("vehicle:trainList.actions.edit")}>
                                 <IconButton
                                   size="small"
                                   onClick={() => {
-                                    setEditingVehicle(v);
+                                    setEditingTrain(tr);
                                     setDialogOpen(true);
                                   }}
-                                  aria-label={t("vehicle:list.actions.edit")}
+                                  aria-label={t("vehicle:trainList.actions.edit")}
                                 >
                                   <EditIcon fontSize="small" />
                                 </IconButton>
                               </Tooltip>
-                              <Tooltip title={t("vehicle:list.actions.delete")}>
+                              <Tooltip title={t("vehicle:trainList.actions.delete")}>
                                 <IconButton
                                   size="small"
-                                  onClick={() => onDeleteVehicle(v)}
-                                  aria-label={t("vehicle:list.actions.delete")}
+                                  onClick={() => onDeleteTrain(tr)}
+                                  aria-label={t("vehicle:trainList.actions.delete")}
                                 >
                                   <DeleteIcon fontSize="small" />
                                 </IconButton>
@@ -337,14 +321,14 @@ export default function AvailableVehiclesCatalogue({ layoutId }: Props) {
           rowsPerPage={ROWS_PER_PAGE}
           rowsPerPageOptions={[ROWS_PER_PAGE]}
           labelDisplayedRows={({ from, to, count }) =>
-            t("vehicle:catalogue.pagination", { from, to, count })
+            t("vehicle:trainCatalogue.pagination", { from, to, count })
           }
         />
       </Paper>
 
-      <VehicleDialog
+      <TrainDialog
         open={dialogOpen}
-        vehicle={editingVehicle}
+        train={editingTrain}
         onClose={() => setDialogOpen(false)}
       />
       <LeaseCreateDialog

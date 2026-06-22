@@ -200,7 +200,7 @@ func TestVehicleDeleteRefusedWhenInTrain(t *testing.T) {
 		t.Fatalf("seed pool: %v", err)
 	}
 	vSvc := cmd.NewVehicle(bundle.Vehicles, pool, bundle.TrainMembers, bundle.LayoutVehicles, bundle.Users)
-	tSvc := cmd.NewTrain(bundle.Trains, bundle.TrainMembers, bundle.Vehicles)
+	tSvc := cmd.NewTrain(bundle.Trains, bundle.TrainMembers, bundle.Vehicles, bundle.LayoutTrains, bundle.Users)
 
 	addr := uint16(7)
 	v, err := vSvc.Create(ctx, cmd.VehicleCreateInput{

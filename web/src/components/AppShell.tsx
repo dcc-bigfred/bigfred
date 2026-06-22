@@ -146,6 +146,12 @@ function AppShellContent() {
         icon: <DirectionsRailwayIcon fontSize="small" />,
         onClick: () => navigate("/fleet/vehicles"),
       },
+      {
+        id: "available-trains",
+        label: t("nav.fleet.availableTrains"),
+        icon: <TrainIcon fontSize="small" />,
+        onClick: () => navigate("/fleet/trains"),
+      },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [t],

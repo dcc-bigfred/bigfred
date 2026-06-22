@@ -72,6 +72,16 @@ func (t *Trains) ListByOwner(ctx context.Context, ownerID uint) ([]domain.Train,
 	return rows, nil
 }
 
+// ListAll returns every train in the catalogue (all owners).
+func (t *Trains) ListAll(ctx context.Context) ([]domain.Train, error) {
+	var rows []domain.Train
+	err := t.repo.FindAll(ctx, &rows, sort.Asc("name"))
+	if err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
 // ListByIDs returns trains by primary-key set.
 func (t *Trains) ListByIDs(ctx context.Context, ids []domain.TrainID) ([]domain.Train, error) {
 	if len(ids) == 0 {

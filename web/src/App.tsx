@@ -16,6 +16,7 @@ import LoginPage from "./pages/LoginPage";
 import MyTrainsPage from "./pages/MyTrainsPage";
 import MyVehiclesPage from "./pages/MyVehiclesPage";
 import AvailableVehiclesPage from "./pages/AvailableVehiclesPage";
+import AvailableTrainsPage from "./pages/AvailableTrainsPage";
 import VehicleFunctionsPage from "./pages/VehicleFunctionsPage";
 import VehicleTemplatesPage from "./pages/VehicleTemplatesPage";
 import TemplateFunctionsPage from "./pages/TemplateFunctionsPage";
@@ -56,6 +57,7 @@ const router = createBrowserRouter(
           <Route path="/" element={<HomePage />} />
           <Route path="/my/vehicles" element={<MyVehiclesPage />} />
           <Route path="/fleet/vehicles" element={<AvailableVehiclesPage />} />
+          <Route path="/fleet/trains" element={<AvailableTrainsPage />} />
           <Route path="/my/vehicles/:vehicleId/functions" element={<VehicleFunctionsPage />} />
           <Route path="/vehicle-templates" element={<VehicleTemplatesPage />} />
           <Route

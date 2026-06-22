@@ -70,6 +70,27 @@ func ToTrainResponse(d cmd.TrainDetail) TrainResponse {
 	}
 }
 
+// TrainCatalogueResponse is one row of GET /api/v1/trains/catalogue.
+type TrainCatalogueResponse struct {
+	TrainResponse
+	OwnerLogin        string `json:"ownerLogin"`
+	OwnerOrganization string `json:"ownerOrganization"`
+	OnLayout          bool   `json:"onLayout"`
+}
+
+// ToTrainCatalogueResponse maps a catalogue entry to the REST wire shape.
+func ToTrainCatalogueResponse(e cmd.TrainCatalogueEntry) TrainCatalogueResponse {
+	return TrainCatalogueResponse{
+		TrainResponse: ToTrainResponse(cmd.TrainDetail{
+			Train:   e.Train,
+			Members: e.Members,
+		}),
+		OwnerLogin:        e.OwnerLogin,
+		OwnerOrganization: e.OwnerOrganization,
+		OnLayout:          e.OnLayout,
+	}
+}
+
 // TrainMemberRequest is one member in a create/update body.
 type TrainMemberRequest struct {
 	VehicleID        string  `json:"vehicleId"`

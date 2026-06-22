@@ -32,7 +32,10 @@
       "editFunctions": "Edytuj funkcje",
       "delete": "Usuń",
       "addToLayout": "Dodaj do makiety",
-      "alreadyOnLayout": "Już w makiecie"
+      "alreadyOnLayout": "Już w makiecie",
+      "lendRequiresLayout": "Pojazd musi być dodany do makiety",
+      "lendRequiresDcc": "Pojazd bez adresu DCC nie może być wypożyczony",
+      "lendAlreadyLeased": "Pojazd jest już wypożyczony"
     },
     "deleteConfirm": "Usunąć pojazd „{{name}}”?",
     "deleteConfirmBody": "Tej operacji nie można cofnąć. Pojazd musi być wcześniej usunięty ze wszystkich składów."
@@ -55,7 +58,9 @@
       "edit": "Edytuj",
       "delete": "Usuń",
       "addToLayout": "Dodaj do makiety",
-      "alreadyOnLayout": "Już w makiecie"
+      "alreadyOnLayout": "Już w makiecie",
+      "lendRequiresLayout": "Skład musi być dodany do makiety",
+      "lendAlreadyLeased": "Skład jest już wypożyczony"
     },
     "deleteConfirm": "Usunąć skład „{{name}}”?",
     "deleteConfirmBody": "Tej operacji nie można cofnąć. Pojazdy wchodzące w skład zostaną zachowane w katalogu."

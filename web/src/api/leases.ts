@@ -32,6 +32,13 @@ export interface LendableCatalogue {
   users: LendableUser[];
 }
 
+export function lendableTargetKey(tgt: {
+  kind: TakeoverTarget;
+  targetId: string;
+}): string {
+  return `${tgt.kind}:${tgt.targetId}`;
+}
+
 export const leasesQueryKey = {
   received: ["leases", "received"] as const,
   granted: ["leases", "granted"] as const,

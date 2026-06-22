@@ -20,12 +20,14 @@ import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
 import TuneIcon from "@mui/icons-material/Tune";
 import DeleteIcon from "@mui/icons-material/Delete";
+import HandshakeIcon from "@mui/icons-material/Handshake";
 import { useNavigate } from "react-router-dom";
 import PlaylistAddIcon from "@mui/icons-material/PlaylistAdd";
 import RemoveCircleOutlineIcon from "@mui/icons-material/RemoveCircleOutline";
 import { useTranslation } from "react-i18next";
 
 import { ApiError } from "../api/client";
+import { lendableTargetKey, useGrantedLeases } from "../api/leases";
 import {
   useAddVehicleToRoster,
   useDeleteVehicle,
@@ -34,6 +36,7 @@ import {
   useRemoveVehicleFromRoster,
   type Vehicle,
 } from "../api/vehicles";
+import LeaseCreateDialog from "./leases/LeaseCreateDialog";
 import VehicleDialog from "./VehicleDialog";
 
 interface Props {
@@ -44,22 +47,57 @@ interface Props {
 // "add to layout". Lives on /my/vehicles; the dashboard roster table
 // stays in RosterSection.
 export default function MyVehiclesCatalogue({ layoutId }: Props) {
-  const { t } = useTranslation(["vehicle", "errors", "common"]);
+  const { t } = useTranslation(["vehicle", "errors", "common", "rentals"]);
   const navigate = useNavigate();
   const vehicles = useMyVehicles();
   const layoutVehicles = useLayoutVehicles(layoutId);
   const addVehicleToRoster = useAddVehicleToRoster();
   const removeVehicleFromRoster = useRemoveVehicleFromRoster();
   const deleteVehicleMut = useDeleteVehicle();
+  const grantedLeases = useGrantedLeases();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
+  const [leaseDialogOpen, setLeaseDialogOpen] = useState(false);
+  const [leaseInitialTarget, setLeaseInitialTarget] = useState<{
+    kind: "vehicle";
+    targetId: string;
+  } | null>(null);
 
   const vehicleOnLayout = useMemo(() => {
     const s = new Set<string>();
     (layoutVehicles.data ?? []).forEach((v) => s.add(v.id));
     return s;
   }, [layoutVehicles.data]);
+
+  const leasedTargetKeys = useMemo(() => {
+    const s = new Set<string>();
+    (grantedLeases.data ?? []).forEach((lease) => s.add(lendableTargetKey(lease)));
+    return s;
+  }, [grantedLeases.data]);
+
+  const vehicleLendTooltip = (v: Vehicle, isOnLayout: boolean) => {
+    const key = lendableTargetKey({ kind: "vehicle", targetId: v.id });
+    if (leasedTargetKeys.has(key)) {
+      return t("vehicle:list.actions.lendAlreadyLeased");
+    }
+    if (!isOnLayout) {
+      return t("vehicle:list.actions.lendRequiresLayout");
+    }
+    if (v.dccAddress == null) {
+      return t("vehicle:list.actions.lendRequiresDcc");
+    }
+    return t("rentals:granted.lend");
+  };
+
+  const canLendVehicle = (v: Vehicle, isOnLayout: boolean) => {
+    const key = lendableTargetKey({ kind: "vehicle", targetId: v.id });
+    return (
+      isOnLayout &&
+      v.dccAddress != null &&
+      !leasedTargetKeys.has(key)
+    );
+  };
 
   const mutationError = (() => {
     const err =
@@ -152,6 +190,7 @@ export default function MyVehiclesCatalogue({ layoutId }: Props) {
               ) : (
                 (vehicles.data ?? []).map((v) => {
                   const isOnLayout = vehicleOnLayout.has(v.id);
+                  const lendable = canLendVehicle(v, isOnLayout);
                   return (
                     <TableRow key={v.id}>
                       <TableCell>{v.name}</TableCell>
@@ -193,6 +232,24 @@ export default function MyVehiclesCatalogue({ layoutId }: Props) {
                               </IconButton>
                             </Tooltip>
                           )}
+                          <Tooltip title={vehicleLendTooltip(v, isOnLayout)}>
+                            <span>
+                              <IconButton
+                                size="small"
+                                disabled={!lendable}
+                                onClick={() => {
+                                  setLeaseInitialTarget({
+                                    kind: "vehicle",
+                                    targetId: v.id,
+                                  });
+                                  setLeaseDialogOpen(true);
+                                }}
+                                aria-label={t("rentals:granted.lend")}
+                              >
+                                <HandshakeIcon fontSize="small" />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
                           <Tooltip title={t("vehicle:list.actions.editFunctions")}>
                             <IconButton
                               size="small"
@@ -238,6 +295,11 @@ export default function MyVehiclesCatalogue({ layoutId }: Props) {
         open={dialogOpen}
         vehicle={editingVehicle}
         onClose={() => setDialogOpen(false)}
+      />
+      <LeaseCreateDialog
+        open={leaseDialogOpen}
+        onClose={() => setLeaseDialogOpen(false)}
+        initialTarget={leaseInitialTarget}
       />
     </>
   );

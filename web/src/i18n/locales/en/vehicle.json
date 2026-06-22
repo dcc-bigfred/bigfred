@@ -32,7 +32,10 @@
       "editFunctions": "Edit functions",
       "delete": "Delete",
       "addToLayout": "Add to layout",
-      "alreadyOnLayout": "Already on layout"
+      "alreadyOnLayout": "Already on layout",
+      "lendRequiresLayout": "Vehicle must be added to the layout",
+      "lendRequiresDcc": "A vehicle without a DCC address cannot be lent",
+      "lendAlreadyLeased": "Vehicle is already lent out"
     },
     "deleteConfirm": "Delete vehicle “{{name}}”?",
     "deleteConfirmBody": "This action cannot be undone. The vehicle must be removed from every train first."
@@ -53,7 +56,9 @@
       "edit": "Edit",
       "delete": "Delete",
       "addToLayout": "Add to layout",
-      "alreadyOnLayout": "Already on layout"
+      "alreadyOnLayout": "Already on layout",
+      "lendRequiresLayout": "Train must be added to the layout",
+      "lendAlreadyLeased": "Train is already lent out"
     },
     "deleteConfirm": "Delete train “{{name}}”?",
     "deleteConfirmBody": "This action cannot be undone. Vehicles in this train will stay in your catalogue."

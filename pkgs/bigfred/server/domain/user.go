@@ -35,13 +35,14 @@ const (
 // ErrAccountDeactivated) but does NOT terminate sessions already in
 // flight — those expire naturally with their JWT.
 type User struct {
-	ID        uint
-	Login     string
-	PINHash   string `db:"pin_hash"`
-	Role      Role
-	Active    bool
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID           uint
+	Login        string
+	PINHash      string `db:"pin_hash"`
+	Role         Role
+	Organization string
+	Active       bool
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }
 
 // Table tells REL which physical table backs this struct.

@@ -228,13 +228,14 @@ func (h *Hub) BroadcastToUserInLayout(layoutID, userID uint, eventType string, p
 }
 
 // NewDriveSession allocates a session for a freshly upgraded client.
-func NewDriveSession(userID uint, login string, layoutID uint) *DriveSession {
+func NewDriveSession(userID uint, login, organization string, layoutID uint) *DriveSession {
 	return &DriveSession{
-		ID:       uuid.NewString(),
-		UserID:   userID,
-		Login:    login,
-		LayoutID: layoutID,
-		OpenedAt: time.Now().UTC(),
+		ID:           uuid.NewString(),
+		UserID:       userID,
+		Login:        login,
+		Organization: organization,
+		LayoutID:     layoutID,
+		OpenedAt:     time.Now().UTC(),
 	}
 }
 
@@ -244,10 +245,11 @@ func NewDriveSession(userID uint, login string, layoutID uint) *DriveSession {
 type DriveSession struct {
 	mu sync.Mutex
 
-	ID       string
-	UserID   uint
-	Login    string
-	LayoutID uint
+	ID           string
+	UserID       uint
+	Login        string
+	Organization string
+	LayoutID     uint
 	OpenedAt time.Time
 
 	currentCS uint
@@ -295,8 +297,9 @@ type OccupantChangedPayload struct {
 
 // OccupantPayload identifies the user staffing a box.
 type OccupantPayload struct {
-	UserID uint   `json:"userId"`
-	Login  string `json:"login"`
+	UserID       uint   `json:"userId"`
+	Login        string `json:"login"`
+	Organization string `json:"organization"`
 }
 
 // ElevationChangedPayload is the server → client

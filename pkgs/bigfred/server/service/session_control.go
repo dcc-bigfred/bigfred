@@ -135,6 +135,7 @@ type controlSession struct {
 func (s controlSession) SessionID() string           { return s.session.ID }
 func (s controlSession) UserID() uint                { return s.session.UserID }
 func (s controlSession) Login() string               { return s.session.Login }
+func (s controlSession) Organization() string        { return s.session.Organization }
 func (s controlSession) LayoutID() uint              { return s.session.LayoutID }
 func (s controlSession) CurrentCommandStation() uint { return s.session.CurrentCommandStation() }
 func (s controlSession) SetCommandStation(commandStationID uint) uint {

@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import {
   Alert,
   Box,
@@ -12,13 +13,15 @@ import {
   TableCell,
   TableContainer,
   TableRow,
+  TextField,
   Typography,
 } from "@mui/material";
 import LockResetIcon from "@mui/icons-material/LockReset";
+import SaveIcon from "@mui/icons-material/Save";
 import { useTranslation } from "react-i18next";
 import { Link as RouterLink, useLocation } from "react-router-dom";
 
-import { useMe } from "../api/auth";
+import { useMe, useUpdateProfile } from "../api/auth";
 import { useMyDCCPool } from "../api/vehicles";
 import { formatDccPoolSummary } from "../components/UserDccPoolFields";
 
@@ -49,16 +52,43 @@ export default function ProfilePage() {
   const pinChanged = (location.state as { pinChanged?: boolean } | null)?.pinChanged;
   const me = useMe();
   const dccPool = useMyDCCPool();
+  const updateProfile = useUpdateProfile();
+  const [organizationInput, setOrganizationInput] = useState("");
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [profileSaved, setProfileSaved] = useState(false);
 
   const loading = me.isLoading || dccPool.isLoading;
   const error = me.error ?? dccPool.error;
   const user = me.data;
+
+  useEffect(() => {
+    if (user) {
+      setOrganizationInput(user.organization ?? "");
+    }
+  }, [user]);
 
   const layoutLabel = user
     ? user.layoutIsSystem
       ? t("layout:system_default_label")
       : user.layoutName
     : "";
+
+  const organizationDirty =
+    user != null && organizationInput.trim() !== (user.organization ?? "");
+
+  const saveOrganization = async () => {
+    if (!user) return;
+    setProfileError(null);
+    setProfileSaved(false);
+    try {
+      await updateProfile.mutateAsync({
+        organization: organizationInput.trim(),
+      });
+      setProfileSaved(true);
+    } catch {
+      setProfileError(t("common:networkError"));
+    }
+  };
 
   return (
     <Container maxWidth="md" sx={{ py: { xs: 3, sm: 5 } }}>
@@ -90,6 +120,11 @@ export default function ProfilePage() {
                   <TableBody>
                     <ProfileField label={t("user:profile.fields.login")}>
                       {user.login}
+                    </ProfileField>
+                    <ProfileField label={t("user:profile.fields.organization")}>
+                      {user.organization
+                        ? user.organization
+                        : t("user:profile.organizationEmpty")}
                     </ProfileField>
                     <ProfileField label={t("user:profile.fields.id")}>
                       {user.id}
@@ -154,6 +189,39 @@ export default function ProfilePage() {
                   </TableBody>
                 </Table>
               </TableContainer>
+            </Paper>
+
+            <Paper variant="outlined" sx={{ p: 2 }}>
+              <Stack spacing={2}>
+                <Typography variant="subtitle1" component="h2">
+                  {t("user:profile.organizationSection")}
+                </Typography>
+                <TextField
+                  label={t("user:profile.fields.organization")}
+                  value={organizationInput}
+                  onChange={(e) => {
+                    setOrganizationInput(e.target.value);
+                    setProfileSaved(false);
+                  }}
+                  helperText={t("user:profile.organizationHelp")}
+                  fullWidth
+                  inputProps={{ maxLength: 128 }}
+                />
+                {profileError && <Alert severity="error">{profileError}</Alert>}
+                {profileSaved && (
+                  <Alert severity="success">{t("user:profile.organizationSaved")}</Alert>
+                )}
+                <Box>
+                  <Button
+                    variant="contained"
+                    startIcon={<SaveIcon />}
+                    onClick={saveOrganization}
+                    disabled={!organizationDirty || updateProfile.isPending}
+                  >
+                    {t("user:profile.saveOrganization")}
+                  </Button>
+                </Box>
+              </Stack>
             </Paper>
 
             <Box>

@@ -25,8 +25,9 @@ type VehicleTemplateFunctionSlot struct {
 // VehicleTemplateListEntry is a template row with owner login for list UIs.
 type VehicleTemplateListEntry struct {
 	domain.VehicleTemplate
-	OwnerLogin string
-	Functions  []VehicleTemplateFunctionSlot
+	OwnerLogin        string
+	OwnerOrganization string
+	Functions         []VehicleTemplateFunctionSlot
 }
 
 // VehicleTemplateCreateInput is the payload for Create.
@@ -65,20 +66,24 @@ func (vt *VehicleTemplate) List(ctx context.Context) ([]VehicleTemplateListEntry
 	if err != nil {
 		return nil, err
 	}
-	logins := make(map[uint]string)
+	logins := make(map[uint]struct {
+		login        string
+		organization string
+	})
 	out := make([]VehicleTemplateListEntry, 0, len(rows))
 	for _, row := range rows {
-		login, ok := logins[row.OwnerUserID]
+		info, ok := logins[row.OwnerUserID]
 		if !ok {
 			u, err := vt.users.FindByID(ctx, row.OwnerUserID)
 			if err != nil {
-				login = "?"
+				info.login = "?"
 			} else {
-				login = u.Login
+				info.login = u.Login
+				info.organization = u.Organization
 			}
-			logins[row.OwnerUserID] = login
+			logins[row.OwnerUserID] = info
 		}
-		entry, err := vt.entryFor(ctx, row, login)
+		entry, err := vt.entryFor(ctx, row, info.login, info.organization)
 		if err != nil {
 			return nil, err
 		}
@@ -152,13 +157,14 @@ func (vt *VehicleTemplate) Update(
 		}
 		return VehicleTemplateListEntry{}, err
 	}
-	return vt.entryFor(ctx, row, "")
+	return vt.entryFor(ctx, row, "", "")
 }
 
 func (vt *VehicleTemplate) entryFor(
 	ctx context.Context,
 	row domain.VehicleTemplate,
 	ownerLogin string,
+	ownerOrganization string,
 ) (VehicleTemplateListEntry, error) {
 	if ownerLogin == "" {
 		u, err := vt.users.FindByID(ctx, row.OwnerUserID)
@@ -166,6 +172,7 @@ func (vt *VehicleTemplate) entryFor(
 			ownerLogin = "?"
 		} else {
 			ownerLogin = u.Login
+			ownerOrganization = u.Organization
 		}
 	}
 	fns, err := vt.functions.ListByTemplateID(ctx, row.ID)
@@ -182,8 +189,9 @@ func (vt *VehicleTemplate) entryFor(
 		})
 	}
 	return VehicleTemplateListEntry{
-		VehicleTemplate: row,
-		OwnerLogin:      ownerLogin,
-		Functions:       slots,
+		VehicleTemplate:   row,
+		OwnerLogin:        ownerLogin,
+		OwnerOrganization: ownerOrganization,
+		Functions:         slots,
 	}, nil
 }

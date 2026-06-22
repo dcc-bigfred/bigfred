@@ -22,6 +22,7 @@ export interface SudoElevation {
 export interface CurrentUser {
   id: number;
   login: string;
+  organization: string;
   role: Role;
   /** effectiveRole resolves signalman grants and sudo for the active layout (§7a.2). */
   effectiveRole: Role;
@@ -47,6 +48,10 @@ export interface CurrentUser {
 export interface ChangePinRequest {
   currentPin: string;
   newPin: string;
+}
+
+export interface UpdateProfileRequest {
+  organization: string;
 }
 
 export interface LoginRequest {
@@ -126,6 +131,22 @@ export function useChangePin() {
       }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: meQueryKey });
+    },
+  });
+}
+
+// useUpdateProfile updates self-service profile fields and refreshes
+// the cached /me row from the response body.
+export function useUpdateProfile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: UpdateProfileRequest) =>
+      apiFetch<CurrentUser>("/api/v1/auth/me/profile", {
+        method: "PUT",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: (user) => {
+      qc.setQueryData(meQueryKey, user);
     },
   });
 }

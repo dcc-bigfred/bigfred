@@ -21,18 +21,20 @@ type UserWithDCCPool struct {
 
 // UserCreateInput is the validated payload of User.Create.
 type UserCreateInput struct {
-	Login   string
-	PIN     string
-	Role    domain.Role
-	DCCPool []PoolRange
+	Login        string
+	PIN          string
+	Organization string
+	Role         domain.Role
+	DCCPool      []PoolRange
 }
 
 // UserUpdateInput is the validated payload of User.Update.
 type UserUpdateInput struct {
-	Login   *string
-	Role    *domain.Role
-	PIN     *string
-	DCCPool *[]PoolRange
+	Login        *string
+	Organization *string
+	Role         *domain.Role
+	PIN          *string
+	DCCPool      *[]PoolRange
 }
 
 // User implements the admin-only user catalogue described in §4.1 / §7a.5.
@@ -126,12 +128,13 @@ func (u *User) Create(ctx context.Context, eff domain.EffectiveRoles, in UserCre
 
 	now := time.Now().UTC()
 	row := domain.User{
-		Login:     login,
-		PINHash:   hash,
-		Role:      in.Role,
-		Active:    true,
-		CreatedAt: now,
-		UpdatedAt: now,
+		Login:        login,
+		PINHash:      hash,
+		Organization: validation.SanitiseOrganization(in.Organization),
+		Role:         in.Role,
+		Active:       true,
+		CreatedAt:    now,
+		UpdatedAt:    now,
 	}
 	if err := u.users.Insert(ctx, &row); err != nil {
 		return domain.User{}, err
@@ -173,6 +176,9 @@ func (u *User) Update(ctx context.Context, eff domain.EffectiveRoles, id uint, i
 			return domain.User{}, svcerrors.ErrUserRoleInvalid
 		}
 		row.Role = *in.Role
+	}
+	if in.Organization != nil {
+		row.Organization = validation.SanitiseOrganization(*in.Organization)
 	}
 	if in.PIN != nil {
 		if err := validation.ValidateUserPIN(*in.PIN); err != nil {

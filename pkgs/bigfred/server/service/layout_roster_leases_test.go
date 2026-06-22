@@ -80,14 +80,15 @@ func TestAllowedVehiclesSnapshotFoldsVehicleLease(t *testing.T) {
 	}
 
 	now := time.Now().UTC()
-	if err := bundle.VehicleLeases.Insert(ctx, &domain.VehicleLease{
+	ok, err := bundle.VehicleLeases.Create(ctx, &domain.VehicleLease{
 		VehicleID:  vehicle.ID,
 		FromUserID: owner.ID,
 		ToUserID:   lessee.ID,
 		StartedAt:  now,
 		ExpiresAt:  now.Add(time.Hour),
-	}); err != nil {
-		t.Fatalf("insert lease: %v", err)
+	}, false)
+	if err != nil || !ok {
+		t.Fatalf("create lease: ok=%v err=%v", ok, err)
 	}
 
 	if err := rosterSvc.SyncLayoutRosterToRedis(ctx, layout.ID); err != nil {
@@ -96,8 +97,10 @@ func TestAllowedVehiclesSnapshotFoldsVehicleLease(t *testing.T) {
 	if len(capture.allowed.Vehicles) != 1 {
 		t.Fatalf("expected one allowed vehicle, got %d", len(capture.allowed.Vehicles))
 	}
+	// While the lease is active the owner loses drive authority: only the
+	// lessee may drive (and be an emergency-stop target for) the vehicle.
 	ids := capture.allowed.Vehicles[0].ControllerUserIDs
-	if len(ids) != 2 || ids[0] != owner.ID || ids[1] != lessee.ID {
-		t.Fatalf("controllerUserIds = %v, want [%d %d]", ids, owner.ID, lessee.ID)
+	if len(ids) != 1 || ids[0] != lessee.ID {
+		t.Fatalf("controllerUserIds = %v, want [%d]", ids, lessee.ID)
 	}
 }

@@ -85,5 +85,14 @@
   "vehicle_template_name_required": "Enter a template name.",
   "vehicle_template_name_taken": "A template with this name already exists.",
   "train_member_multiplier_range": "Multiplier must be between 0 and 4.",
-  "train_leading_multiplier_immutable": "The leading vehicle multiplier cannot be changed."
+  "train_leading_multiplier_immutable": "The leading vehicle multiplier cannot be changed.",
+  "lease_not_found": "The lease does not exist or has expired.",
+  "lease_conflict": "This vehicle or train is already leased out.",
+  "lease_not_owner": "Only the owner can manage this lease.",
+  "lease_not_party": "You are not a party to this lease.",
+  "lease_self": "You cannot lease a vehicle or train to yourself.",
+  "lease_target_not_on_layout": "The vehicle or train is not on this layout.",
+  "lease_invalid_speed_limit": "Speed limit must be between 0% and 100%.",
+  "lease_invalid_duration": "Lease duration must be between 1 minute and 24 hours.",
+  "lease_target_not_drivable": "This vehicle or train cannot be leased."
 }

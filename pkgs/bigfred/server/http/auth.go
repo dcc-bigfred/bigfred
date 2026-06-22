@@ -163,6 +163,35 @@ func (h *AuthHandler) ChangePIN(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// UpdateProfile handles PUT /api/v1/auth/me/profile — self-service
+// updates to profile fields the caller may change themselves.
+func (h *AuthHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
+	id, ok := IdentityFromContext(r.Context())
+	if !ok {
+		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	var req protocol.UpdateProfileRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid_body")
+		return
+	}
+	user, err := h.auth.UpdateProfile(r.Context(), id.User.ID, req.Organization)
+	if err != nil {
+		status, code := svcerrors.UserHTTPStatus(err)
+		writeJSONError(w, status, code)
+		return
+	}
+	id.User = user
+	if h.audit != nil {
+		_ = h.audit.Publish(r.Context(), 0,
+			cmd.AuditActor{UserID: id.User.ID, Login: id.User.Login},
+			"audit_user_updated", map[string]string{"target": id.User.Login})
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(h.buildMeResponse(r, id))
+}
+
 // buildMeResponse runs the per-request derivation that the Login
 // and Me handlers share. Failures inside the auth/sudo lookups fall
 // back to safe defaults (effectiveRole := user.Role, isSignalman :=
@@ -185,6 +214,7 @@ func (h *AuthHandler) buildMeResponse(r *http.Request, id cmd.Identity) protocol
 	return protocol.MeResponse{
 		ID:             id.User.ID,
 		Login:          id.User.Login,
+		Organization:   id.User.Organization,
 		Role:           id.User.Role,
 		EffectiveRole:  effectiveRole,
 		IsSignalman:    isSignalman,

@@ -51,6 +51,7 @@ import UserDccPoolFields, {
   parseDccPoolRanges,
   type DccPoolRangeInput,
 } from "../../components/UserDccPoolFields";
+import { getUserName } from "../../utils/getUserName";
 
 // UsersPage is the admin-only management screen for user accounts
 // (§4.1 / §7a.5). Five operations are supported:
@@ -86,6 +87,7 @@ export default function UsersPage() {
 
   const [dialog, setDialog] = useState<DialogState>(null);
   const [loginInput, setLoginInput] = useState("");
+  const [organizationInput, setOrganizationInput] = useState("");
   const [pinInput, setPinInput] = useState("");
   const [roleInput, setRoleInput] = useState<Role>("driver");
   const [dccPoolInput, setDccPoolInput] = useState<DccPoolRangeInput[]>([
@@ -96,6 +98,7 @@ export default function UsersPage() {
   const closeDialog = () => {
     setDialog(null);
     setLoginInput("");
+    setOrganizationInput("");
     setPinInput("");
     setRoleInput("driver");
     setDccPoolInput([emptyDccPoolRange()]);
@@ -120,6 +123,7 @@ export default function UsersPage() {
   const openCreate = () => {
     setDialog({ kind: "create" });
     setLoginInput("");
+    setOrganizationInput("");
     setPinInput("");
     setRoleInput("driver");
     setDccPoolInput([emptyDccPoolRange()]);
@@ -129,6 +133,7 @@ export default function UsersPage() {
   const openEdit = (target: User) => {
     setDialog({ kind: "edit", target });
     setLoginInput(target.login);
+    setOrganizationInput(target.organization ?? "");
     setPinInput("");
     setRoleInput(target.role);
     setDccPoolInput(dccPoolFromApi(target.dccPool ?? []));
@@ -153,6 +158,7 @@ export default function UsersPage() {
         if (!dccPool) return;
         await create.mutateAsync({
           login: loginInput.trim(),
+          organization: organizationInput.trim(),
           pin: pinInput,
           role: roleInput,
           dccPool,
@@ -163,6 +169,7 @@ export default function UsersPage() {
         await update.mutateAsync({
           id: dialog.target.id,
           login: loginInput.trim(),
+          organization: organizationInput.trim(),
           role: roleInput,
           pin: pinInput || undefined,
           dccPool,
@@ -265,7 +272,7 @@ export default function UsersPage() {
                         <TableCell>
                           <Stack direction="row" spacing={1} alignItems="center">
                             <Typography variant="body2" fontWeight={500}>
-                              {u.login}
+                              {getUserName(u)}
                             </Typography>
                             {isSelf && (
                               <Chip
@@ -394,7 +401,7 @@ export default function UsersPage() {
       >
         <DialogTitle>
           {dialog?.kind === "edit"
-            ? t("user:admin.dialogs.edit.title", { login: dialog.target.login })
+            ? t("user:admin.dialogs.edit.title", { login: getUserName(dialog.target) })
             : t("user:admin.dialogs.create.title")}
         </DialogTitle>
         <DialogContent>
@@ -407,6 +414,14 @@ export default function UsersPage() {
               autoFocus
               fullWidth
               required
+            />
+            <TextField
+              label={t("user:admin.dialogs.fields.organization")}
+              value={organizationInput}
+              onChange={(e) => setOrganizationInput(e.target.value)}
+              helperText={t("user:admin.dialogs.fields.organizationHelp")}
+              fullWidth
+              inputProps={{ maxLength: 128 }}
             />
             <TextField
               select
@@ -479,10 +494,10 @@ export default function UsersPage() {
           {dialog?.kind === "activate" &&
             (dialog.active
               ? t("user:admin.dialogs.activate.title", {
-                  login: dialog.target.login,
+                  login: getUserName(dialog.target),
                 })
               : t("user:admin.dialogs.deactivate.title", {
-                  login: dialog.target.login,
+                  login: getUserName(dialog.target),
                 }))}
         </DialogTitle>
         <DialogContent>
@@ -527,7 +542,7 @@ export default function UsersPage() {
         <DialogTitle>
           {dialog?.kind === "delete" &&
             t("user:admin.dialogs.delete.title", {
-              login: dialog.target.login,
+              login: getUserName(dialog.target),
             })}
         </DialogTitle>
         <DialogContent>

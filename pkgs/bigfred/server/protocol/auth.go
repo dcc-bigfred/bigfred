@@ -23,6 +23,7 @@ type SudoElevationResponse struct {
 type MeResponse struct {
 	ID             uint                   `json:"id"`
 	Login          string                 `json:"login"`
+	Organization   string                 `json:"organization"`
 	Role           domain.Role            `json:"role"`
 	EffectiveRole  domain.Role            `json:"effectiveRole"`
 	IsSignalman    bool                   `json:"isSignalman"`
@@ -33,6 +34,11 @@ type MeResponse struct {
 	LayoutName     string                 `json:"layoutName"`
 	LayoutIsSystem bool                   `json:"layoutIsSystem"`
 	Sudo           *SudoElevationResponse `json:"sudo"`
+}
+
+// UpdateProfileRequest is the PUT /api/v1/auth/me/profile body.
+type UpdateProfileRequest struct {
+	Organization string `json:"organization"`
 }
 
 // ChangePINRequest is the PUT /api/v1/auth/me/pin body.

@@ -22,6 +22,7 @@ import {
   type RadioSendContext,
   type RadioSendTarget,
 } from "../../api/radio";
+import { getUserName } from "../../utils/getUserName";
 import { useRadioMessageClock } from "../../hooks/useRadioMessageClock";
 import RadioChatLine from "../radio/RadioChatLine";
 import RadioPhrasePickerDialog from "./RadioPhrasePickerDialog";
@@ -99,7 +100,7 @@ export default function InterlockingChatPanel({
                     setReply({
                       to: { userId: msg.from.userId },
                       context: radioContextFromMessage(msg),
-                      targetLabel: msg.from.login,
+                      targetLabel: getUserName(msg.from),
                       contextLabel: contextLabel(msg),
                     })
                   }

@@ -32,7 +32,7 @@ func ServeWS(hub *ws.Hub, auth *cmd.Auth, w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	session := ws.NewDriveSession(id.User.ID, id.User.Login, id.Layout.ID)
+	session := ws.NewDriveSession(id.User.ID, id.User.Login, id.User.Organization, id.Layout.ID)
 	client := ws.NewClient(conn, hub, session)
 	hub.Register(client)
 	client.Serve(r.Context())

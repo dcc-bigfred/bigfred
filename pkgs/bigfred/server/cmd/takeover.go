@@ -164,6 +164,21 @@ func (s *Takeover) effectiveRoles(ctx context.Context, user domain.User, layoutI
 	return s.auth.Effective(ctx, user, layoutID)
 }
 
+func (s *Takeover) userWire(ctx context.Context, userID uint) contract.TakeoverUserWire {
+	if s.users == nil {
+		return contract.TakeoverUserWire{UserID: userID}
+	}
+	user, err := s.users.FindByID(ctx, userID)
+	if err != nil {
+		return contract.TakeoverUserWire{UserID: userID}
+	}
+	return contract.TakeoverUserWire{
+		UserID:       user.ID,
+		Login:        user.Login,
+		Organization: user.Organization,
+	}
+}
+
 func (s *Takeover) userLogin(ctx context.Context, userID uint) string {
 	if s.users == nil {
 		return ""
@@ -253,10 +268,9 @@ func (s *Takeover) Request(
 		return domain.TakeoverRequest{}, err
 	}
 
-	signalmanLogin := s.userLogin(ctx, signalman.ID)
 	requested := contract.TakeoverRequestedWire{
 		RequestID:   row.ID,
-		Signalman:   contract.TakeoverUserWire{UserID: signalman.ID, Login: signalmanLogin},
+		Signalman:   s.userWire(ctx, signalman.ID),
 		Target:      target,
 		TargetID:    targetID,
 		AutoGrantAt: row.AutoGrantAt.UnixMilli(),
@@ -346,9 +360,9 @@ func (s *Takeover) release(ctx context.Context, row domain.TakeoverRequest, now 
 	if row.State == domain.TakeoverStateGranted {
 		switch row.Target {
 		case domain.TakeoverTargetVehicle:
-			_ = s.vehicleLeases.Revoke(ctx, domain.VehicleID(row.TargetID), now)
+			_ = s.vehicleLeases.Revoke(ctx, domain.VehicleID(row.TargetID))
 		case domain.TakeoverTargetTrain:
-			_ = s.trainLeases.Revoke(ctx, domain.TrainID(row.TargetID), now)
+			_ = s.trainLeases.Revoke(ctx, domain.TrainID(row.TargetID))
 		}
 	}
 	row.State = domain.TakeoverStateReleased
@@ -396,8 +410,9 @@ func (s *Takeover) autoGrant(ctx context.Context, requestID uint) error {
 			ToUserID:   row.SignalmanUserID,
 			StartedAt:  now,
 			ExpiresAt:  expires,
+			Source:     "takeover",
 		}
-		if err := s.vehicleLeases.Insert(ctx, &lease); err != nil {
+		if _, err := s.vehicleLeases.Create(ctx, &lease, true); err != nil {
 			return err
 		}
 	case domain.TakeoverTargetTrain:
@@ -411,8 +426,9 @@ func (s *Takeover) autoGrant(ctx context.Context, requestID uint) error {
 			ToUserID:   row.SignalmanUserID,
 			StartedAt:  now,
 			ExpiresAt:  expires,
+			Source:     "takeover",
 		}
-		if err := s.trainLeases.Insert(ctx, &lease); err != nil {
+		if _, err := s.trainLeases.Create(ctx, &lease, true); err != nil {
 			return err
 		}
 	default:
@@ -447,7 +463,7 @@ func (s *Takeover) autoGrant(ctx context.Context, requestID uint) error {
 		RequestID:      row.ID,
 		Target:         row.Target,
 		TargetID:       row.TargetID,
-		Signalman:      contract.TakeoverUserWire{UserID: row.SignalmanUserID, Login: signalmanLogin},
+		Signalman:      s.userWire(ctx, row.SignalmanUserID),
 		LeaseExpiresAt: expires.UnixMilli(),
 	}
 	s.broadcast(row.LayoutID, row.DriverUserID, contract.TypeTakeoverGranted, granted)

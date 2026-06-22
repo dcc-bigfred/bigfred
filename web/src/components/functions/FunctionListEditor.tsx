@@ -45,7 +45,10 @@ import {
   cockpit,
   cockpitFunctionButtonGradient,
 } from "../throttle/throttleCockpitTheme";
-import { FunctionIconVisual } from "./functionIconMap";
+import {
+  FunctionIconVisual,
+} from "./functionIconMap";
+import { getUserName } from "../../utils/getUserName";
 
 type IconOption = { slug: string; label: string };
 
@@ -548,7 +551,7 @@ export default function FunctionListEditor({
                 options={copyFunctionsFrom.sources}
                 groupBy={(option) => sourceTypeLabel(option.kind)}
                 getOptionLabel={(option) =>
-                  `${option.name} (${option.ownerLogin})`
+                  `${option.name} (${getUserName(option)})`
                 }
                 value={selectedSource}
                 onChange={(_event, value) => setSelectedSource(value)}
@@ -572,7 +575,7 @@ export default function FunctionListEditor({
                         {option.name}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
-                        {option.ownerLogin}
+                        {getUserName(option)}
                       </Typography>
                     </Stack>
                   </Box>

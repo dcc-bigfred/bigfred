@@ -57,6 +57,11 @@ type AllowedVehicle struct {
 	// checks membership in this slice. See §7e.5.
 	ControllerUserIDs []uint `json:"controllerUserIds"`
 
+	// ControllerSpeedLimits maps lessee user ids to a 1–100 percent cap
+	// on throttle speed steps. Owners are omitted (no cap). dcc-bus
+	// clamps loco.setSpeed / train.setSpeed for listed users.
+	ControllerSpeedLimits map[uint]uint8 `json:"controllerSpeedLimits,omitempty"`
+
 	// Per-vehicle dead-man's switch catalogue (§7e.5). Copied from the
 	// vehicle row so dcc-bus can act without SQLite.
 	Rp1Function             uint8  `json:"rp1Function"`
@@ -80,6 +85,9 @@ type DefinedTrain struct {
 	// ControllerUserIDs is the flat set of user ids allowed to drive
 	// this train right now (owner + active train lessees).
 	ControllerUserIDs []uint `json:"controllerUserIds"`
+
+	// ControllerSpeedLimits maps train lessee user ids to percent caps.
+	ControllerSpeedLimits map[uint]uint8 `json:"controllerSpeedLimits,omitempty"`
 
 	Members []DefinedTrainMember `json:"members"`
 }

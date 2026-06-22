@@ -37,8 +37,9 @@ const (
 
 // RadioUserWire identifies a user on the wire.
 type RadioUserWire struct {
-	UserID uint   `json:"userId"`
-	Login  string `json:"login"`
+	UserID       uint   `json:"userId"`
+	Login        string `json:"login"`
+	Organization string `json:"organization"`
 }
 
 // RadioTargetWire is exactly one of userId or interlockingId.
@@ -108,8 +109,9 @@ func MessageWireFromDomain(msg domain.RadioMessage) RadioMessageWire {
 	out := RadioMessageWire{
 		MessageID: msg.ID,
 		From: RadioUserWire{
-			UserID: msg.FromUserID,
-			Login:  msg.FromLogin,
+			UserID:       msg.FromUserID,
+			Login:        msg.FromLogin,
+			Organization: msg.FromOrganization,
 		},
 		Phrase: msg.Phrase,
 		Note:   msg.Note,

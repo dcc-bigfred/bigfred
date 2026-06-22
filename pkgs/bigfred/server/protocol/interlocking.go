@@ -13,8 +13,9 @@ type InterlockingResponse struct {
 }
 
 type OccupantResponse struct {
-	UserID uint   `json:"userId"`
-	Login  string `json:"login"`
+	UserID       uint   `json:"userId"`
+	Login        string `json:"login"`
+	Organization string `json:"organization"`
 }
 
 func ToInterlockingResponse(i domain.Interlocking) InterlockingResponse {

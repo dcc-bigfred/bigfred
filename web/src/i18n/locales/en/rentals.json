@@ -1,0 +1,43 @@
+{
+  "title": "Rentals",
+  "tabs": {
+    "received": "Borrowed from others",
+    "granted": "Lent to others"
+  },
+  "empty": "No active rentals.",
+  "expired": "Expired",
+  "kind": {
+    "vehicle": "vehicle",
+    "train": "train"
+  },
+  "received": {
+    "from": "Owner: {{login}}",
+    "return": "Return",
+    "returnConfirmTitle": "Return vehicle/train?",
+    "returnConfirmBody": "Return “{{name}}” to the owner?"
+  },
+  "granted": {
+    "to": "Lessee: {{login}}",
+    "lend": "Lend"
+  },
+  "create": {
+    "title": "Lend a vehicle or train",
+    "target": "Vehicle / train",
+    "user": "User",
+    "speedLimit": "Speed limit (%)",
+    "speedLimitHelp": "0 = no cap, 100 = full speed",
+    "hours": "Hours",
+    "minutes": "Minutes",
+    "submit": "Lend"
+  },
+  "control": {
+    "lessee": "Lessee",
+    "remaining": "Time remaining",
+    "speedLimit": "Speed limit (%)",
+    "apply": "Apply",
+    "stop": "Stop vehicle/train",
+    "return": "Return vehicle/train",
+    "adjustTime": "Extend / shorten time",
+    "adjustTimeSubmit": "Apply duration"
+  }
+}

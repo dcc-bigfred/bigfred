@@ -86,8 +86,9 @@ type FunctionCatalogueEntryResponse struct {
 	VehicleID   string             `json:"vehicleId"`
 	VehicleName string             `json:"vehicleName"`
 	OwnerID     uint               `json:"ownerId"`
-	OwnerLogin  string             `json:"ownerLogin"`
-	DCCAddress  *uint16            `json:"dccAddress"`
+	OwnerLogin        string             `json:"ownerLogin"`
+	OwnerOrganization string             `json:"ownerOrganization"`
+	DCCAddress        *uint16            `json:"dccAddress"`
 	Kind        domain.VehicleKind `json:"kind"`
 	Functions   []FunctionResponse `json:"functions"`
 }
@@ -98,8 +99,9 @@ func ToFunctionCatalogueEntry(row cmd.VehicleFunctionCatalogueEntry) FunctionCat
 		VehicleID:   row.VehicleID.String(),
 		VehicleName: row.VehicleName,
 		OwnerID:     row.OwnerID,
-		OwnerLogin:  row.OwnerLogin,
-		DCCAddress:  row.DCCAddress,
+		OwnerLogin:        row.OwnerLogin,
+		OwnerOrganization: row.OwnerOrganization,
+		DCCAddress:        row.DCCAddress,
 		Kind:        row.Kind,
 		Functions:   ToFunctionResponses(row.Functions),
 	}

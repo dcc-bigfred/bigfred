@@ -27,7 +27,7 @@ type EStopTargetDccBusPort interface {
 type EStopTargetRosterPort interface {
 	ListVehicles(ctx context.Context, layoutID uint) ([]RosterVehicleEntry, error)
 	ListTrains(ctx context.Context, layoutID uint) ([]RosterTrainEntry, error)
-	LesseesByVehicle(ctx context.Context, vehicleEntries []RosterVehicleEntry, trainEntries []RosterTrainEntry) (map[domain.VehicleID][]uint, error)
+	LesseesByVehicle(ctx context.Context, vehicleEntries []RosterVehicleEntry, trainEntries []RosterTrainEntry) (map[domain.VehicleID][]domain.VehicleLessee, error)
 }
 
 type EStopTargetLayoutsPort interface {
@@ -201,7 +201,7 @@ func (s *EStopTarget) resolveVehicle(
 		return estopTargetResolved{}, err
 	}
 	addr := uint16(*entry.Vehicle.DCCAddress)
-	controllers := helpers.MergeUserIDs(entry.Vehicle.OwnerUserID, lesseesByVehicle[vehicleID]...)
+	controllers := helpers.MergeUserIDs(entry.Vehicle.OwnerUserID, domain.VehicleLesseeUserIDs(lesseesByVehicle[vehicleID])...)
 	return estopTargetResolved{
 		addrs:             []uint16{addr},
 		ownerID:           entry.Vehicle.OwnerUserID,
@@ -253,7 +253,7 @@ func (s *EStopTarget) resolveTrain(
 			addrs = append(addrs, addr)
 		}
 		for _, lessee := range lesseesByVehicle[m.VehicleID] {
-			controllerSet[lessee] = struct{}{}
+			controllerSet[lessee.UserID] = struct{}{}
 		}
 	}
 	controllers := make([]uint, 0, len(controllerSet))

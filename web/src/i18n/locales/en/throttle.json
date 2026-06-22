@@ -47,6 +47,9 @@
   "functions": "Functions",
   "fnLabel": "F{{n}}",
   "stop": "Stop",
+  "lease": {
+    "remaining": "Rental"
+  },
   "emergencyStop": "Emergency stop",
   "leaveGuard": {
     "title": "Locomotive in motion",

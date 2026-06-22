@@ -33,13 +33,14 @@ type FunctionReorderEntry struct {
 
 // VehicleFunctionCatalogueEntry is one vehicle with its resolved function list.
 type VehicleFunctionCatalogueEntry struct {
-	VehicleID   domain.VehicleID
-	VehicleName string
-	OwnerID     uint
-	OwnerLogin  string
-	DCCAddress  *uint16
-	Kind        domain.VehicleKind
-	Functions   []ResolvedFunction
+	VehicleID         domain.VehicleID
+	VehicleName       string
+	OwnerID           uint
+	OwnerLogin        string
+	OwnerOrganization string
+	DCCAddress        *uint16
+	Kind              domain.VehicleKind
+	Functions         []ResolvedFunction
 }
 
 // Function manages dcc_functions for vehicles and templates (§3a.6).
@@ -92,7 +93,10 @@ func (f *Function) ListFunctionCatalogue(ctx context.Context) ([]VehicleFunction
 	if err != nil {
 		return nil, err
 	}
-	logins := make(map[uint]string)
+	logins := make(map[uint]struct {
+		login        string
+		organization string
+	})
 	out := make([]VehicleFunctionCatalogueEntry, 0, len(vehicles))
 	for _, v := range vehicles {
 		fns, err := f.ListForVehicle(ctx, v.ID)
@@ -102,24 +106,26 @@ func (f *Function) ListFunctionCatalogue(ctx context.Context) ([]VehicleFunction
 		if len(fns) == 0 {
 			continue
 		}
-		login, ok := logins[v.OwnerUserID]
+		info, ok := logins[v.OwnerUserID]
 		if !ok {
 			u, err := f.users.FindByID(ctx, v.OwnerUserID)
 			if err != nil {
-				login = "?"
+				info.login = "?"
 			} else {
-				login = u.Login
+				info.login = u.Login
+				info.organization = u.Organization
 			}
-			logins[v.OwnerUserID] = login
+			logins[v.OwnerUserID] = info
 		}
 		out = append(out, VehicleFunctionCatalogueEntry{
-			VehicleID:   v.ID,
-			VehicleName: v.Name,
-			OwnerID:     v.OwnerUserID,
-			OwnerLogin:  login,
-			DCCAddress:  v.DCCAddress,
-			Kind:        v.Kind,
-			Functions:   fns,
+			VehicleID:         v.ID,
+			VehicleName:       v.Name,
+			OwnerID:           v.OwnerUserID,
+			OwnerLogin:        info.login,
+			OwnerOrganization: info.organization,
+			DCCAddress:        v.DCCAddress,
+			Kind:              v.Kind,
+			Functions:         fns,
 		})
 	}
 	return out, nil

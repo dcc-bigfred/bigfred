@@ -18,6 +18,10 @@ func (r *Router) HandleSetSpeed(ctx context.Context, actor Actor, resp Responder
 	if d := r.drive.CanDrive(actor.UserID, vehicle, onLayout); !d.Allowed {
 		return FailResult(d.Reason)
 	}
+	maxSpeed := contract.MaxSpeedForSpeedSteps(r.speedSteps)
+	if limit := vehicle.ControllerSpeedLimits[actor.UserID]; limit > 0 {
+		p.Speed = contract.ClampSpeedForControllerLimit(p.Speed, maxSpeed, limit)
+	}
 	if err := r.applyMemberSetSpeed(ctx, actor, p.Address, p.Speed, p.Forward, p.Emergency, "throttle"); err != nil {
 		_ = resp.SendLocoError(ctx, p.Address, errors.CodeCommandStationError, err.Error())
 		return FailResult(errors.CodeCommandStationError)

@@ -103,6 +103,8 @@ func register(m *migrator.Migrator) {
 	m.Register(migrationVersion(20260617, 16), seedRailboxRb23xxBr232LudmilaTemplateUp, seedRailboxRb23xxBr232LudmilaTemplateDown)
 	m.Register(migrationVersion(20260617, 17), seedRailboxRb23xxTp1TemplateUp, seedRailboxRb23xxTp1TemplateDown)
 	m.Register(migrationVersion(20260621, 1), migrateVehicleTrainStringIDsUp, migrateVehicleTrainStringIDsDown)
+	m.Register(migrationVersion(20260622, 1), addUsersOrganizationColumnUp, addUsersOrganizationColumnDown)
+	m.Register(migrationVersion(20260622, 2), addLeaseSpeedLimitColumnUp, addLeaseSpeedLimitColumnDown)
 }
 
 // createCommandStationsUp installs the `command_stations` catalogue
@@ -402,6 +404,20 @@ func addUsersActiveColumnDown(s *rel.Schema) {
 	})
 }
 
+// addUsersOrganizationColumnUp stores the optional club / organisation
+// label shown on the user profile.
+func addUsersOrganizationColumnUp(s *rel.Schema) {
+	s.AlterTable("users", func(t *rel.AlterTable) {
+		t.String("organization", rel.Default(""))
+	})
+}
+
+func addUsersOrganizationColumnDown(s *rel.Schema) {
+	s.AlterTable("users", func(t *rel.AlterTable) {
+		t.DropColumn("organization")
+	})
+}
+
 // addLayoutsAdminPINUp installs the `admin_pin_hash` column on the
 // `layouts` table (§7a.7). The column is NOT NULL — every layout
 // (including the bootstrap system row) MUST carry a digest so the
@@ -680,5 +696,14 @@ func addTrainMemberBrakeRampUp(s *rel.Schema) {
 }
 
 func addTrainMemberBrakeRampDown(s *rel.Schema) {
+	// SQLite cannot DROP COLUMN in older schemas; leave columns in place.
+}
+
+func addLeaseSpeedLimitColumnUp(s *rel.Schema) {
+	s.Exec(rel.Raw(`ALTER TABLE vehicle_leases ADD COLUMN speed_limit INTEGER NOT NULL DEFAULT 0`))
+	s.Exec(rel.Raw(`ALTER TABLE train_leases ADD COLUMN speed_limit INTEGER NOT NULL DEFAULT 0`))
+}
+
+func addLeaseSpeedLimitColumnDown(s *rel.Schema) {
 	// SQLite cannot DROP COLUMN in older schemas; leave columns in place.
 }

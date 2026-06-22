@@ -34,6 +34,10 @@ func (r *Router) HandleTrainSetSpeed(ctx context.Context, actor Actor, _ Respond
 	}
 
 	maxSpeed := contract.MaxSpeedForSpeedSteps(r.speedSteps)
+	leadingSpeed := p.Speed
+	if limit := train.ControllerSpeedLimits[actor.UserID]; limit > 0 {
+		leadingSpeed = contract.ClampSpeedForControllerLimit(p.Speed, maxSpeed, limit)
+	}
 	leadingWasAtStartSpeed := r.leadingWasAtStartSpeed(ctx, leading)
 	members := make([]service.TrainMemberSetSpeed, 0, len(train.Members))
 	for _, m := range train.Members {
@@ -44,7 +48,7 @@ func (r *Router) HandleTrainSetSpeed(ctx context.Context, actor Actor, _ Respond
 		if m.IsLeading(leading) {
 			mult = 1.0
 		}
-		speed := contract.EffectiveMemberSpeed(p.Speed, mult, maxSpeed)
+		speed := contract.EffectiveMemberSpeed(leadingSpeed, mult, maxSpeed)
 		forward := p.Forward
 		if m.Reversed {
 			forward = !forward

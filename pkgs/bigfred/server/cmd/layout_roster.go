@@ -13,17 +13,19 @@ import (
 
 // RosterVehicleEntry is one dashboard row of the layout vehicle roster.
 type RosterVehicleEntry struct {
-	Vehicle    domain.Vehicle
-	OwnerLogin string
-	AddedAt    time.Time
+	Vehicle            domain.Vehicle
+	OwnerLogin         string
+	OwnerOrganization  string
+	AddedAt            time.Time
 }
 
 // RosterTrainEntry is the train-shaped sibling of RosterVehicleEntry.
 type RosterTrainEntry struct {
-	Train      domain.Train
-	OwnerLogin string
-	AddedAt    time.Time
-	Members    []domain.TrainMember
+	Train             domain.Train
+	OwnerLogin        string
+	OwnerOrganization string
+	AddedAt           time.Time
+	Members           []domain.TrainMember
 }
 
 // LayoutRoster implements per-layout roster CRUD (§3a.1, §6.3c).
@@ -92,14 +94,16 @@ func (r *LayoutRoster) ListVehicles(ctx context.Context, layoutID uint) ([]Roste
 			continue
 		}
 		owner, err := r.users.FindByID(ctx, v.OwnerUserID)
-		ownerLogin := ""
+		ownerLogin, ownerOrganization := "", ""
 		if err == nil {
 			ownerLogin = owner.Login
+			ownerOrganization = owner.Organization
 		}
 		out = append(out, RosterVehicleEntry{
-			Vehicle:    v,
-			OwnerLogin: ownerLogin,
-			AddedAt:    row.AddedAt,
+			Vehicle:           v,
+			OwnerLogin:        ownerLogin,
+			OwnerOrganization: ownerOrganization,
+			AddedAt:           row.AddedAt,
 		})
 	}
 	return out, nil
@@ -131,19 +135,21 @@ func (r *LayoutRoster) ListTrains(ctx context.Context, layoutID uint) ([]RosterT
 			continue
 		}
 		owner, err := r.users.FindByID(ctx, t.OwnerUserID)
-		ownerLogin := ""
+		ownerLogin, ownerOrganization := "", ""
 		if err == nil {
 			ownerLogin = owner.Login
+			ownerOrganization = owner.Organization
 		}
 		members, err := r.members.ListByTrain(ctx, t.ID)
 		if err != nil {
 			return nil, err
 		}
 		out = append(out, RosterTrainEntry{
-			Train:      t,
-			OwnerLogin: ownerLogin,
-			AddedAt:    row.AddedAt,
-			Members:    members,
+			Train:             t,
+			OwnerLogin:        ownerLogin,
+			OwnerOrganization: ownerOrganization,
+			AddedAt:           row.AddedAt,
+			Members:           members,
 		})
 	}
 	return out, nil
@@ -179,11 +185,17 @@ func (r *LayoutRoster) AddVehicle(ctx context.Context, layoutID, actorID uint, v
 	}
 
 	owner, err := r.users.FindByID(ctx, v.OwnerUserID)
-	ownerLogin := ""
+	ownerLogin, ownerOrganization := "", ""
 	if err == nil {
 		ownerLogin = owner.Login
+		ownerOrganization = owner.Organization
 	}
-	entry := RosterVehicleEntry{Vehicle: v, OwnerLogin: ownerLogin, AddedAt: row.AddedAt}
+	entry := RosterVehicleEntry{
+		Vehicle:           v,
+		OwnerLogin:        ownerLogin,
+		OwnerOrganization: ownerOrganization,
+		AddedAt:           row.AddedAt,
+	}
 	r.broadcastVehicleChanged(layoutID, v.ID, "added")
 	return entry, nil
 }
@@ -250,15 +262,22 @@ func (r *LayoutRoster) AddTrain(ctx context.Context, layoutID, actorID uint, tra
 	}
 
 	owner, err := r.users.FindByID(ctx, t.OwnerUserID)
-	ownerLogin := ""
+	ownerLogin, ownerOrganization := "", ""
 	if err == nil {
 		ownerLogin = owner.Login
+		ownerOrganization = owner.Organization
 	}
 	members, err := r.members.ListByTrain(ctx, t.ID)
 	if err != nil {
 		return RosterTrainEntry{}, err
 	}
-	entry := RosterTrainEntry{Train: t, OwnerLogin: ownerLogin, AddedAt: row.AddedAt, Members: members}
+	entry := RosterTrainEntry{
+		Train:             t,
+		OwnerLogin:        ownerLogin,
+		OwnerOrganization: ownerOrganization,
+		AddedAt:           row.AddedAt,
+		Members:           members,
+	}
 	r.broadcastTrainChanged(layoutID, t.ID, "added")
 	return entry, nil
 }

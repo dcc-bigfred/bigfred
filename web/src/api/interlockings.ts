@@ -6,6 +6,7 @@ import { useSocket } from "../context/SocketContext";
 export interface InterlockingOccupant {
   userId: number;
   login: string;
+  organization: string;
 }
 
 export interface Interlocking {

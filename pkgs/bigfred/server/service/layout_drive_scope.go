@@ -12,7 +12,7 @@ func (s *LayoutVehicleService) LesseesByVehicle(
 	layoutID uint,
 	entries []RosterVehicleEntry,
 	trains []RosterTrainEntry,
-) (map[domain.VehicleID][]uint, error) {
+) (map[domain.VehicleID][]domain.VehicleLessee, error) {
 	if entries == nil {
 		var err error
 		entries, err = s.ListVehicles(ctx, layoutID)

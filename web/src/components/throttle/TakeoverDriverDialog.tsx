@@ -15,6 +15,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { TakeoverRequestedEvent } from "../../api/takeover";
 import { useTakeoverActions } from "../../api/takeover";
 import { layoutVehiclesQueryKey } from "../../api/vehicles";
+import { getUserName } from "../../utils/getUserName";
 import { useSocket } from "../../context/SocketContext";
 
 interface TakeoverDriverDialogProps {
@@ -38,7 +39,7 @@ export function TakeoverDriverDialog({ pending, onDismiss }: TakeoverDriverDialo
       <DialogContent>
         <DialogContentText sx={{ mb: 2 }}>
           {t("throttle:takeover.requestedMessage", {
-            login: pending.signalman.login,
+            login: getUserName(pending.signalman),
             target: pending.target,
           })}
         </DialogContentText>

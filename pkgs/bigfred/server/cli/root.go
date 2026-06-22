@@ -164,8 +164,6 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	trainMembers := repo.NewTrainMembers(repository)
 	layoutVehicles := repo.NewLayoutVehicles(repository)
 	layoutTrains := repo.NewLayoutTrains(repository)
-	vehicleLeasesRepo := repo.NewVehicleLeases(repository)
-	trainLeasesRepo := repo.NewTrainLeases(repository)
 	takeoverRequestsRepo := repo.NewTakeoverRequests(repository)
 	commandStations := repo.NewCommandStations(repository)
 	layoutCommandStations := repo.NewLayoutCommandStations(repository)
@@ -282,8 +280,8 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		log.Warn("redis unavailable; sudo elevations stored in SQLite")
 	}
 
-	var vehicleLeases repo.VehicleLeaseStore = vehicleLeasesRepo
-	var trainLeases repo.TrainLeaseStore = trainLeasesRepo
+	var vehicleLeases repo.VehicleLeaseStore
+	var trainLeases repo.TrainLeaseStore
 	var takeoverRequests repo.TakeoverRequestStore = takeoverRequestsRepo
 	if redisReady {
 		vehicleLeases = repo.NewRedisVehicleLeases(redisSvc.Client())
@@ -291,7 +289,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		takeoverRequests = repo.NewRedisTakeoverRequests(redisSvc.Client())
 		log.Info("takeover requests and drive leases stored in Redis")
 	} else {
-		log.Warn("redis unavailable; takeover requests and leases stored in SQLite")
+		log.Warn("redis unavailable; takeover requests stored in SQLite, leases disabled")
 	}
 
 	authSvc := cmd.NewAuth(users, layoutSvc, layoutSignalmen, sudoElevations, cmd.AuthConfig{JWTSecret: secret})
@@ -345,6 +343,22 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	if redisReady {
 		auditSvc = service.NewAuditService(service.AuditServiceConfig{Redis: redisSvc})
 		log.Info("audit service ready (Redis Streams)")
+	}
+
+	leaseSvc := service.NewLeaseService(service.LeaseConfig{
+		VehicleLeases:  vehicleLeases,
+		TrainLeases:    trainLeases,
+		LayoutVehicles: layoutVehicles,
+		LayoutTrains:   layoutTrains,
+		Vehicles:       vehicles,
+		Trains:         trains,
+		Users:          users,
+		Roster:         layoutVehicleSvc,
+		Hub:            hub,
+		Audit:          auditSvc,
+	})
+	if err := leaseSvc.RecoverPending(ctx); err != nil {
+		log.WithError(err).Warn("lease recover pending")
 	}
 
 	var radioStopSvc *service.RadioStopService
@@ -514,6 +528,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		DccBus:           dccBusSvc,
 		Radio:            radioSvc,
 		Audit:            auditSvc,
+		Leases:           leaseSvc,
 		AllowedOrigins:   f.AllowedOrigins,
 		SecureCookie:     f.SecureCookie,
 		StaticFS:         staticFS,

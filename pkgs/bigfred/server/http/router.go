@@ -38,6 +38,7 @@ type RouterConfig struct {
 	DccBus           *service.DccBusService
 	Radio            *service.RadioService
 	Audit            *service.AuditService
+	Leases           *service.LeaseService
 
 	// AllowedOrigins is forwarded verbatim to the CORS middleware.
 	// In development the Vite dev server lives on a different port
@@ -91,6 +92,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	diagnosticsH := NewDiagnosticsHandler(cfg.Diagnostics)
 	radioH := NewRadioHandler(cfg.Radio)
 	auditH := NewAuditHandler(cfg.Audit)
+	leaseH := NewLeaseHandler(cfg.Leases)
 
 	r.Route("/api/v1", func(r chi.Router) {
 		// WebSocket upgrade — auth reads cookie / ?token= inline.
@@ -125,6 +127,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 
 			r.Get("/auth/me", authH.Me)
 			r.Put("/auth/me/pin", authH.ChangePIN)
+			r.Put("/auth/me/profile", authH.UpdateProfile)
 			r.Get("/auth/me/dcc-pool", vehicleH.ListPool)
 
 			// Vehicle catalogue (own only for now).
@@ -156,6 +159,13 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			r.Put("/trains/{id}", trainH.Update)
 			r.Patch("/trains/{id}/members/{memberId}", trainH.PatchMember)
 			r.Delete("/trains/{id}", trainH.Delete)
+
+			r.Get("/leases/received", leaseH.ListReceived)
+			r.Get("/leases/granted", leaseH.ListGranted)
+			r.Get("/leases/lendable", leaseH.Lendable)
+			r.Post("/leases", leaseH.Create)
+			r.Patch("/leases/{kind}/{id}", leaseH.Patch)
+			r.Delete("/leases/{kind}/{id}", leaseH.Delete)
 
 			// Layout vehicle / train roster (dashboard data sources).
 			r.Get("/layouts/{id}/vehicles", rosterH.ListVehicles)

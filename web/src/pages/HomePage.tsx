@@ -24,6 +24,7 @@ import { useLayoutPresence } from "../api/presence";
 import PromoteSignalmanButton from "../components/PromoteSignalmanButton";
 import DemoteSignalmanButton from "../components/DemoteSignalmanButton";
 import RosterSection from "../components/RosterSection";
+import { getUserName } from "../utils/getUserName";
 
 export default function HomePage() {
   const me = useMe().data;
@@ -53,7 +54,7 @@ export default function HomePage() {
           {me && (
             <Typography variant="body1" color="text.secondary">
               {t("home:subtitle", {
-                login: me.login,
+                login: getUserName(me),
                 role: t(`role:${me.effectiveRole}` as const, {
                   defaultValue: me.effectiveRole,
                 }),
@@ -98,7 +99,7 @@ export default function HomePage() {
                     ) : (
                       (presence.data ?? []).map((user) => (
                         <TableRow key={user.userId}>
-                          <TableCell>{user.login}</TableCell>
+                          <TableCell>{getUserName(user)}</TableCell>
                           <TableCell>
                             {t(`role:${user.role}` as const, { defaultValue: user.role })}
                           </TableCell>
@@ -180,7 +181,9 @@ export default function HomePage() {
                           <TableCell>{row.name}</TableCell>
                           <TableCell>{row.location || t("home:interlockings.noLocation")}</TableCell>
                           <TableCell>
-                            {row.occupant?.login ?? t("home:interlockings.vacant")}
+                            {row.occupant
+                              ? getUserName(row.occupant)
+                              : t("home:interlockings.vacant")}
                           </TableCell>
                         </TableRow>
                       ))

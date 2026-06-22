@@ -29,6 +29,7 @@ import {
   type RosterVehicle,
   type RosterTrain,
 } from "../api/vehicles";
+import { getUserName } from "../utils/getUserName";
 
 interface Props {
   layoutId: number;
@@ -127,7 +128,10 @@ export default function RosterSection({ layoutId }: Props) {
                       {t("vehicle:trainList.membersCount", { count: row.members.length })}
                     </TableCell>
                     <TableCell>
-                      {row.ownerLogin}
+                      {getUserName({
+                        login: row.ownerLogin,
+                        organization: row.ownerOrganization,
+                      })}
                       {ownsRow(row.ownerId) && (
                         <Typography component="span" variant="caption" color="text.secondary">
                           {" "}
@@ -213,7 +217,10 @@ export default function RosterSection({ layoutId }: Props) {
                     <TableCell>{row.number || "—"}</TableCell>
                     <TableCell>{renderDCC(row)}</TableCell>
                     <TableCell>
-                      {row.ownerLogin}
+                      {getUserName({
+                        login: row.ownerLogin,
+                        organization: row.ownerOrganization,
+                      })}
                       {ownsRow(row.ownerId) && (
                         <Typography component="span" variant="caption" color="text.secondary">
                           {" "}

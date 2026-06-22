@@ -85,5 +85,14 @@
   "vehicle_template_name_required": "Wpisz nazwę szablonu.",
   "vehicle_template_name_taken": "Szablon o tej nazwie już istnieje.",
   "train_member_multiplier_range": "Mnożnik musi być między 0 a 4.",
-  "train_leading_multiplier_immutable": "Mnożnika pojazdu prowadzącego nie można zmienić."
+  "train_leading_multiplier_immutable": "Mnożnika pojazdu prowadzącego nie można zmienić.",
+  "lease_not_found": "Wypożyczenie nie istnieje lub wygasło.",
+  "lease_conflict": "Ten pojazd lub skład jest już wypożyczony.",
+  "lease_not_owner": "Tylko właściciel może zarządzać tym wypożyczeniem.",
+  "lease_not_party": "Nie jesteś stroną tego wypożyczenia.",
+  "lease_self": "Nie możesz wypożyczyć pojazdu lub składu samemu sobie.",
+  "lease_target_not_on_layout": "Pojazd lub skład nie znajduje się na tej makiecie.",
+  "lease_invalid_speed_limit": "Ograniczenie prędkości musi być w zakresie 0–100%.",
+  "lease_invalid_duration": "Czas wypożyczenia musi wynosić od 1 minuty do 24 godzin.",
+  "lease_target_not_drivable": "Tego pojazdu lub składu nie można wypożyczyć."
 }

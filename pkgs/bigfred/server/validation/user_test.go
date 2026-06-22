@@ -57,3 +57,17 @@ func TestIsPermanentRole(t *testing.T) {
 		t.Fatal("expected guest to be non-permanent")
 	}
 }
+
+func TestSanitiseOrganization(t *testing.T) {
+	if got := validation.SanitiseOrganization("  Klub KM  "); got != "Klub KM" {
+		t.Fatalf("trim: got %q", got)
+	}
+	if got := validation.SanitiseOrganization(""); got != "" {
+		t.Fatalf("empty: got %q", got)
+	}
+	long := strings.Repeat("o", validation.MaxUserOrganizationLen+8)
+	got := validation.SanitiseOrganization(long)
+	if len(got) != validation.MaxUserOrganizationLen {
+		t.Fatalf("truncate: got len %d", len(got))
+	}
+}

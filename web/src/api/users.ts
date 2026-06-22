@@ -10,6 +10,7 @@ import type { DCCAddressRange } from "./vehicles";
 export interface User {
   id: number;
   login: string;
+  organization: string;
   role: Role;
   active: boolean;
   dccPool: DCCAddressRange[];
@@ -41,6 +42,7 @@ export function useUsers() {
 export interface UserCreateBody {
   login: string;
   pin: string;
+  organization?: string;
   role: Role;
   dccPool: DccPoolRangeBody[];
 }
@@ -64,6 +66,7 @@ export function useCreateUser() {
 export interface UserUpdateBody {
   id: number;
   login?: string;
+  organization?: string;
   role?: Role;
   // pin is optional; an empty / undefined value leaves the hash alone
   // (the backend coerces an empty string to "leave alone" as well).
@@ -77,6 +80,7 @@ export function useUpdateUser() {
     mutationFn: (body: UserUpdateBody) => {
       const payload: Record<string, unknown> = {};
       if (body.login !== undefined) payload.login = body.login;
+      if (body.organization !== undefined) payload.organization = body.organization;
       if (body.role !== undefined) payload.role = body.role;
       if (body.pin !== undefined && body.pin !== "") payload.pin = body.pin;
       if (body.dccPool !== undefined) payload.dccPool = body.dccPool;

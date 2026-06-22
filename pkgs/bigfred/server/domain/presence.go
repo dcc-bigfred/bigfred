@@ -6,6 +6,7 @@ package domain
 type PresenceUser struct {
 	UserID               uint                  `json:"userId"`
 	Login                string                `json:"login"`
+	Organization         string                `json:"organization"`
 	Role                 Role                  `json:"role"`
 	OccupiedInterlocking *OccupiedInterlocking `json:"occupiedInterlocking,omitempty"`
 }

@@ -16,19 +16,25 @@ import {
 import { useTranslation } from "react-i18next";
 
 import {
+  lendableTargetKey,
   useCreateLease,
   useLendable,
-  type LendableTarget,
   type LendableUser,
 } from "../../api/leases";
+import type { TakeoverTarget } from "../../api/takeover";
 import { getUserName } from "../../utils/getUserName";
 
 export interface LeaseCreateDialogProps {
   open: boolean;
   onClose: () => void;
+  initialTarget?: { kind: TakeoverTarget; targetId: string } | null;
 }
 
-export default function LeaseCreateDialog({ open, onClose }: LeaseCreateDialogProps) {
+export default function LeaseCreateDialog({
+  open,
+  onClose,
+  initialTarget = null,
+}: LeaseCreateDialogProps) {
   const { t } = useTranslation(["rentals", "common"]);
   const lendable = useLendable();
   const create = useCreateLease();
@@ -44,13 +50,15 @@ export default function LeaseCreateDialog({ open, onClose }: LeaseCreateDialogPr
 
   useEffect(() => {
     if (open) {
-      setSelectedTargetKey("");
+      setSelectedTargetKey(
+        initialTarget ? lendableTargetKey(initialTarget) : "",
+      );
       setSelectedUser(null);
       setSpeedLimit("80");
       setHours("0");
       setMinutes("30");
     }
-  }, [open]);
+  }, [open, initialTarget]);
 
   const selectedTarget = targets.find(
     (tgt) => lendableTargetKey(tgt) === selectedTargetKey,
@@ -159,8 +167,4 @@ export default function LeaseCreateDialog({ open, onClose }: LeaseCreateDialogPr
       </DialogActions>
     </Dialog>
   );
-}
-
-function lendableTargetKey(tgt: LendableTarget): string {
-  return `${tgt.kind}:${tgt.targetId}`;
 }

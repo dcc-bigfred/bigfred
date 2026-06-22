@@ -18,11 +18,13 @@ import {
 import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
+import HandshakeIcon from "@mui/icons-material/Handshake";
 import PlaylistAddIcon from "@mui/icons-material/PlaylistAdd";
 import RemoveCircleOutlineIcon from "@mui/icons-material/RemoveCircleOutline";
 import { useTranslation } from "react-i18next";
 
 import { ApiError } from "../api/client";
+import { lendableTargetKey, useGrantedLeases } from "../api/leases";
 import {
   useAddTrainToRoster,
   useDeleteTrain,
@@ -31,6 +33,7 @@ import {
   useRemoveTrainFromRoster,
   type Train,
 } from "../api/vehicles";
+import LeaseCreateDialog from "./leases/LeaseCreateDialog";
 import TrainDialog from "./TrainDialog";
 
 interface Props {
@@ -40,21 +43,49 @@ interface Props {
 // MyTrainsCatalogue is the caller's train catalogue: CRUD plus
 // "add to layout". Lives on /my/trains.
 export default function MyTrainsCatalogue({ layoutId }: Props) {
-  const { t } = useTranslation(["vehicle", "errors", "common"]);
+  const { t } = useTranslation(["vehicle", "errors", "common", "rentals"]);
   const trains = useMyTrains();
   const layoutTrains = useLayoutTrains(layoutId);
   const addTrainToRoster = useAddTrainToRoster();
   const removeTrainFromRoster = useRemoveTrainFromRoster();
   const deleteTrainMut = useDeleteTrain();
+  const grantedLeases = useGrantedLeases();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingTrain, setEditingTrain] = useState<Train | null>(null);
+  const [leaseDialogOpen, setLeaseDialogOpen] = useState(false);
+  const [leaseInitialTarget, setLeaseInitialTarget] = useState<{
+    kind: "train";
+    targetId: string;
+  } | null>(null);
 
   const trainOnLayout = useMemo(() => {
     const s = new Set<string>();
     (layoutTrains.data ?? []).forEach((tt) => s.add(tt.id));
     return s;
   }, [layoutTrains.data]);
+
+  const leasedTargetKeys = useMemo(() => {
+    const s = new Set<string>();
+    (grantedLeases.data ?? []).forEach((lease) => s.add(lendableTargetKey(lease)));
+    return s;
+  }, [grantedLeases.data]);
+
+  const trainLendTooltip = (tr: Train, isOnLayout: boolean) => {
+    const key = lendableTargetKey({ kind: "train", targetId: tr.id });
+    if (leasedTargetKeys.has(key)) {
+      return t("vehicle:trainList.actions.lendAlreadyLeased");
+    }
+    if (!isOnLayout) {
+      return t("vehicle:trainList.actions.lendRequiresLayout");
+    }
+    return t("rentals:granted.lend");
+  };
+
+  const canLendTrain = (tr: Train, isOnLayout: boolean) => {
+    const key = lendableTargetKey({ kind: "train", targetId: tr.id });
+    return isOnLayout && !leasedTargetKeys.has(key);
+  };
 
   const mutationError = (() => {
     const err =
@@ -135,6 +166,7 @@ export default function MyTrainsCatalogue({ layoutId }: Props) {
               ) : (
                 (trains.data ?? []).map((tr) => {
                   const isOnLayout = trainOnLayout.has(tr.id);
+                  const lendable = canLendTrain(tr, isOnLayout);
                   return (
                     <TableRow key={tr.id}>
                       <TableCell>{tr.name}</TableCell>
@@ -176,6 +208,24 @@ export default function MyTrainsCatalogue({ layoutId }: Props) {
                               </IconButton>
                             </Tooltip>
                           )}
+                          <Tooltip title={trainLendTooltip(tr, isOnLayout)}>
+                            <span>
+                              <IconButton
+                                size="small"
+                                disabled={!lendable}
+                                onClick={() => {
+                                  setLeaseInitialTarget({
+                                    kind: "train",
+                                    targetId: tr.id,
+                                  });
+                                  setLeaseDialogOpen(true);
+                                }}
+                                aria-label={t("rentals:granted.lend")}
+                              >
+                                <HandshakeIcon fontSize="small" />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
                           <Tooltip title={t("vehicle:trainList.actions.edit")}>
                             <IconButton
                               size="small"
@@ -212,6 +262,11 @@ export default function MyTrainsCatalogue({ layoutId }: Props) {
         open={dialogOpen}
         train={editingTrain}
         onClose={() => setDialogOpen(false)}
+      />
+      <LeaseCreateDialog
+        open={leaseDialogOpen}
+        onClose={() => setLeaseDialogOpen(false)}
+        initialTarget={leaseInitialTarget}
       />
     </>
   );

@@ -85,20 +85,9 @@ func NewAddrSetCommand(app *app.LocoApp) *cobra.Command {
 				return fmt.Errorf("invalid address %q: %w", args[0], parseErr)
 			}
 
-			cvString, buildErr := addressToCVString(uint16(addr64))
-			if buildErr != nil {
-				return buildErr
-			}
-
-			track, trackErr := TrackOrDefault("", cmdArgs.LocoId)
-			if trackErr != nil {
-				return trackErr
-			}
-
-			return app.SendCVAction(
-				track,
+			return app.SetAddrAction(
 				cmdArgs.LocoId,
-				cvString,
+				uint16(addr64),
 				cmdArgs.Verify,
 				time.Second*time.Duration(cmdArgs.Timeout),
 				time.Millisecond*time.Duration(cmdArgs.Settle),
@@ -113,8 +102,4 @@ func NewAddrSetCommand(app *app.LocoApp) *cobra.Command {
 	command.Flags().Uint8VarP(&cmdArgs.LocoId, "loco", "l", 0, progLocoFlagUsage)
 
 	return command
-}
-
-func addressToCVString(addr uint16) (string, error) {
-	return app.AddressToCVString(addr)
 }

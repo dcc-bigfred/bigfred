@@ -38,3 +38,10 @@ type RailroadCpResult struct {
 	Updated  bool
 	ID       int64
 }
+
+// CVBitWriteResult describes one read-modify-write on a CV bit field.
+type CVBitWriteResult struct {
+	Number uint16
+	Before int
+	After  int
+}

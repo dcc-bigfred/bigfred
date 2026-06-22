@@ -60,6 +60,12 @@ func printCVReads(reads []app.CVRead) error {
 	return lastErr
 }
 
+func printCVBitWriteResults(results []app.CVBitWriteResult) {
+	for _, result := range results {
+		fmt.Printf("cv%d=%d (was %d)\n", result.Number, result.After, result.Before)
+	}
+}
+
 func printActiveFunctions(functions []int) {
 	if len(functions) == 0 {
 		fmt.Printf("No active functions\n")

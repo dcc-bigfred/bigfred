@@ -42,8 +42,23 @@ func TestAddressFromCVs_LongAddressZero(t *testing.T) {
 	}
 }
 
+func TestAddressCV29For(t *testing.T) {
+	// CV29=46: bits 1,2,3,5 set (28 steps, analog, user speed table, long addr)
+	const cv29 = 46
+
+	if got := addressCV29For(cv29, false); got != 14 {
+		t.Fatalf("short: got cv29=%d, want 14", got)
+	}
+	if got := addressCV29For(cv29, true); got != 46 {
+		t.Fatalf("long unchanged: got cv29=%d, want 46", got)
+	}
+	if got := addressCV29For(14, true); got != 46 {
+		t.Fatalf("enable long: got cv29=%d, want 46", got)
+	}
+}
+
 func TestAddressToCVString_ShortAddress(t *testing.T) {
-	cvString, err := AddressToCVString(125)
+	cvString, err := AddressToCVString(125, 0)
 	if err != nil {
 		t.Fatalf("AddressToCVString: %v", err)
 	}
@@ -52,8 +67,18 @@ func TestAddressToCVString_ShortAddress(t *testing.T) {
 	}
 }
 
+func TestAddressToCVString_ShortAddressPreservesCV29(t *testing.T) {
+	cvString, err := AddressToCVString(125, 46)
+	if err != nil {
+		t.Fatalf("AddressToCVString: %v", err)
+	}
+	if cvString != "cv1=125, cv17=0, cv18=0, cv29=14" {
+		t.Fatalf("got %q", cvString)
+	}
+}
+
 func TestAddressToCVString_LongAddress(t *testing.T) {
-	cvString, err := AddressToCVString(178)
+	cvString, err := AddressToCVString(178, 0)
 	if err != nil {
 		t.Fatalf("AddressToCVString: %v", err)
 	}
@@ -62,8 +87,18 @@ func TestAddressToCVString_LongAddress(t *testing.T) {
 	}
 }
 
+func TestAddressToCVString_LongAddressPreservesCV29(t *testing.T) {
+	cvString, err := AddressToCVString(178, 14)
+	if err != nil {
+		t.Fatalf("AddressToCVString: %v", err)
+	}
+	if cvString != "cv17=192, cv18=178, cv29=46" {
+		t.Fatalf("got %q", cvString)
+	}
+}
+
 func TestAddressToCVString_LongAddressUpperBoundary(t *testing.T) {
-	cvString, err := AddressToCVString(10239)
+	cvString, err := AddressToCVString(10239, 0)
 	if err != nil {
 		t.Fatalf("AddressToCVString: %v", err)
 	}
@@ -73,7 +108,7 @@ func TestAddressToCVString_LongAddressUpperBoundary(t *testing.T) {
 }
 
 func TestAddressToCVString_LongAddressZero(t *testing.T) {
-	cvString, err := AddressToCVString(0)
+	cvString, err := AddressToCVString(0, 0)
 	if err != nil {
 		t.Fatalf("AddressToCVString: %v", err)
 	}

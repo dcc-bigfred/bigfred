@@ -23,7 +23,7 @@ func TestTrainAdminCanMutateOthersTrain(t *testing.T) {
 		t.Fatalf("seed owner pool: %v", err)
 	}
 	vSvc := cmd.NewVehicle(bundle.Vehicles, pool, bundle.TrainMembers, bundle.LayoutVehicles, bundle.Users)
-	tSvc := cmd.NewTrain(bundle.Trains, bundle.TrainMembers, bundle.Vehicles)
+	tSvc := cmd.NewTrain(bundle.Trains, bundle.TrainMembers, bundle.Vehicles, bundle.LayoutTrains, bundle.Users)
 
 	addr := uint16(42)
 	v, err := vSvc.Create(ctx, cmd.VehicleCreateInput{
@@ -72,7 +72,7 @@ func TestTrainNonOwnerDriverCannotMutateOthersTrain(t *testing.T) {
 
 	pool := cmd.NewDCCPool(bundle.Pool)
 	vSvc := cmd.NewVehicle(bundle.Vehicles, pool, bundle.TrainMembers, bundle.LayoutVehicles, bundle.Users)
-	tSvc := cmd.NewTrain(bundle.Trains, bundle.TrainMembers, bundle.Vehicles)
+	tSvc := cmd.NewTrain(bundle.Trains, bundle.TrainMembers, bundle.Vehicles, bundle.LayoutTrains, bundle.Users)
 
 	v, err := vSvc.Create(ctx, cmd.VehicleCreateInput{
 		OwnerUserID: owner.ID,
@@ -118,7 +118,7 @@ func TestUpdateMemberMultiplier(t *testing.T) {
 		t.Fatalf("seed owner pool: %v", err)
 	}
 	vSvc := cmd.NewVehicle(bundle.Vehicles, pool, bundle.TrainMembers, bundle.LayoutVehicles, bundle.Users)
-	tSvc := cmd.NewTrain(bundle.Trains, bundle.TrainMembers, bundle.Vehicles)
+	tSvc := cmd.NewTrain(bundle.Trains, bundle.TrainMembers, bundle.Vehicles, bundle.LayoutTrains, bundle.Users)
 
 	leadAddr := uint16(10)
 	lead, err := vSvc.Create(ctx, cmd.VehicleCreateInput{

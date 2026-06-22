@@ -167,7 +167,6 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	takeoverRequestsRepo := repo.NewTakeoverRequests(repository)
 	commandStations := repo.NewCommandStations(repository)
 	layoutCommandStations := repo.NewLayoutCommandStations(repository)
-	_ = layoutTrains
 
 	layoutSvc := cmd.NewLayout(layouts, interlockings, layoutInterlockings, commandStations, layoutCommandStations)
 	commandStationSvc := cmd.NewCommandStation(commandStations, layoutCommandStations, layouts)
@@ -176,7 +175,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	vehicleSvc := cmd.NewVehicle(vehicles, dccPoolSvc, trainMembers, layoutVehicles, users)
 	functionSvc := cmd.NewFunction(dccFunctions, vehicles, vehicleTemplates, users)
 	vehicleTemplateSvc := cmd.NewVehicleTemplate(vehicleTemplates, users, dccFunctions)
-	trainSvc := cmd.NewTrain(trains, trainMembers, vehicles)
+	trainSvc := cmd.NewTrain(trains, trainMembers, vehicles, layoutTrains, users)
 	userSvc := cmd.NewUser(users, vehicles, trains, dccPoolSvc)
 
 	redisAddr := f.RedisAddr

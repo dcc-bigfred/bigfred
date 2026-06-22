@@ -164,7 +164,7 @@ func TestUserDeleteRefusedWhenOwnsTrains(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create vehicle: %v", err)
 	}
-	tSvc := cmd.NewTrain(bundle.Trains, bundle.TrainMembers, bundle.Vehicles)
+	tSvc := cmd.NewTrain(bundle.Trains, bundle.TrainMembers, bundle.Vehicles, bundle.LayoutTrains, bundle.Users)
 	if _, err := tSvc.Create(ctx, cmd.TrainCreateInput{
 		OwnerUserID: created.ID,
 		Name:        "Express",

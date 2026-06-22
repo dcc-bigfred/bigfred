@@ -54,7 +54,8 @@
     },
     "fleet": {
       "menuLabel": "Tabor",
-      "availableVehicles": "Dostępne pojazdy"
+      "availableVehicles": "Dostępne pojazdy",
+      "availableTrains": "Dostępne składy"
     },
     "account": {
       "menuLabel": "Konto",

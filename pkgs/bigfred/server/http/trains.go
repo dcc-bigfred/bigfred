@@ -47,6 +47,28 @@ func (h *TrainHandler) List(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(out)
 }
 
+// ListCatalogue handles GET /api/v1/trains/catalogue — every
+// registered train with owner metadata and on-layout flag for the
+// caller's pinned session layout.
+func (h *TrainHandler) ListCatalogue(w http.ResponseWriter, r *http.Request) {
+	actor, ok := IdentityFromContext(r.Context())
+	if !ok {
+		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	rows, err := h.svc.ListCatalogue(r.Context(), actor.Layout.ID)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	out := make([]protocol.TrainCatalogueResponse, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, protocol.ToTrainCatalogueResponse(row))
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(out)
+}
+
 // Create handles POST /api/v1/trains.
 func (h *TrainHandler) Create(w http.ResponseWriter, r *http.Request) {
 	actor, ok := IdentityFromContext(r.Context())

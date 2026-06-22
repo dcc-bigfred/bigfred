@@ -108,9 +108,6 @@ export default function MyVehiclesCatalogue({ layoutId }: Props) {
     deleteVehicleMut.mutate(v.id);
   };
 
-  const renderVehicleKind = (kind: Vehicle["kind"]) =>
-    t(`vehicle:kind.${kind}` as const);
-
   const renderDCC = (vehicle: { dccAddress: number | null }) =>
     vehicle.dccAddress != null ? (
       String(vehicle.dccAddress)
@@ -153,7 +150,6 @@ export default function MyVehiclesCatalogue({ layoutId }: Props) {
             <TableHead>
               <TableRow>
                 <TableCell>{t("vehicle:list.columns.name")}</TableCell>
-                <TableCell>{t("vehicle:list.columns.kind")}</TableCell>
                 <TableCell>{t("vehicle:list.columns.number")}</TableCell>
                 <TableCell>{t("vehicle:list.columns.dccAddress")}</TableCell>
                 <TableCell align="right">
@@ -164,13 +160,13 @@ export default function MyVehiclesCatalogue({ layoutId }: Props) {
             <TableBody>
               {vehicles.isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={5} align="center" sx={{ py: 3, color: "text.secondary" }}>
+                  <TableCell colSpan={4} align="center" sx={{ py: 3, color: "text.secondary" }}>
                     {t("common:loading")}
                   </TableCell>
                 </TableRow>
               ) : (vehicles.data ?? []).length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} align="center" sx={{ py: 3, color: "text.secondary" }}>
+                  <TableCell colSpan={4} align="center" sx={{ py: 3, color: "text.secondary" }}>
                     {t("vehicle:list.empty")}
                   </TableCell>
                 </TableRow>
@@ -193,7 +189,6 @@ export default function MyVehiclesCatalogue({ layoutId }: Props) {
                   return (
                     <TableRow key={v.id}>
                       <TableCell>{v.name}</TableCell>
-                      <TableCell>{renderVehicleKind(v.kind)}</TableCell>
                       <TableCell>{v.number || "—"}</TableCell>
                       <TableCell>{renderDCC(v)}</TableCell>
                       <TableCell align="right">

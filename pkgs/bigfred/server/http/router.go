@@ -156,6 +156,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 
 			// Train catalogue.
 			r.Get("/trains", trainH.List)
+			r.Get("/trains/catalogue", trainH.ListCatalogue)
 			r.Post("/trains", trainH.Create)
 			r.Put("/trains/{id}", trainH.Update)
 			r.Patch("/trains/{id}/members/{memberId}", trainH.PatchMember)

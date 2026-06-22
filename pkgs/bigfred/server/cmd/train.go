@@ -62,15 +62,29 @@ type TrainDetail struct {
 // Train implements the CRUD lifecycle for domain.Train (§4.1).
 // Every member vehicle must be owned by the caller (goal 7).
 type Train struct {
-	trains   *repo.Trains
-	members  *repo.TrainMembers
-	vehicles *repo.Vehicles
-	sec      security.TrainSecurityContext
+	trains       *repo.Trains
+	members      *repo.TrainMembers
+	vehicles     *repo.Vehicles
+	layoutTrains *repo.LayoutTrains
+	users        *repo.Users
+	sec          security.TrainSecurityContext
 }
 
 // NewTrain constructs a Train use-case handler.
-func NewTrain(t *repo.Trains, m *repo.TrainMembers, v *repo.Vehicles) *Train {
-	return &Train{trains: t, members: m, vehicles: v}
+func NewTrain(
+	t *repo.Trains,
+	m *repo.TrainMembers,
+	v *repo.Vehicles,
+	layoutTrains *repo.LayoutTrains,
+	users *repo.Users,
+) *Train {
+	return &Train{
+		trains:       t,
+		members:      m,
+		vehicles:     v,
+		layoutTrains: layoutTrains,
+		users:        users,
+	}
 }
 
 // ListOwned returns every train owned by the user with member rows hydrated.
@@ -79,6 +93,69 @@ func (t *Train) ListOwned(ctx context.Context, ownerID uint) ([]TrainDetail, err
 	if err != nil {
 		return nil, err
 	}
+	return t.hydrateDetails(ctx, trains)
+}
+
+// TrainCatalogueEntry is one row of the global train catalogue.
+type TrainCatalogueEntry struct {
+	Train             domain.Train
+	Members           []domain.TrainMember
+	OwnerLogin        string
+	OwnerOrganization string
+	OnLayout          bool
+}
+
+// ListCatalogue returns every registered train enriched with members,
+// owner metadata and whether it is on the given layout roster.
+func (t *Train) ListCatalogue(ctx context.Context, layoutID uint) ([]TrainCatalogueEntry, error) {
+	trains, err := t.trains.ListAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+	onLayout := make(map[domain.TrainID]struct{})
+	if t.layoutTrains != nil {
+		rows, err := t.layoutTrains.ListByLayout(ctx, layoutID)
+		if err != nil {
+			return nil, err
+		}
+		for _, row := range rows {
+			onLayout[row.TrainID] = struct{}{}
+		}
+	}
+	logins := make(map[uint]struct {
+		login        string
+		organization string
+	})
+	out := make([]TrainCatalogueEntry, 0, len(trains))
+	for _, train := range trains {
+		info, ok := logins[train.OwnerUserID]
+		if !ok && t.users != nil {
+			u, err := t.users.FindByID(ctx, train.OwnerUserID)
+			if err != nil {
+				info.login = "?"
+			} else {
+				info.login = u.Login
+				info.organization = u.Organization
+			}
+			logins[train.OwnerUserID] = info
+		}
+		members, err := t.members.ListByTrain(ctx, train.ID)
+		if err != nil {
+			return nil, err
+		}
+		_, on := onLayout[train.ID]
+		out = append(out, TrainCatalogueEntry{
+			Train:             train,
+			Members:           members,
+			OwnerLogin:        info.login,
+			OwnerOrganization: info.organization,
+			OnLayout:          on,
+		})
+	}
+	return out, nil
+}
+
+func (t *Train) hydrateDetails(ctx context.Context, trains []domain.Train) ([]TrainDetail, error) {
 	out := make([]TrainDetail, 0, len(trains))
 	for _, tr := range trains {
 		members, err := t.members.ListByTrain(ctx, tr.ID)

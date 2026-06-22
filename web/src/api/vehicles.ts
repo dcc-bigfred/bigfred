@@ -239,7 +239,14 @@ export interface Train {
   members: TrainMember[];
 }
 
+export interface CatalogueTrain extends Train {
+  ownerLogin: string;
+  ownerOrganization: string;
+  onLayout: boolean;
+}
+
 const trainsQueryKey = ["trains"] as const;
+const trainCatalogueQueryKey = ["trains", "catalogue"] as const;
 
 export function useMyTrains() {
   return useQuery({
@@ -247,6 +254,32 @@ export function useMyTrains() {
     queryFn: () => apiFetch<Train[]>("/api/v1/trains"),
     staleTime: 5 * 1000,
   });
+}
+
+// useTrainCatalogue returns every registered train with owner
+// metadata and on-layout flag for the caller's pinned layout.
+export function useTrainCatalogue(layoutId: number | null) {
+  const qc = useQueryClient();
+  const { subscribe } = useSocket();
+
+  const query = useQuery({
+    queryKey: trainCatalogueQueryKey,
+    queryFn: () => apiFetch<CatalogueTrain[]>("/api/v1/trains/catalogue"),
+    enabled: layoutId != null && layoutId > 0,
+    staleTime: 5 * 1000,
+  });
+
+  useEffect(() => {
+    if (layoutId == null || layoutId <= 0) return;
+    return subscribe("layout.trainsChanged", (payload) => {
+      const data = payload as { layoutId?: number };
+      if (data.layoutId !== layoutId) return;
+      void qc.invalidateQueries({ queryKey: trainCatalogueQueryKey });
+      void qc.invalidateQueries({ queryKey: layoutTrainsQueryKey(layoutId) });
+    });
+  }, [layoutId, subscribe, qc]);
+
+  return query;
 }
 
 export interface TrainMemberInput {
@@ -270,6 +303,7 @@ export function useCreateTrain() {
       }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: trainsQueryKey });
+      void qc.invalidateQueries({ queryKey: trainCatalogueQueryKey });
     },
   });
 }
@@ -297,6 +331,7 @@ export function useUpdateTrain() {
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: trainsQueryKey });
+      void qc.invalidateQueries({ queryKey: trainCatalogueQueryKey });
     },
   });
 }
@@ -308,6 +343,7 @@ export function useDeleteTrain() {
       apiFetch<void>(`/api/v1/trains/${id}`, { method: "DELETE" }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: trainsQueryKey });
+      void qc.invalidateQueries({ queryKey: trainCatalogueQueryKey });
     },
   });
 }
@@ -447,6 +483,7 @@ export function useAddTrainToRoster() {
       void qc.invalidateQueries({
         queryKey: layoutTrainsQueryKey(args.layoutId),
       });
+      void qc.invalidateQueries({ queryKey: trainCatalogueQueryKey });
     },
   });
 }
@@ -463,6 +500,7 @@ export function useRemoveTrainFromRoster() {
       void qc.invalidateQueries({
         queryKey: layoutTrainsQueryKey(args.layoutId),
       });
+      void qc.invalidateQueries({ queryKey: trainCatalogueQueryKey });
     },
   });
 }

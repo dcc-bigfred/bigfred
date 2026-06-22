@@ -2,7 +2,6 @@ package decoders
 
 import (
 	"testing"
-	"time"
 )
 
 func TestRailboxRB23xxSetGetBrightness(t *testing.T) {
@@ -112,18 +111,72 @@ func TestRailboxRB23xxSnapshotBrightness(t *testing.T) {
 	}
 }
 
-func TestRunBrightnessTestRestoresValues(t *testing.T) {
+func TestRunBrightnessIdentifyTestRestoresValues(t *testing.T) {
 	cv := &fakeCV{values: map[uint16]int{119: 200, 120: 100}}
 	d := NewRailboxRB23xx(WithCVAccess(cv))
 
-	_, err := RunBrightnessTest(d, func(time.Duration) {})
+	_, err := RunBrightnessIdentifyTest(d, BrightnessTestActivePercentDefault, BrightnessIdentifyHooks{})
 	if err != nil {
-		t.Fatalf("RunBrightnessTest: %v", err)
+		t.Fatalf("RunBrightnessIdentifyTest: %v", err)
 	}
 	if cv.values[119] != 200 {
 		t.Fatalf("CV119 = %d after test, want 200", cv.values[119])
 	}
 	if cv.values[120] != 100 {
 		t.Fatalf("CV120 = %d after test, want 100", cv.values[120])
+	}
+}
+
+func TestRunBrightnessIdentifyTestCallsHooks(t *testing.T) {
+	cv := &fakeCV{values: map[uint16]int{119: 200, 120: 100}}
+	d := NewRailboxRB23xx(WithCVAccess(cv))
+
+	var onOutput, waitNext int
+	_, err := RunBrightnessIdentifyTest(d, BrightnessTestActivePercentDefault, BrightnessIdentifyHooks{
+		OnOutput: func(state OutputBrightness, index, total int) error {
+			onOutput++
+			return nil
+		},
+		WaitNext: func(state OutputBrightness, index, total int) error {
+			waitNext++
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("RunBrightnessIdentifyTest: %v", err)
+	}
+	want := len(d.Outputs())
+	if onOutput != want || waitNext != want {
+		t.Fatalf("hooks called onOutput=%d waitNext=%d, want %d each", onOutput, waitNext, want)
+	}
+}
+
+func TestRunBrightnessIdentifyTestLightsOneAtATime(t *testing.T) {
+	cv := &fakeCV{values: map[uint16]int{119: 200, 120: 100}}
+	d := NewRailboxRB23xx(WithCVAccess(cv))
+
+	_, err := RunBrightnessIdentifyTest(d, BrightnessTestActivePercentDefault, BrightnessIdentifyHooks{
+		OnOutput: func(state OutputBrightness, index, total int) error {
+			for _, out := range d.Outputs() {
+				cvNum, err := d.brightnessCVForOutput(out)
+				if err != nil {
+					return err
+				}
+				if out == state.Output {
+					if cv.values[cvNum] == 0 {
+						t.Fatalf("output O%d should be on during its step", out)
+					}
+					continue
+				}
+				if cv.values[cvNum] != 0 {
+					t.Fatalf("output O%d should be off while O%d is active", out, state.Output)
+				}
+			}
+			return nil
+		},
+		WaitNext: func(state OutputBrightness, index, total int) error { return nil },
+	})
+	if err != nil {
+		t.Fatalf("RunBrightnessIdentifyTest: %v", err)
 	}
 }

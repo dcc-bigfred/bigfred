@@ -38,6 +38,7 @@ import type { RadioSendContext, RadioSendTarget } from "../../api/radio";
 import { useTakeoverActions } from "../../api/takeover";
 import { useEstopTargetActions } from "../../api/estop";
 import { useDccBusOptional } from "../../context/DccBusContext";
+import { getUserName } from "../../utils/getUserName";
 import RadioPhrasePickerDialog from "./RadioPhrasePickerDialog";
 
 interface InterlockingRosterPanelProps {
@@ -51,6 +52,7 @@ type RosterRow =
       ownerUserId: number;
       entityId: string;
       login: string;
+      organization: string;
       name: string;
       addresses: number[];
     }
@@ -60,6 +62,7 @@ type RosterRow =
       ownerUserId: number;
       entityId: string;
       login: string;
+      organization: string;
       name: string;
       addresses: number[];
     };
@@ -73,8 +76,9 @@ function vehicleRow(v: RosterVehicle): RosterRow | null {
     key: `v-${v.id}`,
     ownerUserId: v.ownerId,
     entityId: v.id,
-    login: v.ownerLogin,
-    name: v.name,
+      login: v.ownerLogin,
+      organization: v.ownerOrganization,
+      name: v.name,
     addresses: [v.dccAddress],
   };
 }
@@ -95,8 +99,9 @@ function trainRow(
     key: `t-${t.id}`,
     ownerUserId: t.ownerId,
     entityId: t.id,
-    login: t.ownerLogin,
-    name: t.name,
+      login: t.ownerLogin,
+      organization: t.ownerOrganization,
+      name: t.name,
     addresses,
   };
 }
@@ -150,7 +155,7 @@ export default function InterlockingRosterPanel({
       return out;
     }
     return out.filter((row) => {
-      const label = `(${row.login}) ${row.name}`.toLowerCase();
+      const label = `(${getUserName(row)}) ${row.name}`.toLowerCase();
       return label.includes(q);
     });
   }, [vehicles, trains, query]);
@@ -211,7 +216,7 @@ export default function InterlockingRosterPanel({
                   <TableCell>
                     <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
                       <Typography variant="body2">
-                        ({row.login}) {row.name}
+                        ({getUserName(row)}) {row.name}
                       </Typography>
                       {isInMotion(row.addresses) && (
                         <Chip
@@ -235,7 +240,7 @@ export default function InterlockingRosterPanel({
                                 row.kind === "vehicle"
                                   ? { vehicleId: row.entityId }
                                   : { trainId: row.entityId },
-                              targetLabel: row.login,
+                              targetLabel: getUserName(row),
                               contextLabel: row.name,
                             })
                           }
@@ -252,7 +257,7 @@ export default function InterlockingRosterPanel({
                             setStopConfirm({
                               target: row.kind === "vehicle" ? "vehicle" : "train",
                               targetId: row.entityId,
-                              label: `(${row.login}) ${row.name}`,
+                              label: `(${getUserName(row)}) ${row.name}`,
                             })
                           }
                         >

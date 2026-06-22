@@ -38,6 +38,7 @@ func (p radioControlPort) Send(ctx context.Context, in cmd.RadioSendInput) (doma
 		LayoutID:         in.LayoutID,
 		FromUserID:       in.FromUserID,
 		FromLogin:        in.FromLogin,
+		FromOrganization: in.FromOrganization,
 		ToUserID:         in.ToUserID,
 		ToInterlockingID: in.ToInterlockingID,
 		ContextVehicleID: in.ContextVehicleID,

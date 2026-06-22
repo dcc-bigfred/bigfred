@@ -11,7 +11,8 @@
     "create": "Utwórz",
     "rename": "Zmień nazwę",
     "delete": "Usuń",
-    "confirm": "Potwierdź"
+    "confirm": "Potwierdź",
+    "close": "Zamknij"
   },
   "keypad": {
     "groupLabel": "Klawiatura numeryczna",
@@ -48,7 +49,8 @@
       "vehicles": "Pojazdy",
       "trains": "Składy",
       "templates": "Szablony pojazdów",
-      "throttle": "Sterowanie"
+      "throttle": "Sterowanie",
+      "rentals": "Wypożyczenia"
     },
     "account": {
       "menuLabel": "Konto",

@@ -40,6 +40,7 @@ import {
   type DccFunction,
 } from "../api/functions";
 import FunctionSummaryChips from "../components/functions/FunctionSummaryChips";
+import { getUserName } from "../utils/getUserName";
 
 type TemplateTableRow = {
   rowKey: string;
@@ -48,6 +49,7 @@ type TemplateTableRow = {
   ownerId: number;
   name: string;
   ownerLogin: string;
+  ownerOrganization: string;
   description: string;
   functions: DccFunction[];
 };
@@ -59,6 +61,7 @@ type LocomotiveTableRow = {
   ownerId: number;
   name: string;
   ownerLogin: string;
+  ownerOrganization: string;
   functions: DccFunction[];
 };
 
@@ -93,6 +96,7 @@ export default function VehicleTemplatesPage() {
         ownerId: row.ownerId,
         name: row.name,
         ownerLogin: row.ownerLogin,
+        ownerOrganization: row.ownerOrganization,
         description: row.description,
         functions: row.functions ?? [],
       }),
@@ -108,6 +112,7 @@ export default function VehicleTemplatesPage() {
         ownerId: entry.ownerId,
         name: entry.vehicleName,
         ownerLogin: entry.ownerLogin,
+        ownerOrganization: entry.ownerOrganization,
         functions: entry.functions,
       }))
       .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
@@ -269,7 +274,12 @@ export default function VehicleTemplatesPage() {
                         />
                       </TableCell>
                       <TableCell>{row.name}</TableCell>
-                      <TableCell>{row.ownerLogin}</TableCell>
+                      <TableCell>
+                        {getUserName({
+                          login: row.ownerLogin,
+                          organization: row.ownerOrganization,
+                        })}
+                      </TableCell>
                       <TableCell>
                         {row.rowType === "template" ? (
                           showLocomotives ? (

@@ -21,6 +21,7 @@ import DirectionsRailwayIcon from "@mui/icons-material/DirectionsRailway";
 import HistoryIcon from "@mui/icons-material/History";
 import BugReportIcon from "@mui/icons-material/BugReport";
 import PersonIcon from "@mui/icons-material/Person";
+import HandshakeIcon from "@mui/icons-material/Handshake";
 import TrainIcon from "@mui/icons-material/Train";
 import TuneIcon from "@mui/icons-material/Tune";
 import VpnKeyIcon from "@mui/icons-material/VpnKey";
@@ -30,6 +31,7 @@ import { Link, Outlet, useMatch, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
 import { useLogout, useMe } from "../api/auth";
+import { getUserName } from "../utils/getUserName";
 import { SocketProvider } from "../context/SocketContext";
 import LanguageMenu from "./LanguageMenu";
 import { useSudoMobileMenuItems } from "./SudoIndicator";
@@ -149,6 +151,12 @@ function AppShellContent() {
         onClick: () => navigate("/my/trains"),
       },
       {
+        id: "rentals",
+        label: t("nav.my.rentals"),
+        icon: <HandshakeIcon fontSize="small" />,
+        onClick: () => navigate("/rentals"),
+      },
+      {
         id: "templates",
         label: t("nav.my.templates"),
         icon: <TuneIcon fontSize="small" />,
@@ -259,7 +267,7 @@ function AppShellContent() {
 
   const accountCaption =
     me &&
-    `${me.login} · ${t(`role:${me.effectiveRole}` as const, {
+    `${getUserName(me)} · ${t(`role:${me.effectiveRole}` as const, {
       defaultValue: me.effectiveRole,
     })}`;
 

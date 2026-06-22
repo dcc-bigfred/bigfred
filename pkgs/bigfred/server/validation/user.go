@@ -9,9 +9,10 @@ import (
 )
 
 const (
-	MinUserPINLength = 4
-	MaxUserPINLength = 12
-	MaxUserLoginLen  = 32
+	MinUserPINLength        = 4
+	MaxUserPINLength        = 12
+	MaxUserLoginLen         = 32
+	MaxUserOrganizationLen  = 128
 )
 
 // SanitiseLogin trims and validates the ASCII-only login used in admin paths.
@@ -50,6 +51,16 @@ func ValidateUserPIN(pin string) error {
 		}
 	}
 	return nil
+}
+
+// SanitiseOrganization trims whitespace and caps the profile label length.
+// An empty string is allowed.
+func SanitiseOrganization(raw string) string {
+	trimmed := strings.TrimSpace(raw)
+	if len(trimmed) > MaxUserOrganizationLen {
+		return trimmed[:MaxUserOrganizationLen]
+	}
+	return trimmed
 }
 
 // IsPermanentRole gates the closed catalogue of permanent roles.

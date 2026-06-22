@@ -18,6 +18,7 @@ import MyVehiclesPage from "./pages/MyVehiclesPage";
 import VehicleFunctionsPage from "./pages/VehicleFunctionsPage";
 import VehicleTemplatesPage from "./pages/VehicleTemplatesPage";
 import TemplateFunctionsPage from "./pages/TemplateFunctionsPage";
+import RentalsPage from "./pages/RentalsPage";
 import ThrottlePage from "./pages/ThrottlePage";
 import AuditLogPage from "./pages/AuditLogPage";
 import ProfilePage from "./pages/ProfilePage";
@@ -60,6 +61,7 @@ const router = createBrowserRouter(
             element={<TemplateFunctionsPage />}
           />
           <Route path="/my/trains" element={<MyTrainsPage />} />
+          <Route path="/rentals" element={<RentalsPage />} />
           <Route path="/throttle" element={<ThrottlePage />} />
           <Route path="/interlockings/:id" element={<InterlockingPage />} />
           <Route path="/audit-log" element={<AuditLogPage />} />

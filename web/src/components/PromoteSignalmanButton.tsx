@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import { useMe } from "../api/auth";
 import type { PresenceUser } from "../api/presence";
 import { useGrantSignalmanToUser, useRequestSudo } from "../api/sudo";
+import { getUserName } from "../utils/getUserName";
 import SudoPinDialog from "./SudoPinDialog";
 
 interface PromoteSignalmanButtonProps {
@@ -50,13 +51,13 @@ export default function PromoteSignalmanButton({
 
   return (
     <>
-      <Tooltip title={t("home:onlineUsers.promoteSignalman", { login: user.login })}>
+      <Tooltip title={t("home:onlineUsers.promoteSignalman", { login: getUserName(user) })}>
         <span>
           <IconButton
             size="small"
             onClick={handleClick}
             disabled={busy}
-            aria-label={t("home:onlineUsers.promoteSignalman", { login: user.login })}
+            aria-label={t("home:onlineUsers.promoteSignalman", { login: getUserName(user) })}
           >
             <EngineeringIcon fontSize="small" />
           </IconButton>
@@ -66,7 +67,7 @@ export default function PromoteSignalmanButton({
       <SudoPinDialog
         open={pinOpen}
         target="promoteSignalman"
-        targetLogin={user.login}
+        targetLogin={getUserName(user)}
         onCancel={() => setPinOpen(false)}
         onSubmit={(pin) => promote(pin)}
       />

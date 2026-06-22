@@ -19,8 +19,9 @@ type VehicleTemplateResponse struct {
 	Name        string                            `json:"name"`
 	Description string                            `json:"description"`
 	OwnerID     uint                              `json:"ownerId"`
-	OwnerLogin  string                            `json:"ownerLogin"`
-	Version     int                               `json:"version"`
+	OwnerLogin        string                            `json:"ownerLogin"`
+	OwnerOrganization string                            `json:"ownerOrganization"`
+	Version           int                               `json:"version"`
 	Functions   []VehicleTemplateFunctionResponse `json:"functions"`
 }
 
@@ -40,8 +41,9 @@ func ToVehicleTemplateResponse(t cmd.VehicleTemplateListEntry) VehicleTemplateRe
 		Name:        t.Name,
 		Description: t.Description,
 		OwnerID:     t.OwnerUserID,
-		OwnerLogin:  t.OwnerLogin,
-		Version:     t.Version,
+		OwnerLogin:        t.OwnerLogin,
+		OwnerOrganization: t.OwnerOrganization,
+		Version:           t.Version,
 		Functions:   fns,
 	}
 }

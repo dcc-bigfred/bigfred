@@ -1,0 +1,43 @@
+{
+  "title": "Wypożyczenia",
+  "tabs": {
+    "received": "Wypożyczam od kogoś",
+    "granted": "Wypożyczam komuś"
+  },
+  "empty": "Brak aktywnych wypożyczeń.",
+  "expired": "Wygasło",
+  "kind": {
+    "vehicle": "pojazd",
+    "train": "skład"
+  },
+  "received": {
+    "from": "Właściciel: {{login}}",
+    "return": "Oddaj",
+    "returnConfirmTitle": "Oddać pojazd/skład?",
+    "returnConfirmBody": "Czy na pewno chcesz oddać „{{name}}” właścicielowi?"
+  },
+  "granted": {
+    "to": "Wypożyczony: {{login}}",
+    "lend": "Wypożycz"
+  },
+  "create": {
+    "title": "Wypożycz pojazd lub skład",
+    "target": "Pojazd / skład",
+    "user": "Użytkownik",
+    "speedLimit": "Ograniczenie prędkości (%)",
+    "speedLimitHelp": "0 = brak limitu, 100 = pełna prędkość",
+    "hours": "Godziny",
+    "minutes": "Minuty",
+    "submit": "Wypożycz"
+  },
+  "control": {
+    "lessee": "Wypożyczający",
+    "remaining": "Pozostały czas",
+    "speedLimit": "Ograniczenie prędkości (%)",
+    "apply": "Zastosuj",
+    "stop": "Zatrzymaj pojazd/skład",
+    "return": "Zwróć skład/pojazd",
+    "adjustTime": "Przedłuż / skróć czas",
+    "adjustTimeSubmit": "Zastosuj czas"
+  }
+}

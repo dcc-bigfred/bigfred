@@ -18,6 +18,7 @@ export interface VehicleTemplate {
   description: string;
   ownerId: number;
   ownerLogin: string;
+  ownerOrganization: string;
   version: number;
   functions: DccFunction[];
 }
@@ -27,6 +28,7 @@ export interface FunctionCatalogueEntry {
   vehicleName: string;
   ownerId: number;
   ownerLogin: string;
+  ownerOrganization: string;
   dccAddress: number | null;
   kind: string;
   functions: DccFunction[];
@@ -164,8 +166,8 @@ export function useDeleteVehicleFunction(vehicleId: string) {
 }
 
 export type FunctionCopySource =
-  | { kind: "template"; id: number; name: string; ownerLogin: string }
-  | { kind: "locomotive"; id: string; name: string; ownerLogin: string };
+  | { kind: "template"; id: number; name: string; ownerLogin: string; ownerOrganization: string }
+  | { kind: "locomotive"; id: string; name: string; ownerLogin: string; ownerOrganization: string };
 
 export type FunctionReplaceFromBody =
   | { templateId: number }

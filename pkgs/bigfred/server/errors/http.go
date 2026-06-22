@@ -300,8 +300,38 @@ func CommandStationHTTPStatus(err error) (status int, code string) {
 		return http.StatusUnprocessableEntity, CodeCommandStationSpeedInvalid
 	case stderrors.Is(err, ErrLayoutNeedsAtLeastOneCommandStation):
 		return http.StatusConflict, CodeLayoutNeedsAtLeastOneCommandStation
-	case stderrors.Is(err, ErrCommandStationForbidden):
-		return http.StatusForbidden, CodeCommandStationForbidden
+	default:
+		return http.StatusInternalServerError, "internal_error"
+	}
+}
+
+// LeaseHTTPStatus maps lease errors to HTTP status and code.
+func LeaseHTTPStatus(err error) (status int, code string) {
+	switch {
+	case stderrors.Is(err, ErrLeaseNotFound):
+		return http.StatusNotFound, CodeLeaseNotFound
+	case stderrors.Is(err, ErrLeaseConflict):
+		return http.StatusConflict, CodeLeaseConflict
+	case stderrors.Is(err, ErrLeaseNotOwner):
+		return http.StatusForbidden, CodeLeaseNotOwner
+	case stderrors.Is(err, ErrLeaseNotParty):
+		return http.StatusForbidden, CodeLeaseNotParty
+	case stderrors.Is(err, ErrLeaseSelf):
+		return http.StatusUnprocessableEntity, CodeLeaseSelf
+	case stderrors.Is(err, ErrLeaseTargetNotOnLayout):
+		return http.StatusUnprocessableEntity, CodeLeaseTargetNotOnLayout
+	case stderrors.Is(err, ErrLeaseInvalidSpeedLimit):
+		return http.StatusUnprocessableEntity, CodeLeaseInvalidSpeedLimit
+	case stderrors.Is(err, ErrLeaseInvalidDuration):
+		return http.StatusUnprocessableEntity, CodeLeaseInvalidDuration
+	case stderrors.Is(err, ErrLeaseTargetNotDrivable):
+		return http.StatusUnprocessableEntity, CodeLeaseTargetNotDrivable
+	case stderrors.Is(err, ErrLeaseStoreUnavailable):
+		return http.StatusServiceUnavailable, CodeLeaseStoreUnavailable
+	case stderrors.Is(err, ErrUserNotFound):
+		return http.StatusNotFound, CodeUserNotFound
+	case stderrors.Is(err, ErrAccountDeactivated):
+		return http.StatusForbidden, CodeAccountDeactivated
 	default:
 		return http.StatusInternalServerError, "internal_error"
 	}

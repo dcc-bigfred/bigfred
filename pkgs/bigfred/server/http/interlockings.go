@@ -32,8 +32,9 @@ func toInterlockingWithOccupant(row service.InterlockingWithOccupant) protocol.I
 	out := protocol.ToInterlockingResponse(row.Interlocking)
 	if row.Occupant != nil {
 		out.Occupant = &protocol.OccupantResponse{
-			UserID: row.Occupant.UserID,
-			Login:  row.Occupant.Login,
+			UserID:       row.Occupant.UserID,
+			Login:        row.Occupant.Login,
+			Organization: row.Occupant.Organization,
 		}
 	}
 	return out

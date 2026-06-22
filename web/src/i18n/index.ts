@@ -32,6 +32,7 @@ import plDiagnostics from "./locales/pl/diagnostics.json";
 import plFunction from "./locales/pl/function.json";
 import plTrainAnnouncements from "./locales/pl/trainAnnouncements.json";
 import plAudit from "./locales/pl/audit.json";
+import plRentals from "./locales/pl/rentals.json";
 
 import enCommon from "./locales/en/common.json";
 import enAuth from "./locales/en/auth.json";
@@ -50,6 +51,7 @@ import enDiagnostics from "./locales/en/diagnostics.json";
 import enFunction from "./locales/en/function.json";
 import enTrainAnnouncements from "./locales/en/trainAnnouncements.json";
 import enAudit from "./locales/en/audit.json";
+import enRentals from "./locales/en/rentals.json";
 
 // SUPPORTED_LOCALES is the single source of truth. Adding a third
 // locale (e.g. "de") is: append it here → mirror every catalogue
@@ -81,6 +83,7 @@ export const resources = {
     function: plFunction,
     trainAnnouncements: plTrainAnnouncements,
     audit: plAudit,
+    rentals: plRentals,
   },
   en: {
     common: enCommon,
@@ -100,6 +103,7 @@ export const resources = {
     function: enFunction,
     trainAnnouncements: enTrainAnnouncements,
     audit: enAudit,
+    rentals: enRentals,
   },
 } as const;
 
@@ -116,7 +120,7 @@ void i18n
     fallbackLng: "pl",
     supportedLngs: SUPPORTED_LOCALES as unknown as string[],
     defaultNS: "common",
-    ns: ["common", "auth", "errors", "role", "home", "layout", "interlocking", "radio", "vehicle", "user", "sudo", "throttle", "commandStation", "diagnostics", "function", "trainAnnouncements", "audit"],
+    ns: ["common", "auth", "errors", "role", "home", "layout", "interlocking", "radio", "vehicle", "user", "sudo", "throttle", "commandStation", "diagnostics", "function", "trainAnnouncements", "audit", "rentals"],
     interpolation: {
       // React already escapes everything; double-escaping inside
       // i18next would mangle apostrophes and quotes.

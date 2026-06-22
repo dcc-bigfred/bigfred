@@ -84,9 +84,10 @@ func (s *Presence) buildEntry(ctx context.Context, layoutID, userID uint, login 
 	}
 
 	entry := domain.PresenceUser{
-		UserID: userID,
-		Login:  login,
-		Role:   role,
+		UserID:       userID,
+		Login:        user.Login,
+		Organization: user.Organization,
+		Role:         role,
 	}
 
 	sess, err := s.sessions.FindActiveByUser(ctx, userID)

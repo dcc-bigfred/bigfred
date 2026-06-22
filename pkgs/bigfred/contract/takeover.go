@@ -21,8 +21,9 @@ const (
 
 // TakeoverUserWire identifies a user on takeover envelopes.
 type TakeoverUserWire struct {
-	UserID uint   `json:"userId"`
-	Login  string `json:"login"`
+	UserID       uint   `json:"userId"`
+	Login        string `json:"login"`
+	Organization string `json:"organization"`
 }
 
 // TakeoverRequestPayload is the client → server takeover.request body.

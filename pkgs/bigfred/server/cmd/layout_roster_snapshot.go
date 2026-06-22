@@ -146,7 +146,8 @@ func (s *LayoutRosterSnapshot) BuildAllowedVehiclesSnapshot(ctx context.Context,
 			VehicleID:               e.Vehicle.ID.String(),
 			Addr:                    *e.Vehicle.DCCAddress,
 			OwnerUserID:             e.Vehicle.OwnerUserID,
-			ControllerUserIDs:       helpers.MergeUserIDs(e.Vehicle.OwnerUserID, lesseesByVehicle[e.Vehicle.ID]...),
+			ControllerUserIDs:       foldDriveControllers(e.Vehicle.OwnerUserID, domain.VehicleLesseeUserIDs(lesseesByVehicle[e.Vehicle.ID])),
+			ControllerSpeedLimits:   buildVehicleSpeedLimits(lesseesByVehicle[e.Vehicle.ID]),
 			Rp1Function:             e.Vehicle.Rp1Function,
 			EmergencyLightsFunction: e.Vehicle.EmergencyLightsFunction,
 			DeadManSwitchOption:     string(e.Vehicle.DeadManSwitchOption),
@@ -161,9 +162,9 @@ func (s *LayoutRosterSnapshot) LesseesByVehicle(
 	ctx context.Context,
 	vehicleEntries []RosterVehicleEntry,
 	trainEntries []RosterTrainEntry,
-) (map[domain.VehicleID][]uint, error) {
+) (map[domain.VehicleID][]domain.VehicleLessee, error) {
 	now := time.Now().UTC()
-	lesseesByVehicle := make(map[domain.VehicleID][]uint)
+	lesseesByVehicle := make(map[domain.VehicleID][]domain.VehicleLessee)
 
 	if s.vehicleLeases != nil && len(vehicleEntries) > 0 {
 		vehicleIDs := make([]domain.VehicleID, 0, len(vehicleEntries))
@@ -175,7 +176,10 @@ func (s *LayoutRosterSnapshot) LesseesByVehicle(
 			return nil, err
 		}
 		for _, lease := range rows {
-			lesseesByVehicle[lease.VehicleID] = append(lesseesByVehicle[lease.VehicleID], lease.ToUserID)
+			lesseesByVehicle[lease.VehicleID] = append(lesseesByVehicle[lease.VehicleID], domain.VehicleLessee{
+				UserID:     lease.ToUserID,
+				SpeedLimit: lease.SpeedLimit,
+			})
 		}
 	}
 
@@ -188,9 +192,12 @@ func (s *LayoutRosterSnapshot) LesseesByVehicle(
 		if err != nil {
 			return nil, err
 		}
-		trainLessee := make(map[domain.TrainID]uint, len(rows))
+		trainLessee := make(map[domain.TrainID]domain.VehicleLessee, len(rows))
 		for _, lease := range rows {
-			trainLessee[lease.TrainID] = lease.ToUserID
+			trainLessee[lease.TrainID] = domain.VehicleLessee{
+				UserID:     lease.ToUserID,
+				SpeedLimit: lease.SpeedLimit,
+			}
 		}
 		for _, te := range trainEntries {
 			lessee, ok := trainLessee[te.Train.ID]
@@ -204,6 +211,52 @@ func (s *LayoutRosterSnapshot) LesseesByVehicle(
 	}
 
 	return lesseesByVehicle, nil
+}
+
+// foldDriveControllers returns the drive-authority controller set for a
+// roster target published to dcc-bus. While at least one lessee holds an
+// active lease the owner loses drive authority (mirrors
+// security.DriveSecurityContext: "the owner may drive only while no one
+// else holds a lease"). With no lessees the owner is the sole controller.
+// This is what stops a lent-out vehicle from staying drivable by — and an
+// emergency-stop target of — its original owner.
+func foldDriveControllers(ownerID uint, lesseeIDs []uint) []uint {
+	if len(lesseeIDs) == 0 {
+		return helpers.MergeUserIDs(ownerID)
+	}
+	return helpers.MergeUserIDs(0, lesseeIDs...)
+}
+
+func buildVehicleSpeedLimits(lessees []domain.VehicleLessee) map[uint]uint8 {
+	if len(lessees) == 0 {
+		return nil
+	}
+	out := make(map[uint]uint8)
+	for _, l := range lessees {
+		if l.SpeedLimit > 0 && l.SpeedLimit < 100 {
+			out[l.UserID] = l.SpeedLimit
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func buildTrainSpeedLimits(lessees []domain.TrainLessee) map[uint]uint8 {
+	if len(lessees) == 0 {
+		return nil
+	}
+	out := make(map[uint]uint8)
+	for _, l := range lessees {
+		if l.SpeedLimit > 0 && l.SpeedLimit < 100 {
+			out[l.ToUserID] = l.SpeedLimit
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 // BuildDefinedTrainsSnapshot lists layout trains with member DCC
@@ -242,10 +295,11 @@ func (s *LayoutRosterSnapshot) BuildDefinedTrainsSnapshot(ctx context.Context, l
 	}
 	for _, e := range entries {
 		dt := contract.DefinedTrain{
-			TrainID:           e.Train.ID.String(),
-			OwnerUserID:       e.Train.OwnerUserID,
-			ControllerUserIDs: helpers.MergeUserIDs(e.Train.OwnerUserID, domain.TrainLesseeUserIDs(trainLessees[e.Train.ID])...),
-			Members:           make([]contract.DefinedTrainMember, 0, len(e.Members)),
+			TrainID:               e.Train.ID.String(),
+			OwnerUserID:           e.Train.OwnerUserID,
+			ControllerUserIDs:     foldDriveControllers(e.Train.OwnerUserID, domain.TrainLesseeUserIDs(trainLessees[e.Train.ID])),
+			ControllerSpeedLimits: buildTrainSpeedLimits(trainLessees[e.Train.ID]),
+			Members:               make([]contract.DefinedTrainMember, 0, len(e.Members)),
 		}
 		for _, m := range e.Members {
 			mult := m.SpeedMultiplier
@@ -294,8 +348,9 @@ func (s *LayoutRosterSnapshot) TrainLessees(
 	}
 	for _, lease := range rows {
 		lesseesByTrain[lease.TrainID] = append(lesseesByTrain[lease.TrainID], domain.TrainLessee{
-			TrainID:  lease.TrainID,
-			ToUserID: lease.ToUserID,
+			TrainID:    lease.TrainID,
+			ToUserID:   lease.ToUserID,
+			SpeedLimit: lease.SpeedLimit,
 		})
 	}
 	return lesseesByTrain, nil

@@ -104,10 +104,11 @@ func (s *Radio) Send(ctx context.Context, in RadioSendInput) (domain.RadioMessag
 	}
 
 	msg := domain.RadioMessage{
-		LayoutID:    in.LayoutID,
-		FromUserID:  in.FromUserID,
-		FromLogin:   in.FromLogin,
-		Phrase:      in.Phrase,
+		LayoutID:         in.LayoutID,
+		FromUserID:       in.FromUserID,
+		FromLogin:        in.FromLogin,
+		FromOrganization: in.FromOrganization,
+		Phrase:           in.Phrase,
 		Note:        note,
 		ContextName: contextName,
 		SentAt:      time.Now().UTC(),

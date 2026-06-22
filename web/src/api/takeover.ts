@@ -7,6 +7,7 @@ export type TakeoverTarget = "vehicle" | "train";
 export interface TakeoverUser {
   userId: number;
   login: string;
+  organization: string;
 }
 
 export interface TakeoverRequestedEvent {

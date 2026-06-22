@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { apiFetch } from "./client";
 import { useSocket } from "../context/SocketContext";
+import { getUserName } from "../utils/getUserName";
 
 // Driver phrases — ordered: acks/entry/departure, then shunting, then other.
 export const RADIO_PHRASES_DRIVER = [
@@ -256,6 +257,7 @@ export function writeStoredRadioPhraseGroupFilter(
 export interface RadioUser {
   userId: number;
   login: string;
+  organization: string;
 }
 
 export interface RadioTarget {
@@ -475,7 +477,7 @@ export function radioSenderLabel(msg: RadioMessage): string {
   if (msg.fromInterlocking?.name) {
     return msg.fromInterlocking.name;
   }
-  return msg.from.login;
+  return getUserName(msg.from);
 }
 
 export function formatRadioAlertLine(msg: RadioMessage, phraseLabel: string): string {
@@ -505,7 +507,7 @@ export function radioFromLabel(
   ) {
     return options.selfLabel;
   }
-  return msg.from.login;
+  return getUserName(msg.from);
 }
 
 export function isRadioSelfMessage(msg: RadioMessage, viewerUserId?: number): boolean {
@@ -595,7 +597,7 @@ export function signalmanReplyTargetFromInbound(
   return {
     to: { userId: msg.from.userId },
     context,
-    targetLabel: msg.from.login,
+    targetLabel: getUserName(msg.from),
     contextLabel: contextLabel(msg),
   };
 }

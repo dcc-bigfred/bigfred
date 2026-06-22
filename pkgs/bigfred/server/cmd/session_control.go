@@ -73,6 +73,7 @@ type ControlSession interface {
 	SessionID() string
 	UserID() uint
 	Login() string
+	Organization() string
 	LayoutID() uint
 	CurrentCommandStation() uint
 	SetCommandStation(commandStationID uint) uint

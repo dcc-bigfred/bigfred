@@ -7,6 +7,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/alicebob/miniredis/v2"
+	"github.com/redis/go-redis/v9"
+
 	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
 	"github.com/keskad/loco/pkgs/bigfred/server/repo"
@@ -14,6 +17,18 @@ import (
 )
 
 var testAdminEff = domain.NewEffectiveRoles(domain.RoleAdmin)
+
+func freshRedisLeaseStores(t *testing.T) (repo.VehicleLeaseStore, repo.TrainLeaseStore) {
+	t.Helper()
+	mr, err := miniredis.Run()
+	if err != nil {
+		t.Fatalf("miniredis: %v", err)
+	}
+	t.Cleanup(mr.Close)
+	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = client.Close() })
+	return repo.NewRedisVehicleLeases(client), repo.NewRedisTrainLeases(client)
+}
 
 func freshRepo(t *testing.T) (repo.UsersBundle, func()) {
 	t.Helper()
@@ -26,6 +41,7 @@ func freshRepo(t *testing.T) (repo.UsersBundle, func()) {
 	}
 	migrations.MigrateUp(context.Background(), r)
 
+	vehicleLeases, trainLeases := freshRedisLeaseStores(t)
 	bundle := repo.UsersBundle{
 		Users:                 repo.NewUsers(r),
 		Pool:                  repo.NewDCCAddressRanges(r),
@@ -41,8 +57,8 @@ func freshRepo(t *testing.T) (repo.UsersBundle, func()) {
 		CommandStations:       repo.NewCommandStations(r),
 		LayoutCommandStations: repo.NewLayoutCommandStations(r),
 		SudoElevations:        repo.NewSudoElevations(r),
-		VehicleLeases:         repo.NewVehicleLeases(r),
-		TrainLeases:           repo.NewTrainLeases(r),
+		VehicleLeases:         vehicleLeases,
+		TrainLeases:           trainLeases,
 	}
 	cleanup := func() {
 		_ = db.Close()

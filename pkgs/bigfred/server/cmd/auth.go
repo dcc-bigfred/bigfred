@@ -279,6 +279,23 @@ func (a *Auth) ChangePIN(ctx context.Context, userID uint, currentPIN, newPIN st
 	return a.users.Update(ctx, &user)
 }
 
+// UpdateProfile updates the caller's self-service profile fields.
+func (a *Auth) UpdateProfile(ctx context.Context, userID uint, organization string) (domain.User, error) {
+	user, err := a.users.FindByID(ctx, userID)
+	if err != nil {
+		if errors.Is(err, repo.ErrUserNotFound) {
+			return domain.User{}, svcerrors.ErrUserNotFound
+		}
+		return domain.User{}, err
+	}
+	user.Organization = validation.SanitiseOrganization(organization)
+	user.UpdatedAt = time.Now().UTC()
+	if err := a.users.Update(ctx, &user); err != nil {
+		return domain.User{}, err
+	}
+	return user, nil
+}
+
 func verifyPIN(pin, encoded string) error {
 	if err := helpers.VerifyPIN(pin, encoded); err != nil {
 		return svcerrors.ErrInvalidCredentials

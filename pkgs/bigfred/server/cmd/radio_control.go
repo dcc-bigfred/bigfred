@@ -21,6 +21,7 @@ type RadioSendInput struct {
 	LayoutID         uint
 	FromUserID       uint
 	FromLogin        string
+	FromOrganization string
 	ToUserID         uint
 	ToInterlockingID uint
 	ContextVehicleID domain.VehicleID
@@ -87,6 +88,7 @@ func (h *RadioControl) handleSend(ctx context.Context, c ControlClient, env Cont
 		LayoutID:         sess.LayoutID(),
 		FromUserID:       sess.UserID(),
 		FromLogin:        sess.Login(),
+		FromOrganization: sess.Organization(),
 		ToUserID:         toUser,
 		ToInterlockingID: toIlk,
 		ContextVehicleID: ctxVehicle,

@@ -35,6 +35,7 @@ import {
 } from "react-router-dom";
 
 import { useMe } from "../api/auth";
+import { getUserName } from "../utils/getUserName";
 import { ApiError } from "../api/client";
 import {
   useInterlocking,
@@ -649,8 +650,8 @@ function OccupantBadge({
       color={isMe ? "success" : "primary"}
       label={
         isMe
-          ? t("view.occupantSelf", { login: occupant.login })
-          : t("view.occupant", { login: occupant.login })
+          ? t("view.occupantSelf", { login: getUserName(occupant) })
+          : t("view.occupant", { login: getUserName(occupant) })
       }
       size="medium"
     />
@@ -675,7 +676,7 @@ function DisplaceDialog({
       <DialogContent>
         <DialogContentText>
           {incumbent
-            ? t("view.displace.message", { login: incumbent.login })
+            ? t("view.displace.message", { login: getUserName(incumbent) })
             : null}
         </DialogContentText>
       </DialogContent>

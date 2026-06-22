@@ -69,6 +69,6 @@ func (r eStopTargetRoster) LesseesByVehicle(
 	ctx context.Context,
 	vehicleEntries []cmd.RosterVehicleEntry,
 	trainEntries []cmd.RosterTrainEntry,
-) (map[domain.VehicleID][]uint, error) {
+) (map[domain.VehicleID][]domain.VehicleLessee, error) {
 	return r.roster.LayoutRosterSnapshot.LesseesByVehicle(ctx, vehicleEntries, trainEntries)
 }

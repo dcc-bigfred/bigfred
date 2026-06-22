@@ -138,6 +138,7 @@ type RadioMessage struct {
 	LayoutID             uint
 	FromUserID           uint
 	FromLogin            string
+	FromOrganization     string
 	FromInterlockingID   *uint
 	FromInterlockingName string
 	ToUserID             *uint

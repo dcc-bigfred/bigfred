@@ -19,8 +19,9 @@ type InterlockingWithOccupant struct {
 
 // OccupantInfo identifies the signalman staffing a box.
 type OccupantInfo struct {
-	UserID uint
-	Login  string
+	UserID       uint
+	Login        string
+	Organization string
 }
 
 // JoinResult describes the outcome of occupying an interlocking.
@@ -89,7 +90,11 @@ func (s *InterlockingOccupancy) GetForLayout(
 	out := InterlockingWithOccupant{Interlocking: row}
 	if sess, err := s.sessions.FindActiveByInterlocking(ctx, interlockingID); err == nil {
 		if user, err := s.users.FindByID(ctx, sess.SignalmanUserID); err == nil {
-			out.Occupant = &OccupantInfo{UserID: user.ID, Login: user.Login}
+			out.Occupant = &OccupantInfo{
+				UserID:       user.ID,
+				Login:        user.Login,
+				Organization: user.Organization,
+			}
 		}
 	} else if !errors.Is(err, repo.ErrInterlockingSessionNotFound) {
 		return InterlockingWithOccupant{}, err
@@ -122,7 +127,11 @@ func (s *InterlockingOccupancy) ListForLayout(ctx context.Context, layoutID uint
 		if sess, ok := byInterlocking[row.ID]; ok {
 			user, err := s.users.FindByID(ctx, sess.SignalmanUserID)
 			if err == nil {
-				item.Occupant = &OccupantInfo{UserID: user.ID, Login: user.Login}
+				item.Occupant = &OccupantInfo{
+					UserID:       user.ID,
+					Login:        user.Login,
+					Organization: user.Organization,
+				}
 			}
 		}
 		out = append(out, item)
@@ -176,7 +185,11 @@ func (s *InterlockingOccupancy) Join(ctx context.Context, in JoinInput) (JoinRes
 	if current != nil && current.SignalmanUserID == in.Actor.ID {
 		return JoinResult{
 			Interlocking: ilk,
-			Occupant:     OccupantInfo{UserID: in.Actor.ID, Login: in.Actor.Login},
+			Occupant: OccupantInfo{
+				UserID:       in.Actor.ID,
+				Login:        in.Actor.Login,
+				Organization: in.Actor.Organization,
+			},
 		}, nil
 	}
 
@@ -207,7 +220,11 @@ func (s *InterlockingOccupancy) Join(ctx context.Context, in JoinInput) (JoinRes
 	var displaced *OccupantInfo
 	if current != nil && current.SignalmanUserID != in.Actor.ID {
 		if user, err := s.users.FindByID(ctx, current.SignalmanUserID); err == nil {
-			displaced = &OccupantInfo{UserID: user.ID, Login: user.Login}
+			displaced = &OccupantInfo{
+				UserID:       user.ID,
+				Login:        user.Login,
+				Organization: user.Organization,
+			}
 		}
 		if err := s.sessions.End(ctx, current, now); err != nil {
 			return JoinResult{}, err
@@ -231,7 +248,11 @@ func (s *InterlockingOccupancy) Join(ctx context.Context, in JoinInput) (JoinRes
 		return JoinResult{}, err
 	}
 
-	occupant := OccupantInfo{UserID: in.Actor.ID, Login: in.Actor.Login}
+	occupant := OccupantInfo{
+		UserID:       in.Actor.ID,
+		Login:        in.Actor.Login,
+		Organization: in.Actor.Organization,
+	}
 	s.broadcastOccupant(in.LayoutID, in.InterlockingID, &occupant, "joined")
 	s.refreshPresence(ctx, in.LayoutID)
 

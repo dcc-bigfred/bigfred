@@ -39,6 +39,7 @@ export default function VehicleFunctionsPage() {
         id: row.id,
         name: row.name,
         ownerLogin: row.ownerLogin,
+        ownerOrganization: row.ownerOrganization,
       }),
     );
     const locomotiveRows: FunctionCopySource[] = (catalogue.data ?? [])
@@ -48,6 +49,7 @@ export default function VehicleFunctionsPage() {
         id: entry.vehicleId,
         name: entry.vehicleName,
         ownerLogin: entry.ownerLogin,
+        ownerOrganization: entry.ownerOrganization,
       }));
     const byName = (a: FunctionCopySource, b: FunctionCopySource) =>
       a.name.localeCompare(b.name, undefined, { sensitivity: "base" });

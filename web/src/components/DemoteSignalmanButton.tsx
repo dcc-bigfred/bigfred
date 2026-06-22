@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import { useMe } from "../api/auth";
 import type { PresenceUser } from "../api/presence";
 import { useRequestSudo, useRevokeSignalmanFromUser } from "../api/sudo";
+import { getUserName } from "../utils/getUserName";
 import SudoPinDialog from "./SudoPinDialog";
 
 interface DemoteSignalmanButtonProps {
@@ -50,13 +51,13 @@ export default function DemoteSignalmanButton({
 
   return (
     <>
-      <Tooltip title={t("home:onlineUsers.demoteSignalman", { login: user.login })}>
+      <Tooltip title={t("home:onlineUsers.demoteSignalman", { login: getUserName(user) })}>
         <span>
           <IconButton
             size="small"
             onClick={handleClick}
             disabled={busy}
-            aria-label={t("home:onlineUsers.demoteSignalman", { login: user.login })}
+            aria-label={t("home:onlineUsers.demoteSignalman", { login: getUserName(user) })}
           >
             <TrainIcon fontSize="small" />
           </IconButton>
@@ -66,7 +67,7 @@ export default function DemoteSignalmanButton({
       <SudoPinDialog
         open={pinOpen}
         target="demoteSignalman"
-        targetLogin={user.login}
+        targetLogin={getUserName(user)}
         onCancel={() => setPinOpen(false)}
         onSubmit={(pin) => demote(pin)}
       />

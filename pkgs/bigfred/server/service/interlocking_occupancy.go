@@ -57,8 +57,9 @@ func (h interlockingOccupancyHub) BroadcastOccupantChanged(layoutID, interlockin
 	}
 	if occupant != nil {
 		payload.Occupant = &ws.OccupantPayload{
-			UserID: occupant.UserID,
-			Login:  occupant.Login,
+			UserID:       occupant.UserID,
+			Login:        occupant.Login,
+			Organization: occupant.Organization,
 		}
 	}
 	h.hub.BroadcastToLayout(layoutID, "interlocking.occupantChanged", payload)

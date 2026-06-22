@@ -34,27 +34,30 @@ func NewLayoutRosterHandler(svc *service.LayoutVehicleService, auth *cmd.Auth, a
 // protocol.VehicleResponse and add roster metadata.
 type rosterVehicleResponse struct {
 	protocol.VehicleResponse
-	OwnerLogin string    `json:"ownerLogin"`
-	AddedAt    time.Time `json:"addedAt"`
+	OwnerLogin        string    `json:"ownerLogin"`
+	OwnerOrganization string    `json:"ownerOrganization"`
+	AddedAt           time.Time `json:"addedAt"`
 	CanDrive   bool      `json:"canDrive"`
 }
 
 // rosterTrainResponse is the train-shaped sibling.
 type rosterTrainResponse struct {
-	ID         string                         `json:"id"`
-	Name       string                         `json:"name"`
-	OwnerID    uint                           `json:"ownerId"`
-	OwnerLogin string                         `json:"ownerLogin"`
-	AddedAt    time.Time                      `json:"addedAt"`
-	CanDrive   bool                           `json:"canDrive"`
-	Members    []protocol.TrainMemberResponse `json:"members"`
+	ID                string                         `json:"id"`
+	Name              string                         `json:"name"`
+	OwnerID           uint                           `json:"ownerId"`
+	OwnerLogin        string                         `json:"ownerLogin"`
+	OwnerOrganization string                         `json:"ownerOrganization"`
+	AddedAt           time.Time                      `json:"addedAt"`
+	CanDrive          bool                           `json:"canDrive"`
+	Members           []protocol.TrainMemberResponse `json:"members"`
 }
 
 func toRosterVehicleResponse(e service.RosterVehicleEntry, canDrive bool) rosterVehicleResponse {
 	return rosterVehicleResponse{
 		VehicleResponse: protocol.ToVehicleResponse(e.Vehicle),
-		OwnerLogin:      e.OwnerLogin,
-		AddedAt:         e.AddedAt,
+		OwnerLogin:        e.OwnerLogin,
+		OwnerOrganization: e.OwnerOrganization,
+		AddedAt:           e.AddedAt,
 		CanDrive:        canDrive,
 	}
 }
@@ -65,13 +68,14 @@ func toRosterTrainResponse(e service.RosterTrainEntry, canDrive bool) rosterTrai
 		members = append(members, protocol.ToTrainMemberResponse(m))
 	}
 	return rosterTrainResponse{
-		ID:         e.Train.ID.String(),
-		Name:       e.Train.Name,
-		OwnerID:    e.Train.OwnerUserID,
-		OwnerLogin: e.OwnerLogin,
-		AddedAt:    e.AddedAt,
-		CanDrive:   canDrive,
-		Members:    members,
+		ID:                e.Train.ID.String(),
+		Name:              e.Train.Name,
+		OwnerID:           e.Train.OwnerUserID,
+		OwnerLogin:        e.OwnerLogin,
+		OwnerOrganization: e.OwnerOrganization,
+		AddedAt:           e.AddedAt,
+		CanDrive:          canDrive,
+		Members:           members,
 	}
 }
 
@@ -131,7 +135,7 @@ func (h *LayoutRosterHandler) ListVehicles(w http.ResponseWriter, r *http.Reques
 	}
 	out := make([]rosterVehicleResponse, 0, len(rows))
 	for _, e := range rows {
-		canDrive := (security.DriveSecurityContext{}).CanDrive(actor.User, e.Vehicle.OwnerUserID, lessees[e.Vehicle.ID]).Allowed
+		canDrive := (security.DriveSecurityContext{}).CanDrive(actor.User, e.Vehicle.OwnerUserID, domain.VehicleLesseeUserIDs(lessees[e.Vehicle.ID])).Allowed
 		out = append(out, toRosterVehicleResponse(e, canDrive))
 	}
 	w.Header().Set("Content-Type", "application/json")

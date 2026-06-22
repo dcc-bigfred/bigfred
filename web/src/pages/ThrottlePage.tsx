@@ -20,6 +20,7 @@ import {
   type DataPlaneStatus,
 } from "../context/DccBusContext";
 import { useMe } from "../api/auth";
+import { useReceivedLeases } from "../api/leases";
 import { useVehicleFunctions } from "../api/functions";
 import {
   useLayoutTrains,
@@ -55,6 +56,12 @@ import {
   TakeoverDriverDialog,
   useTakeoverDriverSession,
 } from "../components/throttle/TakeoverDriverDialog";
+import LeaseCountdown from "../components/leases/LeaseCountdown";
+import { useLeaseEvents } from "../hooks/useLeaseEvents";
+import {
+  effectiveLeaseMaxSpeed,
+  useThrottleLease,
+} from "../hooks/useThrottleLease";
 
 function translateErrorCode(
   t: (k: string, opts?: { defaultValue?: string }) => string,
@@ -566,6 +573,8 @@ function ConnectedThrottle({
   driverRadio: DriverRadioInbound;
 }) {
   const me = useMe().data;
+  useLeaseEvents();
+  const receivedLeases = useReceivedLeases();
   const vehicles = useCockpitVehicles(layoutID);
   const trains = useCockpitTrains(layoutID);
   const { selectedTarget, selectTarget } = useThrottleTargetSelection(
@@ -598,6 +607,15 @@ function ConnectedThrottle({
   const { t } = useTranslation(["throttle", "errors"]);
   const speedSteps = busSpeedSteps ?? sessionSpeedSteps;
   const maxSpeed = maxSpeedValue(speedSteps);
+  const activeLease = useThrottleLease(
+    receivedLeases.data,
+    selectedTarget,
+    vehicles,
+  );
+  const throttleMaxSpeed = effectiveLeaseMaxSpeed(
+    maxSpeed,
+    activeLease?.speedLimit,
+  );
   // Only spin once a connection was established and then lost — not during
   // the very first connect, which would flash the icon on every page load.
   const connectionLost =
@@ -644,7 +662,7 @@ function ConnectedThrottle({
     serverSpeed,
     witnessAddr,
   );
-  const cockpitSpeed = Math.min(displaySpeed, maxSpeed);
+  const cockpitSpeed = Math.min(displaySpeed, throttleMaxSpeed);
   const { queueSpeed, sendSpeedNow, flush, retrying: speedRetrying } =
     useDebouncedSpeedSend(setSpeed);
   const {
@@ -669,14 +687,15 @@ function ConnectedThrottle({
   );
 
   const handleSpeed = (next: number) => {
+    const clamped = Math.min(next, throttleMaxSpeed);
     if (isTrainMode) {
-      noteUserSpeed(next);
-      queueTrainSpeed(selectedTarget.trainId, next, forward);
+      noteUserSpeed(clamped);
+      queueTrainSpeed(selectedTarget.trainId, clamped, forward);
       return;
     }
     if (selectedAddr == null) return;
-    noteUserSpeed(next);
-    queueSpeed(selectedAddr, next, forward);
+    noteUserSpeed(clamped);
+    queueSpeed(selectedAddr, clamped, forward);
   };
   const handleDir = (fwd: boolean) => {
     if (isTrainMode) {
@@ -730,12 +749,30 @@ function ConnectedThrottle({
   ]);
 
   const drive = useSelectedDriveContext(layoutID, witnessAddr);
-  const headerExtra = buildThrottleRadioHeader({
+  const radioHeader = buildThrottleRadioHeader({
     layoutId: layoutID,
     vehicleId: drive.vehicleId,
     vehicleName: drive.vehicleName ?? trainCtx.leadingName,
     radio: driverRadio,
   });
+  const headerExtra = (
+    <Stack direction="row" spacing={0.5} alignItems="center">
+      {radioHeader}
+      {activeLease && (
+        <Chip
+          size="small"
+          label={
+            <>
+              {t("throttle:lease.remaining")}:{" "}
+              <LeaseCountdown expiresAt={activeLease.expiresAt} component="span" />
+            </>
+          }
+          sx={{ color: "inherit", borderColor: "rgba(255,255,255,0.35)" }}
+          variant="outlined"
+        />
+      )}
+    </Stack>
+  );
 
   const settingsMember =
     settingsMemberId != null
@@ -816,7 +853,7 @@ function ConnectedThrottle({
         selectedTarget={selectedTarget}
         onSelectTarget={handleSelectTarget}
         speed={cockpitSpeed}
-        maxSpeed={maxSpeed}
+        maxSpeed={throttleMaxSpeed}
         forward={forward}
         functions={functions}
         configuredFunctions={configuredFunctions}

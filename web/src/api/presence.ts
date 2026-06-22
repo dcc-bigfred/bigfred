@@ -13,6 +13,7 @@ export interface OccupiedInterlocking {
 export interface PresenceUser {
   userId: number;
   login: string;
+  organization: string;
   role: Role;
   occupiedInterlocking?: OccupiedInterlocking;
 }

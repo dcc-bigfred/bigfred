@@ -155,8 +155,8 @@ func (r *LayoutRoster) ListTrains(ctx context.Context, layoutID uint) ([]RosterT
 	return out, nil
 }
 
-// AddVehicle attaches a vehicle to the layout roster (owner-only).
-func (r *LayoutRoster) AddVehicle(ctx context.Context, layoutID, actorID uint, vehicleID domain.VehicleID) (RosterVehicleEntry, error) {
+// AddVehicle attaches a vehicle to the layout roster.
+func (r *LayoutRoster) AddVehicle(ctx context.Context, layoutID, actorID uint, vehicleID domain.VehicleID, eff domain.EffectiveRoles) (RosterVehicleEntry, error) {
 	v, err := r.vehicles.FindByID(ctx, vehicleID)
 	if err != nil {
 		if errors.Is(err, repo.ErrVehicleNotFound) {
@@ -164,8 +164,14 @@ func (r *LayoutRoster) AddVehicle(ctx context.Context, layoutID, actorID uint, v
 		}
 		return RosterVehicleEntry{}, err
 	}
-	if v.OwnerUserID != actorID {
-		return RosterVehicleEntry{}, svcerrors.ErrVehicleNotOwned
+	decision := r.sec.CanAddVehicleToRoster(eff, actorID, v.OwnerUserID)
+	if !decision.Allowed {
+		switch decision.Reason {
+		case security.ReasonVehicleNotOwned:
+			return RosterVehicleEntry{}, svcerrors.ErrVehicleNotOwned
+		default:
+			return RosterVehicleEntry{}, errors.New(decision.Reason)
+		}
 	}
 	if _, err := r.layoutVehicles.FindByLayoutAndVehicle(ctx, layoutID, vehicleID); err == nil {
 		return RosterVehicleEntry{}, svcerrors.ErrLayoutVehicleAlreadyOnRoster
@@ -232,8 +238,8 @@ func (r *LayoutRoster) RemoveVehicle(ctx context.Context, layoutID, actorID uint
 	return nil
 }
 
-// AddTrain attaches a train to the layout roster (owner-only).
-func (r *LayoutRoster) AddTrain(ctx context.Context, layoutID, actorID uint, trainID domain.TrainID) (RosterTrainEntry, error) {
+// AddTrain attaches a train to the layout roster.
+func (r *LayoutRoster) AddTrain(ctx context.Context, layoutID, actorID uint, trainID domain.TrainID, eff domain.EffectiveRoles) (RosterTrainEntry, error) {
 	t, err := r.trains.FindByID(ctx, trainID)
 	if err != nil {
 		if errors.Is(err, repo.ErrTrainNotFound) {
@@ -241,8 +247,14 @@ func (r *LayoutRoster) AddTrain(ctx context.Context, layoutID, actorID uint, tra
 		}
 		return RosterTrainEntry{}, err
 	}
-	if t.OwnerUserID != actorID {
-		return RosterTrainEntry{}, svcerrors.ErrTrainNotOwned
+	decision := r.sec.CanAddTrainToRoster(eff, actorID, t.OwnerUserID)
+	if !decision.Allowed {
+		switch decision.Reason {
+		case security.ReasonTrainNotOwned:
+			return RosterTrainEntry{}, svcerrors.ErrTrainNotOwned
+		default:
+			return RosterTrainEntry{}, errors.New(decision.Reason)
+		}
 	}
 	if _, err := r.layoutTrains.FindByLayoutAndTrain(ctx, layoutID, trainID); err == nil {
 		return RosterTrainEntry{}, svcerrors.ErrLayoutTrainAlreadyOnRoster

@@ -40,6 +40,30 @@
     "deleteConfirm": "Delete vehicle “{{name}}”?",
     "deleteConfirmBody": "This action cannot be undone. The vehicle must be removed from every train first."
   },
+  "catalogue": {
+    "title": "Available vehicles",
+    "intro": "Browse every registered vehicle. You can modify only your own rolling stock — or, as an admin, other users' vehicles.",
+    "searchLabel": "Search",
+    "searchPlaceholder": "Name, number, DCC address, owner…",
+    "empty": "No vehicles have been registered yet.",
+    "noResults": "No vehicles match your search.",
+    "pagination": "{{from}}–{{to}} of {{count}}",
+    "onLayout": {
+      "yes": "Yes",
+      "no": "No"
+    },
+    "columns": {
+      "name": "Name",
+      "kind": "Kind",
+      "number": "Number",
+      "dccAddress": "DCC address",
+      "onLayout": "On layout",
+      "actions": "Actions"
+    },
+    "actions": {
+      "lendOwnerOnly": "Only the owner can lend out this vehicle"
+    }
+  },
   "trainList": {
     "title": "My trains",
     "intro": "Manage your trains. A train is a consist of multiple vehicles that move together and are identified as one train. A train added to the layout can be controlled as a whole — then all vehicles move together, even when there are several powered vehicles. Trains can be programmed — for example, to turn wagon lights on in sequence or play sounds in different vehicles beyond the locomotive pulling the consist.",

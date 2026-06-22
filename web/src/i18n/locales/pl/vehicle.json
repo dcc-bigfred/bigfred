@@ -40,6 +40,30 @@
     "deleteConfirm": "Usunąć pojazd „{{name}}”?",
     "deleteConfirmBody": "Tej operacji nie można cofnąć. Pojazd musi być wcześniej usunięty ze wszystkich składów."
   },
+  "catalogue": {
+    "title": "Dostępne pojazdy",
+    "intro": "Przeglądaj wszystkie zarejestrowane pojazdy. Możesz modyfikować tylko własny tabor lub — jako administrator — tabor innych użytkowników.",
+    "searchLabel": "Szukaj",
+    "searchPlaceholder": "Nazwa, numer, adres DCC, właściciel…",
+    "empty": "Nie zarejestrowano jeszcze żadnych pojazdów.",
+    "noResults": "Brak pojazdów pasujących do wyszukiwania.",
+    "pagination": "{{from}}–{{to}} z {{count}}",
+    "onLayout": {
+      "yes": "Tak",
+      "no": "Nie"
+    },
+    "columns": {
+      "name": "Nazwa",
+      "kind": "Typ",
+      "number": "Numer",
+      "dccAddress": "Adres DCC",
+      "onLayout": "Na makiecie",
+      "actions": "Akcje"
+    },
+    "actions": {
+      "lendOwnerOnly": "Tylko właściciel może wypożyczyć pojazd"
+    }
+  },
   "trainList": {
     "title": "Moje składy",
     "intro": "Zarządzaj swoimi składami. Skład to pociąg złożony z wielu pojazdów, które jadą wspólnie i identyfikują się jako jeden pociąg. Skład dodany do makiety można sterować jako całością — wtedy wszystkie pojazdy poruszają się wspólnie, nawet jeśli jest to wiele pojazdów silnikowych. Składy można programować — na przykład włączać sekwencyjnie światła w wagonach czy odtwarzać dźwięki w różnych pojazdach poza samą lokomotywą ciągnącą skład.",

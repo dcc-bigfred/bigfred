@@ -52,6 +52,10 @@
       "throttle": "Throttle",
       "rentals": "Rentals"
     },
+    "fleet": {
+      "menuLabel": "Fleet",
+      "availableVehicles": "Available vehicles"
+    },
     "account": {
       "menuLabel": "Account",
       "profile": "Profile",

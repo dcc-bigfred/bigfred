@@ -138,6 +138,19 @@ function AppShellContent() {
     [t],
   );
 
+  const fleetItems: TopBarMenuItem[] = useMemo(
+    () => [
+      {
+        id: "available-vehicles",
+        label: t("nav.fleet.availableVehicles"),
+        icon: <DirectionsRailwayIcon fontSize="small" />,
+        onClick: () => navigate("/fleet/vehicles"),
+      },
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [t],
+  );
+
   const myItems: TopBarMenuItem[] = useMemo(
     () => [
       {
@@ -241,6 +254,7 @@ function AppShellContent() {
     if (!me) return [];
     const sections: MobileNavSection[] = [
       { id: "quick", items: [...quickNavItems, ...sudoMobileItems] },
+      { id: "fleet", label: t("nav.fleet.menuLabel"), items: fleetItems },
       { id: "my", label: t("nav.my.menuLabel"), items: myItems },
     ];
     if (isAdmin) {
@@ -261,6 +275,7 @@ function AppShellContent() {
     isAdmin,
     quickNavItems,
     sudoMobileItems,
+    fleetItems,
     myItems,
     administrationItems,
     accountItems,
@@ -373,6 +388,10 @@ function AppShellContent() {
                 </Tooltip>
                 <FullscreenToggleButton />
               </>
+            )}
+
+            {me && !isCompactNav && (
+              <TopBarMenu label={t("nav.fleet.menuLabel")} items={fleetItems} />
             )}
 
             {me && !isCompactNav && (

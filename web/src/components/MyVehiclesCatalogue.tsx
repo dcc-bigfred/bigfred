@@ -26,8 +26,9 @@ import PlaylistAddIcon from "@mui/icons-material/PlaylistAdd";
 import RemoveCircleOutlineIcon from "@mui/icons-material/RemoveCircleOutline";
 import { useTranslation } from "react-i18next";
 
+import { useMe } from "../api/auth";
 import { ApiError } from "../api/client";
-import { lendableTargetKey, useGrantedLeases } from "../api/leases";
+import { useGrantedLeases, lendableTargetKey } from "../api/leases";
 import {
   useAddVehicleToRoster,
   useDeleteVehicle,
@@ -36,6 +37,12 @@ import {
   useRemoveVehicleFromRoster,
   type Vehicle,
 } from "../api/vehicles";
+import {
+  isTargetLeased,
+  isVehicleLendable,
+  vehicleLendTooltip,
+} from "../utils/lendAction";
+import { hasEffectiveAdmin } from "../utils/rosterPermissions";
 import LeaseCreateDialog from "./leases/LeaseCreateDialog";
 import VehicleDialog from "./VehicleDialog";
 
@@ -49,12 +56,15 @@ interface Props {
 export default function MyVehiclesCatalogue({ layoutId }: Props) {
   const { t } = useTranslation(["vehicle", "errors", "common", "rentals"]);
   const navigate = useNavigate();
+  const me = useMe().data;
   const vehicles = useMyVehicles();
   const layoutVehicles = useLayoutVehicles(layoutId);
   const addVehicleToRoster = useAddVehicleToRoster();
   const removeVehicleFromRoster = useRemoveVehicleFromRoster();
   const deleteVehicleMut = useDeleteVehicle();
   const grantedLeases = useGrantedLeases();
+
+  const isAdmin = hasEffectiveAdmin(me);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
@@ -75,29 +85,6 @@ export default function MyVehiclesCatalogue({ layoutId }: Props) {
     (grantedLeases.data ?? []).forEach((lease) => s.add(lendableTargetKey(lease)));
     return s;
   }, [grantedLeases.data]);
-
-  const vehicleLendTooltip = (v: Vehicle, isOnLayout: boolean) => {
-    const key = lendableTargetKey({ kind: "vehicle", targetId: v.id });
-    if (leasedTargetKeys.has(key)) {
-      return t("vehicle:list.actions.lendAlreadyLeased");
-    }
-    if (!isOnLayout) {
-      return t("vehicle:list.actions.lendRequiresLayout");
-    }
-    if (v.dccAddress == null) {
-      return t("vehicle:list.actions.lendRequiresDcc");
-    }
-    return t("rentals:granted.lend");
-  };
-
-  const canLendVehicle = (v: Vehicle, isOnLayout: boolean) => {
-    const key = lendableTargetKey({ kind: "vehicle", targetId: v.id });
-    return (
-      isOnLayout &&
-      v.dccAddress != null &&
-      !leasedTargetKeys.has(key)
-    );
-  };
 
   const mutationError = (() => {
     const err =
@@ -190,7 +177,19 @@ export default function MyVehiclesCatalogue({ layoutId }: Props) {
               ) : (
                 (vehicles.data ?? []).map((v) => {
                   const isOnLayout = vehicleOnLayout.has(v.id);
-                  const lendable = canLendVehicle(v, isOnLayout);
+                  const leased = isTargetLeased(leasedTargetKeys, "vehicle", v.id);
+                  const lendable = isVehicleLendable(isAdmin, {
+                    isOwner: true,
+                    onLayout: isOnLayout,
+                    dccAddress: v.dccAddress,
+                    leased,
+                  });
+                  const lendTitle = vehicleLendTooltip(t, isAdmin, {
+                    isOwner: true,
+                    onLayout: isOnLayout,
+                    dccAddress: v.dccAddress,
+                    leased,
+                  });
                   return (
                     <TableRow key={v.id}>
                       <TableCell>{v.name}</TableCell>
@@ -232,7 +231,7 @@ export default function MyVehiclesCatalogue({ layoutId }: Props) {
                               </IconButton>
                             </Tooltip>
                           )}
-                          <Tooltip title={vehicleLendTooltip(v, isOnLayout)}>
+                          <Tooltip title={lendTitle}>
                             <span>
                               <IconButton
                                 size="small"
@@ -300,6 +299,7 @@ export default function MyVehiclesCatalogue({ layoutId }: Props) {
         open={leaseDialogOpen}
         onClose={() => setLeaseDialogOpen(false)}
         initialTarget={leaseInitialTarget}
+        allowUnresolvedTarget={isAdmin}
       />
     </>
   );

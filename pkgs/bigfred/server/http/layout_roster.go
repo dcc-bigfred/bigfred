@@ -191,7 +191,12 @@ func (h *LayoutRosterHandler) AddVehicle(w http.ResponseWriter, r *http.Request)
 		writeJSONError(w, http.StatusBadRequest, "invalid_id")
 		return
 	}
-	entry, err := h.svc.AddVehicle(r.Context(), layoutID, actor.User.ID, vehicleID)
+	eff, err := h.actorEffectiveRoles(r, actor)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	entry, err := h.svc.AddVehicle(r.Context(), layoutID, actor.User.ID, vehicleID, eff)
 	if err != nil {
 		writeLayoutRosterError(w, err)
 		return
@@ -266,7 +271,12 @@ func (h *LayoutRosterHandler) AddTrain(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "invalid_id")
 		return
 	}
-	entry, err := h.svc.AddTrain(r.Context(), layoutID, actor.User.ID, trainID)
+	eff, err := h.actorEffectiveRoles(r, actor)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	entry, err := h.svc.AddTrain(r.Context(), layoutID, actor.User.ID, trainID, eff)
 	if err != nil {
 		writeLayoutRosterError(w, err)
 		return

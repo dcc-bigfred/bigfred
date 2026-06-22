@@ -23,6 +23,7 @@ import PlaylistAddIcon from "@mui/icons-material/PlaylistAdd";
 import RemoveCircleOutlineIcon from "@mui/icons-material/RemoveCircleOutline";
 import { useTranslation } from "react-i18next";
 
+import { useMe } from "../api/auth";
 import { ApiError } from "../api/client";
 import { lendableTargetKey, useGrantedLeases } from "../api/leases";
 import {
@@ -33,6 +34,12 @@ import {
   useRemoveTrainFromRoster,
   type Train,
 } from "../api/vehicles";
+import {
+  isTargetLeased,
+  isTrainLendable,
+  trainLendTooltip,
+} from "../utils/lendAction";
+import { hasEffectiveAdmin } from "../utils/rosterPermissions";
 import LeaseCreateDialog from "./leases/LeaseCreateDialog";
 import TrainDialog from "./TrainDialog";
 
@@ -44,12 +51,15 @@ interface Props {
 // "add to layout". Lives on /my/trains.
 export default function MyTrainsCatalogue({ layoutId }: Props) {
   const { t } = useTranslation(["vehicle", "errors", "common", "rentals"]);
+  const me = useMe().data;
   const trains = useMyTrains();
   const layoutTrains = useLayoutTrains(layoutId);
   const addTrainToRoster = useAddTrainToRoster();
   const removeTrainFromRoster = useRemoveTrainFromRoster();
   const deleteTrainMut = useDeleteTrain();
   const grantedLeases = useGrantedLeases();
+
+  const isAdmin = hasEffectiveAdmin(me);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingTrain, setEditingTrain] = useState<Train | null>(null);
@@ -70,22 +80,6 @@ export default function MyTrainsCatalogue({ layoutId }: Props) {
     (grantedLeases.data ?? []).forEach((lease) => s.add(lendableTargetKey(lease)));
     return s;
   }, [grantedLeases.data]);
-
-  const trainLendTooltip = (tr: Train, isOnLayout: boolean) => {
-    const key = lendableTargetKey({ kind: "train", targetId: tr.id });
-    if (leasedTargetKeys.has(key)) {
-      return t("vehicle:trainList.actions.lendAlreadyLeased");
-    }
-    if (!isOnLayout) {
-      return t("vehicle:trainList.actions.lendRequiresLayout");
-    }
-    return t("rentals:granted.lend");
-  };
-
-  const canLendTrain = (tr: Train, isOnLayout: boolean) => {
-    const key = lendableTargetKey({ kind: "train", targetId: tr.id });
-    return isOnLayout && !leasedTargetKeys.has(key);
-  };
 
   const mutationError = (() => {
     const err =
@@ -166,7 +160,17 @@ export default function MyTrainsCatalogue({ layoutId }: Props) {
               ) : (
                 (trains.data ?? []).map((tr) => {
                   const isOnLayout = trainOnLayout.has(tr.id);
-                  const lendable = canLendTrain(tr, isOnLayout);
+                  const leased = isTargetLeased(leasedTargetKeys, "train", tr.id);
+                  const lendable = isTrainLendable(isAdmin, {
+                    isOwner: true,
+                    onLayout: isOnLayout,
+                    leased,
+                  });
+                  const lendTitle = trainLendTooltip(t, isAdmin, {
+                    isOwner: true,
+                    onLayout: isOnLayout,
+                    leased,
+                  });
                   return (
                     <TableRow key={tr.id}>
                       <TableCell>{tr.name}</TableCell>
@@ -208,7 +212,7 @@ export default function MyTrainsCatalogue({ layoutId }: Props) {
                               </IconButton>
                             </Tooltip>
                           )}
-                          <Tooltip title={trainLendTooltip(tr, isOnLayout)}>
+                          <Tooltip title={lendTitle}>
                             <span>
                               <IconButton
                                 size="small"
@@ -267,6 +271,7 @@ export default function MyTrainsCatalogue({ layoutId }: Props) {
         open={leaseDialogOpen}
         onClose={() => setLeaseDialogOpen(false)}
         initialTarget={leaseInitialTarget}
+        allowUnresolvedTarget={isAdmin}
       />
     </>
   );

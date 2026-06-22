@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
+  Alert,
   Autocomplete,
   Button,
   Dialog,
@@ -15,10 +16,12 @@ import {
 } from "@mui/material";
 import { useTranslation } from "react-i18next";
 
+import { ApiError } from "../../api/client";
 import {
   lendableTargetKey,
   useCreateLease,
   useLendable,
+  type LendableTarget,
   type LendableUser,
 } from "../../api/leases";
 import type { TakeoverTarget } from "../../api/takeover";
@@ -28,14 +31,16 @@ export interface LeaseCreateDialogProps {
   open: boolean;
   onClose: () => void;
   initialTarget?: { kind: TakeoverTarget; targetId: string } | null;
+  allowUnresolvedTarget?: boolean;
 }
 
 export default function LeaseCreateDialog({
   open,
   onClose,
   initialTarget = null,
+  allowUnresolvedTarget = false,
 }: LeaseCreateDialogProps) {
-  const { t } = useTranslation(["rentals", "common"]);
+  const { t } = useTranslation(["rentals", "common", "errors"]);
   const lendable = useLendable();
   const create = useCreateLease();
 
@@ -50,6 +55,7 @@ export default function LeaseCreateDialog({
 
   useEffect(() => {
     if (open) {
+      create.reset();
       setSelectedTargetKey(
         initialTarget ? lendableTargetKey(initialTarget) : "",
       );
@@ -58,11 +64,35 @@ export default function LeaseCreateDialog({
       setHours("0");
       setMinutes("30");
     }
+    // create.reset is stable; full `create` would retrigger every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialTarget]);
 
   const selectedTarget = targets.find(
     (tgt) => lendableTargetKey(tgt) === selectedTargetKey,
   );
+
+  const submitTarget = useMemo((): LendableTarget | null => {
+    if (selectedTarget) {
+      return selectedTarget;
+    }
+    if (allowUnresolvedTarget) {
+      return parseLendableTargetKey(selectedTargetKey);
+    }
+    return null;
+  }, [selectedTarget, selectedTargetKey, allowUnresolvedTarget]);
+
+  const submitError = (() => {
+    const err = create.error;
+    if (!err) return null;
+    if (err instanceof ApiError) {
+      const key = `errors:${err.code}` as const;
+      const translated = t(key, { defaultValue: "" });
+      if (translated) return translated;
+      return t("errors:unknown", { code: err.code });
+    }
+    return t("errors:network");
+  })();
 
   const handleClose = () => {
     if (!create.isPending) {
@@ -71,19 +101,23 @@ export default function LeaseCreateDialog({
   };
 
   const handleSubmit = async () => {
-    if (!selectedTarget || !selectedUser) return;
+    if (!submitTarget || !selectedUser) return;
     const h = Number(hours) || 0;
     const m = Number(minutes) || 0;
     const durationSeconds = h * 3600 + m * 60;
     const limit = Number(speedLimit);
-    await create.mutateAsync({
-      kind: selectedTarget.kind,
-      targetId: selectedTarget.targetId,
-      toUserId: selectedUser.userId,
-      speedLimit: Number.isFinite(limit) ? Math.min(100, Math.max(0, limit)) : 0,
-      durationSeconds,
-    });
-    onClose();
+    try {
+      await create.mutateAsync({
+        kind: submitTarget.kind,
+        targetId: submitTarget.targetId,
+        toUserId: selectedUser.userId,
+        speedLimit: Number.isFinite(limit) ? Math.min(100, Math.max(0, limit)) : 0,
+        durationSeconds,
+      });
+      onClose();
+    } catch {
+      // surfaced via submitError
+    }
   };
 
   return (
@@ -91,6 +125,7 @@ export default function LeaseCreateDialog({
       <DialogTitle>{t("create.title")}</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
+          {submitError && <Alert severity="error">{submitError}</Alert>}
           <FormControl fullWidth>
             <InputLabel id="lease-target-label">{t("create.target")}</InputLabel>
             <Select
@@ -99,6 +134,11 @@ export default function LeaseCreateDialog({
               value={selectedTargetKey}
               onChange={(e) => setSelectedTargetKey(e.target.value)}
             >
+              {allowUnresolvedTarget && selectedTargetKey && !selectedTarget && (
+                <MenuItem value={selectedTargetKey}>
+                  {submitTarget?.targetId ?? selectedTargetKey}
+                </MenuItem>
+              )}
               {targets.map((tgt) => (
                 <MenuItem key={lendableTargetKey(tgt)} value={lendableTargetKey(tgt)}>
                   {tgt.targetName} ({tgt.kind === "train" ? t("kind.train") : t("kind.vehicle")})
@@ -157,7 +197,7 @@ export default function LeaseCreateDialog({
           onClick={() => void handleSubmit()}
           disabled={
             create.isPending ||
-            !selectedTarget ||
+            !submitTarget ||
             !selectedUser ||
             (Number(hours) === 0 && Number(minutes) === 0)
           }
@@ -167,4 +207,20 @@ export default function LeaseCreateDialog({
       </DialogActions>
     </Dialog>
   );
+}
+
+function parseLendableTargetKey(key: string): LendableTarget | null {
+  const sep = key.indexOf(":");
+  if (sep <= 0) {
+    return null;
+  }
+  const kind = key.slice(0, sep) as TakeoverTarget;
+  if (kind !== "vehicle" && kind !== "train") {
+    return null;
+  }
+  const targetId = key.slice(sep + 1);
+  if (!targetId) {
+    return null;
+  }
+  return { kind, targetId, targetName: targetId };
 }

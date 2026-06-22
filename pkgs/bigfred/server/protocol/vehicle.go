@@ -93,3 +93,21 @@ func (r VehicleUpdateRequest) ToUpdateInput() cmd.VehicleUpdateInput {
 	}
 	return in
 }
+
+// VehicleCatalogueResponse is one row of GET /api/v1/vehicles/catalogue.
+type VehicleCatalogueResponse struct {
+	VehicleResponse
+	OwnerLogin        string `json:"ownerLogin"`
+	OwnerOrganization string `json:"ownerOrganization"`
+	OnLayout          bool   `json:"onLayout"`
+}
+
+// ToVehicleCatalogueResponse maps a catalogue entry to the REST wire shape.
+func ToVehicleCatalogueResponse(e cmd.VehicleCatalogueEntry) VehicleCatalogueResponse {
+	return VehicleCatalogueResponse{
+		VehicleResponse:   ToVehicleResponse(e.Vehicle),
+		OwnerLogin:        e.OwnerLogin,
+		OwnerOrganization: e.OwnerOrganization,
+		OnLayout:          e.OnLayout,
+	}
+}

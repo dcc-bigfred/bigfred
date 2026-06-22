@@ -15,6 +15,7 @@ import InterlockingPage from "./pages/InterlockingPage";
 import LoginPage from "./pages/LoginPage";
 import MyTrainsPage from "./pages/MyTrainsPage";
 import MyVehiclesPage from "./pages/MyVehiclesPage";
+import AvailableVehiclesPage from "./pages/AvailableVehiclesPage";
 import VehicleFunctionsPage from "./pages/VehicleFunctionsPage";
 import VehicleTemplatesPage from "./pages/VehicleTemplatesPage";
 import TemplateFunctionsPage from "./pages/TemplateFunctionsPage";
@@ -54,6 +55,7 @@ const router = createBrowserRouter(
         <Route element={<AppShell />}>
           <Route path="/" element={<HomePage />} />
           <Route path="/my/vehicles" element={<MyVehiclesPage />} />
+          <Route path="/fleet/vehicles" element={<AvailableVehiclesPage />} />
           <Route path="/my/vehicles/:vehicleId/functions" element={<VehicleFunctionsPage />} />
           <Route path="/vehicle-templates" element={<VehicleTemplatesPage />} />
           <Route

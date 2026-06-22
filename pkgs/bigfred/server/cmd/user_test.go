@@ -127,7 +127,7 @@ func TestUserDeleteRefusedWhenOwnsVehicles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create user: %v", err)
 	}
-	vSvc := cmd.NewVehicle(bundle.Vehicles, pool, bundle.TrainMembers)
+	vSvc := cmd.NewVehicle(bundle.Vehicles, pool, bundle.TrainMembers, bundle.LayoutVehicles, bundle.Users)
 	addr := uint16(42)
 	if _, err := vSvc.Create(ctx, cmd.VehicleCreateInput{
 		OwnerUserID: created.ID, Name: "Loco", Kind: domain.VehicleKindLoco, DCCAddress: &addr,
@@ -156,7 +156,7 @@ func TestUserDeleteRefusedWhenOwnsTrains(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create user: %v", err)
 	}
-	vSvc := cmd.NewVehicle(bundle.Vehicles, pool, bundle.TrainMembers)
+	vSvc := cmd.NewVehicle(bundle.Vehicles, pool, bundle.TrainMembers, bundle.LayoutVehicles, bundle.Users)
 	addr := uint16(42)
 	v, err := vSvc.Create(ctx, cmd.VehicleCreateInput{
 		OwnerUserID: created.ID, Name: "Loco", Kind: domain.VehicleKindLoco, DCCAddress: &addr,

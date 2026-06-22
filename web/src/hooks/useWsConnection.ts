@@ -1,4 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type MutableRefObject } from "react";
+
+import { isSessionUnauthorized } from "../api/auth";
+import { notifySessionExpired } from "../auth/sessionExpiry";
 
 export interface UseWsConnectionOptions {
   /** WebSocket URL to connect to. Pass `null` to stay disconnected. */
@@ -45,6 +48,11 @@ export interface UseWsConnectionOptions {
   onDispose?: () => void;
   /** Called on a WebSocket error event. */
   onError?: () => void;
+  /**
+   * Called when the handshake fails because the session is no longer
+   * valid (HTTP 401). Reconnect is suppressed after this fires.
+   */
+  onUnauthorized?: () => void;
   /** Called for every incoming message that is not a `pong` frame. */
   onMessage?: (data: string) => void;
   /** Called when a pong frame is received (after the internal watchdog timestamp is updated). */
@@ -59,6 +67,21 @@ export interface UseWsConnectionResult {
 }
 
 const DEFAULT_PING_FRAME = JSON.stringify({ type: "ping" });
+
+async function handleUnauthorizedHandshake(
+  openedThisAttempt: boolean,
+  disposed: boolean,
+  gen: number,
+  connectGenRef: MutableRefObject<number>,
+  onUnauthorizedRef: MutableRefObject<(() => void) | undefined>,
+): Promise<boolean> {
+  if (openedThisAttempt) return false;
+  if (disposed || gen !== connectGenRef.current) return false;
+  if (!(await isSessionUnauthorized())) return false;
+  if (disposed || gen !== connectGenRef.current) return false;
+  (onUnauthorizedRef.current ?? notifySessionExpired)();
+  return true;
+}
 
 /** Detach handlers and clear the ref without calling close(). */
 function orphanSocket(
@@ -96,6 +119,7 @@ export function useWsConnection({
   onClose,
   onDispose,
   onError,
+  onUnauthorized,
   onMessage,
   onPong,
 }: UseWsConnectionOptions): UseWsConnectionResult {
@@ -113,6 +137,7 @@ export function useWsConnection({
   const onCloseRef = useRef(onClose);
   const onDisposeRef = useRef(onDispose);
   const onErrorRef = useRef(onError);
+  const onUnauthorizedRef = useRef(onUnauthorized);
   const onMessageRef = useRef(onMessage);
   const onPongRef = useRef(onPong);
   const buildPingFrameRef = useRef(buildPingFrame);
@@ -121,6 +146,7 @@ export function useWsConnection({
   onCloseRef.current = onClose;
   onDisposeRef.current = onDispose;
   onErrorRef.current = onError;
+  onUnauthorizedRef.current = onUnauthorized;
   onMessageRef.current = onMessage;
   onPongRef.current = onPong;
   buildPingFrameRef.current = buildPingFrame;
@@ -158,6 +184,7 @@ export function useWsConnection({
       const socket = new WebSocket(url);
       socketRef.current = socket;
       let lastPongAt = Date.now();
+      let openedThisAttempt = false;
 
       const scheduleReconnect = () => {
         if (disposed) return;
@@ -174,8 +201,22 @@ export function useWsConnection({
         if (socket.readyState !== WebSocket.CONNECTING) return;
         window.clearTimeout(connectTimeout);
         orphanSocket(socket, socketRef);
-        onCloseRef.current?.();
-        scheduleReconnect();
+        void (async () => {
+          if (
+            await handleUnauthorizedHandshake(
+              openedThisAttempt,
+              disposed,
+              gen,
+              connectGenRef,
+              onUnauthorizedRef,
+            )
+          ) {
+            return;
+          }
+          if (disposed || gen !== connectGenRef.current) return;
+          onCloseRef.current?.();
+          scheduleReconnect();
+        })();
       };
 
       const connectTimeout = window.setTimeout(() => {
@@ -186,6 +227,7 @@ export function useWsConnection({
       socket.onopen = () => {
         window.clearTimeout(connectTimeout);
         if (disposed || gen !== connectGenRef.current) return;
+        openedThisAttempt = true;
         hadOpenedRef.current = true;
         reconnectDelay = reconnectIntervalMs;
         lastPongAt = Date.now();
@@ -203,8 +245,22 @@ export function useWsConnection({
         window.clearTimeout(connectTimeout);
         if (disposed || gen !== connectGenRef.current) return;
         if (socketRef.current === socket) socketRef.current = null;
-        onCloseRef.current?.();
-        scheduleReconnect();
+        void (async () => {
+          if (
+            await handleUnauthorizedHandshake(
+              openedThisAttempt,
+              disposed,
+              gen,
+              connectGenRef,
+              onUnauthorizedRef,
+            )
+          ) {
+            return;
+          }
+          if (disposed || gen !== connectGenRef.current) return;
+          onCloseRef.current?.();
+          scheduleReconnect();
+        })();
       };
 
       socket.onmessage = (ev) => {

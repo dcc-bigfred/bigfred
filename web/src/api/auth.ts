@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { UseQueryResult } from "@tanstack/react-query";
+import { resetSessionExpiryGuard } from "../auth/sessionExpiry";
 import { ApiError, apiFetch } from "./client";
 
 // These mirror the JSON shapes emitted by pkgs/server/http/auth.go.
@@ -60,7 +61,23 @@ export interface LoginRequest {
   layoutId: number;
 }
 
-const meQueryKey = ["auth", "me"] as const;
+export const meQueryKey = ["auth", "me"] as const;
+
+export function clearCachedSession(qc: {
+  setQueryData: (key: readonly ["auth", "me"], data: null) => void;
+}): void {
+  qc.setQueryData(meQueryKey, null);
+}
+
+/** True when the session cookie is missing or rejected (HTTP 401). */
+export async function isSessionUnauthorized(): Promise<boolean> {
+  try {
+    await apiFetch<CurrentUser>("/api/v1/auth/me");
+    return false;
+  } catch (err) {
+    return err instanceof ApiError && err.status === 401;
+  }
+}
 
 // useMe is the single source of truth for "who am I, if anyone?" in
 // the React tree. It returns:
@@ -101,6 +118,7 @@ export function useLogin() {
         body: JSON.stringify(body),
       }),
     onSuccess: (user) => {
+      resetSessionExpiryGuard();
       qc.setQueryData(meQueryKey, user);
     },
   });

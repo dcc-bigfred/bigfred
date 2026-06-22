@@ -1,12 +1,16 @@
 package cli
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
+	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/keskad/loco/pkgs/loco/app"
+	"github.com/keskad/loco/pkgs/loco/decoders"
 	"github.com/spf13/cobra"
 )
 
@@ -26,6 +30,7 @@ func NewProgCommand(app *app.LocoApp) *cobra.Command {
 	command.AddCommand(NewProgBrightnessCommand(app))
 	command.AddCommand(NewAddrCommand(app))
 	command.AddCommand(NewProgFactoryResetCommand(app))
+	command.AddCommand(NewProgMappingCommand(app))
 	command.AddCommand(NewProgDetectDecoderCommand(app))
 	return command
 }
@@ -137,34 +142,71 @@ func NewProgBrightnessSetCommand(app *app.LocoApp) *cobra.Command {
 
 	cmdArgs := Args{}
 	command := &cobra.Command{
-		Use:   "set OUTPUT",
-		Short: "Set lighting brightness for an output (0-100 percent)",
-		Args:  cobra.ExactArgs(1),
+		Use:   "set OUTPUT=PERCENT [OUTPUT=PERCENT ...]",
+		Short: "Set lighting brightness for one or more outputs (0-100 percent)",
+		Long: `Set lighting brightness per output, in percent (0-100).
+
+Each assignment is OUTPUT=PERCENT; the output may be a bare number or use an
+O/FO/AUX prefix. Assignments may be comma- or space-separated.
+
+Examples:
+  loco prog brightness set O1=50,O2=5
+  loco prog brightness set O1=10 O6=50
+  loco prog brightness set 3=20 -l 3
+
+Legacy single-output form (uses --value):
+  loco prog brightness set O3 --value=20`,
+		Args: cobra.MinimumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
 			if err := app.Initialize(); err != nil {
 				return err
 			}
 
-			output64, err := strconv.ParseUint(args[0], 10, 8)
+			settings, err := brightnessSettingsFromArgs(args, command, cmdArgs.Value)
 			if err != nil {
-				return fmt.Errorf("invalid output number %q: %w", args[0], err)
-			}
-			if cmdArgs.Value > 100 {
-				return fmt.Errorf("brightness must be between 0 and 100 percent, got %d", cmdArgs.Value)
+				return err
 			}
 
-			return app.SetBrightnessAction(cmdArgs.LocoId, uint8(output64), cmdArgs.Value, time.Second*time.Duration(cmdArgs.Timeout))
+			applied, err := app.SetBrightnessAction(cmdArgs.LocoId, settings, time.Second*time.Duration(cmdArgs.Timeout))
+			if err != nil {
+				return err
+			}
+			printBrightnessLevels(applied)
+			return nil
 		},
 	}
 
 	command.Flags().BoolVarP(&app.Debug, "debug", "v", false, "Increase verbosity to the debug level")
 	command.Flags().Uint16VarP(&cmdArgs.Timeout, "timeout", "", 10, "Connection timeout")
 	command.Flags().Uint8VarP(&cmdArgs.LocoId, "loco", "l", 0, progLocoFlagUsage)
-	command.Flags().Uint8VarP(&cmdArgs.Value, "value", "V", 0, "Brightness in percent (0-100)")
-
-	command.MarkFlagRequired("value")
+	command.Flags().Uint8VarP(&cmdArgs.Value, "value", "V", 0, "Brightness in percent for the legacy OUTPUT form (0-100)")
 
 	return command
+}
+
+// brightnessSettingsFromArgs parses OUTPUT=PERCENT assignments. When no argument
+// contains "=", it falls back to the legacy form where outputs take the --value flag.
+func brightnessSettingsFromArgs(args []string, command *cobra.Command, value uint8) ([]decoders.BrightnessSetting, error) {
+	for _, a := range args {
+		if strings.Contains(a, "=") {
+			return decoders.ParseBrightnessArgs(args)
+		}
+	}
+
+	if !command.Flags().Changed("value") {
+		return nil, fmt.Errorf("specify brightness as OUTPUT=PERCENT (e.g. O1=50), or pass --value for the legacy single-output form")
+	}
+
+	paired := make([]string, 0, len(args))
+	for _, a := range args {
+		fields := strings.FieldsFunc(a, func(r rune) bool {
+			return r == ',' || r == ' ' || r == '\t'
+		})
+		for _, field := range fields {
+			paired = append(paired, fmt.Sprintf("%s=%d", field, value))
+		}
+	}
+	return decoders.ParseBrightnessArgs(paired)
 }
 
 func NewProgBrightnessGetCommand(app *app.LocoApp) *cobra.Command {
@@ -238,42 +280,68 @@ func NewProgBrightnessListCommand(app *app.LocoApp) *cobra.Command {
 
 func NewProgBrightnessTestCommand(app *app.LocoApp) *cobra.Command {
 	type Args struct {
-		LocoId  uint8
-		Timeout uint16
-		Pause   uint16
+		LocoId     uint8
+		Timeout    uint16
+		Pause      uint16
+		Brightness uint8
 	}
 
-	cmdArgs := Args{Pause: 5}
+	cmdArgs := Args{Pause: 5, Brightness: decoders.BrightnessTestActivePercentDefault}
 	command := &cobra.Command{
 		Use:   "test",
-		Short: "Blink each output twice to identify lighting wiring",
-		Long: `Save all output brightness CV values, blink each output twice
-(0% -> 50%), then restore the original values.
+		Short: "Identify which physical light is wired to each output",
+		Long: `Interactive test to map physical lights to decoder outputs (O/FO/AUX).
 
-Turn on all light functions on the locomotive before the test starts.`,
+Turn on all lighting functions on the vehicle first. The test turns all outputs
+off, then lights one output at a time. Note which physical light is on,
+then press Enter to continue to the next output. Use --brightness to set how
+bright each output is during the test (default 50%%).
+
+Use the output numbers when running: loco prog mapping set`,
 		Args: cobra.NoArgs,
 		RunE: func(command *cobra.Command, args []string) error {
 			if err := app.Initialize(); err != nil {
 				return err
 			}
 
-			fmt.Printf("Turn on all light functions on the locomotive before the test starts.\n")
+			fmt.Printf("Turn on all lighting functions on the vehicle before the test starts.\n")
 			if cmdArgs.Pause > 0 {
 				fmt.Printf("Starting in %d seconds…\n", cmdArgs.Pause)
 				time.Sleep(time.Second * time.Duration(cmdArgs.Pause))
 			}
 
-			fmt.Printf("Running brightness test…\n")
+			reader := bufio.NewReader(os.Stdin)
 			snapshot, err := app.TestBrightnessAction(
 				cmdArgs.LocoId,
+				cmdArgs.Brightness,
 				time.Second*time.Duration(cmdArgs.Timeout),
+				decoders.BrightnessIdentifyHooks{
+					OnOutput: func(state decoders.OutputBrightness, index, total int) error {
+						fmt.Printf("\n--- Output O%d (%d/%d)  cv%d=%d ---\n",
+							state.Output, index, total, state.CV, state.Value)
+						fmt.Printf("Only this output is lit. Note which physical light is on.\n")
+						return nil
+					},
+					WaitNext: func(state decoders.OutputBrightness, index, total int) error {
+						if index < total {
+							fmt.Printf("Press Enter for the next output… ")
+						} else {
+							fmt.Printf("Press Enter to finish… ")
+						}
+						if _, err := reader.ReadString('\n'); err != nil {
+							return fmt.Errorf("failed to read input: %w", err)
+						}
+						return nil
+					},
+				},
 			)
 			if err != nil {
 				return err
 			}
 
+			fmt.Printf("\nSaved brightness values (restored):\n")
 			printBrightnessSnapshot(snapshot)
-			fmt.Printf("Brightness test complete.\n")
+			fmt.Printf("Brightness identification complete.\n")
 			return nil
 		},
 	}
@@ -282,6 +350,7 @@ Turn on all light functions on the locomotive before the test starts.`,
 	command.Flags().Uint16VarP(&cmdArgs.Timeout, "timeout", "", 10, "Connection timeout")
 	command.Flags().Uint8VarP(&cmdArgs.LocoId, "loco", "l", 0, progLocoFlagUsage)
 	command.Flags().Uint16VarP(&cmdArgs.Pause, "pause", "", 5, "Seconds to wait after the reminder before starting the test")
+	command.Flags().Uint8VarP(&cmdArgs.Brightness, "brightness", "b", decoders.BrightnessTestActivePercentDefault, "Brightness in percent for the active output during the test (0-100)")
 
 	return command
 }

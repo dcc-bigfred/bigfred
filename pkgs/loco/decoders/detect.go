@@ -47,14 +47,14 @@ func Identify(cv CVAccess) (Identification, error) {
 		logrus.Debugf("decoder CV7=%d CV8=%d", cv7, cv8)
 	}
 
-	switch cv8 {
-	case ManufacturerRailBOX:
+	switch {
+	case isRailboxCV8(cv8):
 		id.Kind = DecoderRailBOX
-		id.Name = "RailBOX RB23xx"
-	case ManufacturerESU:
+		id.Name = railboxDecoderName(cv)
+	case cv8 == ManufacturerESU:
 		id.Kind = DecoderESU
 		id.Name = "ESU LokSound 5"
-	case ManufacturerZIMO:
+	case cv8 == ManufacturerZIMO:
 		id.Kind = DecoderZIMO
 		id.Name = "ZIMO MS/MN"
 	default:
@@ -74,6 +74,10 @@ func Detect(cv CVAccess) (VolumeChangeable, error) {
 
 	switch id.Kind {
 	case DecoderRailBOX:
+		locomotive, locoErr := railboxIsLocomotive(cv)
+		if locoErr != nil || !locomotive {
+			return nil, fmt.Errorf("RB 2112 wagon decoder has no master volume")
+		}
 		return NewRailboxRB23xx(WithCVAccess(cv)), nil
 	case DecoderESU:
 		return NewLokSoundv5(cv), nil
@@ -84,8 +88,8 @@ func Detect(cv CVAccess) (VolumeChangeable, error) {
 	}
 }
 
-// DetectBrightness reads CV7 and CV8 to identify the decoder and returns a BrightnessChangeable implementation.
-func DetectBrightness(cv CVAccess) (BrightnessChangeable, error) {
+// GetBrightnessImplementation reads CV7 and CV8 to identify the decoder and returns a BrightnessChangeable implementation.
+func GetBrightnessImplementation(cv CVAccess) (BrightnessChangeable, error) {
 	id, err := Identify(cv)
 	if err != nil {
 		return nil, err
@@ -93,7 +97,11 @@ func DetectBrightness(cv CVAccess) (BrightnessChangeable, error) {
 
 	switch id.Kind {
 	case DecoderRailBOX:
-		return NewRailboxRB23xx(WithCVAccess(cv)), nil
+		locomotive, locoErr := railboxIsLocomotive(cv)
+		if locoErr == nil && locomotive {
+			return NewRailboxRB23xx(WithCVAccess(cv)), nil
+		}
+		return NewRailboxRB2112(cv), nil
 	case DecoderESU:
 		return NewLokSoundv5(cv), nil
 	case DecoderZIMO:

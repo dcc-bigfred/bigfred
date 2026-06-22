@@ -23,6 +23,14 @@ type FactoryResetResult struct {
 	Restored      bool
 }
 
+// FunctionMappingResult describes programmed function-to-output mapping.
+type FunctionMappingResult struct {
+	Function  uint8
+	Outputs   []string
+	Direction string
+	Writes    []decoders.MappingWrite
+}
+
 // RailroadCpResult describes the outcome of copying a loco between databases.
 type RailroadCpResult struct {
 	LocoName string

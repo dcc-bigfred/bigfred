@@ -26,6 +26,15 @@ func (LayoutSecurityContext) CanRemoveVehicleFromRoster(
 	return Deny(ReasonVehicleNotOwned)
 }
 
+// CanAddVehicleToRoster is the symmetric add policy: the owner may
+// attach their own vehicle; an effective admin may attach any vehicle.
+func (LayoutSecurityContext) CanAddVehicleToRoster(
+	eff domain.EffectiveRoles,
+	actorID, ownerUserID uint,
+) Decision {
+	return LayoutSecurityContext{}.CanRemoveVehicleFromRoster(eff, actorID, ownerUserID)
+}
+
 // CanRemoveTrainFromRoster is the train-shaped sibling of
 // CanRemoveVehicleFromRoster.
 func (LayoutSecurityContext) CanRemoveTrainFromRoster(
@@ -39,6 +48,14 @@ func (LayoutSecurityContext) CanRemoveTrainFromRoster(
 		return Allow
 	}
 	return Deny(ReasonTrainNotOwned)
+}
+
+// CanAddTrainToRoster is the symmetric add policy for trains.
+func (LayoutSecurityContext) CanAddTrainToRoster(
+	eff domain.EffectiveRoles,
+	actorID, ownerUserID uint,
+) Decision {
+	return LayoutSecurityContext{}.CanRemoveTrainFromRoster(eff, actorID, ownerUserID)
 }
 
 // CanGrantSignalmanToUser allows an effective admin (permanent or

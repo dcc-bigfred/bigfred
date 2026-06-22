@@ -173,7 +173,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	commandStationSvc := cmd.NewCommandStation(commandStations, layoutCommandStations, layouts)
 	interlockingSvc := cmd.NewInterlocking(interlockings, layoutInterlockings)
 	dccPoolSvc := cmd.NewDCCPool(dccPools)
-	vehicleSvc := cmd.NewVehicle(vehicles, dccPoolSvc, trainMembers)
+	vehicleSvc := cmd.NewVehicle(vehicles, dccPoolSvc, trainMembers, layoutVehicles, users)
 	functionSvc := cmd.NewFunction(dccFunctions, vehicles, vehicleTemplates, users)
 	vehicleTemplateSvc := cmd.NewVehicleTemplate(vehicleTemplates, users, dccFunctions)
 	trainSvc := cmd.NewTrain(trains, trainMembers, vehicles)

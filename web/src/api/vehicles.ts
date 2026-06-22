@@ -55,6 +55,12 @@ export interface Vehicle {
   deadManSwitchOption: DeadManSwitchOption;
 }
 
+export interface CatalogueVehicle extends Vehicle {
+  ownerLogin: string;
+  ownerOrganization: string;
+  onLayout: boolean;
+}
+
 // DCCAddressRange mirrors the row shape of
 // `GET /api/v1/auth/me/dcc-pool`. The dialog uses it to render a
 // "Your pool: 1..9999" hint.
@@ -64,6 +70,7 @@ export interface DCCAddressRange {
 }
 
 const vehiclesQueryKey = ["vehicles"] as const;
+const vehicleCatalogueQueryKey = ["vehicles", "catalogue"] as const;
 const dccPoolQueryKey = ["dcc-pool", "me"] as const;
 
 // useMyVehicles returns the caller's own vehicle catalogue and re-
@@ -76,6 +83,32 @@ export function useMyVehicles() {
     queryFn: () => apiFetch<Vehicle[]>("/api/v1/vehicles"),
     staleTime: 5 * 1000,
   });
+}
+
+// useVehicleCatalogue returns every registered vehicle with owner
+// metadata and on-layout flag for the caller's pinned layout.
+export function useVehicleCatalogue(layoutId: number | null) {
+  const qc = useQueryClient();
+  const { subscribe } = useSocket();
+
+  const query = useQuery({
+    queryKey: vehicleCatalogueQueryKey,
+    queryFn: () => apiFetch<CatalogueVehicle[]>("/api/v1/vehicles/catalogue"),
+    enabled: layoutId != null && layoutId > 0,
+    staleTime: 5 * 1000,
+  });
+
+  useEffect(() => {
+    if (layoutId == null || layoutId <= 0) return;
+    return subscribe("layout.vehiclesChanged", (payload) => {
+      const data = payload as { layoutId?: number };
+      if (data.layoutId !== layoutId) return;
+      void qc.invalidateQueries({ queryKey: vehicleCatalogueQueryKey });
+      void qc.invalidateQueries({ queryKey: layoutVehiclesQueryKey(layoutId) });
+    });
+  }, [layoutId, subscribe, qc]);
+
+  return query;
 }
 
 // useMyDCCPool returns the caller's DCC pool — used by the vehicle
@@ -116,6 +149,7 @@ export function useCreateVehicle() {
       }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: vehiclesQueryKey });
+      void qc.invalidateQueries({ queryKey: vehicleCatalogueQueryKey });
     },
   });
 }
@@ -163,6 +197,7 @@ export function useUpdateVehicle() {
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: vehiclesQueryKey });
+      void qc.invalidateQueries({ queryKey: vehicleCatalogueQueryKey });
     },
   });
 }
@@ -174,6 +209,7 @@ export function useDeleteVehicle() {
       apiFetch<void>(`/api/v1/vehicles/${id}`, { method: "DELETE" }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: vehiclesQueryKey });
+      void qc.invalidateQueries({ queryKey: vehicleCatalogueQueryKey });
     },
   });
 }
@@ -374,6 +410,7 @@ export function useAddVehicleToRoster() {
       void qc.invalidateQueries({
         queryKey: layoutVehiclesQueryKey(args.layoutId),
       });
+      void qc.invalidateQueries({ queryKey: vehicleCatalogueQueryKey });
     },
   });
 }
@@ -390,6 +427,7 @@ export function useRemoveVehicleFromRoster() {
       void qc.invalidateQueries({
         queryKey: layoutVehiclesQueryKey(args.layoutId),
       });
+      void qc.invalidateQueries({ queryKey: vehicleCatalogueQueryKey });
     },
   });
 }

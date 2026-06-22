@@ -37,7 +37,7 @@ func TestAllowedVehiclesSnapshotFoldsVehicleLease(t *testing.T) {
 	if _, err := pool.Replace(ctx, testAdminEff, owner.ID, []cmd.PoolRange{{From: 1, To: 9999}}); err != nil {
 		t.Fatalf("seed pool: %v", err)
 	}
-	vehicleSvc := cmd.NewVehicle(bundle.Vehicles, pool, bundle.TrainMembers)
+	vehicleSvc := cmd.NewVehicle(bundle.Vehicles, pool, bundle.TrainMembers, bundle.LayoutVehicles, bundle.Users)
 	addr := uint16(42)
 	vehicle, err := vehicleSvc.Create(ctx, cmd.VehicleCreateInput{
 		OwnerUserID: owner.ID,
@@ -75,7 +75,7 @@ func TestAllowedVehiclesSnapshotFoldsVehicleLease(t *testing.T) {
 	capture := &captureRosterPublisher{}
 	rosterSvc.SetRedisRosterPublisher(capture)
 
-	if _, err := rosterSvc.AddVehicle(ctx, layout.ID, owner.ID, vehicle.ID); err != nil {
+	if _, err := rosterSvc.AddVehicle(ctx, layout.ID, owner.ID, vehicle.ID, domain.NewEffectiveRoles(domain.RoleDriver)); err != nil {
 		t.Fatalf("add vehicle to roster: %v", err)
 	}
 

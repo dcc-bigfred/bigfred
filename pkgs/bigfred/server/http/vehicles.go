@@ -51,6 +51,28 @@ func (h *VehicleHandler) List(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(out)
 }
 
+// ListCatalogue handles GET /api/v1/vehicles/catalogue — every
+// registered vehicle with owner metadata and on-layout flag for the
+// caller's pinned session layout.
+func (h *VehicleHandler) ListCatalogue(w http.ResponseWriter, r *http.Request) {
+	actor, ok := IdentityFromContext(r.Context())
+	if !ok {
+		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	rows, err := h.svc.ListCatalogue(r.Context(), actor.Layout.ID)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	out := make([]protocol.VehicleCatalogueResponse, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, protocol.ToVehicleCatalogueResponse(row))
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(out)
+}
+
 // Create handles POST /api/v1/vehicles.
 func (h *VehicleHandler) Create(w http.ResponseWriter, r *http.Request) {
 	id, ok := IdentityFromContext(r.Context())

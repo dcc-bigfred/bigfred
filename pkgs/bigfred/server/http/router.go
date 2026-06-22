@@ -132,6 +132,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 
 			// Vehicle catalogue (own only for now).
 			r.Get("/vehicles", vehicleH.List)
+			r.Get("/vehicles/catalogue", vehicleH.ListCatalogue)
 			r.Post("/vehicles", vehicleH.Create)
 			r.Put("/vehicles/{id}", vehicleH.Update)
 			r.Delete("/vehicles/{id}", vehicleH.Delete)

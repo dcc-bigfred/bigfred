@@ -24,6 +24,7 @@ import {
   useRevokeLease,
   type LeaseEntry,
 } from "../api/leases";
+import { useMe } from "../api/auth";
 import LeaseCountdown from "../components/leases/LeaseCountdown";
 import LeaseControlDialog from "../components/leases/LeaseControlDialog";
 import LeaseCreateDialog from "../components/leases/LeaseCreateDialog";
@@ -32,6 +33,8 @@ import { useLeaseEvents } from "../hooks/useLeaseEvents";
 
 export default function RentalsPage() {
   const { t } = useTranslation(["rentals", "common"]);
+  const me = useMe().data;
+  const isAdmin = me?.effectiveRole === "admin";
   useLeaseEvents();
   const [tab, setTab] = useState(0);
   const [createOpen, setCreateOpen] = useState(false);
@@ -114,7 +117,11 @@ export default function RentalsPage() {
         ))}
       </Stack>
 
-      <LeaseCreateDialog open={createOpen} onClose={() => setCreateOpen(false)} />
+      <LeaseCreateDialog
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        allowUnresolvedTarget={isAdmin}
+      />
       <LeaseControlDialog
         lease={controlLease}
         open={controlLease != null}

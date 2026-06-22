@@ -22,7 +22,7 @@ func TestTrainAdminCanMutateOthersTrain(t *testing.T) {
 	if _, err := pool.Replace(ctx, testAdminEff, owner.ID, []cmd.PoolRange{{From: 1, To: 9999}}); err != nil {
 		t.Fatalf("seed owner pool: %v", err)
 	}
-	vSvc := cmd.NewVehicle(bundle.Vehicles, pool, bundle.TrainMembers)
+	vSvc := cmd.NewVehicle(bundle.Vehicles, pool, bundle.TrainMembers, bundle.LayoutVehicles, bundle.Users)
 	tSvc := cmd.NewTrain(bundle.Trains, bundle.TrainMembers, bundle.Vehicles)
 
 	addr := uint16(42)
@@ -71,7 +71,7 @@ func TestTrainNonOwnerDriverCannotMutateOthersTrain(t *testing.T) {
 	other := insertUser(t, ctx, bundle.Users, "other", domain.RoleDriver)
 
 	pool := cmd.NewDCCPool(bundle.Pool)
-	vSvc := cmd.NewVehicle(bundle.Vehicles, pool, bundle.TrainMembers)
+	vSvc := cmd.NewVehicle(bundle.Vehicles, pool, bundle.TrainMembers, bundle.LayoutVehicles, bundle.Users)
 	tSvc := cmd.NewTrain(bundle.Trains, bundle.TrainMembers, bundle.Vehicles)
 
 	v, err := vSvc.Create(ctx, cmd.VehicleCreateInput{
@@ -117,7 +117,7 @@ func TestUpdateMemberMultiplier(t *testing.T) {
 	if _, err := pool.Replace(ctx, testAdminEff, owner.ID, []cmd.PoolRange{{From: 1, To: 9999}}); err != nil {
 		t.Fatalf("seed owner pool: %v", err)
 	}
-	vSvc := cmd.NewVehicle(bundle.Vehicles, pool, bundle.TrainMembers)
+	vSvc := cmd.NewVehicle(bundle.Vehicles, pool, bundle.TrainMembers, bundle.LayoutVehicles, bundle.Users)
 	tSvc := cmd.NewTrain(bundle.Trains, bundle.TrainMembers, bundle.Vehicles)
 
 	leadAddr := uint16(10)

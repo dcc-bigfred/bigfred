@@ -30,6 +30,7 @@ import {
   type RosterTrain,
 } from "../api/vehicles";
 import { getUserName } from "../utils/getUserName";
+import { canRemoveFromLayout } from "../utils/rosterPermissions";
 
 interface Props {
   layoutId: number;
@@ -71,8 +72,7 @@ export default function RosterSection({ layoutId }: Props) {
     );
 
   const ownsRow = (ownerId: number) => me?.id === ownerId;
-  const isAdmin = me?.effectiveRole === "admin";
-  const canRemoveFromRoster = (ownerId: number) => ownsRow(ownerId) || isAdmin;
+  const canRemoveFromRoster = (ownerId: number) => canRemoveFromLayout(me, ownerId);
 
   return (
     <Stack spacing={3}>

@@ -52,6 +52,10 @@
       "throttle": "Sterowanie",
       "rentals": "Wypożyczenia"
     },
+    "fleet": {
+      "menuLabel": "Tabor",
+      "availableVehicles": "Dostępne pojazdy"
+    },
     "account": {
       "menuLabel": "Konto",
       "profile": "Profil",

@@ -37,7 +37,7 @@ func freshRepo(t *testing.T) (repo.UsersBundle, func()) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "service_test.db")
 
-	r, db, err := repo.Open(path)
+	r, db, err := repo.Open(path, nil)
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
@@ -104,7 +104,7 @@ func TestVehicleCreateAcceptsDummy(t *testing.T) {
 	user := insertUser(t, ctx, bundle.Users, "driver", domain.RoleDriver)
 
 	pool := cmd.NewDCCPool(bundle.Pool)
-	svc := cmd.NewVehicle(bundle.Vehicles, pool, bundle.TrainMembers)
+	svc := cmd.NewVehicle(bundle.Vehicles, pool, bundle.TrainMembers, bundle.LayoutVehicles, bundle.Users)
 
 	v, err := svc.Create(ctx, cmd.VehicleCreateInput{
 		OwnerUserID: user.ID,
@@ -137,7 +137,7 @@ func TestVehicleCreateRejectsOutsidePool(t *testing.T) {
 	if _, err := pool.Replace(ctx, testAdminEff, user.ID, []cmd.PoolRange{{From: 100, To: 199}}); err != nil {
 		t.Fatalf("seed pool: %v", err)
 	}
-	svc := cmd.NewVehicle(bundle.Vehicles, pool, bundle.TrainMembers)
+	svc := cmd.NewVehicle(bundle.Vehicles, pool, bundle.TrainMembers, bundle.LayoutVehicles, bundle.Users)
 
 	addrInside := uint16(150)
 	if _, err := svc.Create(ctx, cmd.VehicleCreateInput{
@@ -172,7 +172,7 @@ func TestVehicleCreateRejectsDuplicateDCC(t *testing.T) {
 	if _, err := pool.Replace(ctx, testAdminEff, user.ID, []cmd.PoolRange{{From: 1, To: 9999}}); err != nil {
 		t.Fatalf("seed pool: %v", err)
 	}
-	svc := cmd.NewVehicle(bundle.Vehicles, pool, bundle.TrainMembers)
+	svc := cmd.NewVehicle(bundle.Vehicles, pool, bundle.TrainMembers, bundle.LayoutVehicles, bundle.Users)
 
 	addr := uint16(33)
 	if _, err := svc.Create(ctx, cmd.VehicleCreateInput{
@@ -199,7 +199,7 @@ func TestVehicleDeleteRefusedWhenInTrain(t *testing.T) {
 	if _, err := pool.Replace(ctx, testAdminEff, user.ID, []cmd.PoolRange{{From: 1, To: 9999}}); err != nil {
 		t.Fatalf("seed pool: %v", err)
 	}
-	vSvc := cmd.NewVehicle(bundle.Vehicles, pool, bundle.TrainMembers)
+	vSvc := cmd.NewVehicle(bundle.Vehicles, pool, bundle.TrainMembers, bundle.LayoutVehicles, bundle.Users)
 	tSvc := cmd.NewTrain(bundle.Trains, bundle.TrainMembers, bundle.Vehicles)
 
 	addr := uint16(7)
@@ -234,7 +234,7 @@ func TestVehicleAdminCanMutateOthersVehicle(t *testing.T) {
 	if _, err := pool.Replace(ctx, testAdminEff, owner.ID, []cmd.PoolRange{{From: 1, To: 9999}}); err != nil {
 		t.Fatalf("seed owner pool: %v", err)
 	}
-	svc := cmd.NewVehicle(bundle.Vehicles, pool, bundle.TrainMembers)
+	svc := cmd.NewVehicle(bundle.Vehicles, pool, bundle.TrainMembers, bundle.LayoutVehicles, bundle.Users)
 
 	v, err := svc.Create(ctx, cmd.VehicleCreateInput{
 		OwnerUserID: owner.ID,
@@ -271,7 +271,7 @@ func TestVehicleNonOwnerDriverCannotMutateOthersVehicle(t *testing.T) {
 	other := insertUser(t, ctx, bundle.Users, "other", domain.RoleDriver)
 
 	pool := cmd.NewDCCPool(bundle.Pool)
-	svc := cmd.NewVehicle(bundle.Vehicles, pool, bundle.TrainMembers)
+	svc := cmd.NewVehicle(bundle.Vehicles, pool, bundle.TrainMembers, bundle.LayoutVehicles, bundle.Users)
 
 	v, err := svc.Create(ctx, cmd.VehicleCreateInput{
 		OwnerUserID: owner.ID,

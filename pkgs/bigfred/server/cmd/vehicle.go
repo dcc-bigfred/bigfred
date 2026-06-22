@@ -17,15 +17,29 @@ import (
 // Vehicle implements the CRUD lifecycle for domain.Vehicle (§4.1).
 // Pool checks compose via DCCPoolPort; authority via security.
 type Vehicle struct {
-	vehicles     *repo.Vehicles
-	pool         DCCPoolPort
-	trainMembers *repo.TrainMembers
-	sec          security.VehicleSecurityContext
+	vehicles       *repo.Vehicles
+	pool           DCCPoolPort
+	trainMembers   *repo.TrainMembers
+	layoutVehicles *repo.LayoutVehicles
+	users          *repo.Users
+	sec            security.VehicleSecurityContext
 }
 
 // NewVehicle constructs a Vehicle use-case handler.
-func NewVehicle(v *repo.Vehicles, pool DCCPoolPort, members *repo.TrainMembers) *Vehicle {
-	return &Vehicle{vehicles: v, pool: pool, trainMembers: members}
+func NewVehicle(
+	v *repo.Vehicles,
+	pool DCCPoolPort,
+	members *repo.TrainMembers,
+	layoutVehicles *repo.LayoutVehicles,
+	users *repo.Users,
+) *Vehicle {
+	return &Vehicle{
+		vehicles:       v,
+		pool:           pool,
+		trainMembers:   members,
+		layoutVehicles: layoutVehicles,
+		users:          users,
+	}
 }
 
 // Get loads a vehicle by primary key.
@@ -43,6 +57,59 @@ func (v *Vehicle) Get(ctx context.Context, id domain.VehicleID) (domain.Vehicle,
 // ListOwned returns every vehicle owned by the user.
 func (v *Vehicle) ListOwned(ctx context.Context, ownerID uint) ([]domain.Vehicle, error) {
 	return v.vehicles.ListByOwner(ctx, ownerID)
+}
+
+// VehicleCatalogueEntry is one row of the global vehicle catalogue.
+type VehicleCatalogueEntry struct {
+	Vehicle           domain.Vehicle
+	OwnerLogin        string
+	OwnerOrganization string
+	OnLayout          bool
+}
+
+// ListCatalogue returns every registered vehicle enriched with owner
+// metadata and whether it is on the given layout roster.
+func (v *Vehicle) ListCatalogue(ctx context.Context, layoutID uint) ([]VehicleCatalogueEntry, error) {
+	vehicles, err := v.vehicles.ListAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+	onLayout := make(map[domain.VehicleID]struct{})
+	if v.layoutVehicles != nil {
+		rows, err := v.layoutVehicles.ListByLayout(ctx, layoutID)
+		if err != nil {
+			return nil, err
+		}
+		for _, row := range rows {
+			onLayout[row.VehicleID] = struct{}{}
+		}
+	}
+	logins := make(map[uint]struct {
+		login        string
+		organization string
+	})
+	out := make([]VehicleCatalogueEntry, 0, len(vehicles))
+	for _, vehicle := range vehicles {
+		info, ok := logins[vehicle.OwnerUserID]
+		if !ok && v.users != nil {
+			u, err := v.users.FindByID(ctx, vehicle.OwnerUserID)
+			if err != nil {
+				info.login = "?"
+			} else {
+				info.login = u.Login
+				info.organization = u.Organization
+			}
+			logins[vehicle.OwnerUserID] = info
+		}
+		_, on := onLayout[vehicle.ID]
+		out = append(out, VehicleCatalogueEntry{
+			Vehicle:           vehicle,
+			OwnerLogin:        info.login,
+			OwnerOrganization: info.organization,
+			OnLayout:          on,
+		})
+	}
+	return out, nil
 }
 
 // VehicleCreateInput is the validated payload of Vehicle.Create.

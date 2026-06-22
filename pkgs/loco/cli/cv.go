@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/keskad/loco/pkgs/loco/app"
+	"github.com/keskad/loco/pkgs/loco/syntax"
 	"github.com/spf13/cobra"
 )
 
@@ -22,6 +23,7 @@ func NewCVCommand(app *app.LocoApp) *cobra.Command {
 	}
 
 	command.AddCommand(NewSetCommand(app))
+	command.AddCommand(NewSetBitCommand(app))
 	command.AddCommand(NewGetCommand(app))
 	return command
 }
@@ -59,6 +61,76 @@ func NewSetCommand(app *app.LocoApp) *cobra.Command {
 			}
 
 			return app.SendCVAction(track, cmdArgs.LocoId, cvString, cmdArgs.Verify, time.Second*time.Duration(cmdArgs.Timeout), time.Millisecond*time.Duration(cmdArgs.Settle))
+		},
+	}
+
+	command.Flags().BoolVarP(&app.Debug, "debug", "v", false, "Increase verbosity to the debug level")
+	command.Flags().Uint16VarP(&cmdArgs.Timeout, "timeout", "", 10, "Connection timeout")
+	command.Flags().Uint16VarP(&cmdArgs.Settle, "settle", "", 300, "Time in miliseconds between writes")
+	command.Flags().BoolVarP(&cmdArgs.Verify, "verify", "", false, "Verify the value after writting")
+	command.Flags().Uint8VarP(&cmdArgs.LocoId, "loco", "l", 0, "Use locomotive under specific address")
+	command.Flags().StringVarP(&cmdArgs.Track, "track", "t", "", "Track type: 'pom' for programming on main, 'prog' for programming track, or empty for automatic selection")
+
+	return command
+}
+
+func NewSetBitCommand(app *app.LocoApp) *cobra.Command {
+	type SetBitArgs struct {
+		LocoId  uint8
+		Track   string
+		Verify  bool
+		Timeout uint16
+		Settle  uint16
+	}
+
+	cmdArgs := SetBitArgs{}
+	command := &cobra.Command{
+		Use:   "set-bit ASSIGNMENTS...",
+		Short: "Set or clear individual bits in configuration variables",
+		Long: `Modify one or more bits in CV values using read-modify-write.
+
+Each assignment is CV<number>b<bit>=<0|1>. Bits are numbered b0-b7 (b0 is
+the least significant bit). Multiple assignments may be comma- or
+space-separated.
+
+Examples:
+  loco prog cv set-bit CV29b5=1
+  loco prog cv set-bit CV29b5=1 CV29b2=1 -l 3
+  loco prog cv set-bit CV29b5=1,CV29b3=0`,
+		Args: cobra.MinimumNArgs(1),
+		RunE: func(command *cobra.Command, args []string) error {
+			if err := app.Initialize(); err != nil {
+				return err
+			}
+
+			track, trackErr := TrackOrDefault(cmdArgs.Track, cmdArgs.LocoId)
+			if trackErr != nil {
+				return trackErr
+			}
+
+			input, parseErr := parseArgsAsCVs(args)
+			if parseErr != nil {
+				return parseErr
+			}
+
+			assignments, err := syntax.ParseCVBitAssignments(input)
+			if err != nil {
+				return err
+			}
+
+			results, err := app.SetCVBitAction(
+				track,
+				cmdArgs.LocoId,
+				assignments,
+				cmdArgs.Verify,
+				time.Second*time.Duration(cmdArgs.Timeout),
+				time.Millisecond*time.Duration(cmdArgs.Settle),
+			)
+			if err != nil {
+				return err
+			}
+			printCVBitWriteResults(results)
+			return nil
 		},
 	}
 

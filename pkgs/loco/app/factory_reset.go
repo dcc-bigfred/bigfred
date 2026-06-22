@@ -46,7 +46,7 @@ func (app *LocoApp) FactoryResetAction(locoId uint8, preserveAddr bool, timeout 
 	}
 
 	if preserveAddr && result.Preserved != nil {
-		if err := app.writeAddress(locoId, result.Preserved.Address, timeout, settle); err != nil {
+		if err := app.writeAddress(locoId, result.Preserved.Address, result.Preserved.CV29, timeout, settle); err != nil {
 			return FactoryResetResult{}, fmt.Errorf("failed to restore address after reset: %w", err)
 		}
 		result.Restored = true

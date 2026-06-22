@@ -8,7 +8,9 @@ import (
 	"github.com/keskad/loco/pkgs/loco/syntax"
 )
 
-const cv29LongAddressBit = 32
+const (
+	cv29LongAddressBit = 32 // bit 5: long address format (CV17/CV18)
+)
 
 const (
 	shortAddressMin = 1
@@ -47,19 +49,29 @@ func addressFromCVs(cv1, cv17, cv18, cv29 int) (AddressInfo, error) {
 	return info, nil
 }
 
+// addressCV29For returns cv29 with only the long-address bit (bit 5) set or cleared.
+// All other configuration bits are preserved.
+func addressCV29For(cv29 int, longAddress bool) int {
+	if longAddress {
+		return cv29 | cv29LongAddressBit
+	}
+	return cv29 &^ cv29LongAddressBit
+}
+
 // AddressToCVString builds CV write assignments for programming a decoder address.
-func AddressToCVString(addr uint16) (string, error) {
+// cv29 is the current CV29 value; only bit 5 (long address) is modified.
+func AddressToCVString(addr uint16, cv29 int) (string, error) {
 	if addr < longAddressMin || addr > longAddressMax {
 		return "", fmt.Errorf("address %d out of range (%d-%d)", addr, longAddressMin, longAddressMax)
 	}
 
 	if addr >= shortAddressMin && addr <= shortAddressMax {
-		return fmt.Sprintf("cv1=%d, cv17=0, cv18=0, cv29=0", addr), nil
+		return fmt.Sprintf("cv1=%d, cv17=0, cv18=0, cv29=%d", addr, addressCV29For(cv29, false)), nil
 	}
 
 	cv17 := 192 + (addr / 256)
 	cv18 := addr % 256
-	return fmt.Sprintf("cv17=%d, cv18=%d, cv29=32", cv17, cv18), nil
+	return fmt.Sprintf("cv17=%d, cv18=%d, cv29=%d", cv17, cv18, addressCV29For(cv29, true)), nil
 }
 
 func (app *LocoApp) readProgCV(locoId uint8, num uint16, timeout time.Duration, retries uint8) (int, error) {
@@ -105,8 +117,8 @@ func (app *LocoApp) readAddressInfo(locoId uint8, timeout time.Duration, retries
 	return addressFromCVs(cv1, cv17, cv18, cv29)
 }
 
-func (app *LocoApp) writeAddress(locoId uint8, addr uint16, timeout time.Duration, settle time.Duration) error {
-	cvString, err := AddressToCVString(addr)
+func (app *LocoApp) writeAddress(locoId uint8, addr uint16, cv29 int, timeout time.Duration, settle time.Duration) error {
+	cvString, err := AddressToCVString(addr, cv29)
 	if err != nil {
 		return err
 	}
@@ -132,4 +144,43 @@ func (app *LocoApp) GetAddrAction(locoId uint8, timeout time.Duration, retries u
 	defer app.Station.CleanUp()
 
 	return app.readAddressInfo(locoId, timeout, retries)
+}
+
+func (app *LocoApp) SetAddrAction(locoId uint8, addr uint16, verify bool, timeout time.Duration, settle time.Duration) error {
+	if cmdErr := app.InitializeCommandStation(); cmdErr != nil {
+		return cmdErr
+	}
+	defer app.Station.CleanUp()
+
+	cv29, err := app.readProgCV(locoId, 29, timeout, 0)
+	if err != nil {
+		return fmt.Errorf("failed to read CV29: %w", err)
+	}
+
+	cvString, err := AddressToCVString(addr, cv29)
+	if err != nil {
+		return err
+	}
+
+	entries, err := syntax.ParseCVString(cvString, ",")
+	if err != nil {
+		return err
+	}
+
+	mode := progModeForLoco(locoId)
+	for _, entry := range entries {
+		if err := app.Station.WriteCV(
+			mode,
+			commandstation.LocoCV{
+				LocoId: commandstation.LocoAddr(locoId),
+				Cv:     commandstation.CV{Num: commandstation.CVNum(entry.Number), Value: int(entry.Value)},
+			},
+			commandstation.Verify(verify),
+			commandstation.Timeout(timeout),
+		); err != nil {
+			return fmt.Errorf("failed to write CV%d: %w", entry.Number, err)
+		}
+		time.Sleep(settle)
+	}
+	return nil
 }

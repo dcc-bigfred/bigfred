@@ -3,6 +3,7 @@ dist
 dist-ssr
 *.local
 .vite
+*.tsbuildinfo
 
 # Editor
 .vscode/*

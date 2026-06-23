@@ -3,8 +3,8 @@ package decoders
 import "fmt"
 
 const (
-	railboxRB2112BrightnessMaxCV    uint8  = 255
-	railboxRB2112BrightnessOutputMax uint8  = 13
+	railboxRB2112BrightnessMaxCV     uint8 = 255
+	railboxRB2112BrightnessOutputMax uint8 = 13
 )
 
 var railboxRB2112MaxBrightnessCVs = map[uint8]uint16{

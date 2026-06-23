@@ -15,7 +15,7 @@
       }
     ]
   },
-  "description": "LocoNet driver OTLP metrics from dcc-bus: bus utilization (% of 16.66 kbit/s capacity), estimated max slot capacity (linear extrapolation from BigFred TX), throughput (RX/TX), per-opcode traffic, TX pacer saturation, slot lifecycle, transport reliability, and internal queue backpressure. Requires a LocoNet command station with telemetry enabled.",
+  "description": "LocoNet driver OTLP metrics from dcc-bus: bus utilization (% of 16.66 kbit/s capacity), estimated max slot capacity (linear extrapolation from BigFred TX), throughput (RX/TX), per-opcode traffic, TX pacer saturation, slot lifecycle, command-station slot occupy/release (bus-wide), transport reliability, and internal queue backpressure. Requires a LocoNet command station with telemetry enabled.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -2542,6 +2542,375 @@
       ],
       "title": "Slot operations / s",
       "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 76
+      },
+      "id": 455,
+      "panels": [],
+      "title": "Command station slot transitions (bus-wide)",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "Rate of slots transitioning to IN_USE on the command station (any throttle, including external FREDs). Distinct from BigFred driver acquire calls.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 2,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.5
+              },
+              {
+                "color": "red",
+                "value": 2
+              }
+            ]
+          },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 77
+      },
+      "id": 456,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(bigfred_dcc_bus_loconet_slot_ops_total{service_name=\"dcc-bus\", op=\"cs_occupied\", layout_id=~\"$layout_id\", command_station_id=~\"$command_station_id\", station_kind=~\"$station_kind\"}[$__rate_interval]))",
+          "legendFormat": "occupied/s",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "CS slot occupied / s",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "Rate of slots leaving IN_USE on the command station (COMMON / IDLE / FREE). Includes external throttles releasing slots.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 2,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.5
+              },
+              {
+                "color": "red",
+                "value": 2
+              }
+            ]
+          },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 77
+      },
+      "id": 457,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(bigfred_dcc_bus_loconet_slot_ops_total{service_name=\"dcc-bus\", op=\"cs_released\", layout_id=~\"$layout_id\", command_station_id=~\"$command_station_id\", station_kind=~\"$station_kind\"}[$__rate_interval]))",
+          "legendFormat": "released/s",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "CS slot released / s",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "Command-station slot state transitions observed on the LocoNet bus (OPC_SL_RD_DATA / OPC_SLOT_STAT1 / NULL MOVE), aggregated across all slots.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisPlacement": "auto",
+            "drawStyle": "line",
+            "fillOpacity": 15,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "ops"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "cs_released"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "orange",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 77
+      },
+      "id": 458,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "sum"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(bigfred_dcc_bus_loconet_slot_ops_total{service_name=\"dcc-bus\", op=\"cs_occupied\", layout_id=~\"$layout_id\", command_station_id=~\"$command_station_id\", station_kind=~\"$station_kind\"}[$__rate_interval]))",
+          "legendFormat": "cs_occupied",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(bigfred_dcc_bus_loconet_slot_ops_total{service_name=\"dcc-bus\", op=\"cs_released\", layout_id=~\"$layout_id\", command_station_id=~\"$command_station_id\", station_kind=~\"$station_kind\"}[$__rate_interval]))",
+          "legendFormat": "cs_released",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "CS slot transitions / s",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "Cumulative command-station slot transitions in the selected time range.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 84
+      },
+      "id": 459,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "total"
+          }
+        ]
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "sum(increase(bigfred_dcc_bus_loconet_slot_ops_total{service_name=\"dcc-bus\", op=~\"cs_occupied|cs_released\", layout_id=~\"$layout_id\", command_station_id=~\"$command_station_id\", station_kind=~\"$station_kind\"}[$__range])) by (op)",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "__auto",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "CS slot transitions in range (total)",
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "indexByName": {},
+            "renameByName": {
+              "Value": "total"
+            }
+          }
+        }
+      ],
+      "type": "table"
     }
   ],
   "refresh": "30s",

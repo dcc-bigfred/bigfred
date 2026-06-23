@@ -36,13 +36,17 @@ type lnMetrics struct {
 	txErrors       atomic.Uint64
 	lackRejections atomic.Uint64 // OPC_LONG_ACK carrying a reject code (0x00)
 
-	// Slot lifecycle.
+	// Slot lifecycle (driver API calls).
 	slotAcquires     atomic.Uint64
 	slotAcquireFails atomic.Uint64
 	slotRetries      atomic.Uint64
 	slotReleases     atomic.Uint64
 	slotDispatches   atomic.Uint64
 	keepaliveRefresh atomic.Uint64
+
+	// Command-station slot state transitions (any slot, bus-wide).
+	csSlotOccupied atomic.Uint64 // slot promoted to IN_USE on the command station
+	csSlotReleased atomic.Uint64 // slot left IN_USE (COMMON / IDLE / FREE)
 }
 
 func newLnMetrics() *lnMetrics { return &lnMetrics{} }
@@ -123,13 +127,17 @@ type LnMetricsSnapshot struct {
 	WriteTimeouts  uint64
 	LackRejections uint64
 
-	// Slot lifecycle (cumulative).
+	// Slot lifecycle (cumulative, driver API).
 	SlotAcquires     uint64
 	SlotAcquireFails uint64
 	SlotRetries      uint64
 	SlotReleases     uint64
 	SlotDispatches   uint64
 	KeepaliveRefresh uint64
+
+	// Command-station slot state transitions (cumulative, bus-wide).
+	CsSlotOccupied uint64
+	CsSlotReleased uint64
 
 	// Gauges (point-in-time).
 	SlotsActive  int64
@@ -161,6 +169,8 @@ func (m *lnMetrics) snapshot() LnMetricsSnapshot {
 		SlotReleases:     m.slotReleases.Load(),
 		SlotDispatches:   m.slotDispatches.Load(),
 		KeepaliveRefresh: m.keepaliveRefresh.Load(),
+		CsSlotOccupied:   m.csSlotOccupied.Load(),
+		CsSlotReleased:   m.csSlotReleased.Load(),
 		TxByOpcode:       make(map[byte]uint64),
 		RxByOpcode:       make(map[byte]uint64),
 	}

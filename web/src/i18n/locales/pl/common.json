@@ -25,7 +25,8 @@
     "current": "Aktualny język",
     "options": {
       "pl": "Polski",
-      "en": "Angielski"
+      "en": "Angielski",
+      "de": "Niemiecki"
     }
   },
   "nav": {
@@ -42,7 +43,8 @@
       "interlockings": "Nastawnie",
       "commandStations": "Centralki",
       "diagnostics": "Diagnostyka",
-      "auditLog": "Dziennik audytu"
+      "auditLog": "Dziennik audytu",
+      "rentals": "Wypożyczenia"
     },
     "my": {
       "menuLabel": "Moje",

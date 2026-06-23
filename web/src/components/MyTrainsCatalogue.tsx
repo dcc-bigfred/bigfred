@@ -67,6 +67,7 @@ export default function MyTrainsCatalogue({ layoutId }: Props) {
   const [leaseInitialTarget, setLeaseInitialTarget] = useState<{
     kind: "train";
     targetId: string;
+    targetName?: string;
   } | null>(null);
 
   const trainOnLayout = useMemo(() => {
@@ -221,6 +222,7 @@ export default function MyTrainsCatalogue({ layoutId }: Props) {
                                   setLeaseInitialTarget({
                                     kind: "train",
                                     targetId: tr.id,
+                                    targetName: tr.name,
                                   });
                                   setLeaseDialogOpen(true);
                                 }}

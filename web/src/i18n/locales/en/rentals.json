@@ -20,6 +20,10 @@
     "to": "Lessee: {{login}}",
     "lend": "Lend"
   },
+  "admin": {
+    "title": "Event rentals",
+    "intro": "Manage fleet lending for the current layout"
+  },
   "create": {
     "title": "Lend a vehicle or train",
     "target": "Vehicle / train",

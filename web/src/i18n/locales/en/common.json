@@ -25,7 +25,8 @@
     "current": "Current language",
     "options": {
       "pl": "Polish",
-      "en": "English"
+      "en": "English",
+      "de": "German"
     }
   },
   "nav": {
@@ -42,7 +43,8 @@
       "interlockings": "Interlockings",
       "commandStations": "Command stations",
       "diagnostics": "Diagnostics",
-      "auditLog": "Audit log"
+      "auditLog": "Audit log",
+      "rentals": "Rentals"
     },
     "my": {
       "menuLabel": "My",

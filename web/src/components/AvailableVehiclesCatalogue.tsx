@@ -72,6 +72,7 @@ export default function AvailableVehiclesCatalogue({ layoutId }: Props) {
   const [leaseInitialTarget, setLeaseInitialTarget] = useState<{
     kind: "vehicle";
     targetId: string;
+    targetName?: string;
   } | null>(null);
 
   useEffect(() => {
@@ -285,6 +286,7 @@ export default function AvailableVehiclesCatalogue({ layoutId }: Props) {
                                     setLeaseInitialTarget({
                                       kind: "vehicle",
                                       targetId: v.id,
+                                      targetName: v.name,
                                     });
                                     setLeaseDialogOpen(true);
                                   }}

@@ -133,6 +133,12 @@ function AppShellContent() {
         icon: <BugReportIcon fontSize="small" />,
         onClick: () => navigate("/admin/diagnostics"),
       },
+      {
+        id: "rentals",
+        label: t("nav.administration.rentals"),
+        icon: <HandshakeIcon fontSize="small" />,
+        onClick: () => navigate("/admin/rentals"),
+      },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [t],

@@ -762,10 +762,11 @@ function ConnectedThrottle({
         <Chip
           size="small"
           label={
-            <>
-              {t("throttle:lease.remaining")}:{" "}
-              <LeaseCountdown expiresAt={activeLease.expiresAt} component="span" />
-            </>
+            <LeaseCountdown
+              expiresAt={activeLease.expiresAt}
+              component="span"
+              sx={{ color: "inherit" }}
+            />
           }
           sx={{ color: "inherit", borderColor: "rgba(255,255,255,0.35)" }}
           variant="outlined"

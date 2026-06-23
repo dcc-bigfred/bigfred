@@ -72,6 +72,7 @@ export default function MyVehiclesCatalogue({ layoutId }: Props) {
   const [leaseInitialTarget, setLeaseInitialTarget] = useState<{
     kind: "vehicle";
     targetId: string;
+    targetName?: string;
   } | null>(null);
 
   const vehicleOnLayout = useMemo(() => {
@@ -235,6 +236,7 @@ export default function MyVehiclesCatalogue({ layoutId }: Props) {
                                   setLeaseInitialTarget({
                                     kind: "vehicle",
                                     targetId: v.id,
+                                    targetName: v.name,
                                   });
                                   setLeaseDialogOpen(true);
                                 }}

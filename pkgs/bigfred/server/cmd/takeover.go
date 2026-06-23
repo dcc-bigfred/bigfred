@@ -25,6 +25,11 @@ var (
 	ErrNotInterlockingOccupant   = svcerrors.ErrNotInterlockingOccupant
 )
 
+// TakeoverMetricsPort records takeover lifecycle counters.
+type TakeoverMetricsPort interface {
+	RecordTakeover(action string)
+}
+
 // Takeover implements the takeover state machine (§4.3).
 type Takeover struct {
 	requests      repo.TakeoverRequestStore
@@ -39,6 +44,7 @@ type Takeover struct {
 	auth          TakeoverAuthPort
 	hub           TakeoverHubPort
 	audit         AuditPublisher
+	metrics       TakeoverMetricsPort
 	sec           security.TakeoverSecurityContext
 
 	mu             sync.Mutex
@@ -74,6 +80,7 @@ type TakeoverConfig struct {
 	Auth          TakeoverAuthPort
 	Hub           TakeoverHubPort
 	Audit         AuditPublisher
+	Metrics       TakeoverMetricsPort
 }
 
 // NewTakeover returns a ready orchestrator.
@@ -91,6 +98,7 @@ func NewTakeover(cfg TakeoverConfig) *Takeover {
 		auth:          cfg.Auth,
 		hub:           cfg.Hub,
 		audit:         cfg.Audit,
+		metrics:       cfg.Metrics,
 		grantTimers:   make(map[uint]*time.Timer),
 		releaseTimers: make(map[uint]*time.Timer),
 	}
@@ -282,6 +290,9 @@ func (s *Takeover) Request(
 	s.broadcast(layoutID, signalman.ID, contract.TypeTakeoverRequested, requested)
 
 	s.scheduleAutoGrant(row.ID, domain.TakeoverWindow)
+	if s.metrics != nil {
+		s.metrics.RecordTakeover("created")
+	}
 	return row, nil
 }
 
@@ -301,6 +312,9 @@ func (s *Takeover) Reject(ctx context.Context, requestID, driverID uint) error {
 	}
 	s.cancelGrantTimer(requestID)
 	s.broadcast(row.LayoutID, row.SignalmanUserID, contract.TypeTakeoverRejected, contract.TakeoverRejectedWire{RequestID: requestID})
+	if s.metrics != nil {
+		s.metrics.RecordTakeover("rejected")
+	}
 	return nil
 }
 
@@ -320,6 +334,9 @@ func (s *Takeover) Cancel(ctx context.Context, requestID, signalmanID uint) erro
 	}
 	s.cancelGrantTimer(requestID)
 	s.broadcast(row.LayoutID, row.DriverUserID, contract.TypeTakeoverCancelled, contract.TakeoverCancelledWire{RequestID: requestID})
+	if s.metrics != nil {
+		s.metrics.RecordTakeover("cancelled")
+	}
 	return nil
 }
 
@@ -384,6 +401,9 @@ func (s *Takeover) release(ctx context.Context, row domain.TakeoverRequest, now 
 	}
 	s.broadcast(row.LayoutID, row.DriverUserID, contract.TypeTakeoverReleased, payload)
 	s.broadcast(row.LayoutID, row.SignalmanUserID, contract.TypeTakeoverReleased, payload)
+	if s.metrics != nil {
+		s.metrics.RecordTakeover("released")
+	}
 	return nil
 }
 
@@ -468,6 +488,9 @@ func (s *Takeover) autoGrant(ctx context.Context, requestID uint) error {
 	}
 	s.broadcast(row.LayoutID, row.DriverUserID, contract.TypeTakeoverGranted, granted)
 	s.broadcast(row.LayoutID, row.SignalmanUserID, contract.TypeTakeoverGranted, granted)
+	if s.metrics != nil {
+		s.metrics.RecordTakeover("granted")
+	}
 	return nil
 }
 

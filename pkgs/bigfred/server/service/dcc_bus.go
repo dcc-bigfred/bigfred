@@ -17,6 +17,7 @@ import (
 	"github.com/keskad/loco/pkgs/bigfred/contract"
 	dccbuscli "github.com/keskad/loco/pkgs/bigfred/dcc-bus/cli"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/protocol"
+	"github.com/keskad/loco/pkgs/bigfred/server/metrics"
 	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
 	"github.com/keskad/loco/pkgs/bigfred/server/repo"
 	"github.com/keskad/loco/pkgs/bigfred/server/supervisord"
@@ -80,8 +81,9 @@ type DccBusService struct {
 	cs    *repo.CommandStations
 	log   *logrus.Logger
 
-	mu    sync.Mutex
-	ports map[portKey]uint16 // (layoutID, commandStationID) -> port
+	mu      sync.Mutex
+	ports   map[portKey]uint16 // (layoutID, commandStationID) -> port
+	metrics *metrics.Metrics
 }
 
 type portKey struct {
@@ -169,6 +171,19 @@ func (d *DccBusService) LayoutIDsWithProgramForCS(commandStationID uint) []uint 
 	return out
 }
 
+// SetMetrics wires optional OpenTelemetry recorders for orchestration paths.
+func (d *DccBusService) SetMetrics(m *metrics.Metrics) {
+	d.metrics = m
+}
+
+// AllocatedPortCount returns how many dcc-bus daemons have a port assignment.
+// Implements metrics.DccBusStatsReader.
+func (d *DccBusService) AllocatedPortCount() int {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return len(d.ports)
+}
+
 // PortFor returns the TCP port assigned to (layoutID, commandStationID)
 // or 0 when none has been allocated yet. Used by the reverse proxy
 // to resolve `csId → port` without serializing on the daemon's mutex.
@@ -198,6 +213,15 @@ func programName(layoutID, commandStationID uint) string {
 //     program into supervisord (autostart + autorestart), wait for
 //     RUNNING and `tcp dial OK`, persist the port assignment.
 func (d *DccBusService) EnsureRunning(ctx context.Context, layoutID, commandStationID uint) (uint16, string, error) {
+	start := time.Now()
+	port, name, err := d.ensureRunning(ctx, layoutID, commandStationID)
+	if d.metrics != nil {
+		d.metrics.RecordDccBusEnsureRunning(layoutID, commandStationID, time.Since(start), err)
+	}
+	return port, name, err
+}
+
+func (d *DccBusService) ensureRunning(ctx context.Context, layoutID, commandStationID uint) (uint16, string, error) {
 	if d.sup == nil {
 		return 0, "", errors.New("dcc-bus: supervisord service is not wired")
 	}

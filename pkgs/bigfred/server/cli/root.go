@@ -24,6 +24,8 @@ import (
 	dccbuscli "github.com/keskad/loco/pkgs/bigfred/dcc-bus/cli"
 	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
 	httpapi "github.com/keskad/loco/pkgs/bigfred/server/http"
+	bfotel "github.com/keskad/loco/pkgs/bigfred/otel"
+	"github.com/keskad/loco/pkgs/bigfred/server/metrics"
 	"github.com/keskad/loco/pkgs/bigfred/server/repo"
 	"github.com/keskad/loco/pkgs/bigfred/server/repo/migrations"
 	"github.com/keskad/loco/pkgs/bigfred/server/service"
@@ -121,7 +123,7 @@ real-time throttle commands.`,
 	cmd.Flags().BoolVar(&f.RedisNoPersist, "redis-no-persist", false,
 		"disable RDB snapshots for the managed redis-server (ephemeral mode)")
 	cmd.Flags().BoolVar(&f.EnableTelemetry, "enable-telemetry", false,
-		"start Grafana Alloy via supervisord and enable dcc-bus metric export")
+		"start Grafana Alloy via supervisord and enable OTLP metric export for loco-server and dcc-bus")
 	cmd.Flags().StringVar(&f.TelemetryConfig, "telemetry-config", service.DefaultTelemetryConfigPath,
 		"path to the Alloy config file (used with --enable-telemetry)")
 
@@ -144,7 +146,27 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		return err
 	}
 
-	repository, sqlDB, err := repo.Open(f.DBPath, log)
+	var metricsShutdown func(context.Context) error
+	var serverMetrics *metrics.Metrics
+	if f.EnableTelemetry {
+		var shutdownErr error
+		metricsShutdown, shutdownErr = bfotel.InitMetrics(ctx, "loco-server", service.DefaultOTLPEndpoint)
+		if shutdownErr != nil {
+			return fmt.Errorf("loco-server metrics: %w", shutdownErr)
+		}
+		defer func() {
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_ = metricsShutdown(shutdownCtx)
+		}()
+		serverMetrics, err = metrics.New(metrics.Config{Enabled: true})
+		if err != nil {
+			return fmt.Errorf("loco-server metrics instruments: %w", err)
+		}
+		log.WithField("endpoint", service.DefaultOTLPEndpoint).Info("loco-server metrics enabled")
+	}
+
+	repository, sqlDB, err := repo.Open(f.DBPath, log, serverMetrics)
 	if err != nil {
 		return fmt.Errorf("open db: %w", err)
 	}
@@ -297,6 +319,10 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	authSvc := cmd.NewAuth(users, layoutSvc, layoutSignalmen, sudoElevations, cmd.AuthConfig{JWTSecret: secret})
 
 	hub := ws.NewHub()
+	hub.SetMetrics(serverMetrics)
+	if serverMetrics != nil {
+		serverMetrics.SetPresenceReader(hub)
+	}
 	sudoSvc := cmd.NewSudo(sudoElevations, layoutSignalmen, layoutSvc, hub, cmd.DefaultSudoConfig)
 	presenceSvc := service.NewPresenceService(hub, authSvc, users, interlockingSessions, interlockings, layoutInterlockings)
 	hub.SetPresenceRefresher(presenceSvc)
@@ -337,6 +363,10 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		}, supSvc, redisSvc, commandStations, log)
 		if err := dccBusSvc.HydratePorts(ctx); err != nil {
 			log.WithError(err).Warn("dcc-bus hydrate ports")
+		}
+		dccBusSvc.SetMetrics(serverMetrics)
+		if serverMetrics != nil {
+			serverMetrics.SetDccBusStatsReader(dccBusSvc)
 		}
 		dccLayoutSync = service.NewDccBusLayoutSync(dccBusSvc, layoutSvc, hub)
 	}
@@ -402,6 +432,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		CommandStns: commandStations,
 		LayoutCS:    layoutCommandStations,
 		Layouts:     layouts,
+		Metrics:     serverMetrics,
 	})
 
 	if redisReady {
@@ -429,6 +460,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 			Auth:          authSvc,
 			Hub:           hub,
 			Audit:         auditSvc,
+			Metrics:       serverMetrics,
 		})
 		occupancySvc.SetTakeoverService(takeoverSvc)
 		if err := takeoverSvc.RecoverPending(ctx); err != nil {
@@ -437,13 +469,13 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		if takeoverRequests.RequiresJanitor() {
 			go takeoverSvc.RunJanitor(ctx)
 		}
-		hub.SetControlHandler(service.NewCompositeControlHandler(
+		hub.SetControlHandler(service.NewMetricsControlHandler(service.NewCompositeControlHandler(
 			sessionCtl,
 			service.NewRadioControlService(radioSvc),
 			service.NewTakeoverControlService(takeoverSvc),
-		))
+		), serverMetrics))
 	} else {
-		hub.SetControlHandler(sessionCtl)
+		hub.SetControlHandler(service.NewMetricsControlHandler(sessionCtl, serverMetrics))
 	}
 
 	if dccBusSvc != nil {
@@ -453,6 +485,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		})
 
 		evtConsumer := service.NewDccBusEventConsumer(redisSvc, hub, log)
+		evtConsumer.SetMetrics(serverMetrics)
 		if err := evtConsumer.Start(ctx); err != nil {
 			log.WithError(err).Warn("dcc-bus event consumer start")
 		}
@@ -542,6 +575,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		AllowedOrigins:   f.AllowedOrigins,
 		SecureCookie:     f.SecureCookie,
 		StaticFS:         staticFS,
+		Metrics:          serverMetrics,
 	})
 
 	srv := &http.Server{

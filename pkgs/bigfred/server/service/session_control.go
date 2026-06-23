@@ -32,6 +32,7 @@ type SessionControlConfig struct {
 	CommandStns *repo.CommandStations
 	LayoutCS    *repo.LayoutCommandStations
 	Layouts     *repo.Layouts
+	Metrics     cmd.ControlMetricsPort
 }
 
 // NewSessionControlService returns a ready WS adapter.
@@ -57,6 +58,7 @@ func NewSessionControlService(cfg SessionControlConfig) *SessionControlService {
 			CommandStns: cfg.CommandStns,
 			LayoutCS:    cfg.LayoutCS,
 			Layouts:     cfg.Layouts,
+			Metrics:     cfg.Metrics,
 		}),
 		clients: make(map[*ws.Client]*controlClient, 8),
 	}

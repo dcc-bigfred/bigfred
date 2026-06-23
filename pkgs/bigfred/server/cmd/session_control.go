@@ -86,6 +86,12 @@ type ControlClient interface {
 	SendAck(requestID string, ok bool, errCode string)
 }
 
+// ControlMetricsPort records safety-related control-plane counters.
+type ControlMetricsPort interface {
+	RecordRadioStopTriggered(layoutID uint)
+	RecordEStopTriggered(layoutID uint)
+}
+
 // SessionControl owns control-plane session actions.
 type SessionControl struct {
 	log         *logrus.Logger
@@ -95,6 +101,7 @@ type SessionControl struct {
 	cs          *repo.CommandStations
 	layoutCS    *repo.LayoutCommandStations
 	layoutRows  *repo.Layouts
+	metrics     ControlMetricsPort
 
 	proxyPathFn func(csID uint) string
 
@@ -111,6 +118,7 @@ type SessionControlConfig struct {
 	CommandStns *repo.CommandStations
 	LayoutCS    *repo.LayoutCommandStations
 	Layouts     *repo.Layouts
+	Metrics     ControlMetricsPort
 }
 
 // NewSessionControl returns a ready control-plane use case.
@@ -127,6 +135,7 @@ func NewSessionControl(cfg SessionControlConfig) *SessionControl {
 		cs:          cfg.CommandStns,
 		layoutCS:    cfg.LayoutCS,
 		layoutRows:  cfg.Layouts,
+		metrics:     cfg.Metrics,
 		proxyPathFn: defaultSessionProxyPath,
 		sessions:    make(map[ControlClient]struct{}, 8),
 	}
@@ -180,6 +189,9 @@ func (s *SessionControl) HandleEnvelope(ctx context.Context, c ControlClient, en
 			return
 		}
 		ok, code := s.radioStop.Trigger(ctx, c.Session())
+		if ok && s.metrics != nil {
+			s.metrics.RecordRadioStopTriggered(c.Session().LayoutID())
+		}
 		c.SendAck(env.ID, ok, code)
 
 	case TypeSystemEStopTarget:
@@ -193,6 +205,9 @@ func (s *SessionControl) HandleEnvelope(ctx context.Context, c ControlClient, en
 			return
 		}
 		ok, code := s.estopTarget.Trigger(ctx, c.Session(), p.Target, p.TargetID)
+		if ok && s.metrics != nil {
+			s.metrics.RecordEStopTriggered(c.Session().LayoutID())
+		}
 		c.SendAck(env.ID, ok, code)
 	}
 }

@@ -32,6 +32,9 @@ func (c *Client) Send(env Envelope) {
 	select {
 	case c.send <- env:
 	default:
+		if c.hub.metrics != nil {
+			c.hub.metrics.RecordWSBroadcastDropped(c.session.LayoutID, env.Type)
+		}
 	}
 }
 
@@ -91,6 +94,15 @@ func (c *Client) readLoop(ctx context.Context) {
 			continue
 		}
 		if env.Type == "ping" {
+			var pingPayload struct {
+				LastPingLatencyMs float64 `json:"lastPingLatencyMs"`
+			}
+			if len(env.Payload) > 0 {
+				_ = json.Unmarshal(env.Payload, &pingPayload)
+			}
+			if c.hub.metrics != nil {
+				c.hub.metrics.RecordWSClientPingRTT(c.session.LayoutID, c.session.Login, pingPayload.LastPingLatencyMs)
+			}
 			c.Send(Envelope{Type: "pong", ID: env.ID})
 			continue
 		}

@@ -39,8 +39,8 @@ func (h *PresenceHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Dashboard poll (§7e.6): detect command-station attachment changes
-	// and refresh supervisord for online layouts.
+	// Dashboard / throttle poll (§7e.6): detect command-station attachment
+	// changes and refresh supervisord for online layouts.
 	if h.dccSync != nil {
 		if err := h.dccSync.ObserveLayout(r.Context(), layoutID); err != nil {
 			writeJSONError(w, http.StatusInternalServerError, "internal_error")

@@ -22,6 +22,19 @@ export function presenceQueryKey(layoutId: number) {
   return ["layouts", layoutId, "presence"] as const;
 }
 
+// Triggers supervisord rebuild when command-station attachments change
+// (§7e.6). Uses the same GET as the dashboard presence poll, without
+// subscribing to live presence updates.
+export function useLayoutSupervisordSync(layoutId: number | null) {
+  useQuery({
+    queryKey: presenceQueryKey(layoutId ?? 0),
+    queryFn: () =>
+      apiFetch<PresenceUser[]>(`/api/v1/layouts/${layoutId}/presence`),
+    enabled: layoutId != null && layoutId > 0,
+    staleTime: 2 * 1000,
+  });
+}
+
 export function useLayoutPresence(layoutId: number | null) {
   const qc = useQueryClient();
   const { subscribe } = useSocket();

@@ -20,6 +20,7 @@ import {
   type DataPlaneStatus,
 } from "../context/DccBusContext";
 import { useMe } from "../api/auth";
+import { useLayoutSupervisordSync } from "../api/presence";
 import { useReceivedLeases } from "../api/leases";
 import { useVehicleFunctions } from "../api/functions";
 import {
@@ -97,6 +98,7 @@ export default function ThrottlePage() {
   const { t } = useTranslation(["throttle", "common", "errors"]);
 
   const layoutID = me?.layoutId ?? null;
+  useLayoutSupervisordSync(layoutID);
   useRadioStopSound();
   const driverRadio = useDriverRadioInbound();
   const takeoverDriver = useTakeoverDriverSession(layoutID);

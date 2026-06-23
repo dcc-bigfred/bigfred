@@ -183,28 +183,21 @@ func (s *EStopTarget) resolveVehicle(
 	if err != nil {
 		return estopTargetResolved{}, err
 	}
-	var entry *RosterVehicleEntry
-	for i := range entries {
-		if entries[i].Vehicle.ID == vehicleID {
-			entry = &entries[i]
-			break
-		}
+	addrs, ownerID, err := vehicleDriveAddrs(entries, vehicleID)
+	if err != nil {
+		return estopTargetResolved{}, err
 	}
-	if entry == nil {
-		return estopTargetResolved{}, errEStopTargetNotOnLayout
-	}
-	if entry.Vehicle.DCCAddress == nil {
-		return estopTargetResolved{ownerID: entry.Vehicle.OwnerUserID}, nil
+	if len(addrs) == 0 {
+		return estopTargetResolved{ownerID: ownerID}, nil
 	}
 	lesseesByVehicle, err := s.roster.LesseesByVehicle(ctx, entries, trains)
 	if err != nil {
 		return estopTargetResolved{}, err
 	}
-	addr := uint16(*entry.Vehicle.DCCAddress)
-	controllers := helpers.MergeUserIDs(entry.Vehicle.OwnerUserID, domain.VehicleLesseeUserIDs(lesseesByVehicle[vehicleID])...)
+	controllers := helpers.MergeUserIDs(ownerID, domain.VehicleLesseeUserIDs(lesseesByVehicle[vehicleID])...)
 	return estopTargetResolved{
-		addrs:             []uint16{addr},
-		ownerID:           entry.Vehicle.OwnerUserID,
+		addrs:             addrs,
+		ownerID:           ownerID,
 		controllerUserIDs: controllers,
 	}, nil
 }
@@ -222,36 +215,21 @@ func (s *EStopTarget) resolveTrain(
 	if err != nil {
 		return estopTargetResolved{}, err
 	}
-	var trainEntry *RosterTrainEntry
-	for i := range trains {
-		if trains[i].Train.ID == trainID {
-			trainEntry = &trains[i]
-			break
-		}
+	addrs, ownerID, err := trainDriveAddrs(entries, trains, trainID)
+	if err != nil {
+		return estopTargetResolved{}, err
 	}
-	if trainEntry == nil {
-		return estopTargetResolved{}, errEStopTargetNotOnLayout
-	}
-
-	addrByVehicle := make(map[domain.VehicleID]uint16, len(entries))
-	for _, e := range entries {
-		if e.Vehicle.DCCAddress != nil {
-			addrByVehicle[e.Vehicle.ID] = uint16(*e.Vehicle.DCCAddress)
-		}
-	}
-
 	lesseesByVehicle, err := s.roster.LesseesByVehicle(ctx, entries, trains)
 	if err != nil {
 		return estopTargetResolved{}, err
 	}
-
+	trainEntry, err := rosterTrainEntry(trains, trainID)
+	if err != nil {
+		return estopTargetResolved{}, err
+	}
 	controllerSet := make(map[uint]struct{})
-	controllerSet[trainEntry.Train.OwnerUserID] = struct{}{}
-	addrs := make([]uint16, 0, len(trainEntry.Members))
+	controllerSet[ownerID] = struct{}{}
 	for _, m := range trainEntry.Members {
-		if addr, ok := addrByVehicle[m.VehicleID]; ok {
-			addrs = append(addrs, addr)
-		}
 		for _, lessee := range lesseesByVehicle[m.VehicleID] {
 			controllerSet[lessee.UserID] = struct{}{}
 		}
@@ -260,10 +238,9 @@ func (s *EStopTarget) resolveTrain(
 	for id := range controllerSet {
 		controllers = append(controllers, id)
 	}
-
 	return estopTargetResolved{
 		addrs:             addrs,
-		ownerID:           trainEntry.Train.OwnerUserID,
+		ownerID:           ownerID,
 		controllerUserIDs: controllers,
 	}, nil
 }

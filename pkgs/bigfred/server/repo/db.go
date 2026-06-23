@@ -4,11 +4,15 @@
 package repo
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/go-rel/rel"
 	"github.com/go-rel/sqlite3"
+	"github.com/sirupsen/logrus"
 
 	// modernc.org/sqlite registers itself under the driver name
 	// "sqlite" in its init(). The go-rel/sqlite3 adapter is
@@ -24,7 +28,11 @@ import (
 // `path` should be a filesystem path. SQLite-specific pragmas are
 // appended via the DSN query string to enable WAL journaling and
 // foreign-key enforcement.
-func Open(path string) (rel.Repository, *sql.DB, error) {
+//
+// When log is non-nil and its level is debug or lower, every SQL query
+// is logged through logrus. At info and above, go-rel instrumentation
+// is disabled so adapter-query lines do not clutter production logs.
+func Open(path string, log *logrus.Logger) (rel.Repository, *sql.DB, error) {
 	dsn := fmt.Sprintf("file:%s?_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)", path)
 
 	db, err := sql.Open("sqlite", dsn)
@@ -37,5 +45,33 @@ func Open(path string) (rel.Repository, *sql.DB, error) {
 	}
 
 	adapter := sqlite3.New(db)
-	return rel.New(adapter), db, nil
+	repository := rel.New(adapter)
+	if log != nil && log.IsLevelEnabled(logrus.DebugLevel) {
+		repository.Instrumentation(sqlInstrumenter(log))
+	} else {
+		repository.Instrumentation(nil)
+	}
+	return repository, db, nil
+}
+
+func sqlInstrumenter(log *logrus.Logger) rel.Instrumenter {
+	return func(ctx context.Context, op, message string, args ...any) func(err error) {
+		if strings.HasPrefix(op, "rel-") {
+			return func(error) {}
+		}
+
+		start := time.Now()
+		return func(err error) {
+			fields := logrus.Fields{
+				"duration": time.Since(start),
+				"op":       op,
+			}
+			entry := log.WithFields(fields)
+			if err != nil {
+				entry.WithError(err).Debug(message)
+			} else {
+				entry.Debug(message)
+			}
+		}
+	}
 }

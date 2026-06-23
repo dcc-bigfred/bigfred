@@ -16,11 +16,12 @@ import (
 
 // LeaseHandler serves user-initiated drive lease endpoints.
 type LeaseHandler struct {
-	svc *service.LeaseService
+	svc  *service.LeaseService
+	auth *cmd.Auth
 }
 
-func NewLeaseHandler(svc *service.LeaseService) *LeaseHandler {
-	return &LeaseHandler{svc: svc}
+func NewLeaseHandler(svc *service.LeaseService, auth *cmd.Auth) *LeaseHandler {
+	return &LeaseHandler{svc: svc, auth: auth}
 }
 
 func (h *LeaseHandler) ListReceived(w http.ResponseWriter, r *http.Request) {
@@ -41,7 +42,12 @@ func (h *LeaseHandler) ListGranted(w http.ResponseWriter, r *http.Request) {
 	if !ok || h.svc == nil {
 		return
 	}
-	rows, err := h.svc.ListGranted(r.Context(), layoutID, actor.User.ID)
+	eff, err := h.actorEffectiveRoles(r, actor)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	rows, err := h.svc.ListGranted(r.Context(), layoutID, actor.User, eff)
 	if err != nil {
 		writeLeaseError(w, err)
 		return
@@ -68,6 +74,11 @@ func (h *LeaseHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if !ok || h.svc == nil {
 		return
 	}
+	eff, err := h.actorEffectiveRoles(r, actor)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
 	var req protocol.CreateLeaseRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid_body")
@@ -77,6 +88,7 @@ func (h *LeaseHandler) Create(w http.ResponseWriter, r *http.Request) {
 		r.Context(),
 		layoutID,
 		actor.User,
+		eff,
 		req.Kind,
 		req.TargetID,
 		req.ToUserID,
@@ -97,6 +109,11 @@ func (h *LeaseHandler) Patch(w http.ResponseWriter, r *http.Request) {
 	if !ok || h.svc == nil {
 		return
 	}
+	eff, err := h.actorEffectiveRoles(r, actor)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
 	kind, targetID, ok := parseLeasePath(w, r)
 	if !ok {
 		return
@@ -111,15 +128,23 @@ func (h *LeaseHandler) Patch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var entry cmd.LeaseEntry
-	var err error
 	if req.SpeedLimit != nil {
-		entry, err = h.svc.UpdateSpeedLimit(r.Context(), layoutID, actor.User.ID, kind, targetID, *req.SpeedLimit)
+		entry, err = h.svc.UpdateSpeedLimit(
+			r.Context(),
+			layoutID,
+			actor.User,
+			eff,
+			kind,
+			targetID,
+			*req.SpeedLimit,
+		)
 	}
 	if err == nil && req.DurationSeconds != nil {
 		entry, err = h.svc.UpdateDuration(
 			r.Context(),
 			layoutID,
-			actor.User.ID,
+			actor.User,
+			eff,
 			kind,
 			targetID,
 			time.Duration(*req.DurationSeconds)*time.Second,
@@ -138,15 +163,30 @@ func (h *LeaseHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	if !ok || h.svc == nil {
 		return
 	}
+	eff, err := h.actorEffectiveRoles(r, actor)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
 	kind, targetID, ok := parseLeasePath(w, r)
 	if !ok {
 		return
 	}
-	if err := h.svc.Revoke(r.Context(), layoutID, actor.User.ID, kind, targetID); err != nil {
+	if err := h.svc.Revoke(r.Context(), layoutID, actor.User, eff, kind, targetID); err != nil {
 		writeLeaseError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *LeaseHandler) actorEffectiveRoles(r *http.Request, actor cmd.Identity) (domain.EffectiveRoles, error) {
+	if h.auth == nil {
+		if actor.User.Role == domain.RoleAdmin {
+			return domain.NewEffectiveRoles(domain.RoleAdmin), nil
+		}
+		return domain.NewEffectiveRoles(actor.User.Role), nil
+	}
+	return h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
 }
 
 func requireSessionLayout(w http.ResponseWriter, r *http.Request) (uint, cmd.Identity, bool) {

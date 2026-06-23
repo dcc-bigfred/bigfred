@@ -35,7 +35,7 @@ func freshRepo(t *testing.T) (repo.UsersBundle, func()) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "service_test.db")
 
-	r, db, err := repo.Open(path)
+	r, db, err := repo.Open(path, nil)
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}

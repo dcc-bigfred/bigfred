@@ -25,6 +25,7 @@ type LeaseConfig struct {
 	Roster         *LayoutVehicleService
 	Hub            *ws.Hub
 	Audit          cmd.AuditPublisher
+	Brake          cmd.LeaseBrakePort
 }
 
 func NewLeaseService(cfg LeaseConfig) *LeaseService {
@@ -47,6 +48,7 @@ func NewLeaseService(cfg LeaseConfig) *LeaseService {
 		Roster:         roster,
 		Hub:            hub,
 		Audit:          cfg.Audit,
+		Brake:          cfg.Brake,
 	})}
 }
 

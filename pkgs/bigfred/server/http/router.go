@@ -92,7 +92,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	diagnosticsH := NewDiagnosticsHandler(cfg.Diagnostics)
 	radioH := NewRadioHandler(cfg.Radio)
 	auditH := NewAuditHandler(cfg.Audit)
-	leaseH := NewLeaseHandler(cfg.Leases)
+	leaseH := NewLeaseHandler(cfg.Leases, cfg.Auth)
 
 	r.Route("/api/v1", func(r chi.Router) {
 		// WebSocket upgrade — auth reads cookie / ?token= inline.

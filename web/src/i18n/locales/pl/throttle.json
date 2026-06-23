@@ -47,9 +47,6 @@
   "functions": "Funkcje",
   "fnLabel": "F{{n}}",
   "stop": "Stop",
-  "lease": {
-    "remaining": "Wypożyczenie"
-  },
   "emergencyStop": "Stop awaryjny",
   "leaveGuard": {
     "title": "Lokomotywa w ruchu",

@@ -30,7 +30,7 @@ import { getUserName } from "../../utils/getUserName";
 export interface LeaseCreateDialogProps {
   open: boolean;
   onClose: () => void;
-  initialTarget?: { kind: TakeoverTarget; targetId: string } | null;
+  initialTarget?: { kind: TakeoverTarget; targetId: string; targetName?: string } | null;
   allowUnresolvedTarget?: boolean;
 }
 
@@ -49,6 +49,7 @@ export default function LeaseCreateDialog({
   const [speedLimit, setSpeedLimit] = useState("80");
   const [hours, setHours] = useState("0");
   const [minutes, setMinutes] = useState("30");
+  const [unresolvedTargetName, setUnresolvedTargetName] = useState<string | null>(null);
 
   const targets = lendable.data?.targets ?? [];
   const users = lendable.data?.users ?? [];
@@ -59,6 +60,7 @@ export default function LeaseCreateDialog({
       setSelectedTargetKey(
         initialTarget ? lendableTargetKey(initialTarget) : "",
       );
+      setUnresolvedTargetName(initialTarget?.targetName ?? null);
       setSelectedUser(null);
       setSpeedLimit("80");
       setHours("0");
@@ -77,10 +79,17 @@ export default function LeaseCreateDialog({
       return selectedTarget;
     }
     if (allowUnresolvedTarget) {
-      return parseLendableTargetKey(selectedTargetKey);
+      const parsed = parseLendableTargetKey(selectedTargetKey);
+      if (!parsed) {
+        return null;
+      }
+      if (unresolvedTargetName) {
+        return { ...parsed, targetName: unresolvedTargetName };
+      }
+      return parsed;
     }
     return null;
-  }, [selectedTarget, selectedTargetKey, allowUnresolvedTarget]);
+  }, [selectedTarget, selectedTargetKey, allowUnresolvedTarget, unresolvedTargetName]);
 
   const submitError = (() => {
     const err = create.error;
@@ -136,7 +145,7 @@ export default function LeaseCreateDialog({
             >
               {allowUnresolvedTarget && selectedTargetKey && !selectedTarget && (
                 <MenuItem value={selectedTargetKey}>
-                  {submitTarget?.targetId ?? selectedTargetKey}
+                  {submitTarget?.targetName ?? selectedTargetKey}
                 </MenuItem>
               )}
               {targets.map((tgt) => (

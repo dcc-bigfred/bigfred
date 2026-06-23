@@ -29,6 +29,7 @@ import LayoutsAdminPage from "./pages/admin/LayoutsPage";
 import InterlockingsAdminPage from "./pages/admin/InterlockingsPage";
 import CommandStationsAdminPage from "./pages/admin/CommandStationsPage";
 import DiagnosticsAdminPage from "./pages/admin/DiagnosticsPage";
+import AdminRentalsPage from "./pages/admin/AdminRentalsPage";
 import UsersAdminPage from "./pages/admin/UsersPage";
 
 // App is the route-tree root. Layout reads top-down:
@@ -86,6 +87,7 @@ const router = createBrowserRouter(
               path="/admin/diagnostics"
               element={<DiagnosticsAdminPage />}
             />
+            <Route path="/admin/rentals" element={<AdminRentalsPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>

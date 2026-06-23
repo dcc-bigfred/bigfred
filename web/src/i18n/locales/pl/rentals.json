@@ -20,6 +20,10 @@
     "to": "Wypożyczony: {{login}}",
     "lend": "Wypożycz"
   },
+  "admin": {
+    "title": "Wypożyczenia na imprezie",
+    "intro": "Zarządzaj wypożyczaniem taboru na imprezie"
+  },
   "create": {
     "title": "Wypożycz pojazd lub skład",
     "target": "Pojazd / skład",

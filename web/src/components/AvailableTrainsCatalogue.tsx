@@ -72,6 +72,7 @@ export default function AvailableTrainsCatalogue({ layoutId }: Props) {
   const [leaseInitialTarget, setLeaseInitialTarget] = useState<{
     kind: "train";
     targetId: string;
+    targetName?: string;
   } | null>(null);
 
   useEffect(() => {
@@ -269,6 +270,7 @@ export default function AvailableTrainsCatalogue({ layoutId }: Props) {
                                     setLeaseInitialTarget({
                                       kind: "train",
                                       targetId: tr.id,
+                                      targetName: tr.name,
                                     });
                                     setLeaseDialogOpen(true);
                                   }}

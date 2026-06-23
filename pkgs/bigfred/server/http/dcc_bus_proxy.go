@@ -40,7 +40,7 @@ func (p *DccBusProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	recordSession := false
 	defer func() {
 		if recordSession && p.metrics != nil {
-			p.metrics.RecordDccBusProxySession(layoutID, csID, time.Since(start))
+			p.metrics.RecordDccBusProxySessionClosed(layoutID, csID, time.Since(start))
 		}
 	}()
 
@@ -85,6 +85,7 @@ func (p *DccBusProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if p.metrics != nil {
 		p.metrics.RecordDccBusProxyUpgrade(layoutID, csID, true, "_")
+		p.metrics.RecordDccBusProxySessionOpened(layoutID, csID)
 	}
 	recordSession = true
 

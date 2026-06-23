@@ -6,8 +6,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/url"
-	"strings"
 	"sync"
 	"time"
 
@@ -17,6 +15,7 @@ import (
 
 	"github.com/keskad/loco/pkgs/bigfred/contract"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/protocol"
+	"github.com/keskad/loco/pkgs/bigfred/loadtest/wsutil"
 )
 
 const ackTimeout = 8 * time.Second
@@ -44,7 +43,7 @@ func Connect(ctx context.Context, wsURL, token string, log *logrus.Logger) (*Cli
 		log = logrus.New()
 	}
 
-	u, err := withToken(wsURL, token)
+	u, err := wsutil.WithToken(wsURL, token)
 	if err != nil {
 		return nil, err
 	}
@@ -309,23 +308,6 @@ func (c *Client) failPending(code string) {
 		}
 		delete(c.pending, id)
 	}
-}
-
-func withToken(wsURL, token string) (string, error) {
-	wsURL = strings.TrimSpace(wsURL)
-	if wsURL == "" {
-		return "", fmt.Errorf("dcc-bus-ws is required")
-	}
-	u, err := url.Parse(wsURL)
-	if err != nil {
-		return "", fmt.Errorf("parse dcc-bus-ws: %w", err)
-	}
-	q := u.Query()
-	if q.Get("token") == "" && token != "" {
-		q.Set("token", token)
-		u.RawQuery = q.Encode()
-	}
-	return u.String(), nil
 }
 
 func newID() string {

@@ -67,6 +67,35 @@ func TestRecordAuthLogin(t *testing.T) {
 	}
 }
 
+func TestRecordDccBusProxySessionLifecycle(t *testing.T) {
+	reader := metric.NewManualReader()
+	m, err := New(Config{
+		Enabled: true,
+		Meter:   metric.NewMeterProvider(metric.WithReader(reader)).Meter("test"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.RecordDccBusProxySessionOpened(2, 1)
+	m.RecordDccBusProxySessionClosed(2, 1, 3*time.Second)
+
+	var rm metricdata.ResourceMetrics
+	if err := reader.Collect(context.Background(), &rm); err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, sm := range rm.ScopeMetrics {
+		for _, met := range sm.Metrics {
+			if met.Name == upDownDccBusProxySessionsActive {
+				found = true
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("missing %s", upDownDccBusProxySessionsActive)
+	}
+}
+
 func TestObservePresence(t *testing.T) {
 	reader := metric.NewManualReader()
 	m, err := New(Config{

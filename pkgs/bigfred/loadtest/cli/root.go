@@ -11,15 +11,17 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/keskad/loco/pkgs/bigfred/loadtest/auth"
+	"github.com/keskad/loco/pkgs/bigfred/loadtest/control"
 	"github.com/keskad/loco/pkgs/bigfred/loadtest/dccbus"
 	"github.com/keskad/loco/pkgs/bigfred/loadtest/httpapi"
 	"github.com/keskad/loco/pkgs/bigfred/loadtest/sim"
+	"github.com/keskad/loco/pkgs/bigfred/loadtest/wsutil"
 )
 
 // Flags collects every command-line knob exposed by loco-server-load-test.
 type Flags struct {
-	HTTPAddr  string
-	DccBusWS  string
+	HTTPAddr           string
+	CommandStationID   uint
 	UserLogin string
 	PIN       string
 	LayoutID  uint
@@ -43,17 +45,18 @@ func NewCommand(log *logrus.Logger) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "loco-server-load-test",
 		Short: "Generate sustained throttle traffic for BigFred performance testing",
-		Long: `loco-server-load-test authenticates against loco-server, opens a
-dcc-bus WebSocket session and continuously drives the listed vehicles
-(or every owned on-layout vehicle when --vehicles is omitted) with a
-simple speed/function pattern until interrupted.`,
+		Long: `loco-server-load-test authenticates against loco-server, starts the
+requested command station via the control WebSocket, connects to dcc-bus
+through loco-server's reverse proxy and continuously drives the listed
+vehicles (or every owned on-layout vehicle when --vehicles is omitted)
+with a simple speed/function pattern until interrupted.`,
 		RunE: func(c *cobra.Command, _ []string) error {
 			return run(c.Context(), log, f)
 		},
 	}
 
 	cmd.Flags().StringVar(&f.HTTPAddr, "http-addr", "http://localhost:8080", "loco-server HTTP base URL")
-	cmd.Flags().StringVar(&f.DccBusWS, "dcc-bus-ws", "ws://127.0.0.1:9200/ws", "dcc-bus WebSocket URL (ws:// or wss://)")
+	cmd.Flags().UintVar(&f.CommandStationID, "command-station-id", 0, "command station id to spawn and connect through the loco-server proxy (required)")
 	cmd.Flags().StringVar(&f.UserLogin, "user", "admin", "user login")
 	cmd.Flags().StringVar(&f.PIN, "pin", "123456", "user PIN")
 	cmd.Flags().UintVar(&f.LayoutID, "layout-id", 0, "layout id to pin the session to (required)")
@@ -67,6 +70,7 @@ simple speed/function pattern until interrupted.`,
 	cmd.Flags().StringSliceVar(&f.Vehicles, "vehicles", nil, "vehicle ids to drive (default: all owned, on-layout vehicles with a DCC address)")
 
 	_ = cmd.MarkFlagRequired("layout-id")
+	_ = cmd.MarkFlagRequired("command-station-id")
 
 	return cmd
 }
@@ -99,10 +103,16 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		return fmt.Errorf("horn-pulse-secs must be greater than 0")
 	}
 
+	dccBusWS, err := wsutil.DccBusProxyWS(f.HTTPAddr, f.CommandStationID)
+	if err != nil {
+		return err
+	}
+
 	log.WithFields(logrus.Fields{
-		"http":           f.HTTPAddr,
-		"dccBus":         f.DccBusWS,
-		"user":           f.UserLogin,
+		"http":               f.HTTPAddr,
+		"commandStationId":   f.CommandStationID,
+		"dccBusProxy":        dccBusWS,
+		"user":               f.UserLogin,
 		"layoutId":       f.LayoutID,
 		"maxSpeed":       f.MaxSpeed,
 		"shuttleLegSecs": f.ShuttleLegSecs,
@@ -135,7 +145,11 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		}).Info("resolved vehicle")
 	}
 
-	bus, err := dccbus.Connect(ctx, f.DccBusWS, session.Token, log)
+	if err := control.StartCommandStation(ctx, f.HTTPAddr, session.Token, f.CommandStationID, log); err != nil {
+		return fmt.Errorf("start command station: %w", err)
+	}
+
+	bus, err := dccbus.Connect(ctx, dccBusWS, session.Token, log)
 	if err != nil {
 		return fmt.Errorf("dcc-bus connect: %w", err)
 	}

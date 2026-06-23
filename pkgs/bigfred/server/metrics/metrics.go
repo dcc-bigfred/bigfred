@@ -20,7 +20,8 @@ const (
 	upDownWSSessionsActive           = "bigfred.server.ws.sessions.active"
 	counterWSBroadcastDropped        = "bigfred.server.ws.broadcast.dropped"
 	counterDccBusProxyUpgrades       = "bigfred.server.dcc_bus.proxy.upgrades"
-	histogramDccBusProxySession    = "bigfred.server.dcc_bus.proxy.session.duration"
+	upDownDccBusProxySessionsActive  = "bigfred.server.dcc_bus.proxy.sessions.active"
+	histogramDccBusProxySession      = "bigfred.server.dcc_bus.proxy.session.duration"
 	histogramDccBusEnsureRunning   = "bigfred.server.dcc_bus.ensure_running.duration"
 	counterDccBusEnsureRunningErrors = "bigfred.server.dcc_bus.ensure_running.errors"
 	gaugeDccBusDaemonsActive         = "bigfred.server.dcc_bus.daemons.active"
@@ -79,8 +80,9 @@ type Metrics struct {
 	wsSessionsActive        metric.Int64UpDownCounter
 	wsSessionsClosed        metric.Int64Counter
 	wsBroadcastDropped      metric.Int64Counter
-	dccBusProxyUpgrades     metric.Int64Counter
-	dccBusProxySession      metric.Float64Histogram
+	dccBusProxyUpgrades        metric.Int64Counter
+	dccBusProxySessionsActive  metric.Int64UpDownCounter
+	dccBusProxySession         metric.Float64Histogram
 	dccBusEnsureRunning     metric.Float64Histogram
 	dccBusEnsureRunningErrs metric.Int64Counter
 	httpRequestDuration     metric.Float64Histogram
@@ -153,6 +155,13 @@ func New(cfg Config) (*Metrics, error) {
 	)
 	if err != nil {
 		return nil, fmt.Errorf("dcc bus proxy upgrades: %w", err)
+	}
+	m.dccBusProxySessionsActive, err = meter.Int64UpDownCounter(upDownDccBusProxySessionsActive,
+		metric.WithDescription("Live dcc-bus reverse-proxy WebSocket sessions"),
+		metric.WithUnit("{session}"),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("dcc bus proxy sessions active: %w", err)
 	}
 	m.dccBusProxySession, err = meter.Float64Histogram(histogramDccBusProxySession,
 		metric.WithDescription("dcc-bus reverse-proxy WebSocket session lifetime"),
@@ -405,15 +414,23 @@ func (m *Metrics) RecordDccBusProxyUpgrade(layoutID, commandStationID uint, succ
 	))
 }
 
-// RecordDccBusProxySession stores one proxied WebSocket session lifetime.
-func (m *Metrics) RecordDccBusProxySession(layoutID, commandStationID uint, dur time.Duration) {
+// RecordDccBusProxySessionOpened increments the live reverse-proxy session gauge.
+func (m *Metrics) RecordDccBusProxySessionOpened(layoutID, commandStationID uint) {
 	if m == nil {
 		return
 	}
-	m.dccBusProxySession.Record(context.Background(), dur.Seconds(), metric.WithAttributes(
-		layoutAttr(layoutID),
-		csAttr(commandStationID),
-	))
+	attrs := []attribute.KeyValue{layoutAttr(layoutID), csAttr(commandStationID)}
+	m.dccBusProxySessionsActive.Add(context.Background(), 1, metric.WithAttributes(attrs...))
+}
+
+// RecordDccBusProxySessionClosed decrements the live gauge and records session lifetime.
+func (m *Metrics) RecordDccBusProxySessionClosed(layoutID, commandStationID uint, dur time.Duration) {
+	if m == nil {
+		return
+	}
+	attrs := []attribute.KeyValue{layoutAttr(layoutID), csAttr(commandStationID)}
+	m.dccBusProxySessionsActive.Add(context.Background(), -1, metric.WithAttributes(attrs...))
+	m.dccBusProxySession.Record(context.Background(), dur.Seconds(), metric.WithAttributes(attrs...))
 }
 
 // RecordDccBusEnsureRunning stores EnsureRunning latency and optional error.

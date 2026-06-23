@@ -93,6 +93,34 @@
     },
     {
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Live dcc-bus reverse-proxy WebSocket sessions on /api/v1/dcc-bus/{id}/ws.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "orange", "value": null }] },
+          "unit": "none"
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 1 },
+      "id": 6,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "sum(bigfred_server_dcc_bus_proxy_sessions_active{service_name=\"loco-server\", layout_id=~\"$layout_id\", command_station_id=~\"$command_station_id\"})",
+          "legendFormat": "proxy sessions",
+          "refId": "A"
+        }
+      ],
+      "title": "Proxy WS sessions",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "description": "dcc-bus daemons with an allocated TCP port.",
       "fieldConfig": {
         "defaults": {
@@ -101,7 +129,7 @@
           "unit": "none"
         }
       },
-      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 1 },
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 1 },
       "id": 3,
       "options": {
         "colorMode": "value",
@@ -139,7 +167,7 @@
           "unit": "percent"
         }
       },
-      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 1 },
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 1 },
       "id": 4,
       "options": {
         "colorMode": "value",
@@ -175,7 +203,7 @@
           "unit": "s"
         }
       },
-      "gridPos": { "h": 4, "w": 8, "x": 16, "y": 1 },
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 1 },
       "id": 5,
       "options": {
         "colorMode": "value",
@@ -344,11 +372,34 @@
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "fillOpacity": 20, "lineWidth": 2, "showPoints": "never" },
+          "unit": "none"
+        }
+      },
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 29 },
+      "id": 24,
+      "options": { "legend": { "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "sum(bigfred_server_dcc_bus_proxy_sessions_active{service_name=\"loco-server\", layout_id=~\"$layout_id\", command_station_id=~\"$command_station_id\"}) by (layout_id, command_station_id)",
+          "legendFormat": "layout {{layout_id}} cs {{command_station_id}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Active proxy WS sessions",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
           "custom": { "drawStyle": "line", "fillOpacity": 15, "lineWidth": 2 },
           "unit": "s"
         }
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 29 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 35 },
       "id": 20,
       "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
       "targets": [
@@ -377,7 +428,7 @@
           "unit": "ops"
         }
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 29 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 35 },
       "id": 21,
       "options": { "legend": { "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
       "targets": [
@@ -400,7 +451,7 @@
           "unit": "s"
         }
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 37 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 43 },
       "id": 22,
       "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
       "targets": [
@@ -423,7 +474,7 @@
           "unit": "ops"
         }
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 37 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 43 },
       "id": 23,
       "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
       "targets": [
@@ -439,7 +490,7 @@
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 45 },
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 51 },
       "id": 400,
       "title": "HTTP & auth",
       "type": "row"
@@ -453,7 +504,7 @@
           "unit": "reqps"
         }
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 46 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 52 },
       "id": 30,
       "options": { "legend": { "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
       "targets": [
@@ -476,7 +527,7 @@
           "unit": "s"
         }
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 46 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 52 },
       "id": 31,
       "options": { "legend": { "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
       "targets": [
@@ -499,7 +550,7 @@
           "unit": "ops"
         }
       },
-      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 54 },
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 60 },
       "id": 32,
       "targets": [
         {
@@ -521,7 +572,7 @@
           "unit": "ops"
         }
       },
-      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 54 },
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 60 },
       "id": 33,
       "targets": [
         {
@@ -543,7 +594,7 @@
           "unit": "s"
         }
       },
-      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 54 },
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 60 },
       "id": 34,
       "targets": [
         {
@@ -558,7 +609,7 @@
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 60 },
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 66 },
       "id": 500,
       "title": "Safety & domain events",
       "type": "row"
@@ -572,7 +623,7 @@
           "unit": "ops"
         }
       },
-      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 61 },
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 67 },
       "id": 40,
       "targets": [
         {
@@ -594,7 +645,7 @@
           "unit": "ops"
         }
       },
-      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 61 },
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 67 },
       "id": 41,
       "targets": [
         {
@@ -616,7 +667,7 @@
           "unit": "ops"
         }
       },
-      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 61 },
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 67 },
       "id": 42,
       "targets": [
         {
@@ -638,7 +689,7 @@
           "unit": "ops"
         }
       },
-      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 68 },
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 74 },
       "id": 43,
       "targets": [
         {

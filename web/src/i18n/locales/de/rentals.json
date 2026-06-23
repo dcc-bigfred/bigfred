@@ -5,6 +5,7 @@
     "granted": "An andere verliehen"
   },
   "empty": "Keine aktiven Ausleihen.",
+  "refresh": "Aktualisieren",
   "expired": "Abgelaufen",
   "kind": {
     "vehicle": "Fahrzeug",

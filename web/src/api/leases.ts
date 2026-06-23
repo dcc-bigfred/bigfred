@@ -49,7 +49,6 @@ export function useReceivedLeases() {
   return useQuery({
     queryKey: leasesQueryKey.received,
     queryFn: () => apiFetch<LeaseEntry[]>("/api/v1/leases/received"),
-    refetchInterval: 30_000,
   });
 }
 
@@ -57,7 +56,6 @@ export function useGrantedLeases() {
   return useQuery({
     queryKey: leasesQueryKey.granted,
     queryFn: () => apiFetch<LeaseEntry[]>("/api/v1/leases/granted"),
-    refetchInterval: 30_000,
   });
 }
 

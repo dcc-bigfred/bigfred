@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import {
   Box,
+  Button,
+  CircularProgress,
   Container,
   Dialog,
   DialogActions,
@@ -12,12 +14,14 @@ import {
   Tabs,
   Tooltip,
   Typography,
-  Button,
 } from "@mui/material";
+import RefreshIcon from "@mui/icons-material/Refresh";
 import ReplyIcon from "@mui/icons-material/Reply";
+import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
 import {
+  invalidateLeases,
   useReceivedLeases,
   useRevokeLease,
   type LeaseEntry,
@@ -29,6 +33,7 @@ import { useLeaseEvents } from "../hooks/useLeaseEvents";
 
 export default function RentalsPage() {
   const { t } = useTranslation(["rentals", "common"]);
+  const qc = useQueryClient();
   const me = useMe().data;
   const isAdmin = me?.effectiveRole === "admin";
   useLeaseEvents();
@@ -39,6 +44,7 @@ export default function RentalsPage() {
   const revoke = useRevokeLease();
 
   const receivedRows = useMemo(() => received.data ?? [], [received.data]);
+  const isRefreshingReceived = received.isFetching && !received.isLoading;
 
   return (
     <Container maxWidth="md" sx={{ py: 3 }}>
@@ -53,6 +59,23 @@ export default function RentalsPage() {
 
       {tab === 0 ? (
         <>
+          <Stack direction="row" justifyContent="flex-end" sx={{ mb: 2 }}>
+            <Button
+              variant="outlined"
+              startIcon={
+                isRefreshingReceived ? (
+                  <CircularProgress size={16} color="inherit" />
+                ) : (
+                  <RefreshIcon />
+                )
+              }
+              onClick={() => void invalidateLeases(qc)}
+              disabled={isRefreshingReceived}
+            >
+              {t("refresh")}
+            </Button>
+          </Stack>
+
           {received.isLoading && (
             <Typography color="text.secondary">{t("common:loading")}</Typography>
           )}

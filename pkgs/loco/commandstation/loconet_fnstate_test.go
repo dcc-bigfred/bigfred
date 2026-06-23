@@ -53,3 +53,28 @@ func TestObserveDoesNotClobberCommandedDirf(t *testing.T) {
 		t.Fatalf("DIRF sent on F2 press = 0x%02X, want 0x23 (F0..F4: F1+F2 set, forward)", got)
 	}
 }
+
+// AcquireSlot must skip a redundant command-station round trip when the slot
+// was validated very recently (reconnect-storm debounce), but still do the
+// round trip the first time.
+func TestAcquireSlotDebouncesReconnectStorm(t *testing.T) {
+	l, srv := newSlotTestLoconet(7, lnSLOT_IN_USE)
+	t.Cleanup(func() { close(l.stop) })
+
+	const addr LocoAddr = 98
+	if err := l.AcquireSlot(addr); err != nil {
+		t.Fatalf("AcquireSlot #1: %v", err)
+	}
+	firstCount := countOpcode(srv.txFrames(), lnOPC_LOCO_ADR)
+	if firstCount == 0 {
+		t.Fatal("first AcquireSlot should query the command station")
+	}
+
+	// Immediate re-acquire (e.g. a reconnect 1 s later) must not re-query.
+	if err := l.AcquireSlot(addr); err != nil {
+		t.Fatalf("AcquireSlot #2: %v", err)
+	}
+	if got := countOpcode(srv.txFrames(), lnOPC_LOCO_ADR); got != firstCount {
+		t.Fatalf("second AcquireSlot issued %d extra LOCO_ADR query(ies); expected debounce", got-firstCount)
+	}
+}

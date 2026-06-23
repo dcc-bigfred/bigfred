@@ -68,3 +68,18 @@ func AsMetricsSource(s commandstation.Station) (commandstation.MetricsSource, bo
 	}
 	return nil, false
 }
+
+// AsZ21MetricsSource returns the Z21MetricsSource behind optional wrappers.
+func AsZ21MetricsSource(s commandstation.Station) (commandstation.Z21MetricsSource, bool) {
+	for s != nil {
+		if ms, ok := s.(commandstation.Z21MetricsSource); ok {
+			return ms, true
+		}
+		u, ok := s.(innerStation)
+		if !ok {
+			return nil, false
+		}
+		s = u.Inner()
+	}
+	return nil, false
+}

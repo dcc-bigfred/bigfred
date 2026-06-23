@@ -73,6 +73,7 @@ type Daemon struct {
 	router          *cmd.Router
 	metricsShutdown func(context.Context) error
 	lnMetricsReg    metric.Registration
+	z21MetricsReg   metric.Registration
 }
 
 // New validates cfg, opens Redis + the command station driver and
@@ -189,11 +190,11 @@ func New(ctx context.Context, log *logrus.Logger, cfg Config) (*Daemon, error) {
 		"connection":       station.Describe(cs),
 	}).Info("dcc-bus command station driver ready")
 
-	// Register LocoNet driver metrics (RX/TX, per-opcode, slots, saturation).
+	// Register driver metrics (RX/TX, per-message-type, queues, saturation).
 	// Observable instruments read a snapshot at each OTLP export; no extra
-	// goroutine. Only wired when the driver exposes counters (LocoNet) and
-	// telemetry is on.
+	// goroutine. Only wired when the driver exposes counters and telemetry is on.
 	var lnMetricsReg metric.Registration
+	var z21MetricsReg metric.Registration
 	if cfg.EnableTelemetry && cfg.OTLPEndpoint != "" {
 		if src, ok := station.AsMetricsSource(st); ok {
 			reg, regErr := station.StartLocoNetMetrics(src, station.LocoNetMetricsConfig{
@@ -206,6 +207,19 @@ func New(ctx context.Context, log *logrus.Logger, cfg Config) (*Daemon, error) {
 			} else {
 				lnMetricsReg = reg
 				log.Info("dcc-bus loconet driver metrics enabled")
+			}
+		}
+		if src, ok := station.AsZ21MetricsSource(st); ok {
+			reg, regErr := station.StartZ21Metrics(src, station.Z21MetricsConfig{
+				LayoutID:         cfg.LayoutID,
+				CommandStationID: cfg.CommandStationID,
+				Kind:             cs.Kind,
+			})
+			if regErr != nil {
+				log.WithError(regErr).Warn("dcc-bus z21 metrics registration failed")
+			} else {
+				z21MetricsReg = reg
+				log.Info("dcc-bus z21 driver metrics enabled")
 			}
 		}
 	}
@@ -283,6 +297,7 @@ func New(ctx context.Context, log *logrus.Logger, cfg Config) (*Daemon, error) {
 		router:          router,
 		metricsShutdown: metricsShutdown,
 		lnMetricsReg:    lnMetricsReg,
+		z21MetricsReg:   z21MetricsReg,
 	}, nil
 }
 
@@ -446,6 +461,9 @@ func (d *Daemon) Close() error {
 	}
 	if d.lnMetricsReg != nil {
 		_ = d.lnMetricsReg.Unregister()
+	}
+	if d.z21MetricsReg != nil {
+		_ = d.z21MetricsReg.Unregister()
 	}
 	if d.rds != nil {
 		_ = d.rds.Close()

@@ -207,7 +207,12 @@ func (z *Z21Roco) write(b []byte) (n int, err error) {
 	logrus.Debugf("write: % X", b)
 	n, err = z.conn.Write(b)
 	if err != nil {
+		z.metrics.incr(&z.metrics.txErrors)
 		logrus.WithError(err).Warn("z21 command station: UDP write failed")
+		return n, err
+	}
+	for _, pkt := range splitZ21Datagram(b[:n]) {
+		z.metrics.countTx(pkt, len(pkt))
 	}
 	return n, err
 }

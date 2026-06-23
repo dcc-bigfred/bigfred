@@ -35,6 +35,7 @@ func NewZ21Roco(netAddr string, netPort uint16) (*Z21Roco, error) {
 		syncCh:          make(chan []byte, 64),
 		obsCh:           make(chan LocoObservation, 64),
 		stop:            make(chan struct{}),
+		metrics:         newZ21Metrics(),
 	}
 	return &roco, roco.connect(fmt.Sprintf("%s:%d", netAddr, netPort))
 }
@@ -74,6 +75,10 @@ type Z21Roco struct {
 	// Keyed by address; value is 5 bytes covering F0..F31 as in LAN_X_LOCO_INFO (DB4..DB8).
 	fnStateCache map[LocoAddr]fnState
 	fnStateMu    sync.Mutex
+
+	// metrics holds lock-free hot-path counters. Always non-nil; bumping it is
+	// near-free and OTel-agnostic (see z21_metrics.go).
+	metrics *z21Metrics
 }
 
 // infoTimeout returns the read deadline used for loco-info queries.
@@ -124,9 +129,26 @@ func (z *Z21Roco) connect(netAddr string) error {
 	if z.stop == nil {
 		z.stop = make(chan struct{})
 	}
+	if z.metrics == nil {
+		z.metrics = newZ21Metrics()
+	}
 	logrus.WithField("remote", netAddr).Info("z21 command station: UDP socket open")
 	go z.readLoop()
 	return nil
+}
+
+// Z21MetricsSnapshot implements the Z21MetricsSource interface: it returns the
+// current cumulative counters plus instantaneous gauges (function-state cache
+// size, channel depths). OTel-free by design; the dcc-bus telemetry layer maps
+// it onto instruments.
+func (z *Z21Roco) Z21MetricsSnapshot() Z21MetricsSnapshot {
+	s := z.metrics.snapshot()
+	z.fnStateMu.Lock()
+	s.FnCacheEntries = int64(len(z.fnStateCache))
+	z.fnStateMu.Unlock()
+	s.ObsQueueLen, s.ObsQueueCap = int64(len(z.obsCh)), int64(cap(z.obsCh))
+	s.SyncQueueLen, s.SyncQueueCap = int64(len(z.syncCh)), int64(cap(z.syncCh))
+	return s
 }
 
 func (z *Z21Roco) CleanUp() error {
@@ -211,6 +233,7 @@ func (z *Z21Roco) readLoop() {
 			case <-z.stop:
 				return
 			default:
+				z.metrics.incr(&z.metrics.rxErrors)
 				logrus.Debugf("z21 read error: %v", err)
 				time.Sleep(100 * time.Millisecond)
 				continue
@@ -224,6 +247,7 @@ func (z *Z21Roco) readLoop() {
 
 func (z *Z21Roco) handlePacket(pkt []byte) {
 	logrus.Debugf("z21 RX: % X", pkt)
+	z.metrics.countRx(pkt, len(pkt))
 	z.observe(pkt)
 	if z.syncActive.Load() {
 		// Copy: buf is reused by the read loop on the next datagram.
@@ -231,6 +255,7 @@ func (z *Z21Roco) handlePacket(pkt []byte) {
 		select {
 		case z.syncCh <- cp:
 		default:
+			z.metrics.incr(&z.metrics.syncDropped)
 		}
 	}
 }
@@ -264,6 +289,7 @@ func (z *Z21Roco) emit(obs LocoObservation) {
 	select {
 	case z.obsCh <- obs:
 	default:
+		z.metrics.incr(&z.metrics.obsDropped)
 		logrus.Debug("z21: observation channel full, dropping update")
 	}
 }
@@ -302,6 +328,7 @@ func (z *Z21Roco) awaitMatching(timeout time.Duration, match func(pkt []byte) bo
 				return pkt, nil
 			}
 		case <-deadline:
+			z.metrics.incr(&z.metrics.syncTimeouts)
 			return nil, errors.New("response timeout")
 		}
 	}
@@ -584,6 +611,12 @@ func (z *Z21Roco) sendAndAwait(req []byte, timeout time.Duration) (cvResult, err
 		return cvResult{}, err
 	}
 	_ = pkt
+	switch res.source {
+	case "LAN_X_CV_NACK":
+		z.metrics.incr(&z.metrics.cvNacks)
+	case "LAN_X_CV_NACK_SC":
+		z.metrics.incr(&z.metrics.cvNackSC)
+	}
 	return res, nil
 }
 

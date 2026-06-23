@@ -112,6 +112,10 @@ type LocoNet struct {
 	// metrics holds lock-free hot-path counters. Always non-nil; bumping it is
 	// near-free and OTel-agnostic (see loconet_metrics.go).
 	metrics *lnMetrics
+
+	// csSlotStaLast holds the last observed SL_STA per locomotive slot (0..119)
+	// for CS-wide occupy/release counters. csSlotStaUnknown means never seen.
+	csSlotStaLast [120]atomic.Uint32
 }
 
 // LocoNet TX/timeout tuning. These trade a touch of latency for the ability to
@@ -133,6 +137,9 @@ const (
 	// lnKeepaliveInterval re-touches active slots well within the ~200 s purge
 	// window (spec §4.3 recommends ~100 s).
 	lnKeepaliveInterval = 90 * time.Second
+
+	// csSlotStaUnknown is the initial csSlotStaLast sentinel (not a valid SL_STA).
+	csSlotStaUnknown = 0xFF
 )
 
 func newLocoNetBase() *LocoNet {
@@ -288,6 +295,7 @@ func (l *LocoNet) releaseAllSlots() {
 			logrus.WithError(err).Debugf("loconet: releaseAllSlots: slot %d addr %d", p.slot, p.addr)
 			continue
 		}
+		l.trackCsSlotStatus(p.slot, lnSLOT_COMMON)
 		logrus.Debugf("loconet: released slot %d (addr %d) on shutdown", p.slot, p.addr)
 	}
 }
@@ -346,6 +354,28 @@ func (l *LocoNet) applySlotData(sd lnSlotData) {
 	l.setSpd(sd.Addr, sd.Speed)
 }
 
+// trackCsSlotStatus records a command-station slot status change for telemetry.
+// It counts bus-wide transitions to IN_USE (occupied) and away from IN_USE
+// (released), independent of locomotive address. Repeated observations of the
+// same status are ignored.
+func (l *LocoNet) trackCsSlotStatus(slot byte, stat1 byte) {
+	if slot >= 120 {
+		return
+	}
+	sta := stat1 & lnSLOT_STA_MASK
+	prev := byte(l.csSlotStaLast[slot].Swap(uint32(sta)))
+	switch {
+	case prev == csSlotStaUnknown:
+		if sta == lnSLOT_IN_USE {
+			l.metrics.incr(&l.metrics.csSlotOccupied)
+		}
+	case prev != lnSLOT_IN_USE && sta == lnSLOT_IN_USE:
+		l.metrics.incr(&l.metrics.csSlotOccupied)
+	case prev == lnSLOT_IN_USE && sta != lnSLOT_IN_USE:
+		l.metrics.incr(&l.metrics.csSlotReleased)
+	}
+}
+
 func (l *LocoNet) observe(pkt []byte) {
 	if len(pkt) < 2 {
 		return
@@ -362,6 +392,7 @@ func (l *LocoNet) observe(pkt []byte) {
 		if sd.Slot >= 120 {
 			return
 		}
+		l.trackCsSlotStatus(sd.Slot, sd.Stat1)
 		// Passive observation: refresh the slot mapping and last-seen speed
 		// ONLY for locos that BigFred currently owns. Unconditionally calling
 		// setSlot here would re-adopt a slot that BigFred explicitly released
@@ -454,6 +485,11 @@ func (l *LocoNet) observe(pkt []byte) {
 		}
 		l.mergeExtFn(addr, fns)
 		l.emit(LocoObservation{Addr: addr, Functions: fns})
+	case lnOPC_SLOT_STAT1:
+		if len(pkt) < 3 {
+			return
+		}
+		l.trackCsSlotStatus(pkt[1], pkt[2])
 	}
 }
 
@@ -1041,6 +1077,7 @@ func (l *LocoNet) nullMoveLocked(slot byte) error {
 			return nil
 		}
 		if sd, ok := parseLnSlotData(pkt); ok && sd.Slot == slot {
+			l.trackCsSlotStatus(slot, lnSLOT_IN_USE)
 			return nil
 		}
 		// OPC_LONG_ACK for OPC_MOVE_SLOTS: B4 <BA&0x7F=0x3A> <code> <chk>
@@ -1049,9 +1086,11 @@ func (l *LocoNet) nullMoveLocked(slot byte) error {
 				l.metrics.incr(&l.metrics.lackRejections)
 				return fmt.Errorf("loconet: null move rejected by command station for slot %d", slot)
 			}
+			l.trackCsSlotStatus(slot, lnSLOT_IN_USE)
 			return nil // any non-zero code means accepted
 		}
 	}
+	l.trackCsSlotStatus(slot, lnSLOT_IN_USE)
 	return nil // timeout → silent acceptance
 }
 
@@ -1157,6 +1196,7 @@ func (l *LocoNet) ReleaseSlot(addr LocoAddr) error {
 	if err := l.sendLocked(lnBuildSlotStat1(slot, lnSLOT_COMMON)); err != nil {
 		return err
 	}
+	l.trackCsSlotStatus(slot, lnSLOT_COMMON)
 	l.clearSlot(addr, slot)
 	l.metrics.incr(&l.metrics.slotReleases)
 	logrus.Debugf("loconet: released slot %d for addr %d (set COMMON)", slot, addr)

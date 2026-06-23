@@ -164,6 +164,8 @@ func StartLocoNetMetrics(src commandstation.MetricsSource, cfg LocoNetMetricsCon
 		o.ObserveInt64(slotOps, int64(s.SlotReleases), withBase(attribute.String("op", "release")))
 		o.ObserveInt64(slotOps, int64(s.SlotDispatches), withBase(attribute.String("op", "dispatch")))
 		o.ObserveInt64(slotOps, int64(s.KeepaliveRefresh), withBase(attribute.String("op", "keepalive")))
+		o.ObserveInt64(slotOps, int64(s.CsSlotOccupied), withBase(attribute.String("op", "cs_occupied")))
+		o.ObserveInt64(slotOps, int64(s.CsSlotReleased), withBase(attribute.String("op", "cs_released")))
 
 		o.ObserveInt64(slotsActive, s.SlotsActive, withBase())
 

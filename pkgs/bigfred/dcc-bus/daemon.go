@@ -353,6 +353,12 @@ func (d *Daemon) Run(ctx context.Context) error {
 		}
 	}
 
+	// Stop rolling stock before HTTP shutdown so dead-man timers and client
+	// disconnect grace cannot leave locomotives moving after SIGTERM.
+	if d.router != nil {
+		d.router.Shutdown()
+	}
+
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	return d.srv.Shutdown(shutdownCtx)
@@ -429,7 +435,7 @@ func (d *Daemon) runRadioStopConsumer(ctx context.Context, sub *redis.PubSub) {
 }
 
 // Close releases every dependency the daemon opened. Idempotent.
-// Shutdown order: HTTP server → command station  → Redis → metrics.
+// Shutdown order: HTTP server → emergency stop + station cleanup → Redis → metrics.
 func (d *Daemon) Close() error {
 	if d.srv != nil {
 		_ = d.srv.Close()

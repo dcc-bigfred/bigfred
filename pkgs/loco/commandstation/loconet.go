@@ -278,6 +278,12 @@ func (l *LocoNet) releaseAllSlots() {
 	l.reqMu.Lock()
 	defer l.reqMu.Unlock()
 	for _, p := range pairs {
+		// Stop before releasing: ReleaseSlot/COMMON leaves the loco at its
+		// current speed on the track (LocoNet spec). On daemon shutdown we
+		// must not leave rolling stock moving after the process exits.
+		if err := l.sendLocked(lnBuildSetSpeed(p.slot, 0)); err != nil {
+			logrus.WithError(err).Debugf("loconet: releaseAllSlots stop slot %d addr %d", p.slot, p.addr)
+		}
 		if err := l.sendLocked(lnBuildSlotStat1(p.slot, lnSLOT_COMMON)); err != nil {
 			logrus.WithError(err).Debugf("loconet: releaseAllSlots: slot %d addr %d", p.slot, p.addr)
 			continue
@@ -356,17 +362,26 @@ func (l *LocoNet) observe(pkt []byte) {
 		if sd.Slot >= 120 {
 			return
 		}
-		// Passive observation: refresh only the slot mapping and the
-		// last-seen speed (needed for reverse attribution and keepalive).
-		// Do NOT adopt the DIRF/SND function bytes here. BigFred is the
-		// authoritative throttle for the locos it controls; an echo of our
-		// own write or a stale slot broadcast from the command station must
-		// never clobber the function state we command (that was the cause
-		// of the F0..F4 flicker). The request paths (acquireSlotFreshLocked
-		// / querySlotLocked) still seed the cache authoritatively via
-		// applySlotData when WE asked for the slot.
-		l.setSlot(sd.Addr, sd.Slot)
-		l.setSpd(sd.Addr, sd.Speed)
+		// Passive observation: refresh the slot mapping and last-seen speed
+		// ONLY for locos that BigFred currently owns. Unconditionally calling
+		// setSlot here would re-adopt a slot that BigFred explicitly released
+		// (clearSlot): the keepalive loop would then find the address in
+		// slotByAd and keep refreshing the track with the stale speed from
+		// the command-station broadcast, preventing the loco from stopping.
+		// The authoritative seed path (acquireSlotFreshLocked / applySlotData)
+		// still populates the cache when BigFred itself requests the slot.
+		if prevSlot, owned := l.getSlot(sd.Addr); owned {
+			// Refresh the slot number when the command station moved this loco
+			// (purge + reassignment). Never adopt an unowned slot here — that
+			// would resurrect keepalive traffic after ReleaseSlot. Do not copy
+			// sd.Speed into the spd cache: BigFred is the authoritative
+			// throttle and keepalive must re-send our last command, not a
+			// stale broadcast from the command station (which would undo
+			// teardown or fight an in-flight SetSpeed).
+			if sd.Slot != prevSlot {
+				l.setSlot(sd.Addr, sd.Slot)
+			}
+		}
 		fns := make(map[int]bool, 9)
 		for fn := 0; fn <= 4; fn++ {
 			fns[fn] = getFnFromDirf(sd.DirF, fn)
@@ -800,39 +815,15 @@ func (l *LocoNet) writeSpeed(addr LocoAddr, slot, lnSpeed byte, forward bool, ge
 	return nil
 }
 
-// acquireSlot returns the slot for addr, allocating it through the
-// request/response path (under reqMu) the first time. Subsequent calls hit the
-// cache and return without taking any lock, keeping the fast path lock-free so
-// one loco's command never waits on another's.
+// acquireSlot returns the slot for addr. A cached slot is trusted only while
+// recentlyAcquired reports a fresh command-station round trip; otherwise the
+// mapping is revalidated so a stale slot number (e.g. after a purge/reassign
+// or a buggy external client) cannot silently swallow drive commands.
 func (l *LocoNet) acquireSlot(addr LocoAddr) (byte, error) {
-	if slot, ok := l.getSlot(addr); ok {
+	if slot, ok := l.getSlot(addr); ok && l.recentlyAcquired(addr) {
 		return slot, nil
 	}
-	l.reqMu.Lock()
-	defer l.reqMu.Unlock()
-	// Another goroutine may have acquired it while we waited for reqMu.
-	if slot, ok := l.getSlot(addr); ok {
-		return slot, nil
-	}
-	l.beginSync()
-	defer l.endSync()
-
-	var lastErr error
-	for i := 0; i <= lnSlotAcquireRetries; i++ {
-		if i > 0 {
-			l.metrics.incr(&l.metrics.slotRetries)
-		}
-		slot, err := l.ensureSlotLocked(addr)
-		if err == nil {
-			l.metrics.incr(&l.metrics.slotAcquires)
-			return slot, nil
-		}
-		lastErr = err
-		logrus.Debugf("loconet: slot acquire attempt %d/%d for addr %d failed: %v",
-			i+1, lnSlotAcquireRetries+1, addr, err)
-	}
-	l.metrics.incr(&l.metrics.slotAcquireFails)
-	return 0, lastErr
+	return l.validateSlot(addr)
 }
 
 func (l *LocoNet) GetSpeed(addr LocoAddr) (speed uint8, forward bool, err error) {
@@ -964,12 +955,29 @@ func (l *LocoNet) AcquireSlot(addr LocoAddr) error {
 	if l.recentlyAcquired(addr) {
 		return nil
 	}
+	_, err := l.validateSlot(addr)
+	return err
+}
+
+// ForceAcquireSlot always revalidates addr against the command station,
+// bypassing the debounce window. Intended for subscribe and command retry.
+func (l *LocoNet) ForceAcquireSlot(addr LocoAddr) error {
+	if addr == 0 {
+		return fmt.Errorf("loconet: ForceAcquireSlot invalid addr 0")
+	}
+	l.slotMu.Lock()
+	delete(l.slotAcquiredAt, addr)
+	l.slotMu.Unlock()
+	_, err := l.validateSlot(addr)
+	return err
+}
+
+// validateSlot queries the command station for addr's slot, refreshes the local
+// cache from the reply, and asserts IN_USE when needed. Caller must not hold
+// reqMu.
+func (l *LocoNet) validateSlot(addr LocoAddr) (byte, error) {
 	l.reqMu.Lock()
 	defer l.reqMu.Unlock()
-	// Re-check under reqMu: another caller may have just validated it.
-	if l.recentlyAcquired(addr) {
-		return nil
-	}
 	l.beginSync()
 	defer l.endSync()
 
@@ -978,18 +986,18 @@ func (l *LocoNet) AcquireSlot(addr LocoAddr) error {
 		if i > 0 {
 			l.metrics.incr(&l.metrics.slotRetries)
 		}
-		if _, err := l.acquireSlotFreshLocked(addr); err == nil {
+		slot, err := l.acquireSlotFreshLocked(addr)
+		if err == nil {
 			l.markAcquired(addr)
 			l.metrics.incr(&l.metrics.slotAcquires)
-			return nil
-		} else {
-			lastErr = err
-			logrus.Debugf("loconet: AcquireSlot attempt %d/%d for addr %d failed: %v",
-				i+1, lnSlotAcquireRetries+1, addr, err)
+			return slot, nil
 		}
+		lastErr = err
+		logrus.Debugf("loconet: slot validate attempt %d/%d for addr %d failed: %v",
+			i+1, lnSlotAcquireRetries+1, addr, err)
 	}
 	l.metrics.incr(&l.metrics.slotAcquireFails)
-	return lastErr
+	return 0, lastErr
 }
 
 // slotRevalidateInterval bounds how long AcquireSlot trusts a previously
@@ -1109,6 +1117,19 @@ func (l *LocoNet) clearSlot(addr LocoAddr, slot byte) {
 	delete(l.slotAddr, slot)
 	delete(l.slotAcquiredAt, addr)
 	l.slotMu.Unlock()
+	l.clearLocoState(addr)
+}
+
+// clearLocoState drops cached speed/direction/function bytes for addr so the
+// next acquire cannot read-modify-write stale DIRF/SND left by a released slot.
+func (l *LocoNet) clearLocoState(addr LocoAddr) {
+	l.stateMu.Lock()
+	delete(l.dirfByA, addr)
+	delete(l.sndByA, addr)
+	delete(l.spdByA, addr)
+	delete(l.speedGenByA, addr)
+	delete(l.extFnByA, addr)
+	l.stateMu.Unlock()
 }
 
 // slotToAddr resolves a slot number back to a loco address using the

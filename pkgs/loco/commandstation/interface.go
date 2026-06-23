@@ -38,6 +38,11 @@ type SlotManager interface {
 	// (e.g. held by a physical throttle) is left untouched.
 	AcquireSlot(addr LocoAddr) error
 
+	// ForceAcquireSlot revalidates addr's slot against the command station,
+	// ignoring any debounce window. Use when a client subscribes or when a
+	// drive command failed and the local slot mapping may be stale.
+	ForceAcquireSlot(addr LocoAddr) error
+
 	// ReleaseSlot marks the slot for addr as COMMON on the command station
 	// (no active throttle owner) and removes it from the local cache.
 	// The locomotive continues at its current speed; call SetSpeed first

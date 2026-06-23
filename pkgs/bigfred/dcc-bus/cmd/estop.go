@@ -158,6 +158,7 @@ func (r *Router) applyEStopAll(ctx context.Context, reason string) []uint16 {
 		}
 		if cached, ok, err := r.redis.GetLocoCurrentState(ctx, addr); err == nil && ok {
 			snap.Functions = cached.Functions
+			snap.ControlledByUserID = cached.ControlledByUserID
 		}
 		_ = r.redis.StoreLocoCurrentState(ctx, snap, StateTTL)
 		service.BroadcastLocoState(ctx, r.hub, snap)

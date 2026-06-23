@@ -52,6 +52,10 @@ type Router struct {
 
 	pulseMu     sync.Mutex
 	pulseActive map[service.FnKey]bool
+
+	shutdownOnce sync.Once
+	bootStopMu   sync.Mutex
+	bootStopDone bool
 }
 
 // Config carries the inputs Router needs at construction time.
@@ -152,6 +156,7 @@ func (r *Router) ApplyAllowedVehicles(ctx context.Context, snap contract.Allowed
 		"addrs":    addrs,
 		"count":    len(addrs),
 	}).Info("dcc-bus allowed vehicles updated")
+	r.ensureBootStop(ctx)
 }
 
 // ApplyDefinedTrains replaces the layout train roster cache.

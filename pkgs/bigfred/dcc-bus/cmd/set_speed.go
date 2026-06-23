@@ -39,13 +39,17 @@ func (r *Router) applyMemberSetSpeed(
 	source string,
 ) error {
 	if err := r.dcc.SetSpeed(addr, speed, forward, emergency); err != nil {
-		fields := r.stationLogFields()
-		fields["addr"] = addr
-		fields["speed"] = speed
-		fields["forward"] = forward
-		fields["emergency"] = emergency
-		r.log.WithError(err).WithFields(fields).Warn("dcc-bus command station SetSpeed failed")
-		return err
+		r.forceRevalidateSlot(addr)
+		if retryErr := r.dcc.SetSpeed(addr, speed, forward, emergency); retryErr != nil {
+			fields := r.stationLogFields()
+			fields["addr"] = addr
+			fields["speed"] = speed
+			fields["forward"] = forward
+			fields["emergency"] = emergency
+			r.log.WithError(retryErr).WithFields(fields).Warn("dcc-bus command station SetSpeed failed")
+			return retryErr
+		}
+		r.log.WithField("addr", addr).Debug("dcc-bus SetSpeed succeeded after slot revalidate")
 	}
 	r.log.WithFields(logrus.Fields{
 		"addr":    addr,

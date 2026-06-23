@@ -79,6 +79,9 @@ LocoApp controller layer. It owns user authentication, session
 management and (in later milestones) the WebSocket fan-out for
 real-time throttle commands.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if err := mergeConfigFile(cmd, &f, log); err != nil {
+				return err
+			}
 			return run(cmd.Context(), log, f)
 		},
 	}

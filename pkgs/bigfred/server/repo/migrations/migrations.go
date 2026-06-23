@@ -105,6 +105,8 @@ func register(m *migrator.Migrator) {
 	m.Register(migrationVersion(20260621, 1), migrateVehicleTrainStringIDsUp, migrateVehicleTrainStringIDsDown)
 	m.Register(migrationVersion(20260622, 1), addUsersOrganizationColumnUp, addUsersOrganizationColumnDown)
 	m.Register(migrationVersion(20260622, 2), addLeaseSpeedLimitColumnUp, addLeaseSpeedLimitColumnDown)
+	m.Register(migrationVersion(20260623, 1), addCommandStationTimingColumnsUp, addCommandStationTimingColumnsDown)
+	m.Register(migrationVersion(20260623, 2), addCommandStationPollIntervalColumnUp, addCommandStationPollIntervalColumnDown)
 }
 
 // createCommandStationsUp installs the `command_stations` catalogue
@@ -705,5 +707,26 @@ func addLeaseSpeedLimitColumnUp(s *rel.Schema) {
 }
 
 func addLeaseSpeedLimitColumnDown(s *rel.Schema) {
+	// SQLite cannot DROP COLUMN in older schemas; leave columns in place.
+}
+
+// addCommandStationTimingColumnsUp stores per-station WS ping and dead-man
+// windows forwarded to dcc-bus as --heartbeat-secs / --deadman-secs.
+func addCommandStationTimingColumnsUp(s *rel.Schema) {
+	s.Exec(rel.Raw(`ALTER TABLE command_stations ADD COLUMN heartbeat_secs REAL NOT NULL DEFAULT 2`))
+	s.Exec(rel.Raw(`ALTER TABLE command_stations ADD COLUMN deadman_secs REAL NOT NULL DEFAULT 6`))
+}
+
+func addCommandStationTimingColumnsDown(s *rel.Schema) {
+	// SQLite cannot DROP COLUMN in older schemas; leave columns in place.
+}
+
+// addCommandStationPollIntervalColumnUp stores per-station state-feed polling
+// cadence forwarded to dcc-bus as --poll-interval-ms (0 == daemon default).
+func addCommandStationPollIntervalColumnUp(s *rel.Schema) {
+	s.Exec(rel.Raw(`ALTER TABLE command_stations ADD COLUMN poll_interval_ms INTEGER NOT NULL DEFAULT 0`))
+}
+
+func addCommandStationPollIntervalColumnDown(s *rel.Schema) {
 	// SQLite cannot DROP COLUMN in older schemas; leave columns in place.
 }

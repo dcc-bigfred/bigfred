@@ -17,7 +17,7 @@ func TestMigrateUpSmoke(t *testing.T) {
 	path := filepath.Join(dir, "smoke.db")
 	t.Cleanup(func() { _ = os.Remove(path) })
 
-	repository, sqlDB, err := repo.Open(path)
+	repository, sqlDB, err := repo.Open(path, nil)
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}

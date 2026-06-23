@@ -62,7 +62,10 @@ type CommandStationCreateInput struct {
 	Name          string
 	Kind          domain.CommandStationKind
 	ConnectionURI string
-	SpeedSteps    uint
+	SpeedSteps     uint
+	HeartbeatSecs  float64
+	DeadmanSecs    float64
+	PollIntervalMs uint
 }
 
 func (s *CommandStation) Create(ctx context.Context, eff domain.EffectiveRoles, in CommandStationCreateInput) (domain.CommandStation, error) {
@@ -70,6 +73,14 @@ func (s *CommandStation) Create(ctx context.Context, eff domain.EffectiveRoles, 
 		return domain.CommandStation{}, err
 	}
 	name, kind, uri, steps, err := validation.SanitiseCommandStationInput(in.Name, in.Kind, in.ConnectionURI, in.SpeedSteps)
+	if err != nil {
+		return domain.CommandStation{}, err
+	}
+	heartbeat, deadman, err := validation.SanitiseCommandStationTiming(in.HeartbeatSecs, in.DeadmanSecs)
+	if err != nil {
+		return domain.CommandStation{}, err
+	}
+	pollInterval, err := validation.SanitiseCommandStationPollInterval(in.PollIntervalMs)
 	if err != nil {
 		return domain.CommandStation{}, err
 	}
@@ -84,8 +95,11 @@ func (s *CommandStation) Create(ctx context.Context, eff domain.EffectiveRoles, 
 		Name:          name,
 		Kind:          kind,
 		ConnectionURI: uri,
-		SpeedSteps:    steps,
-		CreatedAt:     now,
+		SpeedSteps:     steps,
+		HeartbeatSecs:  heartbeat,
+		DeadmanSecs:    deadman,
+		PollIntervalMs: pollInterval,
+		CreatedAt:      now,
 		UpdatedAt:     now,
 	}
 	if err := s.stations.Insert(ctx, &row); err != nil {
@@ -98,7 +112,10 @@ type CommandStationUpdateInput struct {
 	Name          *string
 	Kind          *domain.CommandStationKind
 	ConnectionURI *string
-	SpeedSteps    *uint
+	SpeedSteps     *uint
+	HeartbeatSecs  *float64
+	DeadmanSecs    *float64
+	PollIntervalMs *uint
 }
 
 func (s *CommandStation) Update(ctx context.Context, eff domain.EffectiveRoles, id uint, in CommandStationUpdateInput) (domain.CommandStation, error) {
@@ -136,10 +153,34 @@ func (s *CommandStation) Update(ctx context.Context, eff domain.EffectiveRoles, 
 		row.ConnectionURI = strings.TrimSpace(*in.ConnectionURI)
 	}
 	if in.SpeedSteps != nil {
-		if err := validation.ValidateCommandStationSpeedSteps(*in.SpeedSteps); err != nil {
+		steps, err := validation.SanitiseCommandStationSpeedSteps(*in.SpeedSteps)
+		if err != nil {
 			return domain.CommandStation{}, err
 		}
-		row.SpeedSteps = *in.SpeedSteps
+		row.SpeedSteps = steps
+	}
+	heartbeat := row.HeartbeatSecs
+	deadman := row.DeadmanSecs
+	if in.HeartbeatSecs != nil {
+		heartbeat = *in.HeartbeatSecs
+	}
+	if in.DeadmanSecs != nil {
+		deadman = *in.DeadmanSecs
+	}
+	if in.HeartbeatSecs != nil || in.DeadmanSecs != nil {
+		heartbeat, deadman, err = validation.SanitiseCommandStationTiming(heartbeat, deadman)
+		if err != nil {
+			return domain.CommandStation{}, err
+		}
+		row.HeartbeatSecs = heartbeat
+		row.DeadmanSecs = deadman
+	}
+	if in.PollIntervalMs != nil {
+		pollInterval, err := validation.SanitiseCommandStationPollInterval(*in.PollIntervalMs)
+		if err != nil {
+			return domain.CommandStation{}, err
+		}
+		row.PollIntervalMs = pollInterval
 	}
 	row.UpdatedAt = time.Now().UTC()
 

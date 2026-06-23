@@ -298,6 +298,14 @@ func CommandStationHTTPStatus(err error) (status int, code string) {
 		return http.StatusUnprocessableEntity, CodeCommandStationKindInvalid
 	case stderrors.Is(err, ErrCommandStationSpeedInvalid):
 		return http.StatusUnprocessableEntity, CodeCommandStationSpeedInvalid
+	case stderrors.Is(err, ErrCommandStationHeartbeatInvalid):
+		return http.StatusUnprocessableEntity, CodeCommandStationHeartbeatInvalid
+	case stderrors.Is(err, ErrCommandStationDeadmanInvalid):
+		return http.StatusUnprocessableEntity, CodeCommandStationDeadmanInvalid
+	case stderrors.Is(err, ErrCommandStationDeadmanTooShort):
+		return http.StatusUnprocessableEntity, CodeCommandStationDeadmanTooShort
+	case stderrors.Is(err, ErrCommandStationPollIntervalInvalid):
+		return http.StatusUnprocessableEntity, CodeCommandStationPollIntervalInvalid
 	case stderrors.Is(err, ErrLayoutNeedsAtLeastOneCommandStation):
 		return http.StatusConflict, CodeLayoutNeedsAtLeastOneCommandStation
 	default:

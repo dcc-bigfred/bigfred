@@ -20,12 +20,26 @@ func TestAppendStationFlags(t *testing.T) {
 	args := AppendStationFlags(nil, domain.CommandStation{
 		Name: "Main", Kind: domain.CommandStationKindZ21,
 		ConnectionURI: "udp://host:21105", SpeedSteps: 28,
+		HeartbeatSecs: 2, DeadmanSecs: 6,
 	})
 	joined := stringsJoin(args)
-	for _, want := range []string{"--station-name", "Main", "--station-kind", "z21", "--station-uri", "udp://host:21105", "--speed-steps", "28"} {
+	for _, want := range []string{
+		"--station-name", "Main", "--station-kind", "z21", "--station-uri", "udp://host:21105",
+		"--speed-steps", "28", "--heartbeat-secs", "2", "--deadman-secs", "6", "--poll-interval-ms", "0",
+	} {
 		if !contains(args, want) {
 			t.Fatalf("missing %q in %s", want, joined)
 		}
+	}
+}
+
+func TestAppendStationFlagsDefaultsTiming(t *testing.T) {
+	args := AppendStationFlags(nil, domain.CommandStation{
+		Name: "Main", Kind: domain.CommandStationKindZ21,
+		ConnectionURI: "udp://host:21105", SpeedSteps: 128,
+	})
+	if !contains(args, "2") || !contains(args, "6") {
+		t.Fatalf("expected default timing flags, got %v", args)
 	}
 }
 

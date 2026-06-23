@@ -40,6 +40,10 @@ import {
   useCreateCommandStation,
   useDeleteCommandStation,
   useUpdateCommandStation,
+  DEFAULT_COMMAND_STATION_DEADMAN_SECS,
+  DEFAULT_COMMAND_STATION_HEARTBEAT_SECS,
+  DEFAULT_COMMAND_STATION_POLL_INTERVAL_MS,
+  DEFAULT_COMMAND_STATION_SPEED_STEPS,
   type CommandStation,
   type CommandStationKind,
 } from "../../api/command_stations";
@@ -61,7 +65,18 @@ export default function CommandStationsPage() {
   const [nameInput, setNameInput] = useState("");
   const [kindInput, setKindInput] = useState<CommandStationKind>("z21");
   const [uriInput, setUriInput] = useState("");
-  const [speedStepsInput, setSpeedStepsInput] = useState<number>(128);
+  const [speedStepsInput, setSpeedStepsInput] = useState<number>(
+    DEFAULT_COMMAND_STATION_SPEED_STEPS,
+  );
+  const [heartbeatSecsInput, setHeartbeatSecsInput] = useState<number>(
+    DEFAULT_COMMAND_STATION_HEARTBEAT_SECS,
+  );
+  const [deadmanSecsInput, setDeadmanSecsInput] = useState<number>(
+    DEFAULT_COMMAND_STATION_DEADMAN_SECS,
+  );
+  const [pollIntervalMsInput, setPollIntervalMsInput] = useState<number>(
+    DEFAULT_COMMAND_STATION_POLL_INTERVAL_MS,
+  );
   const [actionError, setActionError] = useState<string | null>(null);
 
   const closeDialog = () => {
@@ -69,7 +84,10 @@ export default function CommandStationsPage() {
     setNameInput("");
     setKindInput("z21");
     setUriInput("");
-    setSpeedStepsInput(128);
+    setSpeedStepsInput(DEFAULT_COMMAND_STATION_SPEED_STEPS);
+    setHeartbeatSecsInput(DEFAULT_COMMAND_STATION_HEARTBEAT_SECS);
+    setDeadmanSecsInput(DEFAULT_COMMAND_STATION_DEADMAN_SECS);
+    setPollIntervalMsInput(DEFAULT_COMMAND_STATION_POLL_INTERVAL_MS);
     setActionError(null);
     create.reset();
     update.reset();
@@ -90,7 +108,10 @@ export default function CommandStationsPage() {
     setNameInput("");
     setKindInput("z21");
     setUriInput("");
-    setSpeedStepsInput(128);
+    setSpeedStepsInput(DEFAULT_COMMAND_STATION_SPEED_STEPS);
+    setHeartbeatSecsInput(DEFAULT_COMMAND_STATION_HEARTBEAT_SECS);
+    setDeadmanSecsInput(DEFAULT_COMMAND_STATION_DEADMAN_SECS);
+    setPollIntervalMsInput(DEFAULT_COMMAND_STATION_POLL_INTERVAL_MS);
     setActionError(null);
   };
 
@@ -100,6 +121,9 @@ export default function CommandStationsPage() {
     setKindInput(target.kind);
     setUriInput(target.connectionUri);
     setSpeedStepsInput(target.speedSteps);
+    setHeartbeatSecsInput(target.heartbeatSecs);
+    setDeadmanSecsInput(target.deadmanSecs);
+    setPollIntervalMsInput(target.pollIntervalMs);
     setActionError(null);
   };
 
@@ -116,6 +140,9 @@ export default function CommandStationsPage() {
         kind: kindInput,
         connectionUri: uriInput.trim(),
         speedSteps: speedStepsInput,
+        heartbeatSecs: heartbeatSecsInput,
+        deadmanSecs: deadmanSecsInput,
+        pollIntervalMs: pollIntervalMsInput,
       };
       if (dialog.kind === "create") {
         await create.mutateAsync(body);
@@ -184,6 +211,7 @@ export default function CommandStationsPage() {
                     <TableCell>{t("commandStation:admin.columns.kind")}</TableCell>
                     <TableCell>{t("commandStation:admin.columns.connection")}</TableCell>
                     <TableCell>{t("commandStation:admin.columns.speedSteps")}</TableCell>
+                    <TableCell>{t("commandStation:admin.columns.timing")}</TableCell>
                     <TableCell align="right">
                       {t("commandStation:admin.columns.actions")}
                     </TableCell>
@@ -206,6 +234,13 @@ export default function CommandStationsPage() {
                         </Typography>
                       </TableCell>
                       <TableCell>{row.speedSteps}</TableCell>
+                      <TableCell>
+                        {t("commandStation:admin.timingSummary", {
+                          heartbeat: row.heartbeatSecs,
+                          deadman: row.deadmanSecs,
+                          poll: row.pollIntervalMs,
+                        })}
+                      </TableCell>
                       <TableCell align="right">
                         <Stack
                           direction="row"
@@ -306,6 +341,45 @@ export default function CommandStationsPage() {
                 ))}
               </Select>
             </FormControl>
+            <TextField
+              label={t("commandStation:admin.dialogs.fields.pollIntervalMs")}
+              type="number"
+              value={pollIntervalMsInput}
+              onChange={(e) =>
+                setPollIntervalMsInput(Number(e.target.value))
+              }
+              helperText={t(
+                "commandStation:admin.dialogs.fields.pollIntervalMsHelp",
+              )}
+              inputProps={{ min: 0, max: 60000, step: 50 }}
+              fullWidth
+            />
+            <TextField
+              label={t("commandStation:admin.dialogs.fields.heartbeatSecs")}
+              type="number"
+              value={heartbeatSecsInput}
+              onChange={(e) =>
+                setHeartbeatSecsInput(Number(e.target.value))
+              }
+              helperText={t(
+                "commandStation:admin.dialogs.fields.heartbeatSecsHelp",
+              )}
+              inputProps={{ min: 1, max: 60, step: 0.5 }}
+              fullWidth
+              required
+            />
+            <TextField
+              label={t("commandStation:admin.dialogs.fields.deadmanSecs")}
+              type="number"
+              value={deadmanSecsInput}
+              onChange={(e) => setDeadmanSecsInput(Number(e.target.value))}
+              helperText={t(
+                "commandStation:admin.dialogs.fields.deadmanSecsHelp",
+              )}
+              inputProps={{ min: 3, max: 120, step: 0.5 }}
+              fullWidth
+              required
+            />
             {actionError && <Alert severity="error">{actionError}</Alert>}
           </Stack>
         </DialogContent>
@@ -316,7 +390,14 @@ export default function CommandStationsPage() {
           <Button
             variant="contained"
             onClick={submitDialog}
-            disabled={submitting || nameInput.trim() === ""}
+            disabled={
+              submitting ||
+              nameInput.trim() === "" ||
+              heartbeatSecsInput <= 0 ||
+              deadmanSecsInput <= heartbeatSecsInput ||
+              pollIntervalMsInput < 0 ||
+              pollIntervalMsInput > 60000
+            }
           >
             {dialog?.kind === "edit"
               ? t("common:actions.save")

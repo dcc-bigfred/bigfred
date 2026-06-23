@@ -85,7 +85,7 @@ function newID(): string {
 // the daemon's response.
 export function DccBusProvider({
   wsUrl,
-  heartbeatSecs = 5,
+  heartbeatSecs = 2,
   children,
 }: {
   wsUrl: string | null;
@@ -94,6 +94,11 @@ export function DccBusProvider({
 }) {
   const [status, setStatus] = useState<DataPlaneStatus>("idle");
   const [speedSteps, setSpeedSteps] = useState<number | null>(null);
+  // Ping cadence is the daemon's single source of truth: it is advertised in
+  // the `dcc-bus.opened` handshake (`--heartbeat-secs`). We seed it from the
+  // prop default and adopt the server value once connected, so the daemon flag
+  // controls the interval without a frontend rebuild.
+  const [pingIntervalMs, setPingIntervalMs] = useState(heartbeatSecs * 1_000);
   const [pingLatencyMs, setPingLatencyMs] = useState<number | null>(null);
   const [states, setStates] = useState<Map<number, LocoState>>(new Map());
   const [lastError, setLastError] = useState<string | null>(null);
@@ -211,6 +216,12 @@ export function DccBusProvider({
         if (opened.speedSteps > 0) {
           setSpeedSteps(opened.speedSteps);
         }
+        if (opened.heartbeatSecs > 0) {
+          const advertised = opened.heartbeatSecs * 1_000;
+          // Only update (and thus reconnect once) when the daemon's cadence
+          // actually differs from what we're already using.
+          setPingIntervalMs((prev) => (prev === advertised ? prev : advertised));
+        }
         break;
       }
     }
@@ -218,7 +229,7 @@ export function DccBusProvider({
 
   const { socketRef, reconnecting } = useWsConnection({
     url: resolvedUrl,
-    pingIntervalMs: heartbeatSecs * 1_000,
+    pingIntervalMs,
     buildPingFrame,
     onConnecting: handleConnecting,
     onOpen: handleOpen,

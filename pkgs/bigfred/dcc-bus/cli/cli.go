@@ -107,7 +107,7 @@ should rarely be invoked manually.`,
 	cmd.Flags().UintVar(&f.StationSpeedSteps, FlagSpeedSteps, 128, "DCC speed steps (14 or 28 or 128)")
 	cmd.Flags().StringVar(&f.JWTSecret, "jwt-secret", "", "JWT signing secret (use --jwt-secret-env to read from an env var instead)")
 	cmd.Flags().StringVar(&f.JWTSecretEnv, "jwt-secret-env", "BIGFRED_JWT_SECRET", "env var name to read the JWT secret from when --jwt-secret is empty")
-	cmd.Flags().Float64Var(&f.HeartbeatSecs, "heartbeat-secs", 5, "WS keepalive interval the daemon advertises to clients")
+	cmd.Flags().Float64Var(&f.HeartbeatSecs, "heartbeat-secs", 2, "WS ping interval the daemon advertises to clients (kept well below --deadman-secs so jitter does not trip the dead-man)")
 	cmd.Flags().Float64Var(&f.DeadmanSecs, "deadman-secs", 6, "idle window after which the daemon applies emergency stop to client subscriptions")
 	cmd.Flags().UintVar(&f.PollIntervalMs, "poll-interval-ms", 0, "state-feed polling cadence in ms for drivers without push (0 == default)")
 	cmd.Flags().BoolVar(&f.EnableTelemetry, "enable-telemetry", false, "record command-station latency histograms (requires --otel-endpoint or OTEL_EXPORTER_OTLP_ENDPOINT)")

@@ -80,11 +80,12 @@ type ServerConfig struct {
 }
 
 // NewServer returns a ready-to-mount Server. Heartbeat and dead-man
-// defaults match §7e.5 (5s / 6s).
+// defaults are 2s / 6s — the ping interval is kept well below the dead-man
+// window so normal jitter or a single dropped ping does not trip it.
 func NewServer(cfg ServerConfig) *Server {
 	hb := cfg.HeartbeatSecs
 	if hb <= 0 {
-		hb = 5
+		hb = 2
 	}
 	dms := cfg.DeadmanSecs
 	if dms <= 0 {

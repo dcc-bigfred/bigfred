@@ -107,7 +107,7 @@ func New(ctx context.Context, log *logrus.Logger, cfg Config) (*Daemon, error) {
 		cfg.BindAddr = "127.0.0.1"
 	}
 	if cfg.HeartbeatSecs <= 0 {
-		cfg.HeartbeatSecs = 5
+		cfg.HeartbeatSecs = 2
 	}
 	if cfg.DeadmanSecs <= 0 {
 		cfg.DeadmanSecs = 6

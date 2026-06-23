@@ -53,11 +53,30 @@ import enTrainAnnouncements from "./locales/en/trainAnnouncements.json";
 import enAudit from "./locales/en/audit.json";
 import enRentals from "./locales/en/rentals.json";
 
+import deCommon from "./locales/de/common.json";
+import deAuth from "./locales/de/auth.json";
+import deErrors from "./locales/de/errors.json";
+import deRole from "./locales/de/role.json";
+import deHome from "./locales/de/home.json";
+import deLayout from "./locales/de/layout.json";
+import deInterlocking from "./locales/de/interlocking.json";
+import deRadio from "./locales/de/radio.json";
+import deVehicle from "./locales/de/vehicle.json";
+import deUser from "./locales/de/user.json";
+import deSudo from "./locales/de/sudo.json";
+import deThrottle from "./locales/de/throttle.json";
+import deCommandStation from "./locales/de/commandStation.json";
+import deDiagnostics from "./locales/de/diagnostics.json";
+import deFunction from "./locales/de/function.json";
+import deTrainAnnouncements from "./locales/de/trainAnnouncements.json";
+import deAudit from "./locales/de/audit.json";
+import deRentals from "./locales/de/rentals.json";
+
 // SUPPORTED_LOCALES is the single source of truth. Adding a third
 // locale (e.g. "de") is: append it here → mirror every catalogue
 // under web/src/i18n/locales/<code>/ → add it to the resources object
 // → done. Per §7c.1 we may grow to at most three locales.
-export const SUPPORTED_LOCALES = ["pl", "en"] as const;
+export const SUPPORTED_LOCALES = ["pl", "en", "de"] as const;
 export type Locale = (typeof SUPPORTED_LOCALES)[number];
 
 // Catalogue map. Keys MUST be Locale values; values MUST contain
@@ -104,6 +123,26 @@ export const resources = {
     trainAnnouncements: enTrainAnnouncements,
     audit: enAudit,
     rentals: enRentals,
+  },
+  de: {
+    common: deCommon,
+    auth: deAuth,
+    errors: deErrors,
+    role: deRole,
+    home: deHome,
+    layout: deLayout,
+    interlocking: deInterlocking,
+    radio: deRadio,
+    vehicle: deVehicle,
+    user: deUser,
+    sudo: deSudo,
+    throttle: deThrottle,
+    commandStation: deCommandStation,
+    diagnostics: deDiagnostics,
+    function: deFunction,
+    trainAnnouncements: deTrainAnnouncements,
+    audit: deAudit,
+    rentals: deRentals,
   },
 } as const;
 

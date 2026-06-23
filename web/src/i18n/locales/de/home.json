@@ -1,0 +1,31 @@
+{
+  "title": "Anlage: {{layoutName}}",
+  "editLayoutSettings": "Anlageneinstellungen bearbeiten",
+  "subtitle": "Angemeldet als {{login}} mit der Rolle {{role}}.",
+  "greetingAnon": "Willkommen!",
+  "loadError": "Dashboard-Daten konnten nicht geladen werden.",
+  "onlineUsers": {
+    "title": "Online-Benutzer",
+    "empty": "Niemand ist auf dieser Anlage online.",
+    "noInterlocking": "—",
+    "columns": {
+      "login": "Anmeldename",
+      "role": "Rolle",
+      "interlocking": "Stellwerk",
+      "actions": "Aktionen"
+    },
+    "promoteSignalman": "{{login}} zum Fahrdienstleiter befördern",
+    "demoteSignalman": "{{login}} zum Fahrer zurückstufen"
+  },
+  "interlockings": {
+    "title": "Stellwerke",
+    "empty": "Dieser Anlage sind keine Stellwerke zugewiesen.",
+    "vacant": "unbesetzt",
+    "noLocation": "—",
+    "columns": {
+      "name": "Name",
+      "location": "Beschreibung",
+      "occupant": "Besetzt von"
+    }
+  }
+}

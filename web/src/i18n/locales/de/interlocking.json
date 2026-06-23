@@ -1,0 +1,135 @@
+{
+  "admin": {
+    "title": "Stellwerke",
+    "subtitle": "Stellwerkskatalog im System. Stellwerke werden im Anlagen-Editor zugewiesen.",
+    "columns": {
+      "name": "Name",
+      "location": "Beschreibung",
+      "actions": "Aktionen"
+    },
+    "actions": {
+      "create": "Neues Stellwerk",
+      "edit": "Bearbeiten",
+      "delete": "Löschen"
+    },
+    "dialogs": {
+      "create": {
+        "title": "Neues Stellwerk"
+      },
+      "edit": {
+        "title": "Stellwerk bearbeiten"
+      },
+      "delete": {
+        "title": "Stellwerk „{{name}}“ löschen",
+        "message": "Dieser Vorgang ist unwiderruflich. Das Stellwerk wird von allen Anlagen entfernt, denen es zugewiesen war."
+      },
+      "fields": {
+        "name": "Name",
+        "location": "Beschreibung",
+        "locationHelp": "Kurze Beschreibung, wo oder was das Stellwerk abdeckt."
+      }
+    },
+    "empty": "Keine Stellwerke anzuzeigen."
+  },
+  "view": {
+    "overline": "Stellwerk",
+    "backToDashboard": "Zurück zum Dashboard",
+    "vacant": "Unbesetzt",
+    "occupant": "Besetzt von {{login}}",
+    "occupantSelf": "Sie besetzen dieses Stellwerk ({{login}})",
+    "signalmanOnlyHint": "Nur Fahrdienstleiter dieser Anlage können das Stellwerk besetzen oder verlassen.",
+    "radioStop": {
+      "barLabel": "Funkstopp"
+    },
+    "setup": {
+      "selectCommandStation": "Zentrale wählen, um fahrende Züge in der Zugliste anzuzeigen."
+    },
+    "panels": {
+      "chat": "Funk",
+      "roster": "Züge",
+      "announcements": "Ansagen"
+    },
+    "chat": {
+      "title": "Stellwerksfunk",
+      "empty": "Noch keine Funkmeldungen.",
+      "reply": "Antworten"
+    },
+    "announcements": {
+      "title": "Zugansagen",
+      "empty": "Für dieses Stellwerk sind keine Ansagen konfiguriert."
+    },
+    "roster": {
+      "title": "Züge auf der Anlage",
+      "search": "Züge suchen…",
+      "empty": "Keine Fahrzeuge oder Züge auf der Anlagenliste.",
+      "inMotion": "in Fahrt",
+      "columns": {
+        "consist": "Zug",
+        "actions": "Aktionen"
+      },
+      "actions": {
+        "radio": "Funk",
+        "stop": "Zug stoppen",
+        "stopHint": "Nur diesen Zug stoppen (nicht die ganze Anlage)",
+        "takeover": "Übernehmen"
+      },
+      "stopConfirm": {
+        "title": "Zug stoppen?",
+        "message": "Möchten Sie {{target}} wirklich notstoppen? Nur dieser Zug wird gestoppt.",
+        "confirm": "Stoppen",
+        "cancel": "Abbrechen"
+      },
+      "stopError": {
+        "error": "Zug konnte nicht gestoppt werden.",
+        "not_authorized_to_stop": "Sie dürfen diesen Zug nicht stoppen.",
+        "vehicle_is_dummy": "Diesem Zug ist keine DCC-Adresse zugewiesen.",
+        "vehicle_not_on_layout": "Dieser Zug ist nicht auf der Anlage.",
+        "dcc_bus_unavailable": "Der DCC-Bus ist nicht verfügbar."
+      },
+      "takeoverError": {
+        "error": "Übernahmeanfrage konnte nicht gesendet werden.",
+        "not_signalman": "Sie haben keine Fahrdienstleiter-Berechtigung.",
+        "not_interlocking_occupant": "Sie müssen das Stellwerk besetzen, um die Steuerung zu übernehmen.",
+        "takeover_not_configured": "Übernahme ist nicht konfiguriert.",
+        "takeover_target_not_on_layout": "Dieser Zug ist nicht auf der Anlage.",
+        "takeover_not_owner": "Sie können Ihren eigenen Zug nicht übernehmen.",
+        "takeover_already_pending": "Für diesen Zug liegt bereits eine Übernahmeanfrage vor.",
+        "takeover_not_found": "Übernahmeanfrage nicht gefunden.",
+        "takeover_invalid_state": "Die Übernahmeanfrage hat einen ungültigen Status.",
+        "takeover_failed": "Übernahmeanfrage konnte nicht gesendet werden.",
+        "control_offline": "Die Serververbindung ist nicht verfügbar.",
+        "ack_timeout": "Der Server hat nicht rechtzeitig geantwortet."
+      }
+    },
+    "takeover": {
+      "overlayTitle": "Steuerung übernehmen",
+      "close": "Schließen",
+      "releaseVehicle": "Fahrzeug freigeben",
+      "releaseTrain": "Zug freigeben",
+      "stopBeforeClose": "Zug stoppen (Geschwindigkeit 0), bevor die Steuerung freigegeben wird.",
+      "leaseRemaining": "Ausleihe: {{time}}",
+      "noDccTarget": "Diesem Zug ist keine DCC-Adresse zugewiesen.",
+      "waitingTitle": "Warte auf Lokübernahme…",
+      "waitingMessage": "Übernahmeanfrage gesendet. Der Fahrer hat {{seconds}} s zum Ablehnen. Danach wird die Steuerung automatisch übernommen.",
+      "waitingCancel": "Anfrage abbrechen",
+      "rejectedToast": "Der Fahrer hat die Übernahmeanfrage abgelehnt."
+    },
+    "actions": {
+      "occupy": "Stellwerk besetzen",
+      "leave": "Stellwerk verlassen"
+    },
+    "displace": {
+      "title": "Stellwerk bereits besetzt",
+      "message": "Dieses Stellwerk wird derzeit von {{login}} besetzt. Möchten Sie diese Person verdrängen und übernehmen?",
+      "confirm": "Übernehmen",
+      "cancel": "Abbrechen"
+    },
+    "leaveGuard": {
+      "title": "Stellwerk verlassen?",
+      "message": "Sie besetzen dieses Stellwerk. Wenn Sie fortfahren, endet Ihre Fahrdienstleiter-Sitzung hier.",
+      "confirm": "Verlassen",
+      "cancel": "Bleiben"
+    },
+    "displacedToast": "Ein anderer Fahrdienstleiter hat Sie von diesem Stellwerk verdrängt."
+  }
+}

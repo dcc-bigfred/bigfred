@@ -1,0 +1,28 @@
+{
+  "title": "Diagnose",
+  "subtitle": "Schreibgeschützte Ansicht freigegebener supervisord-, Redis- und dcc-bus-Protokolldateien. Pfade werden serverseitig geprüft.",
+  "groupLabel": "Quelle",
+  "fileLabel": "Datei",
+  "tailLines": "Letzte Zeilen",
+  "refresh": "Aktualisieren",
+  "truncated": "nur Ende angezeigt",
+  "empty": "(leer oder fehlende Datei)",
+  "noFiles": "Keine Protokolldateien",
+  "sources": {
+    "supervisord": {
+      "label": "Supervisord"
+    },
+    "redis": {
+      "label": "Redis"
+    },
+    "dcc-bus": {
+      "label": "dcc-bus"
+    }
+  },
+  "entries": {
+    "supervisord.log": "Hauptprotokoll supervisord",
+    "supervisord.config": "supervisord.conf",
+    "redis.stdout": "stdout",
+    "redis.stderr": "stderr"
+  }
+}

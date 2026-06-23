@@ -34,6 +34,7 @@ type TakeoverConfig struct {
 	Auth          *cmd.Auth
 	Hub           *ws.Hub
 	Audit         cmd.AuditPublisher
+	Metrics       cmd.TakeoverMetricsPort
 }
 
 // TakeoverService is the legacy facade for cmd.Takeover.
@@ -63,6 +64,7 @@ func NewTakeoverService(cfg TakeoverConfig) *TakeoverService {
 		Auth:          cfg.Auth,
 		Hub:           hub,
 		Audit:         cfg.Audit,
+		Metrics:       cfg.Metrics,
 	})}
 }
 

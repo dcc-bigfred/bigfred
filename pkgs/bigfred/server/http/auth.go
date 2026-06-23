@@ -7,6 +7,7 @@ import (
 
 	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
 	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
+	"github.com/keskad/loco/pkgs/bigfred/server/metrics"
 	"github.com/keskad/loco/pkgs/bigfred/server/protocol"
 )
 
@@ -19,16 +20,17 @@ import (
 // change. It MAY be nil in legacy tests; in that case the /me
 // payload simply reports `sudo: null`.
 type AuthHandler struct {
-	auth   *cmd.Auth
-	sudo   *cmd.Sudo
-	audit  cmd.AuditPublisher
-	secure bool // toggles the Secure cookie flag (off in dev over http://)
+	auth    *cmd.Auth
+	sudo    *cmd.Sudo
+	audit   cmd.AuditPublisher
+	secure  bool // toggles the Secure cookie flag (off in dev over http://)
+	metrics *metrics.Metrics
 }
 
 // NewAuthHandler returns an AuthHandler. `secureCookie` should be
 // true in any production deployment (HTTPS-only).
-func NewAuthHandler(auth *cmd.Auth, sudo *cmd.Sudo, audit cmd.AuditPublisher, secureCookie bool) *AuthHandler {
-	return &AuthHandler{auth: auth, sudo: sudo, audit: audit, secure: secureCookie}
+func NewAuthHandler(auth *cmd.Auth, sudo *cmd.Sudo, audit cmd.AuditPublisher, secureCookie bool, m *metrics.Metrics) *AuthHandler {
+	return &AuthHandler{auth: auth, sudo: sudo, audit: audit, secure: secureCookie, metrics: m}
 }
 
 // Login validates credentials, mints a JWT and sets it as a Secure,
@@ -58,6 +60,9 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	id, err := h.auth.Login(r.Context(), req.Login, req.PIN, req.LayoutID)
 	if err != nil {
+		if h.metrics != nil {
+			h.metrics.RecordAuthLogin(false)
+		}
 		status, code := svcerrors.AuthHTTPStatus(err)
 		writeJSONError(w, status, code)
 		return
@@ -67,6 +72,9 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 		return
+	}
+	if h.metrics != nil {
+		h.metrics.RecordAuthLogin(true)
 	}
 
 	http.SetCookie(w, &http.Cookie{

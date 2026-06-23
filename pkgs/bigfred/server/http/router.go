@@ -10,6 +10,7 @@ import (
 
 	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
+	"github.com/keskad/loco/pkgs/bigfred/server/metrics"
 	"github.com/keskad/loco/pkgs/bigfred/server/service"
 	"github.com/keskad/loco/pkgs/bigfred/server/ws"
 )
@@ -55,6 +56,9 @@ type RouterConfig struct {
 	// "/" with an index.html fallback. nil in development builds, where
 	// the SPA is served by the Vite dev server instead.
 	StaticFS fs.FS
+
+	// Metrics, when non-nil, records OpenTelemetry signals for HTTP/WS.
+	Metrics *metrics.Metrics
 }
 
 // NewRouter wires every HTTP route currently shipped by the bootstrap.
@@ -65,6 +69,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 
 	r.Use(chimiddleware.RequestID)
 	r.Use(chimiddleware.RealIP)
+	r.Use(MetricsMiddleware(cfg.Metrics))
 	r.Use(chimiddleware.Logger)
 	r.Use(chimiddleware.Recoverer)
 
@@ -77,7 +82,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		MaxAge:           300,
 	}))
 
-	authH := NewAuthHandler(cfg.Auth, cfg.Sudo, cfg.Audit, cfg.SecureCookie)
+	authH := NewAuthHandler(cfg.Auth, cfg.Sudo, cfg.Audit, cfg.SecureCookie, cfg.Metrics)
 	layoutH := NewLayoutHandler(cfg.Layouts, cfg.Auth, cfg.Audit)
 	interlockingH := NewInterlockingHandler(cfg.Interlockings, cfg.Occupancy, cfg.Auth)
 	presenceH := NewPresenceHandler(cfg.Presence, cfg.DccBusLayoutSync)
@@ -97,7 +102,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	r.Route("/api/v1", func(r chi.Router) {
 		// WebSocket upgrade — auth reads cookie / ?token= inline.
 		r.Get("/ws", func(w http.ResponseWriter, r *http.Request) {
-			ServeWS(cfg.Hub, cfg.Auth, w, r)
+			ServeWS(cfg.Hub, cfg.Auth, cfg.Metrics, w, r)
 		})
 
 		// dcc-bus data-plane reverse proxy (§7e.6). Verifies the
@@ -106,7 +111,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		// path the SPA dials in production; --redis-external /
 		// --dcc-bus-proxy=false setups bypass it.
 		if cfg.DccBus != nil {
-			proxy := NewDccBusProxy(cfg.Auth, cfg.DccBus)
+			proxy := NewDccBusProxy(cfg.Auth, cfg.DccBus, cfg.Metrics)
 			r.Get("/dcc-bus/{commandStationId}/ws", proxy.ServeHTTP)
 		}
 
@@ -121,7 +126,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 
 		// Authenticated routes share the RequireAuth middleware.
 		r.Group(func(r chi.Router) {
-			r.Use(RequireAuth(cfg.Auth))
+			r.Use(RequireAuth(cfg.Auth, cfg.Metrics))
 
 			r.Get("/audit-log", auditH.List)
 

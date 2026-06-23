@@ -28,6 +28,17 @@
       "keepTime": true,
       "tags": [],
       "targetBlank": false,
+      "title": "loco-server (control plane)",
+      "type": "link",
+      "url": "/d/bigfred-loco-server/bigfred-loco-server"
+    },
+    {
+      "asDropdown": false,
+      "icon": "external link",
+      "includeVars": true,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
       "title": "LocoNet (bus metrics)",
       "type": "link",
       "url": "/d/bigfred-dcc-bus-loconet/bigfred-dcc-bus-loconet"

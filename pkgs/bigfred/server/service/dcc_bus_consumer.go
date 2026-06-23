@@ -11,6 +11,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/keskad/loco/pkgs/bigfred/contract"
+	"github.com/keskad/loco/pkgs/bigfred/server/metrics"
 	"github.com/keskad/loco/pkgs/bigfred/server/ws"
 )
 
@@ -24,6 +25,7 @@ type DccBusEventConsumer struct {
 	redis *RedisService
 	hub   *ws.Hub
 	log   *logrus.Logger
+	metrics *metrics.Metrics
 
 	mu      sync.Mutex
 	cancel  context.CancelFunc
@@ -38,6 +40,11 @@ func NewDccBusEventConsumer(redis *RedisService, hub *ws.Hub, log *logrus.Logger
 		log = logrus.New()
 	}
 	return &DccBusEventConsumer{redis: redis, hub: hub, log: log}
+}
+
+// SetMetrics wires optional OpenTelemetry recorders for Redis pub/sub events.
+func (c *DccBusEventConsumer) SetMetrics(m *metrics.Metrics) {
+	c.metrics = m
 }
 
 // Start spins the pub/sub subscriber. The pattern `dcc-bus:evt:*`
@@ -110,6 +117,9 @@ func (c *DccBusEventConsumer) dispatch(ctx context.Context, msg *redis.Message) 
 		Payload json.RawMessage `json:"payload,omitempty"`
 	}
 	if err := json.Unmarshal([]byte(msg.Payload), &env); err == nil && env.Type != "" {
+		if c.metrics != nil {
+			c.metrics.RecordDccBusConsumerEvent(env.Type)
+		}
 		c.fanEnvelope(layoutID, env.Type, env.ID, env.Payload, msg.Payload)
 		return
 	}

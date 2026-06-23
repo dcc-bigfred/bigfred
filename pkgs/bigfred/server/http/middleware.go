@@ -8,6 +8,7 @@ import (
 	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
 	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
+	"github.com/keskad/loco/pkgs/bigfred/server/metrics"
 )
 
 // SessionCookieName is the name of the HttpOnly cookie that carries
@@ -20,17 +21,24 @@ const SessionCookieName = "bigfred_session"
 // session cookie (falling back to a `?token=` query parameter to
 // support WS upgrades per §7a.1), verifies it via AuthService and
 // attaches the resulting Identity to the request context.
-func RequireAuth(auth *cmd.Auth) func(http.Handler) http.Handler {
+func RequireAuth(auth *cmd.Auth, m *metrics.Metrics) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			token := readSessionToken(r)
 			if token == "" {
+				if m != nil {
+					m.RecordAuthUnauthorized(r.URL.Path)
+				}
 				writeJSONError(w, http.StatusUnauthorized, "unauthorized")
 				return
 			}
 
 			id, err := auth.VerifyToken(r.Context(), token)
 			if err != nil {
+				if m != nil {
+					m.RecordAuthTokenVerifyError("verify_failed")
+					m.RecordAuthUnauthorized(r.URL.Path)
+				}
 				if errors.Is(err, svcerrors.ErrInvalidCredentials) {
 					writeJSONError(w, http.StatusUnauthorized, "unauthorized")
 					return

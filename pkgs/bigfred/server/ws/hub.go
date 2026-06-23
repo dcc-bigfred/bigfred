@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
+	"github.com/keskad/loco/pkgs/bigfred/server/metrics"
 	"github.com/keskad/loco/pkgs/bigfred/server/protocol"
 )
 
@@ -50,6 +51,7 @@ type Hub struct {
 
 	presence PresenceRefresher
 	control  ControlHandler
+	metrics  *metrics.Metrics
 }
 
 // NewHub constructs a Hub. Call Run before accepting connections.
@@ -73,6 +75,9 @@ func (h *Hub) SetPresenceRefresher(p PresenceRefresher) {
 // called before Run; the Hub will route every non-ping client frame
 // through it once set.
 func (h *Hub) SetControlHandler(c ControlHandler) { h.control = c }
+
+// SetMetrics wires optional OpenTelemetry recorders for session and broadcast metrics.
+func (h *Hub) SetMetrics(m *metrics.Metrics) { h.metrics = m }
 
 // ControlHandler returns the currently-wired dispatcher (or nil when
 // none is set). Used by the Client read loop.
@@ -105,7 +110,12 @@ func (h *Hub) addClient(c *Client) {
 	}
 	layoutID := c.session.LayoutID
 	refresher := h.presence
+	metricsRec := h.metrics
 	h.mu.Unlock()
+
+	if metricsRec != nil {
+		metricsRec.RecordWSSessionOpened(layoutID)
+	}
 
 	if refresher != nil {
 		refresher.RefreshAndBroadcast(context.Background(), layoutID)
@@ -138,6 +148,10 @@ func (h *Hub) removeClient(c *Client) {
 	h.mu.Unlock()
 
 	close(c.send)
+
+	if h.metrics != nil {
+		h.metrics.RecordWSSessionClosed(layoutID, "closed")
+	}
 
 	if refresher != nil {
 		refresher.RefreshAndBroadcast(context.Background(), layoutID)
@@ -177,6 +191,18 @@ func (h *Hub) OnlineUsers(layoutID uint) []onlineUser {
 	return out
 }
 
+// LayoutOnlineCounts returns deduplicated online user counts per layout.
+// Implements metrics.PresenceReader.
+func (h *Hub) LayoutOnlineCounts() map[uint]int {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	out := make(map[uint]int, len(h.online))
+	for layoutID, users := range h.online {
+		out[layoutID] = len(users)
+	}
+	return out
+}
+
 // BroadcastToLayout sends an envelope to every client pinned to
 // layoutID.
 func (h *Hub) BroadcastToLayout(layoutID uint, eventType string, payload any) {
@@ -195,6 +221,9 @@ func (h *Hub) BroadcastToLayout(layoutID uint, eventType string, payload any) {
 		select {
 		case c.send <- env:
 		default:
+			if h.metrics != nil {
+				h.metrics.RecordWSBroadcastDropped(layoutID, eventType)
+			}
 		}
 	}
 }
@@ -223,6 +252,9 @@ func (h *Hub) BroadcastToUserInLayout(layoutID, userID uint, eventType string, p
 		select {
 		case c.send <- env:
 		default:
+			if h.metrics != nil {
+				h.metrics.RecordWSBroadcastDropped(layoutID, eventType)
+			}
 		}
 	}
 }
@@ -250,7 +282,7 @@ type DriveSession struct {
 	Login        string
 	Organization string
 	LayoutID     uint
-	OpenedAt time.Time
+	OpenedAt     time.Time
 
 	currentCS uint
 }

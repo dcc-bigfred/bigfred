@@ -84,6 +84,11 @@ type LocoNet struct {
 	slotMu   sync.Mutex
 	slotByAd map[LocoAddr]byte
 	slotAddr map[byte]LocoAddr // reverse map, needed to attribute bus traffic
+	// slotAcquiredAt records when each slot was last validated via a fresh
+	// command-station round trip, so AcquireSlot can skip redundant
+	// re-validation during reconnect storms (the keepalive loop keeps the
+	// slot IN_USE in the meantime). Guarded by slotMu.
+	slotAcquiredAt map[LocoAddr]time.Time
 
 	// fnTxMu guards fnTxLocks, which hands out a per-address mutex that
 	// serializes the read-modify-write of the shared function bytes. F0..F4
@@ -142,6 +147,7 @@ func newLocoNetBase() *LocoNet {
 		stop:              make(chan struct{}),
 		slotByAd:          make(map[LocoAddr]byte),
 		slotAddr:          make(map[byte]LocoAddr),
+		slotAcquiredAt:    make(map[LocoAddr]time.Time),
 		fnTxLocks:         make(map[LocoAddr]*sync.Mutex),
 		dirfByA:           make(map[LocoAddr]byte),
 		sndByA:            make(map[LocoAddr]byte),
@@ -949,8 +955,21 @@ func (l *LocoNet) AcquireSlot(addr LocoAddr) error {
 	if addr == 0 {
 		return fmt.Errorf("loconet: AcquireSlot invalid addr 0")
 	}
+	// Debounce reconnect storms: if we already own this slot and validated it
+	// within slotRevalidateInterval, skip the fresh LOCO_ADR + slot read +
+	// NULL MOVE round trip. The keepalive loop keeps the slot IN_USE in the
+	// meantime, so a client that drops and reconnects every few seconds (e.g.
+	// a ping-silence dead-man loop) no longer hammers the command station's
+	// slot table.
+	if l.recentlyAcquired(addr) {
+		return nil
+	}
 	l.reqMu.Lock()
 	defer l.reqMu.Unlock()
+	// Re-check under reqMu: another caller may have just validated it.
+	if l.recentlyAcquired(addr) {
+		return nil
+	}
 	l.beginSync()
 	defer l.endSync()
 
@@ -960,6 +979,7 @@ func (l *LocoNet) AcquireSlot(addr LocoAddr) error {
 			l.metrics.incr(&l.metrics.slotRetries)
 		}
 		if _, err := l.acquireSlotFreshLocked(addr); err == nil {
+			l.markAcquired(addr)
 			l.metrics.incr(&l.metrics.slotAcquires)
 			return nil
 		} else {
@@ -970,6 +990,30 @@ func (l *LocoNet) AcquireSlot(addr LocoAddr) error {
 	}
 	l.metrics.incr(&l.metrics.slotAcquireFails)
 	return lastErr
+}
+
+// slotRevalidateInterval bounds how long AcquireSlot trusts a previously
+// validated slot before doing another command-station round trip. Kept well
+// below lnKeepaliveInterval so the keepalive holds the slot IN_USE in between.
+const slotRevalidateInterval = 30 * time.Second
+
+// recentlyAcquired reports whether addr's slot is cached and was validated via
+// a fresh round trip within slotRevalidateInterval.
+func (l *LocoNet) recentlyAcquired(addr LocoAddr) bool {
+	l.slotMu.Lock()
+	defer l.slotMu.Unlock()
+	if _, ok := l.slotByAd[addr]; !ok {
+		return false
+	}
+	at, ok := l.slotAcquiredAt[addr]
+	return ok && time.Since(at) < slotRevalidateInterval
+}
+
+// markAcquired records that addr's slot was just validated.
+func (l *LocoNet) markAcquired(addr LocoAddr) {
+	l.slotMu.Lock()
+	l.slotAcquiredAt[addr] = time.Now()
+	l.slotMu.Unlock()
 }
 
 // nullMoveLocked sends OPC_MOVE_SLOTS with src==dst (NULL MOVE), which
@@ -1063,6 +1107,7 @@ func (l *LocoNet) clearSlot(addr LocoAddr, slot byte) {
 	l.slotMu.Lock()
 	delete(l.slotByAd, addr)
 	delete(l.slotAddr, slot)
+	delete(l.slotAcquiredAt, addr)
 	l.slotMu.Unlock()
 }
 

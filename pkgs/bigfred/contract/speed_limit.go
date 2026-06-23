@@ -8,8 +8,8 @@ func ClampSpeedForControllerLimit(speed, maxSpeed, limitPercent uint8) uint8 {
 		return speed
 	}
 	cap := uint8((uint16(maxSpeed)*uint16(limitPercent) + 50) / 100)
-	if cap == 0 {
-		cap = 1
+	if cap < 2 {
+		cap = 2
 	}
 	if speed > cap {
 		return cap

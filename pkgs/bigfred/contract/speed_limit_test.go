@@ -12,6 +12,8 @@ func TestClampSpeedForControllerLimit(t *testing.T) {
 		{120, 127, 80, 102},
 		{120, 127, 50, 64},
 		{10, 28, 80, 10},
+		{10, 127, 1, 2},
+		{10, 28, 1, 2},
 	}
 	for _, tc := range tests {
 		got := ClampSpeedForControllerLimit(tc.speed, tc.max, tc.limit)

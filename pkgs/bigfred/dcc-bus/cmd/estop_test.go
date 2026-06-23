@@ -210,7 +210,9 @@ func TestApplyEStopTarget_skipsStandingLoco(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		newRouter(t, rs, st).applyEStopTarget(ctx, []uint16{addr})
+		r := newRouter(t, rs, st)
+		calls = 0
+		r.applyEStopTarget(ctx, []uint16{addr})
 		if calls != 0 {
 			t.Fatalf("SetSpeed calls = %d, want 0 for standing loco", calls)
 		}

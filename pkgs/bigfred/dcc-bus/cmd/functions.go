@@ -48,13 +48,17 @@ func (r *Router) setLocoFunction(ctx context.Context, addr uint16, userID uint, 
 	}
 	previous, hadPrev := r.cache.Stage(addr, fn, on)
 	if err := r.station.SendFn(commandstation.MainTrackMode, commandstation.LocoAddr(addr), commandstation.FuncNum(fn), on); err != nil {
-		fields := r.stationLogFields()
-		fields["addr"] = addr
-		fields["function"] = fn
-		fields["on"] = on
-		r.log.WithError(err).WithFields(fields).Warn("dcc-bus command station SendFn failed")
-		r.cache.Rollback(addr, fn, previous, hadPrev)
-		return err
+		r.forceRevalidateSlot(addr)
+		if retryErr := r.station.SendFn(commandstation.MainTrackMode, commandstation.LocoAddr(addr), commandstation.FuncNum(fn), on); retryErr != nil {
+			fields := r.stationLogFields()
+			fields["addr"] = addr
+			fields["function"] = fn
+			fields["on"] = on
+			r.log.WithError(retryErr).WithFields(fields).Warn("dcc-bus command station SendFn failed")
+			r.cache.Rollback(addr, fn, previous, hadPrev)
+			return retryErr
+		}
+		r.log.WithFields(logrus.Fields{"addr": addr, "function": fn}).Debug("dcc-bus SendFn succeeded after slot revalidate")
 	}
 
 	snap := contract.LocoStateWire{

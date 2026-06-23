@@ -189,7 +189,13 @@ export default function MyVehiclesCatalogue({ layoutId }: Props) {
                   });
                   return (
                     <TableRow key={v.id}>
-                      <TableCell>{v.name}</TableCell>
+                      <TableCell>
+                        <Tooltip title={t("vehicle:idTooltip", { id: v.id })}>
+                          <Typography component="span" variant="body2">
+                            {v.name}
+                          </Typography>
+                        </Tooltip>
+                      </TableCell>
                       <TableCell>{v.number || "—"}</TableCell>
                       <TableCell>{renderDCC(v)}</TableCell>
                       <TableCell align="right">

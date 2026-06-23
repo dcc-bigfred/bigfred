@@ -28,6 +28,9 @@ func (r *Router) HandleSessionClose(ctx context.Context, actor Actor, reason str
 		addrs := r.collectSessionAddrs(actor.SessionID)
 		r.applyEmergencyStop(ctx, actor.UserID, actor.SessionID, addrs, reason, true)
 	}
+	// A departing session (e.g. load-test) may leave a bad slot cache while
+	// other tabs remain subscribed to the same locos.
+	r.reclaimSlotsStillSubscribed(actor.ClosingSubscribedAddrs)
 }
 
 // releaseUnusedSlots relinquishes the command-station slot for each loco the

@@ -19,6 +19,7 @@ type slotStubStation struct {
 }
 
 func (s *slotStubStation) AcquireSlot(commandstation.LocoAddr) error { return nil }
+func (s *slotStubStation) ForceAcquireSlot(commandstation.LocoAddr) error { return nil }
 func (s *slotStubStation) DispatchSlot(commandstation.LocoAddr) error { return nil }
 func (s *slotStubStation) AcquireDispatched() (commandstation.LocoAddr, error) {
 	return 0, nil

@@ -52,6 +52,11 @@ func newTestLoconet() (*LocoNet, *recTransport) {
 	return l, rec
 }
 
+func seedCachedSlot(l *LocoNet, addr LocoAddr, slot byte) {
+	l.setSlot(addr, slot)
+	l.markAcquired(addr)
+}
+
 func countOpcode(pkts [][]byte, opc byte) int {
 	n := 0
 	for _, p := range pkts {
@@ -67,7 +72,7 @@ func countOpcode(pkts [][]byte, opc byte) int {
 func TestSetSpeedSuppressesUnchangedDirf(t *testing.T) {
 	l, rec := newTestLoconet()
 	const addr LocoAddr = 31
-	l.setSlot(addr, 5)
+	seedCachedSlot(l, addr, 5)
 
 	// First move sets the direction (reverse -> forward): SPD + DIRF.
 	if err := l.SetSpeed(addr, 10, true, 128); err != nil {
@@ -109,7 +114,7 @@ func TestSetSpeedSuppressesUnchangedDirf(t *testing.T) {
 func TestWriteSpeedCoalescesStale(t *testing.T) {
 	l, rec := newTestLoconet()
 	const addr LocoAddr = 42
-	l.setSlot(addr, 7)
+	seedCachedSlot(l, addr, 7)
 	l.setDirf(addr, 0x20) // forward, so DIRF is never re-sent below
 
 	g1 := l.nextSpeedGen(addr)
@@ -141,7 +146,7 @@ func TestWriteSpeedCoalescesStale(t *testing.T) {
 func TestSendFnTrustsCacheNoRoundTrip(t *testing.T) {
 	l, rec := newTestLoconet()
 	const addr LocoAddr = 55
-	l.setSlot(addr, 9)
+	seedCachedSlot(l, addr, 9)
 
 	// F1 lives in DIRF.
 	if err := l.SendFn(MainTrackMode, addr, 1, true); err != nil {
@@ -193,7 +198,7 @@ func TestPacerEnforcesMinGap(t *testing.T) {
 func TestMetricsSnapshotCountsTraffic(t *testing.T) {
 	l, _ := newTestLoconet()
 	const addr LocoAddr = 31
-	l.setSlot(addr, 5)
+	seedCachedSlot(l, addr, 5)
 	l.setDirf(addr, 0x20) // forward, so no DIRF frame on a forward SetSpeed
 
 	if err := l.SetSpeed(addr, 10, true, 128); err != nil {
@@ -260,7 +265,7 @@ func TestMetricsSnapshotCountsRx(t *testing.T) {
 func TestKeepaliveRefreshesCachedSlots(t *testing.T) {
 	l, rec := newTestLoconet()
 	const addr LocoAddr = 77
-	l.setSlot(addr, 11)
+	seedCachedSlot(l, addr, 11)
 	l.setDirf(addr, 0x20)
 	if err := l.SetSpeed(addr, 25, true, 128); err != nil {
 		t.Fatalf("SetSpeed: %v", err)

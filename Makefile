@@ -23,6 +23,10 @@ server-telemetry:
 server-build:
 	CGO_ENABLED=0 GOOS=linux go build -o bin/loco-server ./pkgs/bigfred/server
 
+.PHONY: loadtest-build
+loadtest-build:
+	CGO_ENABLED=0 GOOS=linux go build -o bin/loco-server-load-test ./pkgs/bigfred/loadtest
+
 # `build-prod` produces the single production binary: it builds the SPA
 # (web/dist) and embeds it into loco-server via go:embed (-tags prod), so
 # one binary serves both the API and the frontend at "/". `web-build` runs

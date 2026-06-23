@@ -1,10 +1,47 @@
 package service_test
 
 import (
+	"context"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/service"
 )
+
+func TestCancelAll_abortsPendingTrainJobs(t *testing.T) {
+	t.Parallel()
+
+	sched := service.NewTrainSpeedScheduler()
+	ctx := context.Background()
+	var applyCalls atomic.Int32
+
+	_, _ = sched.Apply(ctx, "train-a", 10, true, func(_ context.Context, _ uint16, _ uint8, _ bool) error {
+		applyCalls.Add(1)
+		return nil
+	}, []service.TrainMemberSetSpeed{{
+		Addr:         3,
+		CurrentSpeed: 0,
+		Speed:        10,
+		Forward:      true,
+		StartDelayMs: 5000,
+	}})
+
+	deadline := time.Now().Add(200 * time.Millisecond)
+	for applyCalls.Load() == 0 && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if applyCalls.Load() != 0 {
+		t.Fatal("start delay should not have fired yet")
+	}
+
+	sched.CancelAll()
+
+	time.Sleep(100 * time.Millisecond)
+	if applyCalls.Load() != 0 {
+		t.Fatalf("apply calls after CancelAll = %d, want 0", applyCalls.Load())
+	}
+}
 
 func TestIsStartDelayPreviousSpeed(t *testing.T) {
 	for _, speed := range []uint8{0, 1} {

@@ -75,6 +75,17 @@ func (s *TrainSpeedScheduler) CancelTrain(trainID string) {
 	}
 }
 
+// CancelAll aborts every pending train delay/ramp goroutine. Used on daemon
+// shutdown so background consist commands cannot fire after the process stops.
+func (s *TrainSpeedScheduler) CancelAll() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for trainID, cancel := range s.pending {
+		cancel()
+		delete(s.pending, trainID)
+	}
+}
+
 // IsStartDelayPreviousSpeed reports whether a stored speed still counts
 // as a consist "start" for trailing start-delay scheduling.
 func IsStartDelayPreviousSpeed(speed uint8) bool {

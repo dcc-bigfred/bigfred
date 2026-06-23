@@ -227,7 +227,11 @@ export default function AvailableVehiclesCatalogue({ layoutId }: Props) {
                     <TableRow key={v.id}>
                       <TableCell>
                         <Stack spacing={0.25}>
-                          <Typography variant="body2">{v.name}</Typography>
+                          <Tooltip title={t("vehicle:idTooltip", { id: v.id })}>
+                            <Typography variant="body2" component="span" sx={{ display: "inline-block" }}>
+                              {v.name}
+                            </Typography>
+                          </Tooltip>
                           <Typography variant="caption" color="text.secondary" noWrap>
                             {getUserName({
                               login: v.ownerLogin,

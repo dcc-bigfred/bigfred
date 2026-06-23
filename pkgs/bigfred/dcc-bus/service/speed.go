@@ -25,6 +25,8 @@ func (w *DCCWriter) SetSpeed(addr uint16, payloadSpeed uint8, forward bool, emer
 	wireSpeed := payloadSpeed
 	if emergency {
 		wireSpeed = 1
+	} else if wireSpeed == 1 {
+		wireSpeed = 0 // wire speed 1 is DCC e-stop; skip for normal throttle
 	}
 	err := w.Station.SetSpeed(commandstation.LocoAddr(addr), wireSpeed, forward, uint8(w.SpeedSteps))
 	if err == nil {

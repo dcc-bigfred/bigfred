@@ -85,6 +85,14 @@ type LocoNet struct {
 	slotByAd map[LocoAddr]byte
 	slotAddr map[byte]LocoAddr // reverse map, needed to attribute bus traffic
 
+	// fnTxMu guards fnTxLocks, which hands out a per-address mutex that
+	// serializes the read-modify-write of the shared function bytes. F0..F4
+	// (DIRF) and F5..F8 (SND) are each a single byte / DCC function group, so
+	// a concurrent toggle (e.g. the dead-man horn pulse) or a direction
+	// change for the same loco must not interleave and transmit a stale bit.
+	fnTxMu    sync.Mutex
+	fnTxLocks map[LocoAddr]*sync.Mutex
+
 	stateMu     sync.Mutex
 	dirfByA     map[LocoAddr]byte
 	sndByA      map[LocoAddr]byte
@@ -134,6 +142,7 @@ func newLocoNetBase() *LocoNet {
 		stop:              make(chan struct{}),
 		slotByAd:          make(map[LocoAddr]byte),
 		slotAddr:          make(map[byte]LocoAddr),
+		fnTxLocks:         make(map[LocoAddr]*sync.Mutex),
 		dirfByA:           make(map[LocoAddr]byte),
 		sndByA:            make(map[LocoAddr]byte),
 		spdByA:            make(map[LocoAddr]byte),
@@ -310,13 +319,14 @@ func (l *LocoNet) dispatch() {
 // LocoObservation for the change. Slot-keyed packets (SPD/DIRF/SND) are
 // attributed via the reverse slot→addr map populated from slot reads.
 // applySlotData refreshes BigFred's per-loco cache (slot mapping, direction,
-// the F0..F8 function groups and speed) from an OPC_SL_RD_DATA frame seen on
-// the bus. It is the single place that maps slot data onto the cache, shared by
-// the passive observer and the request paths (slot acquire / query) so a
-// locomotive subscription deterministically refreshes the cache straight from
-// the bus reply instead of relying on observation timing. It intentionally does
-// not emit a LocoObservation: observe() owns fan-out so upper layers are
-// notified exactly once.
+// the F0..F8 function groups and speed) from an OPC_SL_RD_DATA frame. It is the
+// authoritative seed and is therefore called only from the request paths (slot
+// acquire / query / dispatch) — i.e. when WE asked the command station for the
+// slot — so a subscription deterministically refreshes the cache straight from
+// the reply. The passive observer (observe) deliberately does NOT call this: it
+// must not let an echo or a stale broadcast overwrite the DIRF/SND function
+// bytes we command. It intentionally does not emit a LocoObservation: observe()
+// owns fan-out so upper layers are notified exactly once.
 func (l *LocoNet) applySlotData(sd lnSlotData) {
 	l.setSlot(sd.Addr, sd.Slot)
 	l.setDirf(sd.Addr, sd.DirF)
@@ -340,7 +350,17 @@ func (l *LocoNet) observe(pkt []byte) {
 		if sd.Slot >= 120 {
 			return
 		}
-		l.applySlotData(sd)
+		// Passive observation: refresh only the slot mapping and the
+		// last-seen speed (needed for reverse attribution and keepalive).
+		// Do NOT adopt the DIRF/SND function bytes here. BigFred is the
+		// authoritative throttle for the locos it controls; an echo of our
+		// own write or a stale slot broadcast from the command station must
+		// never clobber the function state we command (that was the cause
+		// of the F0..F4 flicker). The request paths (acquireSlotFreshLocked
+		// / querySlotLocked) still seed the cache authoritatively via
+		// applySlotData when WE asked for the slot.
+		l.setSlot(sd.Addr, sd.Slot)
+		l.setSpd(sd.Addr, sd.Speed)
 		fns := make(map[int]bool, 9)
 		for fn := 0; fn <= 4; fn++ {
 			fns[fn] = getFnFromDirf(sd.DirF, fn)
@@ -375,7 +395,9 @@ func (l *LocoNet) observe(pkt []byte) {
 			return
 		}
 		dirf := pkt[2]
-		l.setDirf(addr, dirf)
+		// Authoritative-send model: surface the observation for the UI feed
+		// but do not overwrite the DIRF byte we command from passive bus
+		// traffic (echo / external throttle / stale broadcast).
 		fns := make(map[int]bool, 5)
 		for fn := 0; fn <= 4; fn++ {
 			fns[fn] = getFnFromDirf(dirf, fn)
@@ -390,7 +412,8 @@ func (l *LocoNet) observe(pkt []byte) {
 			return
 		}
 		snd := pkt[2]
-		l.setSnd(addr, snd)
+		// Authoritative-send model: surface the observation but do not adopt
+		// the SND byte we command from passive bus traffic.
 		fns := make(map[int]bool, 4)
 		for fn := 5; fn <= 8; fn++ {
 			fns[fn] = getFnFromSnd(snd, fn)
@@ -624,11 +647,24 @@ func (l *LocoNet) SendFn(mode Mode, addr LocoAddr, num FuncNum, toggle bool) err
 		return err
 	}
 
-	// Trust the cached DIRF/SND state. The driver keeps it current from bus
-	// observation (observe()), so the previous per-call OPC_RQ_SL_DATA round
-	// trip was redundant — and, held under the global request lock, it
-	// serialized every other locomotive behind a ~15 ms wait on each function
-	// toggle. Dropping it is the single biggest fleet-latency win.
+	// Trust the cached DIRF/SND state. The driver keeps it current from our
+	// own sends and from authoritative slot reads on acquire, so the previous
+	// per-call OPC_RQ_SL_DATA round trip was redundant — and, held under the
+	// global request lock, it serialized every other locomotive behind a
+	// ~15 ms wait on each function toggle. Dropping it is the single biggest
+	// fleet-latency win.
+	//
+	// Serialize the read-modify-write of the shared function byte for this
+	// loco under a per-address lock: F0..F4 (DIRF) and F5..F8 (SND) are each a
+	// single byte, so a concurrent toggle (e.g. the dead-man horn pulse) or a
+	// direction change must not interleave the read of the old byte with our
+	// store and transmit a stale bit (which made F1 flicker on an F2/F3 press).
+	// Lock order is fn-lock → txMu (sendLocked takes txMu); writeSpeed honours
+	// the same order.
+	fl := l.addrFnLock(addr)
+	fl.Lock()
+	defer fl.Unlock()
+
 	if fn <= 4 {
 		dirf := setFnInDirf(l.getDirf(addr), fn, toggle)
 		if err := l.sendLocked(lnBuildSetDirF(slot, dirf)); err != nil {
@@ -644,6 +680,19 @@ func (l *LocoNet) SendFn(mode Mode, addr LocoAddr, num FuncNum, toggle bool) err
 	}
 	l.setSnd(addr, snd)
 	return nil
+}
+
+// addrFnLock returns the per-address mutex that serializes the DIRF/SND
+// read-modify-write for one locomotive (see SendFn / writeSpeed).
+func (l *LocoNet) addrFnLock(addr LocoAddr) *sync.Mutex {
+	l.fnTxMu.Lock()
+	defer l.fnTxMu.Unlock()
+	m := l.fnTxLocks[addr]
+	if m == nil {
+		m = &sync.Mutex{}
+		l.fnTxLocks[addr] = m
+	}
+	return m
 }
 
 func (l *LocoNet) ListFunctions(addr LocoAddr) ([]int, error) {
@@ -708,6 +757,13 @@ func (l *LocoNet) SetSpeed(addr LocoAddr, speed uint8, forward bool, speedSteps 
 // direction frame is sent only when the DIR bit changed (it rarely does during
 // a throttle sweep), halving speed-related bus traffic.
 func (l *LocoNet) writeSpeed(addr LocoAddr, slot, lnSpeed byte, forward bool, gen uint64) error {
+	// The direction change below is a read-modify-write of the shared DIRF
+	// byte, so take the per-address function lock first (consistent order with
+	// SendFn: fn-lock → txMu) to avoid losing a concurrent function toggle.
+	fl := l.addrFnLock(addr)
+	fl.Lock()
+	defer fl.Unlock()
+
 	l.txMu.Lock()
 	defer l.txMu.Unlock()
 

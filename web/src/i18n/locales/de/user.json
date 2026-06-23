@@ -1,0 +1,108 @@
+{
+  "profile": {
+    "title": "Profil",
+    "subtitle": "Ihre Kontodaten für die aktuelle Sitzung.",
+    "changePin": "Passwort ändern",
+    "yes": "Ja",
+    "no": "Nein",
+    "sudoActive": "Aktiv bis {{expiresAt}}",
+    "sudoInactive": "Keine",
+    "organizationSection": "Organisation",
+    "organizationHelp": "Optionaler Vereins- oder Organisationsname (max. 128 Zeichen).",
+    "organizationEmpty": "—",
+    "organizationSaved": "Organisation gespeichert.",
+    "saveOrganization": "Organisation speichern",
+    "fields": {
+      "login": "Anmeldename",
+      "organization": "Organisation",
+      "id": "Benutzer-ID",
+      "role": "Dauerrolle",
+      "effectiveRole": "Effektive Rolle",
+      "isSignalman": "Fahrdienstleiter-Rechte",
+      "status": "Kontostatus",
+      "dccPool": "DCC-Adresspool",
+      "layout": "Aktive Anlage (Sitzung)",
+      "sudo": "Temporärer Admin (sudo)",
+      "createdAt": "Erstellt",
+      "updatedAt": "Zuletzt geändert"
+    }
+  },
+  "changePin": {
+    "title": "Passwort ändern",
+    "subtitle": "Aktuelles Passwort eingeben und neues wählen.",
+    "submit": "Neues Passwort speichern",
+    "success": "Ihr Passwort wurde geändert.",
+    "fields": {
+      "currentPin": "Aktuelles Passwort",
+      "newPin": "Neues Passwort",
+      "confirmPin": "Neues Passwort bestätigen",
+      "confirmMismatch": "Passwörter stimmen nicht überein."
+    }
+  },
+  "admin": {
+    "title": "Benutzer",
+    "subtitle": "Konten, Rollen und Systemzugriff verwalten.",
+    "empty": "Keine Benutzer anzuzeigen.",
+    "youBadge": "(Sie)",
+    "status": {
+      "active": "Aktiv",
+      "inactive": "Inaktiv"
+    },
+    "columns": {
+      "login": "Anmeldename",
+      "role": "Rolle",
+      "dccPool": "DCC-Adressen",
+      "status": "Status",
+      "actions": "Aktionen"
+    },
+    "actions": {
+      "create": "Neuer Benutzer",
+      "edit": "Bearbeiten",
+      "delete": "Löschen",
+      "activate": "Aktivieren",
+      "deactivate": "Deaktivieren"
+    },
+    "dialogs": {
+      "create": {
+        "title": "Neuer Benutzer",
+        "submit": "Erstellen"
+      },
+      "edit": {
+        "title": "Benutzer „{{login}}“ bearbeiten",
+        "submit": "Speichern"
+      },
+      "fields": {
+        "login": "Anmeldename",
+        "loginHelp": "Lateinische Buchstaben, Ziffern und „.“ , „-“, „_“. Max. 32 Zeichen.",
+        "role": "Rolle",
+        "pin": "Passwort (PIN)",
+        "pinCreateHelp": "Numerisches Passwort wählen (4–12 Ziffern).",
+        "pinEditHelp": "Leer lassen, um das aktuelle Passwort beizubehalten. Nur Ziffern, 4–12 Zeichen.",
+        "pinPlaceholder": "Keine Änderung",
+        "organization": "Organisation",
+        "organizationHelp": "Optionaler Vereins- oder Organisationsname (max. 128 Zeichen).",
+        "dccPool": "DCC-Adresspool",
+        "dccPoolHelp": "Mindestens ein Bereich von {{min}} bis {{max}}. Bereiche dürfen sich nicht mit dem Pool eines anderen Benutzers überschneiden.",
+        "dccFrom": "Von",
+        "dccTo": "Bis",
+        "dccAddRange": "Bereich hinzufügen",
+        "dccRemoveRange": "Bereich entfernen"
+      },
+      "deactivate": {
+        "title": "Benutzer „{{login}}“ deaktivieren?",
+        "message": "Das Konto bleibt in der Datenbank, der Benutzer kann sich aber nicht mehr anmelden. Sie können den Zugriff jederzeit mit „Aktivieren“ wiederherstellen.",
+        "submit": "Deaktivieren"
+      },
+      "activate": {
+        "title": "Benutzer „{{login}}“ aktivieren?",
+        "message": "Nach der Aktivierung kann sich der Benutzer wieder anmelden.",
+        "submit": "Aktivieren"
+      },
+      "delete": {
+        "title": "Benutzer „{{login}}“ löschen?",
+        "message": "Dieser Vorgang kann nicht rückgängig gemacht werden. Zum Löschen darf der Benutzer keine Fahrzeuge oder Züge besitzen.",
+        "submit": "Löschen"
+      }
+    }
+  }
+}

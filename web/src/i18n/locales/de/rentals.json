@@ -1,0 +1,47 @@
+{
+  "title": "Ausleihen",
+  "tabs": {
+    "received": "Von anderen geliehen",
+    "granted": "An andere verliehen"
+  },
+  "empty": "Keine aktiven Ausleihen.",
+  "expired": "Abgelaufen",
+  "kind": {
+    "vehicle": "Fahrzeug",
+    "train": "Zug"
+  },
+  "received": {
+    "from": "Eigentümer: {{login}}",
+    "return": "Zurückgeben",
+    "returnConfirmTitle": "Fahrzeug/Zug zurückgeben?",
+    "returnConfirmBody": "„{{name}}“ an den Eigentümer zurückgeben?"
+  },
+  "granted": {
+    "to": "Entleiher: {{login}}",
+    "lend": "Verleihen"
+  },
+  "admin": {
+    "title": "Veranstaltungs-Ausleihen",
+    "intro": "Fuhrparkverleih für die aktuelle Anlage verwalten"
+  },
+  "create": {
+    "title": "Fahrzeug oder Zug verleihen",
+    "target": "Fahrzeug / Zug",
+    "user": "Benutzer",
+    "speedLimit": "Geschwindigkeitsbegrenzung (%)",
+    "speedLimitHelp": "0 = keine Begrenzung, 100 = volle Geschwindigkeit",
+    "hours": "Stunden",
+    "minutes": "Minuten",
+    "submit": "Verleihen"
+  },
+  "control": {
+    "lessee": "Entleiher",
+    "remaining": "Verbleibende Zeit",
+    "speedLimit": "Geschwindigkeitsbegrenzung (%)",
+    "apply": "Übernehmen",
+    "stop": "Fahrzeug/Zug stoppen",
+    "return": "Fahrzeug/Zug zurückgeben",
+    "adjustTime": "Zeit verlängern / verkürzen",
+    "adjustTimeSubmit": "Dauer übernehmen"
+  }
+}

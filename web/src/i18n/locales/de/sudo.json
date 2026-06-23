@@ -1,0 +1,49 @@
+{
+  "tooltip": {
+    "admin": {
+      "idle": "Zu Anlagen-Administrator erheben (sudo)",
+      "active": "Sudo aktiv: Administrator — noch {{remaining}}"
+    },
+    "signalman": {
+      "idle": "Sich selbst zum Fahrdienstleiter auf dieser Anlage befördern",
+      "active": "Sie sind Fahrdienstleiter auf dieser Anlage — klicken zum Zurücktreten"
+    }
+  },
+  "aria": {
+    "admin": {
+      "idle": "Admin-Sudo aktivieren",
+      "active": "Admin-Sudo widerrufen"
+    },
+    "signalman": {
+      "idle": "Fahrdienstleiter werden",
+      "active": "Als Fahrdienstleiter zurücktreten"
+    }
+  },
+  "nav": {
+    "elevateAdmin": "Berechtigungen erweitern",
+    "revokeAdmin": "Erweiterte Berechtigungen widerrufen",
+    "becomeSignalman": "Verkehrsleiter werden",
+    "revokeSignalman": "Als Verkehrsleiter zurücktreten"
+  },
+  "dialog": {
+    "title": {
+      "admin": "Anlagen-Admin-PIN",
+      "signalman": "Anlagen-Admin-PIN",
+      "promoteSignalman": "Anlagen-Admin-PIN",
+      "demoteSignalman": "Anlagen-Admin-PIN"
+    },
+    "description": {
+      "admin": "Anlagen-Admin-PIN eingeben, um für 2 Minuten Administratorrechte zu erhalten.",
+      "signalman": "Anlagen-Admin-PIN eingeben, um dauerhaft die Rolle Fahrdienstleiter auf dieser Anlage zu übernehmen.",
+      "promoteSignalman": "Anlagen-Admin-PIN eingeben, um {{login}} zum Fahrdienstleiter auf dieser Anlage zu befördern.",
+      "demoteSignalman": "Anlagen-Admin-PIN eingeben, um {{login}} zum Fahrer auf dieser Anlage zurückzustufen."
+    },
+    "pinLabel": "PIN",
+    "submit": "Erheben",
+    "cancel": "Abbrechen"
+  },
+  "settings": {
+    "pinLabel": "Anlagen-Admin-PIN",
+    "pinHelp": "Leer lassen, um die aktuelle PIN beizubehalten. 4–8 Ziffern erforderlich."
+  }
+}

@@ -1,0 +1,188 @@
+{
+  "kind": {
+    "loco": "Lokomotive",
+    "emu": "Triebwagen",
+    "driving_wagon": "Steuerwagen",
+    "trolley": "Triebwagen (klein)",
+    "wagon": "Wagen"
+  },
+  "kindShort": {
+    "loco": "Lok",
+    "emu": "TW",
+    "driving_wagon": "SW",
+    "trolley": "Trl",
+    "wagon": "Wag"
+  },
+  "dummyBadge": "Dummy",
+  "dccNone": "—",
+  "list": {
+    "title": "Meine Fahrzeuge",
+    "intro": "Verwalten Sie Ihre Fahrzeuge. Fahrzeuge können zu <trainsLink>Zügen</trainsLink> zusammengefasst werden. Damit ein Fahrzeug auf der Anlage fährt, fügen Sie es mit der Schaltfläche <addBtn>„Zur Anlage hinzufügen“</addBtn> hier als Einzelfahrzeug hinzu oder auf der <trainsLink>Zugseite</trainsLink> als Teil eines Zuges, der als Ganzes zur Anlage hinzugefügt wurde.",
+    "empty": "Sie haben noch keine Fahrzeuge.",
+    "addButton": "Fahrzeug hinzufügen",
+    "columns": {
+      "name": "Name",
+      "kind": "Art",
+      "number": "Nummer",
+      "dccAddress": "DCC-Adresse",
+      "actions": "Aktionen"
+    },
+    "actions": {
+      "edit": "Bearbeiten",
+      "editFunctions": "Funktionen bearbeiten",
+      "delete": "Löschen",
+      "addToLayout": "Zur Anlage hinzufügen",
+      "alreadyOnLayout": "Bereits auf der Anlage",
+      "lendRequiresLayout": "Fahrzeug muss zur Anlage hinzugefügt sein",
+      "lendRequiresDcc": "Ein Fahrzeug ohne DCC-Adresse kann nicht verliehen werden",
+      "lendAlreadyLeased": "Fahrzeug ist bereits verliehen"
+    },
+    "deleteConfirm": "Fahrzeug „{{name}}“ löschen?",
+    "deleteConfirmBody": "Dieser Vorgang kann nicht rückgängig gemacht werden. Das Fahrzeug muss zuerst aus allen Zügen entfernt werden."
+  },
+  "catalogue": {
+    "title": "Verfügbare Fahrzeuge",
+    "intro": "Alle registrierten Fahrzeuge durchsuchen. Sie können nur eigenes Rollmaterial bearbeiten — oder als Admin die Fahrzeuge anderer Benutzer.",
+    "searchLabel": "Suche",
+    "searchPlaceholder": "Name, Nummer, DCC-Adresse, Eigentümer…",
+    "empty": "Es sind noch keine Fahrzeuge registriert.",
+    "noResults": "Keine Fahrzeuge entsprechen der Suche.",
+    "pagination": "{{from}}–{{to}} von {{count}}",
+    "onLayout": {
+      "yes": "Ja",
+      "no": "Nein"
+    },
+    "columns": {
+      "name": "Name",
+      "kind": "Art",
+      "number": "Nummer",
+      "dccAddress": "DCC-Adresse",
+      "onLayout": "Auf Anlage",
+      "actions": "Aktionen"
+    },
+    "actions": {
+      "lendOwnerOnly": "Nur der Eigentümer kann dieses Fahrzeug verleihen"
+    }
+  },
+  "trainCatalogue": {
+    "title": "Verfügbare Züge",
+    "intro": "Alle registrierten Züge durchsuchen. Sie können nur eigene Züge bearbeiten — oder als Admin die Züge anderer Benutzer.",
+    "searchLabel": "Suche",
+    "searchPlaceholder": "Name, Eigentümer…",
+    "empty": "Es sind noch keine Züge registriert.",
+    "noResults": "Keine Züge entsprechen der Suche.",
+    "pagination": "{{from}}–{{to}} von {{count}}",
+    "onLayout": {
+      "yes": "Ja",
+      "no": "Nein"
+    },
+    "columns": {
+      "name": "Name",
+      "members": "Fahrzeuge",
+      "onLayout": "Auf Anlage",
+      "actions": "Aktionen"
+    }
+  },
+  "trainList": {
+    "title": "Meine Züge",
+    "intro": "Verwalten Sie Ihre Züge. Ein Zug ist ein Verband mehrerer Fahrzeuge, die gemeinsam fahren und als ein Zug erkannt werden. Ein zur Anlage hinzugefügter Zug kann als Ganzes gesteuert werden — dann bewegen sich alle Fahrzeuge gemeinsam, auch bei mehreren angetriebenen Fahrzeugen. Züge können programmiert werden — z. B. Wagenbeleuchtung nacheinander einschalten oder Sounds in verschiedenen Fahrzeugen abspielen, nicht nur in der ziehenden Lokomotive.",
+    "empty": "Sie haben noch keine Züge.",
+    "addButton": "Zug hinzufügen",
+    "membersCount_one": "{{count}} Fahrzeug",
+    "membersCount_other": "{{count}} Fahrzeuge",
+    "columns": {
+      "name": "Name",
+      "members": "Fahrzeuge",
+      "actions": "Aktionen"
+    },
+    "actions": {
+      "edit": "Bearbeiten",
+      "delete": "Löschen",
+      "addToLayout": "Zur Anlage hinzufügen",
+      "alreadyOnLayout": "Bereits auf der Anlage",
+      "lendRequiresLayout": "Zug muss zur Anlage hinzugefügt sein",
+      "lendAlreadyLeased": "Zug ist bereits verliehen"
+    },
+    "deleteConfirm": "Zug „{{name}}“ löschen?",
+    "deleteConfirmBody": "Dieser Vorgang kann nicht rückgängig gemacht werden. Fahrzeuge in diesem Zug bleiben in Ihrem Katalog."
+  },
+  "roster": {
+    "vehicles": {
+      "title": "Fahrzeuge auf der Anlage",
+      "manageButton": "Meine Fahrzeuge verwalten",
+      "empty": "Dieser Anlage wurden noch keine Fahrzeuge hinzugefügt.",
+      "columns": {
+        "name": "Name",
+        "kind": "Art",
+        "number": "Nummer",
+        "dccAddress": "DCC-Adresse",
+        "owner": "Eigentümer",
+        "actions": "Aktionen"
+      }
+    },
+    "trains": {
+      "title": "Züge auf der Anlage",
+      "manageButton": "Meine Züge verwalten",
+      "empty": "Dieser Anlage wurden noch keine Züge hinzugefügt.",
+      "columns": {
+        "name": "Name",
+        "members": "Fahrzeuge",
+        "owner": "Eigentümer",
+        "actions": "Aktionen"
+      }
+    },
+    "removeButton": "Von Anlage entfernen",
+    "ownedByYou": "(Sie)"
+  },
+  "dialog": {
+    "create": {
+      "title": "Fahrzeug hinzufügen"
+    },
+    "edit": {
+      "title": "Fahrzeug bearbeiten"
+    },
+    "fields": {
+      "name": "Name",
+      "kind": "Fahrzeugart",
+      "number": "Nummer (optional)",
+      "dccAddress": "DCC-Adresse (optional)",
+      "dccAddressHelp": "Leer lassen für ein Dummy-Fahrzeug – auf der Anlage sichtbar, aber nicht steuerbar.",
+      "poolHint": "Ihr DCC-Pool: {{ranges}}",
+      "poolEmpty": "Ihnen ist kein DCC-Pool zugewiesen – Sie können trotzdem Dummy-Fahrzeuge hinzufügen.",
+      "rp1Function": "Rp1-Funktion",
+      "emergencyLightsFunction": "Blaulicht-Funktion",
+      "deadManSwitchOption": "Totmann-Schalter",
+      "dccFunction": "F{{fn}}"
+    },
+    "submitCreate": "Hinzufügen",
+    "submitEdit": "Speichern",
+    "cancel": "Abbrechen"
+  },
+  "deadManSwitch": {
+    "stop": "Stoppen",
+    "stop_horn": "Stoppen und hupen",
+    "stop_horn_emergency_lights": "Stoppen, hupen und Blaulicht / Pc6 einschalten"
+  },
+  "trainDialog": {
+    "create": {
+      "title": "Zug hinzufügen"
+    },
+    "edit": {
+      "title": "Zug bearbeiten"
+    },
+    "fields": {
+      "name": "Zugname",
+      "members": "Zugfahrzeuge",
+      "membersHelp": "Mindestens ein Fahrzeug wählen. Mit den Pfeiltasten umsortieren; „umgekehrt“ für entgegengesetzt gekuppelte Fahrzeuge."
+    },
+    "addMember": "Fahrzeug hinzufügen",
+    "movePrev": "Nach oben",
+    "moveNext": "Nach unten",
+    "removeMember": "Entfernen",
+    "reversed": "umgekehrt",
+    "submitCreate": "Hinzufügen",
+    "submitEdit": "Speichern",
+    "cancel": "Abbrechen",
+    "noVehicles": "Sie haben noch keine Fahrzeuge. Fügen Sie zuerst eines zu Ihrem Katalog hinzu."
+  }
+}

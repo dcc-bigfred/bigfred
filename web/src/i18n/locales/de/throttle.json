@@ -1,0 +1,136 @@
+{
+  "title": "Regler",
+  "setup": {
+    "open": "Reglereinstellungen",
+    "close": "Schließen"
+  },
+  "editFunctions": "Funktionen bearbeiten",
+  "fullscreen": {
+    "label": "Vollbild",
+    "enter": "Vollbild aktivieren",
+    "exit": "Vollbild beenden"
+  },
+  "radioStop": {
+    "button": "Funkstopp",
+    "tooltip": "Alle Lokomotiven auf der Anlage anhalten und Alarm auf jedem Regler auslösen",
+    "run": "Funkstopp auslösen",
+    "cancel": "Abbrechen",
+    "toast": "Funkstopp — ausgelöst von {{login}}"
+  },
+  "radio": {
+    "open": "Funk zum Stellwerk",
+    "chat": "Mein Funk",
+    "chatEmpty": "Noch keine Funkmeldungen.",
+    "pickInterlocking": "Stellwerk wählen",
+    "searchInterlocking": "Stellwerke suchen…",
+    "noInterlockings": "Dieser Anlage sind keine Stellwerke zugewiesen.",
+    "reply": "Antworten"
+  },
+  "takeover": {
+    "requestedTitle": "Übernahmeanfrage",
+    "requestedMessage": "Fahrdienstleiter {{login}} möchte Ihren Zug ({{target}}) übernehmen.",
+    "reject": "Ablehnen",
+    "countdown": "Automatische Übernahme in {{seconds}} s",
+    "evicted": "Ihre Reglersitzung endete, weil der Zug übernommen wurde."
+  },
+  "commandStation": "Zentrale",
+  "selectCommandStation": "Zentrale wählen",
+  "noCommandStations": "Dieser Anlage ist keine Zentrale zugewiesen.",
+  "waitingForCommandStations": "Bitte warten, während die Zentralenverbindung startet…",
+  "refreshCommandStations": "Zentralenliste aktualisieren",
+  "vehicle": "Fahrzeug",
+  "speed": "Geschwindigkeit",
+  "direction": {
+    "forward": "Vorwärts",
+    "reverse": "Rückwärts"
+  },
+  "functions": "Funktionen",
+  "fnLabel": "F{{n}}",
+  "stop": "Stoppen",
+  "emergencyStop": "Notstopp",
+  "leaveGuard": {
+    "title": "Lokomotive in Fahrt",
+    "message": "Beim Verlassen dieser Seite wird die Lokomotive notgestoppt. Möchten Sie fortfahren?",
+    "cancel": "Nein, bleiben",
+    "confirm": "Ja"
+  },
+  "deadman": {
+    "warning": "Leerlauf — automatischer Stopp in {{seconds}} s",
+    "executed": "Notfallplan ausgeführt ({{action}})"
+  },
+  "csStatus": {
+    "running": "Verbunden",
+    "starting": "Startet…",
+    "spawning": "Bitte warten, erste Verbindung zur Zentrale…",
+    "stopped": "Getrennt",
+    "draining": "Wird heruntergefahren",
+    "degraded": "Fehler"
+  },
+  "controlPlane": {
+    "online": "Steuerung: online",
+    "offline": "Steuerung: offline",
+    "reconnecting": "Verbindung zu BigFred verloren, Wiederholung alle 2 s…"
+  },
+  "dataPlane": {
+    "online": "DCC-Bus: online",
+    "offline": "DCC-Bus: offline",
+    "connecting": "DCC-Bus: verbindet…",
+    "ping": "Ping",
+    "pingMs": "{{ms}} ms",
+    "pingMeasuring": "messen…"
+  },
+  "reconnecting": "Verbindung zur Zentrale verloren, Wiederholung alle 2 s…",
+  "commandRetrying": "Befehl wird gesendet, Wiederholung…",
+  "errors": {
+    "command_station_disconnected": "Verbindung zur Zentrale verloren",
+    "vehicle_not_on_layout": "Dieses Fahrzeug ist nicht auf der aktiven Anlage",
+    "vehicle_is_dummy": "Fahrzeug hat keine DCC-Adresse",
+    "not_authorized_to_drive": "Sie sind nicht berechtigt, dieses Fahrzeug zu fahren",
+    "taken_over": "Fahrzeug vom Fahrdienstleiter übernommen",
+    "lease_expired": "Ausleihe abgelaufen",
+    "dcc_bus_unavailable": "dcc-bus-Daemon nicht verfügbar — gleich erneut versuchen",
+    "no_dcc_bus_ports_available": "Kein freier Port für neue Zentrale — ungenutzte stoppen",
+    "command_station_not_attached": "Zentrale ist dieser Anlage nicht zugewiesen",
+    "dcc_bus_not_configured": "Zentralensteuerung ist auf diesem Server nicht konfiguriert",
+    "control_offline": "Steuerungsebene offline — Seite aktualisieren",
+    "connection_error": "dcc-bus-WebSocket-Fehler (nicht die physische Zentrale) — Proxy/Netzwerk prüfen",
+    "command_station_error": "Zentrale hat DCC-Befehl abgelehnt — dcc-bus-Protokolle prüfen",
+    "ack_timeout": "Server hat nicht rechtzeitig geantwortet — erneut versuchen",
+    "train_not_on_layout": "Dieser Zug ist nicht auf der aktiven Anlage",
+    "train_no_powered_members": "Dieser Zug hat keine angetriebenen Fahrzeuge",
+    "partial_failure": "Einige Fahrzeuge haben den Befehl nicht angenommen"
+  },
+  "retry": "Erneut versuchen",
+  "train": {
+    "picker": "Zug",
+    "leading": "Führend",
+    "member": "Mitglied",
+    "memberSpeed": "Geschwindigkeit {{speed}}",
+    "functions": "Funktionen",
+    "multiplier": {
+      "title": "Geschwindigkeitsmultiplikator",
+      "field": "Multiplikator",
+      "help": "Skaliert dieses Fahrzeug relativ zum führenden (0,05–4,0).",
+      "save": "Speichern",
+      "cancel": "Abbrechen",
+      "leadingFixed": "Das führende Fahrzeug fährt immer mit Multiplikator 1,0."
+    },
+    "memberSettings": {
+      "title": "Einstellungen Zugmitglied",
+      "leadingFixed": "Das führende Fahrzeug ist immer in der Zuggeschwindigkeitssteuerung enthalten (Multiplikator 1,0).",
+      "leadingMultiplierFixed": "Das führende Fahrzeug fährt immer mit Multiplikator 1,0.",
+      "excludeFromSpeed": "Von Geschwindigkeitssteuerung ausschließen",
+      "startDelay": "Startverzögerung",
+      "startDelayNone": "Aus",
+      "startDelayMs": "{{ms}} ms",
+      "accelRampDuration": "Beschleunigungsrampe",
+      "accelRampOff": "Aus",
+      "accelRampSeconds": "{{seconds}} s",
+      "accelRampMaxSteps": "Max. Stufen",
+      "brakeRampDuration": "Bremsrampe",
+      "brakeRampOff": "Aus",
+      "brakeRampSeconds": "{{seconds}} s",
+      "brakeRampMaxSteps": "Max. Stufen"
+    }
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "admin": {
+    "title": "Zentralen",
+    "subtitle": "DCC-Zentralen-Katalog. Zentralen werden im Anlagen-Editor zugewiesen.",
+    "columns": {
+      "name": "Name",
+      "kind": "Art",
+      "connection": "Verbindung",
+      "speedSteps": "Geschwindigkeitsstufen",
+      "timing": "Zeitsteuerung",
+      "actions": "Aktionen"
+    },
+    "timingSummary": "{{heartbeat}}s Ping / {{deadman}}s Totmann / Abfrage {{poll}}ms (0 = Standard)",
+    "actions": {
+      "create": "Neue Zentrale",
+      "edit": "Bearbeiten",
+      "delete": "Löschen"
+    },
+    "kind": {
+      "z21": "Z21 (UDP)",
+      "loconet_serial": "LocoNet (seriell)",
+      "loconet_tcp": "LocoNet (TCP)"
+    },
+    "dialogs": {
+      "create": {
+        "title": "Neue Zentrale"
+      },
+      "edit": {
+        "title": "Zentrale bearbeiten"
+      },
+      "delete": {
+        "title": "Zentrale „{{name}}“ löschen",
+        "message": "Dies kann nicht rückgängig gemacht werden. Die Zentrale wird von allen Anlagen getrennt, denen sie zugewiesen war."
+      },
+      "fields": {
+        "name": "Name",
+        "kind": "Art",
+        "connectionUri": "Verbindungs-URI",
+        "connectionUriHelp": "z. B. udp://192.168.1.10:21105, serial:///dev/ttyUSB0:57600, tcp://192.168.1.20:1234",
+        "speedSteps": "Geschwindigkeitsstufen",
+        "speedStepsHelp": "DCC-Geschwindigkeitsauflösung an dcc-bus. Standard 128.",
+        "pollIntervalMs": "Abfrageintervall (ms)",
+        "pollIntervalMsHelp": "Abfrageintervall für Treiber ohne Push. 0 verwendet den Daemon-Standard (750 ms).",
+        "heartbeatSecs": "Heartbeat-Intervall (s)",
+        "heartbeatSecsHelp": "WebSocket-Ping-Intervall. Standard 2 s. Kommt der Ping nicht vor dem Totmann an, wird das Fahrzeug notgestoppt.",
+        "deadmanSecs": "Totmann-Timeout (s)",
+        "deadmanSecsHelp": "Leerlaufzeit, nach der der Daemon Notstopp auslöst. Muss länger als der Heartbeat sein. Standard 6 s."
+      }
+    },
+    "empty": "Keine Zentralen anzuzeigen."
+  }
+}

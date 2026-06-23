@@ -1,0 +1,72 @@
+{
+  "appName": "BigFred",
+  "loading": "Laden…",
+  "actions": {
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "ok": "OK",
+    "retry": "Erneut versuchen",
+    "logout": "Abmelden",
+    "back": "Zurück",
+    "create": "Erstellen",
+    "rename": "Umbenennen",
+    "delete": "Löschen",
+    "confirm": "Bestätigen",
+    "close": "Schließen"
+  },
+  "keypad": {
+    "groupLabel": "Numerische Tastatur",
+    "digit": "Ziffer {{digit}}",
+    "backspace": "Letzte Ziffer löschen",
+    "activeField": "Eingabe: {{label}}"
+  },
+  "language": {
+    "menuLabel": "Sprache",
+    "current": "Aktuelle Sprache",
+    "options": {
+      "pl": "Polnisch",
+      "en": "Englisch",
+      "de": "Deutsch"
+    }
+  },
+  "nav": {
+    "goToDashboard": "Zum Dashboard",
+    "dashboard": "Dashboard",
+    "openMenu": "Menü öffnen",
+    "closeMenu": "Menü schließen",
+    "drawerTitle": "Menü",
+    "administration": {
+      "menuLabel": "Administration",
+      "users": "Benutzer",
+      "layouts": "Anlagen",
+      "parties": "Veranstaltungen",
+      "interlockings": "Stellwerke",
+      "commandStations": "Zentralen",
+      "diagnostics": "Diagnose",
+      "auditLog": "Audit-Protokoll",
+      "rentals": "Ausleihen"
+    },
+    "my": {
+      "menuLabel": "Meine",
+      "vehicles": "Fahrzeuge",
+      "trains": "Züge",
+      "templates": "Fahrzeugvorlagen",
+      "throttle": "Regler",
+      "rentals": "Ausleihen"
+    },
+    "fleet": {
+      "menuLabel": "Fuhrpark",
+      "availableVehicles": "Verfügbare Fahrzeuge",
+      "availableTrains": "Verfügbare Züge"
+    },
+    "account": {
+      "menuLabel": "Konto",
+      "profile": "Profil",
+      "apiKeys": "API-Schlüssel",
+      "changePin": "Passwort ändern",
+      "logout": "Abmelden"
+    }
+  },
+  "comingSoon": "Demnächst ({{milestone}})",
+  "networkError": "Server nicht erreichbar."
+}

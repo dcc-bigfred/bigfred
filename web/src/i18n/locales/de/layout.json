@@ -1,0 +1,64 @@
+{
+  "system_default_label": "Standard (Werkstatt)",
+  "loginPicker": {
+    "label": "Anlage",
+    "loading": "Anlagen werden geladen…",
+    "loadError": "Anlagenliste konnte nicht geladen werden.",
+    "empty": "Keine Anlagen verfügbar."
+  },
+  "admin": {
+    "title": "Anlagen",
+    "subtitle": "Alle Anlagen (die Standardanlage ist immer verfügbar und kann nicht gelöscht oder gesperrt werden).",
+    "columns": {
+      "name": "Name",
+      "status": "Status",
+      "type": "Typ",
+      "actions": "Aktionen"
+    },
+    "type": {
+      "system": "System",
+      "custom": "Benutzerdefiniert"
+    },
+    "status": {
+      "active": "Aktiv",
+      "locked": "Gesperrt"
+    },
+    "actions": {
+      "create": "Neue Anlage",
+      "edit": "Bearbeiten",
+      "rename": "Umbenennen",
+      "lock": "Sperren",
+      "unlock": "Entsperren",
+      "delete": "Löschen"
+    },
+    "dialogs": {
+      "create": {
+        "title": "Neue Anlage",
+        "nameLabel": "Name",
+        "nameHelp": "Kurze Bezeichnung der Anlage (z. B. „Modellbahnfest 2026“)."
+      },
+      "edit": {
+        "title": "Anlage bearbeiten",
+        "nameLabel": "Name",
+        "interlockingsLabel": "Stellwerke",
+        "interlockingsHelp": "Stellwerke wählen, die in dieser Anlage sichtbar sind. Die Liste kann leer sein.",
+        "commandStationsLabel": "Zentralen",
+        "commandStationsHelp": "Mindestens eine Zentrale wählen, die dieser Anlage zugewiesen ist.",
+        "commandStationsSystemHelp": "Die Systemanlage sieht alle Katalog-Zentralen — die Zuweisung ist virtuell."
+      },
+      "rename": {
+        "title": "Anlage umbenennen",
+        "nameLabel": "Name"
+      },
+      "delete": {
+        "title": "Anlage „{{name}}“ löschen",
+        "message": "Dieser Vorgang ist unwiderruflich. Aktive Sitzungen auf dieser Anlage laufen weiter, bis sie geschlossen werden, aber niemand kann sich mehr anmelden."
+      },
+      "lock": {
+        "title": "Anlage „{{name}}“ sperren",
+        "message": "Eine gesperrte Anlage erscheint nicht mehr auf dem Anmeldebildschirm, laufende Sitzungen bleiben offen. Sie können sie jederzeit wieder entsperren."
+      }
+    },
+    "empty": "Keine Anlagen anzuzeigen."
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "title": "Audit-Protokoll",
+  "subtitle": "Aktuelle Systemereignisse",
+  "refresh": "Aktualisieren",
+  "empty": "Keine Ereignisse anzuzeigen.",
+  "error": "Audit-Protokoll konnte nicht geladen werden.",
+  "unknownEvent": "Unbekanntes Ereignis: {{msg}}",
+  "colTime": "Zeit",
+  "colEvent": "Ereignis",
+  "events": {
+    "audit_radio_stop": "{{actorLogin}} hat Funkstopp ausgelöst",
+    "audit_estop_target": "{{actorLogin}} hat Fahrzeug gestoppt ({{target}} #{{targetId}})",
+    "audit_layout_updated": "{{actorLogin}} hat Einstellungen der Anlage „{{name}}“ geändert",
+    "audit_layout_locked": "{{actorLogin}} hat Anlage „{{name}}“ gesperrt",
+    "audit_layout_unlocked": "{{actorLogin}} hat Anlage „{{name}}“ entsperrt",
+    "audit_command_station_updated": "{{actorLogin}} hat Zentrale „{{name}}“ geändert",
+    "audit_command_station_deleted": "{{actorLogin}} hat Zentrale „{{name}}“ gelöscht",
+    "audit_takeover_granted": "{{actorLogin}} hat Fahrzeug „{{vehicle}}“ von Benutzer {{driver}} übernommen",
+    "audit_user_created": "{{actorLogin}} hat Benutzer „{{target}}“ erstellt",
+    "audit_user_updated": "{{actorLogin}} hat Daten von Benutzer „{{target}}“ geändert",
+    "audit_user_deleted": "{{actorLogin}} hat Benutzer „{{target}}“ gelöscht",
+    "audit_user_activated": "{{actorLogin}} hat Konto von Benutzer „{{target}}“ aktiviert",
+    "audit_user_deactivated": "{{actorLogin}} hat Konto von Benutzer „{{target}}“ deaktiviert",
+    "audit_roster_vehicle_added": "{{actorLogin}} hat Fahrzeug „{{vehicle}}“ zur Anlage hinzugefügt",
+    "audit_roster_vehicle_removed": "{{actorLogin}} hat Fahrzeug „{{vehicle}}“ von der Anlage entfernt",
+    "audit_roster_train_added": "{{actorLogin}} hat Zug „{{train}}“ zur Anlage hinzugefügt",
+    "audit_roster_train_removed": "{{actorLogin}} hat Zug „{{train}}“ von der Anlage entfernt"
+  }
+}

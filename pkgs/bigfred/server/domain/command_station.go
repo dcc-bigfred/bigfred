@@ -61,12 +61,61 @@ type CommandStation struct {
 	Kind          CommandStationKind
 	ConnectionURI string `db:"connection_uri"`
 	SpeedSteps    uint   `db:"speed_steps"`
+	// HeartbeatSecs is the WS ping interval the dcc-bus daemon advertises to
+	// clients for this station. Default 2 when zero.
+	HeartbeatSecs float64 `db:"heartbeat_secs"`
+	// DeadmanSecs is the client idle window after which dcc-bus applies an
+	// emergency stop. Must exceed HeartbeatSecs. Default 6 when zero.
+	DeadmanSecs   float64 `db:"deadman_secs"`
+	// PollIntervalMs is the state-feed polling cadence for drivers without
+	// push notifications. Zero selects the dcc-bus daemon default (750 ms).
+	PollIntervalMs uint `db:"poll_interval_ms"`
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
 }
 
 // Table tells REL which physical table backs this struct.
 func (CommandStation) Table() string { return "command_stations" }
+
+const (
+	DefaultCommandStationSpeedSteps    = 128
+	DefaultCommandStationHeartbeatSecs = 2
+	DefaultCommandStationDeadmanSecs   = 6
+	DefaultCommandStationPollIntervalMs = 0
+)
+
+// EffectiveSpeedSteps returns the catalogue DCC speed-step count, applying
+// the default when the stored value is zero.
+func (cs CommandStation) EffectiveSpeedSteps() uint {
+	if cs.SpeedSteps == 0 {
+		return DefaultCommandStationSpeedSteps
+	}
+	return cs.SpeedSteps
+}
+
+// EffectiveHeartbeatSecs returns the catalogue heartbeat interval, applying
+// the default when the stored value is zero (pre-migration rows).
+func (cs CommandStation) EffectiveHeartbeatSecs() float64 {
+	if cs.HeartbeatSecs <= 0 {
+		return DefaultCommandStationHeartbeatSecs
+	}
+	return cs.HeartbeatSecs
+}
+
+// EffectiveDeadmanSecs returns the catalogue dead-man idle window, applying
+// the default when the stored value is zero (pre-migration rows).
+func (cs CommandStation) EffectiveDeadmanSecs() float64 {
+	if cs.DeadmanSecs <= 0 {
+		return DefaultCommandStationDeadmanSecs
+	}
+	return cs.DeadmanSecs
+}
+
+// EffectivePollIntervalMs returns the catalogue state-feed poll cadence.
+// Zero means the dcc-bus daemon applies its built-in default.
+func (cs CommandStation) EffectivePollIntervalMs() uint {
+	return cs.PollIntervalMs
+}
 
 // LayoutCommandStation is the join row binding a CommandStation to a
 // Layout. The pair (LayoutID, CommandStationID) is unique on the

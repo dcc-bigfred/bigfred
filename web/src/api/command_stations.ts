@@ -14,12 +14,20 @@ export const COMMAND_STATION_KINDS: CommandStationKind[] = [
 
 export const COMMAND_STATION_SPEED_STEPS = [14, 28, 128] as const;
 
+export const DEFAULT_COMMAND_STATION_HEARTBEAT_SECS = 2;
+export const DEFAULT_COMMAND_STATION_DEADMAN_SECS = 6;
+export const DEFAULT_COMMAND_STATION_POLL_INTERVAL_MS = 0;
+export const DEFAULT_COMMAND_STATION_SPEED_STEPS = 128;
+
 export interface CommandStation {
   id: number;
   name: string;
   kind: CommandStationKind;
   connectionUri: string;
   speedSteps: number;
+  heartbeatSecs: number;
+  deadmanSecs: number;
+  pollIntervalMs: number;
 }
 
 const commandStationsCatalogueQueryKey = [
@@ -44,6 +52,9 @@ export function useCreateCommandStation() {
       kind: CommandStationKind;
       connectionUri: string;
       speedSteps: number;
+      heartbeatSecs: number;
+      deadmanSecs: number;
+      pollIntervalMs: number;
     }) =>
       apiFetch<CommandStation>("/api/v1/command-stations", {
         method: "POST",
@@ -64,6 +75,9 @@ export function useUpdateCommandStation() {
       kind: CommandStationKind;
       connectionUri: string;
       speedSteps: number;
+      heartbeatSecs: number;
+      deadmanSecs: number;
+      pollIntervalMs: number;
     }) =>
       apiFetch<CommandStation>(`/api/v1/command-stations/${args.id}`, {
         method: "PUT",
@@ -72,6 +86,9 @@ export function useUpdateCommandStation() {
           kind: args.kind,
           connectionUri: args.connectionUri,
           speedSteps: args.speedSteps,
+          heartbeatSecs: args.heartbeatSecs,
+          deadmanSecs: args.deadmanSecs,
+          pollIntervalMs: args.pollIntervalMs,
         }),
       }),
     onSuccess: () => {

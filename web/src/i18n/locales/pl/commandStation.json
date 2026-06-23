@@ -7,8 +7,10 @@
       "kind": "Typ",
       "connection": "Połączenie",
       "speedSteps": "Kroki prędkości",
+      "timing": "Czasy",
       "actions": "Akcje"
     },
+    "timingSummary": "{{heartbeat}} s ping / {{deadman}} s dead-man / poll {{poll}} ms (0 = domyślny)",
     "actions": {
       "create": "Nowa centralka",
       "edit": "Edytuj",
@@ -35,7 +37,14 @@
         "kind": "Typ",
         "connectionUri": "URI połączenia",
         "connectionUriHelp": "np. udp://192.168.1.10:21105, serial:///dev/ttyUSB0:57600, tcp://192.168.1.20:1234",
-        "speedSteps": "Kroki prędkości"
+        "speedSteps": "Kroki prędkości",
+        "speedStepsHelp": "Rozdzielczość prędkości DCC przekazywana do dcc-bus. Domyślnie 128.",
+        "pollIntervalMs": "Interwał odpytywania (ms)",
+        "pollIntervalMsHelp": "Częstotliwość odpytywania stanu dla sterowników bez push. 0 oznacza domyślną wartość daemona (750 ms).",
+        "heartbeatSecs": "Interwał heartbeat (s)",
+        "heartbeatSecsHelp": "Interwał pingów WebSocket. Domyślnie 2 s. Jeśli ping nie zdąży przed dead-man, to pojazd zostanie awaryjnie zatrzymany.",
+        "deadmanSecs": "Czas dead-man (s)",
+        "deadmanSecsHelp": "Czas bezczynności, po którym daemon wykonuje zatrzymanie awaryjne. Musi być dłuższy niż heartbeat. Domyślnie 6 s."
       }
     },
     "empty": "Brak centralki do wyświetlenia."

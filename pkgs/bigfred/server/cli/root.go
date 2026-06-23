@@ -141,7 +141,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		return err
 	}
 
-	repository, sqlDB, err := repo.Open(f.DBPath)
+	repository, sqlDB, err := repo.Open(f.DBPath, log)
 	if err != nil {
 		return fmt.Errorf("open db: %w", err)
 	}
@@ -344,24 +344,9 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		log.Info("audit service ready (Redis Streams)")
 	}
 
-	leaseSvc := service.NewLeaseService(service.LeaseConfig{
-		VehicleLeases:  vehicleLeases,
-		TrainLeases:    trainLeases,
-		LayoutVehicles: layoutVehicles,
-		LayoutTrains:   layoutTrains,
-		Vehicles:       vehicles,
-		Trains:         trains,
-		Users:          users,
-		Roster:         layoutVehicleSvc,
-		Hub:            hub,
-		Audit:          auditSvc,
-	})
-	if err := leaseSvc.RecoverPending(ctx); err != nil {
-		log.WithError(err).Warn("lease recover pending")
-	}
-
 	var radioStopSvc *service.RadioStopService
 	var estopTargetSvc *service.EStopTargetService
+	var leaseBrake cmd.LeaseBrakePort
 	if dccBusSvc != nil && redisReady {
 		radioStopSvc = service.NewRadioStopService(service.RadioStopConfig{
 			Hub:    hub,
@@ -381,6 +366,29 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 			LayoutIlks:  layoutInterlockings,
 			Log:         log,
 		})
+		leaseBrake = service.NewLeaseBrake(service.LeaseBrakeConfig{
+			DccBus:  dccBusSvc,
+			Roster:  layoutVehicleSvc,
+			Layouts: layoutSvc,
+			Log:     log,
+		})
+	}
+
+	leaseSvc := service.NewLeaseService(service.LeaseConfig{
+		VehicleLeases:  vehicleLeases,
+		TrainLeases:    trainLeases,
+		LayoutVehicles: layoutVehicles,
+		LayoutTrains:   layoutTrains,
+		Vehicles:       vehicles,
+		Trains:         trains,
+		Users:          users,
+		Roster:         layoutVehicleSvc,
+		Hub:            hub,
+		Audit:          auditSvc,
+		Brake:          leaseBrake,
+	})
+	if err := leaseSvc.RecoverPending(ctx); err != nil {
+		log.WithError(err).Warn("lease recover pending")
 	}
 
 	sessionCtl = service.NewSessionControlService(service.SessionControlConfig{

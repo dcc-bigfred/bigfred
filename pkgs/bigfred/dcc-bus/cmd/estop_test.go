@@ -163,3 +163,84 @@ func TestApplyEStopAll_preservesReverseDirection(t *testing.T) {
 		t.Fatalf("stored snap forward=%v ok=%v, want forward=false", snap.Forward, ok)
 	}
 }
+
+func TestApplyEStopTarget_skipsStandingLoco(t *testing.T) {
+	t.Parallel()
+
+	newRouter := func(t *testing.T, rs *state.Redis, st *commandstation.StubStation) *Router {
+		t.Helper()
+		const addr uint16 = 5
+		r, err := NewRouter(context.Background(), Config{
+			Station:          st,
+			Hub:              &stubHub{},
+			Redis:            rs,
+			LayoutID:         2,
+			CommandStationID: 1,
+			SpeedSteps:       128,
+			AllowedVehicles: contract.AllowedVehicles{
+				LayoutID: 2,
+				Vehicles: []contract.AllowedVehicle{{Addr: addr}},
+			},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
+
+	t.Run("standing", func(t *testing.T) {
+		t.Parallel()
+		var calls int
+		st := &commandstation.StubStation{
+			SetSpeedFn: func(_ commandstation.LocoAddr, _ uint8, _ bool, _ uint8) error {
+				calls++
+				return nil
+			},
+		}
+		rs, cleanup := testRedis(t)
+		defer cleanup()
+		ctx := context.Background()
+		const addr uint16 = 5
+
+		if err := rs.StoreLocoCurrentState(ctx, contract.LocoStateWire{
+			Address: addr,
+			Speed:   0,
+			Forward: true,
+		}, StateTTL); err != nil {
+			t.Fatal(err)
+		}
+
+		newRouter(t, rs, st).applyEStopTarget(ctx, []uint16{addr})
+		if calls != 0 {
+			t.Fatalf("SetSpeed calls = %d, want 0 for standing loco", calls)
+		}
+	})
+
+	t.Run("moving", func(t *testing.T) {
+		t.Parallel()
+		var calls int
+		st := &commandstation.StubStation{
+			SetSpeedFn: func(_ commandstation.LocoAddr, _ uint8, _ bool, _ uint8) error {
+				calls++
+				return nil
+			},
+		}
+		rs, cleanup := testRedis(t)
+		defer cleanup()
+		ctx := context.Background()
+		const addr uint16 = 5
+
+		if err := rs.StoreLocoCurrentState(ctx, contract.LocoStateWire{
+			Address: addr,
+			Speed:   20,
+			Forward: true,
+		}, StateTTL); err != nil {
+			t.Fatal(err)
+		}
+
+		newRouter(t, rs, st).applyEStopTarget(ctx, []uint16{addr})
+		if calls != 1 {
+			t.Fatalf("SetSpeed calls = %d, want 1 for moving loco", calls)
+		}
+	})
+}

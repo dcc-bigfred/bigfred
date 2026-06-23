@@ -86,6 +86,7 @@ type Lease struct {
 	roster         LeaseRosterPort
 	hub            LeaseHubPort
 	audit          AuditPublisher
+	brake          LeaseBrakePort
 
 	mu     sync.Mutex
 	timers map[string]*leaseTimerState
@@ -122,6 +123,7 @@ type LeaseConfig struct {
 	Roster         LeaseRosterPort
 	Hub            LeaseHubPort
 	Audit          AuditPublisher
+	Brake          LeaseBrakePort
 }
 
 func NewLease(cfg LeaseConfig) *Lease {
@@ -136,6 +138,7 @@ func NewLease(cfg LeaseConfig) *Lease {
 		roster:         cfg.Roster,
 		hub:            cfg.Hub,
 		audit:          cfg.Audit,
+		brake:          cfg.Brake,
 		timers:        make(map[string]*leaseTimerState),
 	}
 }
@@ -294,11 +297,19 @@ func (s *Lease) expireLease(kind domain.TakeoverTarget, targetID string, entry L
 	s.cancelTimer(kind, targetID)
 	owner := domain.User{ID: entry.FromUserID, Login: entry.FromLogin}
 	for _, layoutID := range layoutIDs {
+		s.brakeLeasedTarget(ctx, layoutID, kind, targetID)
 		if s.roster != nil {
 			_ = s.roster.SyncLayoutRoster(ctx, layoutID)
 		}
 		s.publishEvent(ctx, layoutID, owner, contract.TypeLeaseExpired, entry)
 	}
+}
+
+func (s *Lease) brakeLeasedTarget(ctx context.Context, layoutID uint, kind domain.TakeoverTarget, targetID string) {
+	if s.brake == nil {
+		return
+	}
+	_ = s.brake.StopLeasedTarget(ctx, layoutID, kind, targetID)
 }
 
 func formatUint8(v uint8) string {
@@ -340,20 +351,36 @@ func (s *Lease) ListReceived(ctx context.Context, layoutID, userID uint) ([]Leas
 	return out, nil
 }
 
-// ListGranted returns leases the user granted to others.
-func (s *Lease) ListGranted(ctx context.Context, layoutID, ownerID uint) ([]LeaseEntry, error) {
+// ListGranted returns leases the user granted to others. Effective
+// admins see every active lease on the layout roster.
+func (s *Lease) ListGranted(
+	ctx context.Context,
+	layoutID uint,
+	actor domain.User,
+	eff domain.EffectiveRoles,
+) ([]LeaseEntry, error) {
 	idx, err := s.buildLayoutRosterIndex(ctx, layoutID)
 	if err != nil {
 		return nil, err
 	}
 	logins := make(userLoginCache)
+	now := time.Now().UTC()
 	var out []LeaseEntry
 	if s.vehicleLeases != nil {
-		rows, err := s.vehicleLeases.ListByOwner(ctx, ownerID)
+		var rows []domain.VehicleLease
+		var err error
+		if eff.Has(domain.RoleAdmin) {
+			rows, err = s.vehicleLeases.ListAll(ctx)
+		} else {
+			rows, err = s.vehicleLeases.ListByOwner(ctx, actor.ID)
+		}
 		if err != nil {
 			return nil, err
 		}
 		for _, row := range rows {
+			if !row.IsActive(now) {
+				continue
+			}
 			entry, ok := s.enrichVehicleLeaseIndexed(ctx, row, idx, logins)
 			if ok {
 				out = append(out, entry)
@@ -361,11 +388,20 @@ func (s *Lease) ListGranted(ctx context.Context, layoutID, ownerID uint) ([]Leas
 		}
 	}
 	if s.trainLeases != nil {
-		rows, err := s.trainLeases.ListByOwner(ctx, ownerID)
+		var rows []domain.TrainLease
+		var err error
+		if eff.Has(domain.RoleAdmin) {
+			rows, err = s.trainLeases.ListAll(ctx)
+		} else {
+			rows, err = s.trainLeases.ListByOwner(ctx, actor.ID)
+		}
 		if err != nil {
 			return nil, err
 		}
 		for _, row := range rows {
+			if !row.IsActive(now) {
+				continue
+			}
 			entry, ok := s.enrichTrainLeaseIndexed(ctx, row, idx, logins)
 			if ok {
 				out = append(out, entry)
@@ -476,11 +512,13 @@ func (s *Lease) Lendable(ctx context.Context, layoutID, ownerID uint) (LendableC
 	return LendableCatalogue{Targets: targets, Users: users}, nil
 }
 
-// Create grants a drive lease from owner to lessee.
+// Create grants a drive lease from the target owner to lessee. The
+// actor must be the owner or an effective admin acting on their behalf.
 func (s *Lease) Create(
 	ctx context.Context,
 	layoutID uint,
-	owner domain.User,
+	actor domain.User,
+	eff domain.EffectiveRoles,
 	kind domain.TakeoverTarget,
 	targetID string,
 	toUserID uint,
@@ -489,6 +527,13 @@ func (s *Lease) Create(
 ) (LeaseEntry, error) {
 	if err := s.requireStores(); err != nil {
 		return LeaseEntry{}, err
+	}
+	owner, err := s.resolveTargetOwner(ctx, kind, targetID)
+	if err != nil {
+		return LeaseEntry{}, err
+	}
+	if actor.ID != owner.ID && !eff.Has(domain.RoleAdmin) {
+		return LeaseEntry{}, ErrLeaseNotOwner
 	}
 	if err := validateLeaseInput(toUserID, owner.ID, speedLimit, duration); err != nil {
 		return LeaseEntry{}, err
@@ -513,16 +558,6 @@ func (s *Lease) Create(
 	switch kind {
 	case domain.TakeoverTargetVehicle:
 		vID := domain.VehicleID(targetID)
-		v, err := s.vehicles.FindByID(ctx, vID)
-		if err != nil {
-			return LeaseEntry{}, err
-		}
-		if v.OwnerUserID != owner.ID {
-			return LeaseEntry{}, ErrLeaseNotOwner
-		}
-		if v.DCCAddress == nil {
-			return LeaseEntry{}, ErrLeaseTargetNotDrivable
-		}
 		row := domain.VehicleLease{
 			VehicleID:  vID,
 			FromUserID: owner.ID,
@@ -547,13 +582,6 @@ func (s *Lease) Create(
 		s.scheduleExpiry(kind, targetID, expires, entry)
 	case domain.TakeoverTargetTrain:
 		tID := domain.TrainID(targetID)
-		t, err := s.trains.FindByID(ctx, tID)
-		if err != nil {
-			return LeaseEntry{}, err
-		}
-		if t.OwnerUserID != owner.ID {
-			return LeaseEntry{}, ErrLeaseNotOwner
-		}
 		row := domain.TrainLease{
 			TrainID:    tID,
 			FromUserID: owner.ID,
@@ -582,12 +610,19 @@ func (s *Lease) Create(
 	if s.roster != nil {
 		_ = s.roster.SyncLayoutRoster(ctx, layoutID)
 	}
-	s.publishEvent(ctx, layoutID, owner, contract.TypeLeaseCreated, entry)
+	s.publishEvent(ctx, layoutID, actor, contract.TypeLeaseCreated, entry)
 	return entry, nil
 }
 
-// Revoke ends a lease. Owner or lessee may call.
-func (s *Lease) Revoke(ctx context.Context, layoutID, actorID uint, kind domain.TakeoverTarget, targetID string) error {
+// Revoke ends a lease. Owner, lessee, or an effective admin may call.
+func (s *Lease) Revoke(
+	ctx context.Context,
+	layoutID uint,
+	actor domain.User,
+	eff domain.EffectiveRoles,
+	kind domain.TakeoverTarget,
+	targetID string,
+) error {
 	if err := s.requireStores(); err != nil {
 		return err
 	}
@@ -595,9 +630,10 @@ func (s *Lease) Revoke(ctx context.Context, layoutID, actorID uint, kind domain.
 	if err != nil {
 		return err
 	}
-	if actorID != loaded.entry.FromUserID && actorID != loaded.entry.ToUserID {
+	if !s.canRevokeLease(actor, eff, loaded.entry) {
 		return ErrLeaseNotParty
 	}
+	s.brakeLeasedTarget(ctx, layoutID, kind, targetID)
 	switch {
 	case loaded.vehicle != nil:
 		if err := s.vehicleLeases.Revoke(ctx, loaded.vehicle.VehicleID); err != nil {
@@ -614,15 +650,16 @@ func (s *Lease) Revoke(ctx context.Context, layoutID, actorID uint, kind domain.
 	if s.roster != nil {
 		_ = s.roster.SyncLayoutRoster(ctx, layoutID)
 	}
-	actor := s.userLogin(ctx, actorID)
-	s.publishEvent(ctx, layoutID, domain.User{ID: actorID, Login: actor}, contract.TypeLeaseRevoked, loaded.entry)
+	s.publishEvent(ctx, layoutID, actor, contract.TypeLeaseRevoked, loaded.entry)
 	return nil
 }
 
-// UpdateSpeedLimit changes the lessee speed cap (owner only).
+// UpdateSpeedLimit changes the lessee speed cap (owner or admin).
 func (s *Lease) UpdateSpeedLimit(
 	ctx context.Context,
-	layoutID, ownerID uint,
+	layoutID uint,
+	actor domain.User,
+	eff domain.EffectiveRoles,
 	kind domain.TakeoverTarget,
 	targetID string,
 	speedLimit uint8,
@@ -637,7 +674,7 @@ func (s *Lease) UpdateSpeedLimit(
 	if err != nil {
 		return LeaseEntry{}, err
 	}
-	if loaded.entry.FromUserID != ownerID {
+	if !s.canManageGrantedLease(actor, eff, loaded.entry.FromUserID) {
 		return LeaseEntry{}, ErrLeaseNotOwner
 	}
 	switch {
@@ -660,15 +697,16 @@ func (s *Lease) UpdateSpeedLimit(
 		_ = s.roster.SyncLayoutRoster(ctx, layoutID)
 	}
 	s.refreshTimerEntry(kind, targetID, loaded.entry)
-	owner := domain.User{ID: ownerID, Login: loaded.entry.FromLogin}
-	s.publishEvent(ctx, layoutID, owner, contract.TypeLeaseUpdated, loaded.entry)
+	s.publishEvent(ctx, layoutID, actor, contract.TypeLeaseUpdated, loaded.entry)
 	return loaded.entry, nil
 }
 
-// UpdateDuration sets a new expiry relative to now (owner only).
+// UpdateDuration sets a new expiry relative to now (owner or admin).
 func (s *Lease) UpdateDuration(
 	ctx context.Context,
-	layoutID, ownerID uint,
+	layoutID uint,
+	actor domain.User,
+	eff domain.EffectiveRoles,
 	kind domain.TakeoverTarget,
 	targetID string,
 	duration time.Duration,
@@ -683,7 +721,7 @@ func (s *Lease) UpdateDuration(
 	if err != nil {
 		return LeaseEntry{}, err
 	}
-	if loaded.entry.FromUserID != ownerID {
+	if !s.canManageGrantedLease(actor, eff, loaded.entry.FromUserID) {
 		return LeaseEntry{}, ErrLeaseNotOwner
 	}
 	expires := time.Now().UTC().Add(duration)
@@ -707,9 +745,53 @@ func (s *Lease) UpdateDuration(
 	if s.roster != nil {
 		_ = s.roster.SyncLayoutRoster(ctx, layoutID)
 	}
-	owner := domain.User{ID: ownerID, Login: loaded.entry.FromLogin}
-	s.publishEvent(ctx, layoutID, owner, contract.TypeLeaseUpdated, loaded.entry)
+	s.publishEvent(ctx, layoutID, actor, contract.TypeLeaseUpdated, loaded.entry)
 	return loaded.entry, nil
+}
+
+func (s *Lease) resolveTargetOwner(
+	ctx context.Context,
+	kind domain.TakeoverTarget,
+	targetID string,
+) (domain.User, error) {
+	var ownerUserID uint
+	switch kind {
+	case domain.TakeoverTargetVehicle:
+		v, err := s.vehicles.FindByID(ctx, domain.VehicleID(targetID))
+		if err != nil {
+			return domain.User{}, err
+		}
+		if v.DCCAddress == nil {
+			return domain.User{}, ErrLeaseTargetNotDrivable
+		}
+		ownerUserID = v.OwnerUserID
+	case domain.TakeoverTargetTrain:
+		tr, err := s.trains.FindByID(ctx, domain.TrainID(targetID))
+		if err != nil {
+			return domain.User{}, err
+		}
+		ownerUserID = tr.OwnerUserID
+	default:
+		return domain.User{}, ErrLeaseTargetNotOnLayout
+	}
+	if s.users == nil {
+		return domain.User{ID: ownerUserID}, nil
+	}
+	u, err := s.users.FindByID(ctx, ownerUserID)
+	if err != nil {
+		return domain.User{}, svcerrors.ErrUserNotFound
+	}
+	return u, nil
+}
+
+func (s *Lease) canManageGrantedLease(actor domain.User, eff domain.EffectiveRoles, fromUserID uint) bool {
+	return actor.ID == fromUserID || eff.Has(domain.RoleAdmin)
+}
+
+func (s *Lease) canRevokeLease(actor domain.User, eff domain.EffectiveRoles, entry LeaseEntry) bool {
+	return actor.ID == entry.FromUserID ||
+		actor.ID == entry.ToUserID ||
+		eff.Has(domain.RoleAdmin)
 }
 
 func validateLeaseInput(toUserID, ownerID uint, speedLimit uint8, duration time.Duration) error {

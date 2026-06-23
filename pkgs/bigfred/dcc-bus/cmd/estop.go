@@ -110,6 +110,9 @@ func (r *Router) applyEStopTarget(ctx context.Context, addrs []uint16) {
 		if !r.roster.IsOnLayout(addr) {
 			continue
 		}
+		if !r.shouldEmergencyStopLoco(ctx, addr, true) {
+			continue
+		}
 		forward := r.isLocoPlacedForward(ctx, addr)
 		if err := r.station.SetSpeed(commandstation.LocoAddr(addr), 1, forward, uint8(r.speedSteps)); err != nil {
 			r.log.WithError(err).WithField("addr", addr).Warn("dcc-bus estop target failed")

@@ -2,13 +2,16 @@ import { useState } from "react";
 import {
   Box,
   Button,
+  CircularProgress,
   Stack,
   Typography,
 } from "@mui/material";
 import HandshakeIcon from "@mui/icons-material/Handshake";
+import RefreshIcon from "@mui/icons-material/Refresh";
+import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
-import { useGrantedLeases, type LeaseEntry } from "../../api/leases";
+import { invalidateLeases, useGrantedLeases, type LeaseEntry } from "../../api/leases";
 import { useLeaseEvents } from "../../hooks/useLeaseEvents";
 import LeaseCountdown from "./LeaseCountdown";
 import LeaseControlDialog from "./LeaseControlDialog";
@@ -26,9 +29,11 @@ export default function GrantedLeasesPanel({
   showOwner = false,
 }: GrantedLeasesPanelProps) {
   const { t } = useTranslation(["rentals", "common"]);
+  const qc = useQueryClient();
   useLeaseEvents();
 
   const granted = useGrantedLeases();
+  const isRefreshing = granted.isFetching && !granted.isLoading;
   const rows = granted.data ?? [];
 
   const [createOpen, setCreateOpen] = useState(false);
@@ -43,7 +48,21 @@ export default function GrantedLeasesPanel({
 
   return (
     <>
-      <Stack direction="row" alignItems="center" justifyContent="flex-end" sx={{ mb: 2 }}>
+      <Stack direction="row" alignItems="center" justifyContent="flex-end" spacing={1} sx={{ mb: 2 }}>
+        <Button
+          variant="outlined"
+          startIcon={
+            isRefreshing ? (
+              <CircularProgress size={16} color="inherit" />
+            ) : (
+              <RefreshIcon />
+            )
+          }
+          onClick={() => void invalidateLeases(qc)}
+          disabled={isRefreshing}
+        >
+          {t("refresh")}
+        </Button>
         <Button
           variant="contained"
           startIcon={<HandshakeIcon />}

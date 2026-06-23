@@ -5,6 +5,7 @@
     "granted": "Wypożyczam komuś"
   },
   "empty": "Brak aktywnych wypożyczeń.",
+  "refresh": "Odśwież",
   "expired": "Wygasło",
   "kind": {
     "vehicle": "pojazd",

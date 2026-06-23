@@ -5,6 +5,7 @@
     "granted": "Lent to others"
   },
   "empty": "No active rentals.",
+  "refresh": "Refresh",
   "expired": "Expired",
   "kind": {
     "vehicle": "vehicle",

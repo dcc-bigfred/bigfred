@@ -33,6 +33,7 @@ import plFunction from "./locales/pl/function.json";
 import plTrainAnnouncements from "./locales/pl/trainAnnouncements.json";
 import plAudit from "./locales/pl/audit.json";
 import plRentals from "./locales/pl/rentals.json";
+import plZ21Remote from "./locales/pl/z21Remote.json";
 
 import enCommon from "./locales/en/common.json";
 import enAuth from "./locales/en/auth.json";
@@ -52,6 +53,7 @@ import enFunction from "./locales/en/function.json";
 import enTrainAnnouncements from "./locales/en/trainAnnouncements.json";
 import enAudit from "./locales/en/audit.json";
 import enRentals from "./locales/en/rentals.json";
+import enZ21Remote from "./locales/en/z21Remote.json";
 
 import deCommon from "./locales/de/common.json";
 import deAuth from "./locales/de/auth.json";
@@ -71,6 +73,7 @@ import deFunction from "./locales/de/function.json";
 import deTrainAnnouncements from "./locales/de/trainAnnouncements.json";
 import deAudit from "./locales/de/audit.json";
 import deRentals from "./locales/de/rentals.json";
+import deZ21Remote from "./locales/de/z21Remote.json";
 
 // SUPPORTED_LOCALES is the single source of truth. Adding a third
 // locale (e.g. "de") is: append it here → mirror every catalogue
@@ -103,6 +106,7 @@ export const resources = {
     trainAnnouncements: plTrainAnnouncements,
     audit: plAudit,
     rentals: plRentals,
+    z21Remote: plZ21Remote,
   },
   en: {
     common: enCommon,
@@ -123,6 +127,7 @@ export const resources = {
     trainAnnouncements: enTrainAnnouncements,
     audit: enAudit,
     rentals: enRentals,
+    z21Remote: enZ21Remote,
   },
   de: {
     common: deCommon,
@@ -143,6 +148,7 @@ export const resources = {
     trainAnnouncements: deTrainAnnouncements,
     audit: deAudit,
     rentals: deRentals,
+    z21Remote: deZ21Remote,
   },
 } as const;
 
@@ -159,7 +165,7 @@ void i18n
     fallbackLng: "pl",
     supportedLngs: SUPPORTED_LOCALES as unknown as string[],
     defaultNS: "common",
-    ns: ["common", "auth", "errors", "role", "home", "layout", "interlocking", "radio", "vehicle", "user", "sudo", "throttle", "commandStation", "diagnostics", "function", "trainAnnouncements", "audit", "rentals"],
+    ns: ["common", "auth", "errors", "role", "home", "layout", "interlocking", "radio", "vehicle", "user", "sudo", "throttle", "commandStation", "diagnostics", "function", "trainAnnouncements", "audit", "rentals", "z21Remote"],
     interpolation: {
       // React already escapes everything; double-escaping inside
       // i18next would mangle apostrophes and quotes.

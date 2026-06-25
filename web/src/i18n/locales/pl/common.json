@@ -52,7 +52,8 @@
       "trains": "Składy",
       "templates": "Szablony pojazdów",
       "throttle": "Sterowanie",
-      "rentals": "Wypożyczenia"
+      "rentals": "Wypożyczenia",
+      "z21Remote": "Pilot Z21"
     },
     "fleet": {
       "menuLabel": "Tabor",

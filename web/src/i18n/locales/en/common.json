@@ -52,7 +52,8 @@
       "trains": "Trains",
       "templates": "Vehicle templates",
       "throttle": "Throttle",
-      "rentals": "Rentals"
+      "rentals": "Rentals",
+      "z21Remote": "Z21 handset"
     },
     "fleet": {
       "menuLabel": "Fleet",

@@ -8,9 +8,11 @@
       "connection": "Verbindung",
       "speedSteps": "Geschwindigkeitsstufen",
       "timing": "Zeitsteuerung",
+      "z21Server": "Z21-Server",
       "actions": "Aktionen"
     },
     "timingSummary": "{{heartbeat}}s Ping / {{deadman}}s Totmann / Abfrage {{poll}}ms (0 = Standard)",
+    "z21ServerOn": "Z21-Server an",
     "actions": {
       "create": "Neue Zentrale",
       "edit": "Bearbeiten",
@@ -44,7 +46,10 @@
         "heartbeatSecs": "Heartbeat-Intervall (s)",
         "heartbeatSecsHelp": "WebSocket-Ping-Intervall. Standard 2 s. Kommt der Ping nicht vor dem Totmann an, wird das Fahrzeug notgestoppt.",
         "deadmanSecs": "Totmann-Timeout (s)",
-        "deadmanSecsHelp": "Leerlaufzeit, nach der der Daemon Notstopp auslöst. Muss länger als der Heartbeat sein. Standard 6 s."
+        "deadmanSecsHelp": "Leerlaufzeit, nach der der Daemon Notstopp auslöst. Muss länger als der Heartbeat sein. Standard 6 s.",
+        "z21ServerEnabled": "Z21-Handgeräte-Server",
+        "z21ServerEnabledHelp": "Z21-Apps verbinden sich mit dem dcc-bus-Host über UDP-Port 21105. Die Kopplung erfolgt über CV3 und CV4 in der Z21-App.",
+        "z21ServerDisableWarn": "Das Deaktivieren stoppt neue Kopplungen. Aktive Handgeräte-Sitzungen funktionieren nach einem dcc-bus-Neustart nicht mehr."
       }
     },
     "empty": "Keine Zentralen anzuzeigen."

@@ -8,9 +8,11 @@
       "connection": "Connection",
       "speedSteps": "Speed steps",
       "timing": "Timing",
+      "z21Server": "Z21 server",
       "actions": "Actions"
     },
     "timingSummary": "{{heartbeat}}s ping / {{deadman}}s dead-man / poll {{poll}}ms (0 = default)",
+    "z21ServerOn": "Z21 server on",
     "actions": {
       "create": "New command station",
       "edit": "Edit",
@@ -44,7 +46,10 @@
         "heartbeatSecs": "Heartbeat interval (s)",
         "heartbeatSecsHelp": "WebSocket ping interval. Default 2 s. If the ping does not arrive before the dead-man, the vehicle will be emergency-stopped.",
         "deadmanSecs": "Dead-man timeout (s)",
-        "deadmanSecsHelp": "Idle window after which the daemon applies emergency stop. Must be longer than the heartbeat. Default 6 s."
+        "deadmanSecsHelp": "Idle window after which the daemon applies emergency stop. Must be longer than the heartbeat. Default 6 s.",
+        "z21ServerEnabled": "Z21 handset server",
+        "z21ServerEnabledHelp": "Stock Z21 apps connect to the dcc-bus host on UDP port 21105. Pairing uses CV3 and CV4 in the Z21 app.",
+        "z21ServerDisableWarn": "Disabling the server stops new pairings. Active handset sessions stop working after the dcc-bus daemon restarts."
       }
     },
     "empty": "No command stations to show."

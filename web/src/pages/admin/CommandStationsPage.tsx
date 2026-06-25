@@ -3,6 +3,7 @@ import {
   Alert,
   Box,
   Button,
+  Chip,
   CircularProgress,
   Container,
   Dialog,
@@ -11,12 +12,14 @@ import {
   DialogContentText,
   DialogTitle,
   FormControl,
+  FormControlLabel,
   IconButton,
   InputLabel,
   MenuItem,
   Paper,
   Select,
   Stack,
+  Switch,
   Table,
   TableBody,
   TableCell,
@@ -77,6 +80,7 @@ export default function CommandStationsPage() {
   const [pollIntervalMsInput, setPollIntervalMsInput] = useState<number>(
     DEFAULT_COMMAND_STATION_POLL_INTERVAL_MS,
   );
+  const [z21ServerEnabledInput, setZ21ServerEnabledInput] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const closeDialog = () => {
@@ -88,6 +92,7 @@ export default function CommandStationsPage() {
     setHeartbeatSecsInput(DEFAULT_COMMAND_STATION_HEARTBEAT_SECS);
     setDeadmanSecsInput(DEFAULT_COMMAND_STATION_DEADMAN_SECS);
     setPollIntervalMsInput(DEFAULT_COMMAND_STATION_POLL_INTERVAL_MS);
+    setZ21ServerEnabledInput(false);
     setActionError(null);
     create.reset();
     update.reset();
@@ -112,6 +117,7 @@ export default function CommandStationsPage() {
     setHeartbeatSecsInput(DEFAULT_COMMAND_STATION_HEARTBEAT_SECS);
     setDeadmanSecsInput(DEFAULT_COMMAND_STATION_DEADMAN_SECS);
     setPollIntervalMsInput(DEFAULT_COMMAND_STATION_POLL_INTERVAL_MS);
+    setZ21ServerEnabledInput(false);
     setActionError(null);
   };
 
@@ -124,6 +130,7 @@ export default function CommandStationsPage() {
     setHeartbeatSecsInput(target.heartbeatSecs);
     setDeadmanSecsInput(target.deadmanSecs);
     setPollIntervalMsInput(target.pollIntervalMs);
+    setZ21ServerEnabledInput(target.z21ServerEnabled);
     setActionError(null);
   };
 
@@ -143,6 +150,7 @@ export default function CommandStationsPage() {
         heartbeatSecs: heartbeatSecsInput,
         deadmanSecs: deadmanSecsInput,
         pollIntervalMs: pollIntervalMsInput,
+        z21ServerEnabled: kindInput === "z21" ? z21ServerEnabledInput : false,
       };
       if (dialog.kind === "create") {
         await create.mutateAsync(body);
@@ -212,6 +220,7 @@ export default function CommandStationsPage() {
                     <TableCell>{t("commandStation:admin.columns.connection")}</TableCell>
                     <TableCell>{t("commandStation:admin.columns.speedSteps")}</TableCell>
                     <TableCell>{t("commandStation:admin.columns.timing")}</TableCell>
+                    <TableCell>{t("commandStation:admin.columns.z21Server")}</TableCell>
                     <TableCell align="right">
                       {t("commandStation:admin.columns.actions")}
                     </TableCell>
@@ -240,6 +249,17 @@ export default function CommandStationsPage() {
                           deadman: row.deadmanSecs,
                           poll: row.pollIntervalMs,
                         })}
+                      </TableCell>
+                      <TableCell>
+                        {row.kind === "z21" && row.z21ServerEnabled ? (
+                          <Chip
+                            size="small"
+                            color="success"
+                            label={t("commandStation:admin.z21ServerOn")}
+                          />
+                        ) : (
+                          "—"
+                        )}
                       </TableCell>
                       <TableCell align="right">
                         <Stack
@@ -380,6 +400,30 @@ export default function CommandStationsPage() {
               fullWidth
               required
             />
+            {kindInput === "z21" && (
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={z21ServerEnabledInput}
+                    onChange={(e) => setZ21ServerEnabledInput(e.target.checked)}
+                  />
+                }
+                label={t("commandStation:admin.dialogs.fields.z21ServerEnabled")}
+              />
+            )}
+            {kindInput === "z21" && (
+              <Typography variant="body2" color="text.secondary">
+                {t("commandStation:admin.dialogs.fields.z21ServerEnabledHelp")}
+              </Typography>
+            )}
+            {dialog?.kind === "edit" &&
+              kindInput === "z21" &&
+              dialog.target.z21ServerEnabled &&
+              !z21ServerEnabledInput && (
+                <Alert severity="warning">
+                  {t("commandStation:admin.dialogs.fields.z21ServerDisableWarn")}
+                </Alert>
+              )}
             {actionError && <Alert severity="error">{actionError}</Alert>}
           </Stack>
         </DialogContent>

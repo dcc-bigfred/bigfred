@@ -59,13 +59,14 @@ func (s *CommandStation) Get(ctx context.Context, id uint) (domain.CommandStatio
 }
 
 type CommandStationCreateInput struct {
-	Name          string
-	Kind          domain.CommandStationKind
-	ConnectionURI string
-	SpeedSteps     uint
-	HeartbeatSecs  float64
-	DeadmanSecs    float64
-	PollIntervalMs uint
+	Name             string
+	Kind             domain.CommandStationKind
+	ConnectionURI    string
+	SpeedSteps       uint
+	HeartbeatSecs    float64
+	DeadmanSecs      float64
+	PollIntervalMs   uint
+	Z21ServerEnabled bool
 }
 
 func (s *CommandStation) Create(ctx context.Context, eff domain.EffectiveRoles, in CommandStationCreateInput) (domain.CommandStation, error) {
@@ -92,15 +93,16 @@ func (s *CommandStation) Create(ctx context.Context, eff domain.EffectiveRoles, 
 
 	now := time.Now().UTC()
 	row := domain.CommandStation{
-		Name:          name,
-		Kind:          kind,
-		ConnectionURI: uri,
-		SpeedSteps:     steps,
-		HeartbeatSecs:  heartbeat,
-		DeadmanSecs:    deadman,
-		PollIntervalMs: pollInterval,
-		CreatedAt:      now,
-		UpdatedAt:     now,
+		Name:             name,
+		Kind:             kind,
+		ConnectionURI:    uri,
+		SpeedSteps:       steps,
+		HeartbeatSecs:    heartbeat,
+		DeadmanSecs:      deadman,
+		PollIntervalMs:   pollInterval,
+		Z21ServerEnabled: in.Z21ServerEnabled,
+		CreatedAt:        now,
+		UpdatedAt:        now,
 	}
 	if err := s.stations.Insert(ctx, &row); err != nil {
 		return domain.CommandStation{}, err
@@ -109,13 +111,14 @@ func (s *CommandStation) Create(ctx context.Context, eff domain.EffectiveRoles, 
 }
 
 type CommandStationUpdateInput struct {
-	Name          *string
-	Kind          *domain.CommandStationKind
-	ConnectionURI *string
-	SpeedSteps     *uint
-	HeartbeatSecs  *float64
-	DeadmanSecs    *float64
-	PollIntervalMs *uint
+	Name             *string
+	Kind             *domain.CommandStationKind
+	ConnectionURI    *string
+	SpeedSteps       *uint
+	HeartbeatSecs    *float64
+	DeadmanSecs      *float64
+	PollIntervalMs   *uint
+	Z21ServerEnabled *bool
 }
 
 func (s *CommandStation) Update(ctx context.Context, eff domain.EffectiveRoles, id uint, in CommandStationUpdateInput) (domain.CommandStation, error) {
@@ -181,6 +184,9 @@ func (s *CommandStation) Update(ctx context.Context, eff domain.EffectiveRoles, 
 			return domain.CommandStation{}, err
 		}
 		row.PollIntervalMs = pollInterval
+	}
+	if in.Z21ServerEnabled != nil {
+		row.Z21ServerEnabled = *in.Z21ServerEnabled
 	}
 	row.UpdatedAt = time.Now().UTC()
 

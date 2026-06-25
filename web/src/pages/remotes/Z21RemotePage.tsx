@@ -24,7 +24,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import PhoneAndroidIcon from "@mui/icons-material/PhoneAndroid";
+import Z21Icon from "../../components/icons/Z21Icon";
 import { Link as RouterLink } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
@@ -228,7 +228,7 @@ export default function Z21RemotePage() {
     <Container maxWidth="md" sx={{ py: { xs: 3, sm: 5 } }}>
       <Stack spacing={3}>
         <Stack direction="row" spacing={2} alignItems="center">
-          <PhoneAndroidIcon color="primary" fontSize="large" />
+          <Z21Icon size={40} />
           <Box>
             <Typography variant="h4" component="h1" gutterBottom>
               {t("z21Remote:title")}

@@ -1,6 +1,6 @@
 {
   "title": "Z21 handset",
-  "subtitle": "Pair a stock Z21 app with BigFred and choose which locomotives you may drive.",
+  "subtitle": "Pair a Z21 handset with BigFred and choose which locomotives you may drive.",
   "alerts": {
     "noServer": "No command station on this layout has the Z21 handset server enabled. Ask an admin to turn it on under",
     "commandStationLink": "Command stations"
@@ -12,7 +12,7 @@
   },
   "fields": {
     "commandStation": "Command station",
-    "allowAllVehicles": "All vehicles I can drive on this layout",
+    "allowAllVehicles": "All vehicles I have permission to drive on this layout",
     "vehicles": "Allowed vehicles",
     "vehiclesPlaceholder": "Pick locomotives…",
     "handsetBrakeSecs": "Time until trains are braked (s)",

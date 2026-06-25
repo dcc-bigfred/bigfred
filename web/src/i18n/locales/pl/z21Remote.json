@@ -1,6 +1,6 @@
 {
   "title": "Pilot Z21",
-  "subtitle": "Sparuj aplikację Z21 z BigFredem i wybierz lokomotywy, którymi możesz sterować.",
+  "subtitle": "Sparuj pilot Z21 z BigFredem i wybierz lokomotywy, którymi możesz sterować.",
   "alerts": {
     "noServer": "Żadna centralka na tej makiecie nie ma włączonego serwera pilota Z21. Poproś administratora o włączenie w",
     "commandStationLink": "Centralkach"
@@ -12,11 +12,11 @@
   },
   "fields": {
     "commandStation": "Centralka",
-    "allowAllVehicles": "Wszystkie pojazdy, którymi mogę sterować na makiecie",
+    "allowAllVehicles": "Wszystkie pojazdy, którymi mam uprawnienia sterować na makiecie",
     "vehicles": "Dozwolone pojazdy",
     "vehiclesPlaceholder": "Wybierz lokomotywy…",
-    "handsetBrakeSecs": "Czas do zahamowania składów (s)",
-    "handsetBrakeSecsHint": "Od {{min}} do {{max}} sekund bez komunikacji pilota z BigFredem"
+    "handsetBrakeSecs": "Czuwak (s)",
+    "handsetBrakeSecsHint": "Po jakim czasie braku łączności pilota z BigFred włącza się hamowanie awaryjne? ({{min}}s - {{max}}s)"
   },
   "status": {
     "paired": "Sparowany",

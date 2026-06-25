@@ -347,7 +347,6 @@ func (d *Daemon) Run(ctx context.Context) error {
 	go d.runAllowedVehiclesConsumer(ctx, vehSub)
 	go d.runDefinedTrainsConsumer(ctx, trainSub)
 	go d.runRadioStopConsumer(ctx, radioStopSub)
-	go d.router.RunStateFeed(ctx)
 
 	if d.cfg.EnableZ21 {
 		z21Srv, err := z21server.New(z21server.Config{
@@ -363,12 +362,15 @@ func (d *Daemon) Run(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("z21 server: %w", err)
 		}
+		d.router.SetZ21Fanout(z21Srv)
 		go func() {
 			if err := z21Srv.Run(ctx); err != nil && ctx.Err() == nil {
 				d.log.WithError(err).Error("z21 inbound server stopped")
 			}
 		}()
 	}
+
+	go d.router.RunStateFeed(ctx)
 
 	serveErr := make(chan error, 1)
 	go func() {

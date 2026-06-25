@@ -7,13 +7,16 @@
   },
   "sections": {
     "status": "Status",
-    "scope": "Fahrzeugumfang"
+    "scope": "Fahrzeugumfang",
+    "clients": "Verbundene Z21-Handgeräte"
   },
   "fields": {
     "commandStation": "Zentrale",
     "allowAllVehicles": "Alle Fahrzeuge, die ich auf dieser Anlage fahren darf",
     "vehicles": "Erlaubte Fahrzeuge",
-    "vehiclesPlaceholder": "Lokomotiven wählen…"
+    "vehiclesPlaceholder": "Lokomotiven wählen…",
+    "handsetBrakeSecs": "Zeit bis zum Bremsen der Züge (s)",
+    "handsetBrakeSecsHint": "{{min}}–{{max}} Sekunden ohne Kommunikation des Handgeräts mit BigFred"
   },
   "status": {
     "paired": "Gekoppelt",
@@ -21,14 +24,33 @@
     "clientKey": "Handgerät: {{key}}",
     "pairedAt": "Gekoppelt am {{time}}",
     "lastSeenAt": "Zuletzt gesehen {{time}}",
-    "keepaliveHint": "Z21-App geöffnet lassen — mindestens ein UDP-Paket pro Minute senden (Z21 §1.1)."
+    "keepaliveHint": "Nach {{seconds}} Sekunden ohne Kommunikation mit BigFred werden die vom Handgerät gesteuerten Züge notgebremst"
+  },
+  "clients": {
+    "empty": "Keine aktiven Z21-Handgeräte-UDP-Verbindungen.",
+    "pairedYes": "Gekoppelt",
+    "pairedNo": "Nicht gekoppelt",
+    "idleBraked": "Gebremst (Leerlauf)",
+    "sessionExpires": "Sitzung läuft ab {{time}}",
+    "columns": {
+      "endpoint": "IP:Port",
+      "paired": "Kopplung",
+      "user": "Benutzer",
+      "lastSeen": "Zuletzt gesehen",
+      "connected": "Verbunden seit",
+      "status": "Status",
+      "actions": "Aktionen"
+    }
   },
   "pending": {
-    "title": "Diese Werte in der Z21-App eingeben (POM)",
+    "title": "Kopplungscode",
+    "instructions": "CV3 und CV4 in der Z21-App auf einer beliebigen Lokomotive eingeben:\n• POM — Programmierung auf dem Hauptgleis\n• Programmiergleis — Service-Modus CV\n• Funktionen F0–F32 — Ziffer für Ziffer (F0–F9: eine Ziffer, F10–F32: zwei Ziffern; z. B. Code 122-145: F1 F2 F2 F1 F4 F5)",
     "expires": "Kopplungscode läuft ab in {{seconds}} s"
   },
   "actions": {
     "generatePairing": "Kopplungscode erzeugen",
+    "cancelPairing": "Kopplung abbrechen",
+    "removePairedHandset": "Gekoppeltes Handgerät entfernen",
     "unpair": "Handgerät trennen"
   }
 }

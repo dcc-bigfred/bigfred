@@ -7,13 +7,16 @@
   },
   "sections": {
     "status": "Status",
-    "scope": "Zakres pojazdów"
+    "scope": "Zakres pojazdów",
+    "clients": "Podłączone piloty Z21"
   },
   "fields": {
     "commandStation": "Centralka",
     "allowAllVehicles": "Wszystkie pojazdy, którymi mogę sterować na makiecie",
     "vehicles": "Dozwolone pojazdy",
-    "vehiclesPlaceholder": "Wybierz lokomotywy…"
+    "vehiclesPlaceholder": "Wybierz lokomotywy…",
+    "handsetBrakeSecs": "Czas do zahamowania składów (s)",
+    "handsetBrakeSecsHint": "Od {{min}} do {{max}} sekund bez komunikacji pilota z BigFredem"
   },
   "status": {
     "paired": "Sparowany",
@@ -21,14 +24,33 @@
     "clientKey": "Pilot: {{key}}",
     "pairedAt": "Sparowano {{time}}",
     "lastSeenAt": "Ostatnia aktywność {{time}}",
-    "keepaliveHint": "Pozostaw aplikację Z21 otwartą — wysyłaj co najmniej jeden pakiet UDP na minutę (Z21 §1.1)."
+    "keepaliveHint": "Po {{seconds}} sekundach pilota nie komunikującego się z BigFred składy zostają zahamowane"
+  },
+  "clients": {
+    "empty": "Brak aktywnych połączeń UDP z pilotami Z21.",
+    "pairedYes": "Sparowany",
+    "pairedNo": "Niesparowany",
+    "idleBraked": "Zahamowano (bezczynność)",
+    "sessionExpires": "Sesja wygasa {{time}}",
+    "columns": {
+      "endpoint": "Adres IP:port",
+      "paired": "Parowanie",
+      "user": "Użytkownik",
+      "lastSeen": "Ostatnia aktywność",
+      "connected": "Czas połączenia",
+      "status": "Stan",
+      "actions": "Akcje"
+    }
   },
   "pending": {
-    "title": "Wpisz te wartości w aplikacji Z21 (POM)",
+    "title": "Kod parowania",
+    "instructions": "Wpisz CV3 i CV4 w aplikacji Z21 na dowolnej lokomotywie:\n• POM — programowanie w trakcie jazdy\n• Tor programujący — tryb serwisowy CV\n• Funkcje F0–F32 — cyfra po cyfrze (F0–F9: jedna cyfra, F10–F32: dwie cyfry; np. kod 122-145: F1 F2 F2 F1 F4 F5)",
     "expires": "Kod parowania wygasa za {{seconds}} s"
   },
   "actions": {
     "generatePairing": "Wygeneruj kod parowania",
+    "cancelPairing": "Anuluj parowanie",
+    "removePairedHandset": "Usuń sparowanego pilota",
     "unpair": "Rozłącz pilot"
   }
 }

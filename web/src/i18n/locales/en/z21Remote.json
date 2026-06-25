@@ -7,13 +7,16 @@
   },
   "sections": {
     "status": "Status",
-    "scope": "Vehicle scope"
+    "scope": "Vehicle scope",
+    "clients": "Connected Z21 handsets"
   },
   "fields": {
     "commandStation": "Command station",
     "allowAllVehicles": "All vehicles I can drive on this layout",
     "vehicles": "Allowed vehicles",
-    "vehiclesPlaceholder": "Pick locomotives…"
+    "vehiclesPlaceholder": "Pick locomotives…",
+    "handsetBrakeSecs": "Time until trains are braked (s)",
+    "handsetBrakeSecsHint": "{{min}}–{{max}} seconds without handset communication with BigFred"
   },
   "status": {
     "paired": "Paired",
@@ -21,14 +24,33 @@
     "clientKey": "Handset: {{key}}",
     "pairedAt": "Paired at {{time}}",
     "lastSeenAt": "Last seen {{time}}",
-    "keepaliveHint": "Keep the Z21 app open and connected — send at least one UDP packet per minute (Z21 §1.1)."
+    "keepaliveHint": "After {{seconds}} seconds without communication with BigFred, trains controlled by the handset are emergency-stopped"
+  },
+  "clients": {
+    "empty": "No active Z21 handset UDP connections.",
+    "pairedYes": "Paired",
+    "pairedNo": "Unpaired",
+    "idleBraked": "Braked (idle)",
+    "sessionExpires": "Session expires {{time}}",
+    "columns": {
+      "endpoint": "IP:port",
+      "paired": "Pairing",
+      "user": "User",
+      "lastSeen": "Last seen",
+      "connected": "Connected for",
+      "status": "Status",
+      "actions": "Actions"
+    }
   },
   "pending": {
-    "title": "Enter these values in the Z21 app (POM)",
+    "title": "Pairing code",
+    "instructions": "Enter CV3 and CV4 in the Z21 app on any locomotive:\n• POM — programming on the main track\n• Programming track — service-mode CV access\n• Functions F0–F32 — digit by digit (F0–F9: one digit, F10–F32: two digits; e.g. code 122-145: F1 F2 F2 F1 F4 F5)",
     "expires": "Pairing code expires in {{seconds}} s"
   },
   "actions": {
     "generatePairing": "Generate pairing code",
+    "cancelPairing": "Cancel pairing",
+    "removePairedHandset": "Remove paired handset",
     "unpair": "Disconnect handset"
   }
 }

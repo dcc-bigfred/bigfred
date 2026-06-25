@@ -106,5 +106,6 @@
   "z21_vehicle_no_dcc_address": "One of the selected vehicles has no DCC address.",
   "z21_session_not_found": "No active Z21 handset session was found.",
   "z21_pairing_scope_invalid": "Pick at least one vehicle or enable “all vehicles I can drive”.",
+  "z21_handset_brake_secs_invalid": "Brake timeout must be between 6 and 60 seconds.",
   "z21_remote_not_configured": "Z21 remote pairing is not available (Redis offline)."
 }

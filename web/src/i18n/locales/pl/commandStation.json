@@ -49,6 +49,8 @@
         "deadmanSecsHelp": "Czas bezczynności, po którym daemon wykonuje zatrzymanie awaryjne. Musi być dłuższy niż heartbeat. Domyślnie 6 s.",
         "z21ServerEnabled": "Serwer pilota Z21",
         "z21ServerEnabledHelp": "Aplikacje Z21 łączą się z hostem dcc-bus na porcie UDP 21105. Parowanie odbywa się przez CV3 i CV4 w aplikacji Z21.",
+        "z21IpStickiness": "Przypisanie sesji do IP (IP stickiness)",
+        "z21IpStickinessHelp": "Gdy włączone, sesja pilota jest powiązana z adresem IP, a nie z portem UDP. Po reconnect z nowym portem (typowe przy DHCP) parowanie pozostaje aktywne.",
         "z21ServerDisableWarn": "Wyłączenie serwera blokuje nowe parowania. Aktywne sesje pilota przestaną działać po restarcie daemona dcc-bus."
       }
     },

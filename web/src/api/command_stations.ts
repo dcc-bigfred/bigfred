@@ -29,6 +29,7 @@ export interface CommandStation {
   deadmanSecs: number;
   pollIntervalMs: number;
   z21ServerEnabled: boolean;
+  z21IpStickiness: boolean;
 }
 
 const commandStationsCatalogueQueryKey = [
@@ -57,6 +58,7 @@ export function useCreateCommandStation() {
       deadmanSecs: number;
       pollIntervalMs: number;
       z21ServerEnabled?: boolean;
+      z21IpStickiness?: boolean;
     }) =>
       apiFetch<CommandStation>("/api/v1/command-stations", {
         method: "POST",
@@ -81,6 +83,7 @@ export function useUpdateCommandStation() {
       deadmanSecs: number;
       pollIntervalMs: number;
       z21ServerEnabled?: boolean;
+      z21IpStickiness?: boolean;
     }) =>
       apiFetch<CommandStation>(`/api/v1/command-stations/${args.id}`, {
         method: "PUT",
@@ -93,6 +96,7 @@ export function useUpdateCommandStation() {
           deadmanSecs: args.deadmanSecs,
           pollIntervalMs: args.pollIntervalMs,
           z21ServerEnabled: args.z21ServerEnabled,
+          z21IpStickiness: args.z21IpStickiness,
         }),
       }),
     onSuccess: () => {

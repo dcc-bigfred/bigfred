@@ -81,6 +81,7 @@ export default function CommandStationsPage() {
     DEFAULT_COMMAND_STATION_POLL_INTERVAL_MS,
   );
   const [z21ServerEnabledInput, setZ21ServerEnabledInput] = useState(false);
+  const [z21IpStickinessInput, setZ21IpStickinessInput] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const closeDialog = () => {
@@ -93,6 +94,7 @@ export default function CommandStationsPage() {
     setDeadmanSecsInput(DEFAULT_COMMAND_STATION_DEADMAN_SECS);
     setPollIntervalMsInput(DEFAULT_COMMAND_STATION_POLL_INTERVAL_MS);
     setZ21ServerEnabledInput(false);
+    setZ21IpStickinessInput(false);
     setActionError(null);
     create.reset();
     update.reset();
@@ -118,6 +120,7 @@ export default function CommandStationsPage() {
     setDeadmanSecsInput(DEFAULT_COMMAND_STATION_DEADMAN_SECS);
     setPollIntervalMsInput(DEFAULT_COMMAND_STATION_POLL_INTERVAL_MS);
     setZ21ServerEnabledInput(false);
+    setZ21IpStickinessInput(false);
     setActionError(null);
   };
 
@@ -131,6 +134,7 @@ export default function CommandStationsPage() {
     setDeadmanSecsInput(target.deadmanSecs);
     setPollIntervalMsInput(target.pollIntervalMs);
     setZ21ServerEnabledInput(target.z21ServerEnabled);
+    setZ21IpStickinessInput(target.z21IpStickiness);
     setActionError(null);
   };
 
@@ -151,6 +155,10 @@ export default function CommandStationsPage() {
         deadmanSecs: deadmanSecsInput,
         pollIntervalMs: pollIntervalMsInput,
         z21ServerEnabled: kindInput === "z21" ? z21ServerEnabledInput : false,
+        z21IpStickiness:
+          kindInput === "z21" && z21ServerEnabledInput
+            ? z21IpStickinessInput
+            : false,
       };
       if (dialog.kind === "create") {
         await create.mutateAsync(body);
@@ -405,7 +413,13 @@ export default function CommandStationsPage() {
                 control={
                   <Switch
                     checked={z21ServerEnabledInput}
-                    onChange={(e) => setZ21ServerEnabledInput(e.target.checked)}
+                    onChange={(e) => {
+                      const on = e.target.checked;
+                      setZ21ServerEnabledInput(on);
+                      if (!on) {
+                        setZ21IpStickinessInput(false);
+                      }
+                    }}
                   />
                 }
                 label={t("commandStation:admin.dialogs.fields.z21ServerEnabled")}
@@ -415,6 +429,28 @@ export default function CommandStationsPage() {
               <Typography variant="body2" color="text.secondary">
                 {t("commandStation:admin.dialogs.fields.z21ServerEnabledHelp")}
               </Typography>
+            )}
+            {kindInput === "z21" && z21ServerEnabledInput && (
+              <>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={z21IpStickinessInput}
+                      onChange={(e) =>
+                        setZ21IpStickinessInput(e.target.checked)
+                      }
+                    />
+                  }
+                  label={t(
+                    "commandStation:admin.dialogs.fields.z21IpStickiness",
+                  )}
+                />
+                <Typography variant="body2" color="text.secondary">
+                  {t(
+                    "commandStation:admin.dialogs.fields.z21IpStickinessHelp",
+                  )}
+                </Typography>
+              </>
             )}
             {dialog?.kind === "edit" &&
               kindInput === "z21" &&

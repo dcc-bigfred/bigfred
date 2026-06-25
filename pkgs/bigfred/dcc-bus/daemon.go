@@ -355,6 +355,8 @@ func (d *Daemon) Run(ctx context.Context) error {
 			CommandStationID: d.cfg.CommandStationID,
 			Bind:             d.cfg.Z21Bind,
 			Port:             d.cfg.Z21Port,
+			SpeedSteps:       cs.SpeedSteps,
+			Router:           d.router,
 			Pairing:          z21pairing.NewStore(d.rds),
 			Log:              d.log,
 		})

@@ -11,9 +11,8 @@ import {
   useMediaQuery,
   useTheme,
 } from "@mui/material";
-import PhoneAndroidIcon from "@mui/icons-material/PhoneAndroid";
-import SpeedIcon from "@mui/icons-material/Speed";
 import MenuIcon from "@mui/icons-material/Menu";
+import SpeedIcon from "@mui/icons-material/Speed";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import PeopleIcon from "@mui/icons-material/People";
 import MapIcon from "@mui/icons-material/Map";
@@ -40,6 +39,7 @@ import { useSudoMobileMenuItems } from "./SudoIndicator";
 import MobileNavDrawer, { type MobileNavSection } from "./MobileNavDrawer";
 import TopBarMenu, { type TopBarMenuItem } from "./TopBarMenu";
 import FullscreenToggleButton from "./throttle/FullscreenToggleButton";
+import Z21Icon from "./icons/Z21Icon";
 
 // AppShell renders the top app bar shared by every authenticated
 // screen. The post-login pages render inside its <Outlet/>.
@@ -187,7 +187,7 @@ function AppShellContent() {
       {
         id: "z21-remote",
         label: t("nav.my.z21Remote"),
-        icon: <PhoneAndroidIcon fontSize="small" />,
+        icon: <Z21Icon size={24} />,
         onClick: () => navigate("/remotes/z21"),
       },
       {

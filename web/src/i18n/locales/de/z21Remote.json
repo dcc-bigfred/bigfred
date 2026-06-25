@@ -1,6 +1,6 @@
 {
   "title": "Z21-Handgerät",
-  "subtitle": "Koppeln Sie eine Z21-App mit BigFred und wählen Sie die Lokomotiven, die Sie fahren dürfen.",
+  "subtitle": "Koppeln Sie ein Z21-Handgerät mit BigFred und wählen Sie die Lokomotiven, die Sie fahren dürfen.",
   "alerts": {
     "noServer": "Keine Zentrale auf dieser Anlage hat den Z21-Handgeräte-Server aktiviert. Bitte einen Administrator bitten, ihn unter",
     "commandStationLink": "Zentralen"

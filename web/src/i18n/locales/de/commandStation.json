@@ -49,6 +49,8 @@
         "deadmanSecsHelp": "Leerlaufzeit, nach der der Daemon Notstopp auslöst. Muss länger als der Heartbeat sein. Standard 6 s.",
         "z21ServerEnabled": "Z21-Handgeräte-Server",
         "z21ServerEnabledHelp": "Z21-Apps verbinden sich mit dem dcc-bus-Host über UDP-Port 21105. Die Kopplung erfolgt über CV3 und CV4 in der Z21-App.",
+        "z21IpStickiness": "IP-Stickiness",
+        "z21IpStickinessHelp": "Wenn aktiv, wird die Handgeräte-Sitzung an die Client-IP gebunden, nicht an den UDP-Port. Nach einem Reconnect mit neuem Port bleibt die Kopplung erhalten.",
         "z21ServerDisableWarn": "Das Deaktivieren stoppt neue Kopplungen. Aktive Handgeräte-Sitzungen funktionieren nach einem dcc-bus-Neustart nicht mehr."
       }
     },

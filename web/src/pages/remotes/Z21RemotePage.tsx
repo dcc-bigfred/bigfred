@@ -15,6 +15,12 @@ import {
   Select,
   Stack,
   Switch,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
   TextField,
   Typography,
 } from "@mui/material";
@@ -27,15 +33,43 @@ import { useMe } from "../../api/auth";
 import { useLayoutCommandStations } from "../../api/command_stations";
 import { useLayoutVehicles, type RosterVehicle } from "../../api/vehicles";
 import {
+  useCancelZ21Pairing,
   useStartZ21Pairing,
   useUnpairZ21Remote,
   useUpdateZ21RemoteSession,
+  useZ21RemoteClients,
   useZ21RemoteStatus,
+  Z21_HANDSET_BRAKE_SECS_DEFAULT,
+  Z21_HANDSET_BRAKE_SECS_MAX,
+  Z21_HANDSET_BRAKE_SECS_MIN,
+  type Z21RemoteClient,
 } from "../../api/z21_remote";
 
 function formatTime(ms: number | undefined, locale: string): string {
   if (ms == null || ms <= 0) return "—";
   return new Date(ms).toLocaleString(locale);
+}
+
+function formatDuration(ms: number): string {
+  if (ms < 0) ms = 0;
+  const totalSec = Math.floor(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  if (h > 0) {
+    return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  }
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function useNowTick(enabled: boolean): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!enabled) return;
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [enabled]);
+  return now;
 }
 
 function usePairingCountdown(expiresAt: number | undefined): number | null {
@@ -73,9 +107,12 @@ export default function Z21RemotePage() {
 
   const selectedCsId = typeof csId === "number" ? csId : null;
   const status = useZ21RemoteStatus(layoutId, selectedCsId);
+  const clients = useZ21RemoteClients(layoutId, selectedCsId);
+  const now = useNowTick((clients.data?.clients.length ?? 0) > 0);
   const roster = useLayoutVehicles(layoutId);
 
   const startPairing = useStartZ21Pairing(layoutId ?? 0, selectedCsId ?? 0);
+  const cancelPairing = useCancelZ21Pairing(layoutId ?? 0, selectedCsId ?? 0);
   const updateSession = useUpdateZ21RemoteSession(
     layoutId ?? 0,
     selectedCsId ?? 0,
@@ -84,6 +121,9 @@ export default function Z21RemotePage() {
 
   const [allowAll, setAllowAll] = useState(false);
   const [selectedVehicles, setSelectedVehicles] = useState<RosterVehicle[]>([]);
+  const [handsetBrakeSecs, setHandsetBrakeSecs] = useState(
+    Z21_HANDSET_BRAKE_SECS_DEFAULT,
+  );
   const [actionError, setActionError] = useState<string | null>(null);
 
   const drivableVehicles = useMemo(
@@ -102,15 +142,22 @@ export default function Z21RemotePage() {
       return;
     }
     const ids = new Set(
-      status.data.allowedVehicles.map((v) => v.vehicleId),
+      (status.data.allowedVehicles ?? []).map((v) => v.vehicleId),
     );
     setSelectedVehicles(
       drivableVehicles.filter((v) => ids.has(v.id)),
     );
+    if (status.data.handsetBrakeSecs != null) {
+      setHandsetBrakeSecs(status.data.handsetBrakeSecs);
+    }
   }, [status.data, drivableVehicles]);
 
   const pending = status.data?.pendingPairing;
   const countdown = usePairingCountdown(pending?.expiresAt);
+  const brakeSecsHint =
+    status.data?.handsetBrakeSecs ??
+    pending?.handsetBrakeSecs ??
+    handsetBrakeSecs;
 
   const translateError = (err: unknown): string => {
     if (err instanceof ApiError) {
@@ -124,6 +171,7 @@ export default function Z21RemotePage() {
   const scopePayload = () => ({
     allowAllVehicles: allowAll,
     vehicleIds: allowAll ? [] : selectedVehicles.map((v) => v.id),
+    handsetBrakeSecs,
   });
 
   const handleStartPairing = async () => {
@@ -149,18 +197,31 @@ export default function Z21RemotePage() {
     }
   };
 
-  const handleUnpair = async () => {
+  const handleCancelPairing = async () => {
     if (!selectedCsId) return;
     setActionError(null);
     try {
-      await unpair.mutateAsync(status.data?.clientKey);
+      await cancelPairing.mutateAsync();
+    } catch (err) {
+      setActionError(translateError(err));
+    }
+  };
+
+  const handleUnpair = async (clientKey?: string) => {
+    if (!selectedCsId) return;
+    setActionError(null);
+    try {
+      await unpair.mutateAsync(clientKey ?? status.data?.clientKey);
     } catch (err) {
       setActionError(translateError(err));
     }
   };
 
   const submitting =
-    startPairing.isPending || updateSession.isPending || unpair.isPending;
+    startPairing.isPending ||
+    cancelPairing.isPending ||
+    updateSession.isPending ||
+    unpair.isPending;
   const noZ21OnLayout = !stations.isLoading && z21Stations.length === 0;
 
   return (
@@ -254,7 +315,9 @@ export default function Z21RemotePage() {
                         })}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
-                        {t("z21Remote:status.keepaliveHint")}
+                        {t("z21Remote:status.keepaliveHint", {
+                          seconds: brakeSecsHint,
+                        })}
                       </Typography>
                     </Stack>
                   ) : (
@@ -271,6 +334,12 @@ export default function Z21RemotePage() {
                     </Typography>
                     <Typography variant="h4" component="p" sx={{ my: 1 }}>
                       CV3 = {pending.pairingCV3} · CV4 = {pending.pairingCV4}
+                    </Typography>
+                    <Typography
+                      variant="body2"
+                      sx={{ whiteSpace: "pre-line", mb: 1 }}
+                    >
+                      {t("z21Remote:pending.instructions")}
                     </Typography>
                     <Typography variant="body2">
                       {t("z21Remote:pending.expires", {
@@ -316,6 +385,35 @@ export default function Z21RemotePage() {
                       sx={{ mt: 1 }}
                     />
                   )}
+                  {!status.data.paired && !pending && (
+                    <TextField
+                      type="number"
+                      label={t("z21Remote:fields.handsetBrakeSecs")}
+                      helperText={t("z21Remote:fields.handsetBrakeSecsHint", {
+                        min: Z21_HANDSET_BRAKE_SECS_MIN,
+                        max: Z21_HANDSET_BRAKE_SECS_MAX,
+                      })}
+                      value={handsetBrakeSecs}
+                      onChange={(e) => {
+                        const n = Number(e.target.value);
+                        if (!Number.isFinite(n)) return;
+                        setHandsetBrakeSecs(
+                          Math.min(
+                            Z21_HANDSET_BRAKE_SECS_MAX,
+                            Math.max(Z21_HANDSET_BRAKE_SECS_MIN, n),
+                          ),
+                        );
+                      }}
+                      inputProps={{
+                        min: Z21_HANDSET_BRAKE_SECS_MIN,
+                        max: Z21_HANDSET_BRAKE_SECS_MAX,
+                        step: 1,
+                      }}
+                      disabled={submitting}
+                      sx={{ mt: 2 }}
+                      fullWidth
+                    />
+                  )}
                 </Box>
 
                 <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
@@ -326,10 +424,22 @@ export default function Z21RemotePage() {
                       disabled={
                         submitting ||
                         selectedCsId == null ||
-                        (!allowAll && selectedVehicles.length === 0)
+                        (!allowAll && selectedVehicles.length === 0) ||
+                        handsetBrakeSecs < Z21_HANDSET_BRAKE_SECS_MIN ||
+                        handsetBrakeSecs > Z21_HANDSET_BRAKE_SECS_MAX
                       }
                     >
                       {t("z21Remote:actions.generatePairing")}
+                    </Button>
+                  )}
+                  {pending && !status.data.paired && (
+                    <Button
+                      variant="outlined"
+                      color="error"
+                      onClick={handleCancelPairing}
+                      disabled={submitting}
+                    >
+                      {t("z21Remote:actions.cancelPairing")}
                     </Button>
                   )}
                   {status.data.paired && (
@@ -347,10 +457,10 @@ export default function Z21RemotePage() {
                       <Button
                         variant="outlined"
                         color="error"
-                        onClick={handleUnpair}
+                        onClick={() => handleUnpair()}
                         disabled={submitting}
                       >
-                        {t("z21Remote:actions.unpair")}
+                        {t("z21Remote:actions.removePairedHandset")}
                       </Button>
                     </>
                   )}
@@ -361,6 +471,97 @@ export default function Z21RemotePage() {
             {actionError && <Alert severity="error">{actionError}</Alert>}
           </Stack>
         </Paper>
+
+        {selectedCsId != null && (
+          <Paper variant="outlined" sx={{ p: 3 }}>
+            <Stack spacing={2}>
+              <Typography variant="h6">{t("z21Remote:sections.clients")}</Typography>
+              {clients.isLoading && (
+                <Box sx={{ display: "flex", justifyContent: "center", py: 2 }}>
+                  <CircularProgress size={28} />
+                </Box>
+              )}
+              {clients.isError && (
+                <Alert severity="error">{translateError(clients.error)}</Alert>
+              )}
+              {clients.data && clients.data.clients.length === 0 && (
+                <Typography variant="body2" color="text.secondary">
+                  {t("z21Remote:clients.empty")}
+                </Typography>
+              )}
+              {clients.data && clients.data.clients.length > 0 && (
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>{t("z21Remote:clients.columns.endpoint")}</TableCell>
+                        <TableCell>{t("z21Remote:clients.columns.paired")}</TableCell>
+                        <TableCell>{t("z21Remote:clients.columns.user")}</TableCell>
+                        <TableCell>{t("z21Remote:clients.columns.lastSeen")}</TableCell>
+                        <TableCell>{t("z21Remote:clients.columns.connected")}</TableCell>
+                        <TableCell>{t("z21Remote:clients.columns.status")}</TableCell>
+                        <TableCell align="right">
+                          {t("z21Remote:clients.columns.actions")}
+                        </TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {clients.data.clients.map((row: Z21RemoteClient) => (
+                        <TableRow key={row.clientKey}>
+                          <TableCell>
+                            {row.ip}:{row.port}
+                          </TableCell>
+                          <TableCell>
+                            {row.paired
+                              ? t("z21Remote:clients.pairedYes")
+                              : t("z21Remote:clients.pairedNo")}
+                          </TableCell>
+                          <TableCell>
+                            {row.userLogin ?? (row.userId ? `#${row.userId}` : "—")}
+                          </TableCell>
+                          <TableCell>
+                            {formatTime(row.lastSeenAt, i18n.language)}
+                          </TableCell>
+                          <TableCell>
+                            {formatDuration(now - row.connectedAt)}
+                          </TableCell>
+                          <TableCell>
+                            {row.idleBraked && (
+                              <Chip
+                                size="small"
+                                color="warning"
+                                label={t("z21Remote:clients.idleBraked")}
+                              />
+                            )}
+                            {row.paired && clients.data.ipStickiness && row.sessionExpiresAt != null && (
+                              <Typography variant="caption" display="block" color="text.secondary">
+                                {t("z21Remote:clients.sessionExpires", {
+                                  time: formatTime(row.sessionExpiresAt, i18n.language),
+                                })}
+                              </Typography>
+                            )}
+                          </TableCell>
+                          <TableCell align="right">
+                            {row.paired && row.userId === me?.id && (
+                              <Button
+                                size="small"
+                                color="error"
+                                onClick={() => handleUnpair(row.clientKey)}
+                                disabled={submitting}
+                              >
+                                {t("z21Remote:actions.removePairedHandset")}
+                              </Button>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+            </Stack>
+          </Paper>
+        )}
       </Stack>
     </Container>
   );

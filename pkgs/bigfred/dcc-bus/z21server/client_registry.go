@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/keskad/loco/pkgs/bigfred/contract"
 )
 
 // Client is one registered Z21 LAN participant (§1.1 implicit login).
@@ -13,6 +15,13 @@ type Client struct {
 	Key            string
 	LastSeen       time.Time
 	BroadcastFlags uint32
+
+	Paired *contract.Z21PairingActiveWire
+
+	pairCV3 *int
+	pairCV4 *int
+
+	SubscribedLocos []uint16
 }
 
 // Registry tracks active UDP participants for one virtual Z21 server.
@@ -54,6 +63,55 @@ func (r *Registry) Remove(key string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	delete(r.clients, key)
+}
+
+// SetPaired stores the active handset session on a client.
+func (r *Registry) SetPaired(key string, active *contract.Z21PairingActiveWire) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if c, ok := r.clients[key]; ok {
+		if active == nil {
+			c.Paired = nil
+		} else {
+			copy := *active
+			c.Paired = &copy
+		}
+		c.clearPairingBuffer()
+	}
+}
+
+func (c *Client) clearPairingBuffer() {
+	c.pairCV3 = nil
+	c.pairCV4 = nil
+}
+
+// BufferPairingCV records one CV3/CV4 POM value while pairing.
+func (c *Client) BufferPairingCV(cvWire int, value int) (cv3, cv4 int, ready bool) {
+	switch cvWire {
+	case 2:
+		c.pairCV3 = &value
+	case 3:
+		c.pairCV4 = &value
+	default:
+		return 0, 0, false
+	}
+	if c.pairCV3 != nil && c.pairCV4 != nil {
+		return *c.pairCV3, *c.pairCV4, true
+	}
+	return 0, 0, false
+}
+
+// SubscribeLoco adds addr to the per-client FIFO (max 16 per Z21 spec).
+func (c *Client) SubscribeLoco(addr uint16) {
+	for _, existing := range c.SubscribedLocos {
+		if existing == addr {
+			return
+		}
+	}
+	c.SubscribedLocos = append(c.SubscribedLocos, addr)
+	if len(c.SubscribedLocos) > 16 {
+		c.SubscribedLocos = c.SubscribedLocos[len(c.SubscribedLocos)-16:]
+	}
 }
 
 // EvictIdle removes clients whose LastSeen is older than cutoff.

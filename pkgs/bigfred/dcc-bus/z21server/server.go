@@ -9,6 +9,8 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/keskad/loco/pkgs/bigfred/contract"
+	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/cmd"
 	"github.com/keskad/loco/pkgs/bigfred/z21pairing"
 )
 
@@ -19,8 +21,11 @@ type Config struct {
 	Bind             string
 	Port             uint16
 	Serial           uint32
-	Pairing          *z21pairing.Store
-	Log              *logrus.Logger
+	SpeedSteps       uint
+
+	Router  *cmd.Router
+	Pairing *z21pairing.Store
+	Log     *logrus.Logger
 }
 
 // Server listens for Z21 LAN UDP and answers handshake packets.
@@ -29,6 +34,8 @@ type Server struct {
 	log      *logrus.Logger
 	conn     *net.UDPConn
 	registry *Registry
+	pairing  *PairingHandler
+	adapter  *Adapter
 }
 
 // New validates cfg and returns a server that is not yet listening.
@@ -45,15 +52,23 @@ func New(cfg Config) (*Server, error) {
 	if cfg.Serial == 0 {
 		cfg.Serial = virtualSerial(cfg.LayoutID, cfg.CommandStationID)
 	}
+	if cfg.SpeedSteps == 0 {
+		cfg.SpeedSteps = 128
+	}
 	log := cfg.Log
 	if log == nil {
 		log = logrus.New()
 	}
-	return &Server{
+	s := &Server{
 		cfg:      cfg,
 		log:      log,
 		registry: NewRegistry(),
-	}, nil
+	}
+	s.pairing = NewPairingHandler(cfg.Pairing, cfg.LayoutID, cfg.CommandStationID, s.registry)
+	if cfg.Router != nil {
+		s.adapter = NewAdapter(s, cfg.Router)
+	}
+	return s, nil
 }
 
 // Run listens until ctx is cancelled.
@@ -101,6 +116,11 @@ func (s *Server) Run(ctx context.Context) error {
 func (s *Server) handlePacket(ctx context.Context, remote *net.UDPAddr, pkt []byte) {
 	now := time.Now().UTC()
 	client := s.registry.Touch(remote, now)
+	s.syncPaired(ctx, client)
+
+	if client.Paired != nil && s.cfg.Pairing != nil {
+		_ = s.cfg.Pairing.TouchSeen(ctx, s.cfg.LayoutID, s.cfg.CommandStationID, client.Key, contract.NowMS())
+	}
 
 	_, header, ok := packetHeader(pkt)
 	if !ok {
@@ -112,22 +132,91 @@ func (s *Server) handlePacket(ctx context.Context, remote *net.UDPAddr, pkt []by
 		return
 	}
 
-	if reply, handled := s.handshakeReply(header); handled {
-		_ = s.writeUDP(remote, reply)
+	if isPairingPOM(pkt) {
+		cvWire, value, ok := parsePOMWriteByte(pkt)
+		if ok {
+			if _, active := s.pairing.Handle(ctx, client, cvWire, value); active != nil {
+				s.syncPaired(ctx, client)
+				s.log.WithFields(logrus.Fields{
+					"client": client.Key,
+					"userId": active.UserID,
+				}).Info("z21 handset paired via CV3/CV4")
+			}
+		}
 		return
 	}
 
-	if isDriveHeader(header, pkt) {
-		s.log.WithField("client", client.Key).Debug("z21 drive rejected: not paired")
+	if client.Paired == nil {
+		if reply, handled := s.handshakeReply(header); handled {
+			_ = s.writeUDP(remote, reply)
+			return
+		}
+		if header == HeaderSetBroadcastFlags {
+			client.BroadcastFlags = broadcastFlagsFromPkt(pkt)
+			return
+		}
+		if isDriveHeader(header, pkt) {
+			s.log.WithField("client", client.Key).Debug("z21 drive rejected: not paired")
+		}
 		return
 	}
 
-	if !isHandshakeHeader(header) && header != HeaderSetBroadcastFlags {
+	if s.adapter == nil {
+		return
+	}
+
+	switch {
+	case header == HeaderSetBroadcastFlags:
+		s.adapter.HandleSetBroadcastFlags(client, pkt)
+	case isSetLocoDrive(header, pkt):
+		s.adapter.HandleSetLocoDrive(ctx, client, pkt)
+	case isSetLocoFunction(header, pkt):
+		s.adapter.HandleSetLocoFunction(ctx, client, pkt)
+	case isGetLocoInfo(header, pkt):
+		s.adapter.HandleGetLocoInfo(ctx, client, pkt)
+	default:
+		if reply, handled := s.handshakeReply(header); handled {
+			_ = s.writeUDP(remote, reply)
+			return
+		}
 		s.log.WithFields(logrus.Fields{
 			"client": client.Key,
 			"header": fmt.Sprintf("0x%04X", header),
-		}).Debug("z21 unhandled packet while unpaired")
+		}).Debug("z21 unhandled packet from paired client")
 	}
+}
+
+func broadcastFlagsFromPkt(pkt []byte) uint32 {
+	if len(pkt) < 8 {
+		return 0
+	}
+	return uint32(pkt[4]) | uint32(pkt[5])<<8 | uint32(pkt[6])<<16 | uint32(pkt[7])<<24
+}
+
+func isSetLocoDrive(header uint16, pkt []byte) bool {
+	return header == HeaderXBus && len(pkt) >= 6 && pkt[4] == 0xE4 && (pkt[5]&0xF0) == 0x10
+}
+
+func isSetLocoFunction(header uint16, pkt []byte) bool {
+	return header == HeaderXBus && len(pkt) >= 6 && pkt[4] == 0xE4 && pkt[5] == 0xF8
+}
+
+func isGetLocoInfo(header uint16, pkt []byte) bool {
+	return header == HeaderXBus && len(pkt) >= 6 && pkt[4] == 0xE3 && pkt[5] == 0xF0
+}
+
+func (s *Server) syncPaired(ctx context.Context, client *Client) {
+	if s.cfg.Pairing == nil {
+		client.Paired = nil
+		return
+	}
+	active, ok, err := s.cfg.Pairing.GetActiveByClientKey(ctx, s.cfg.LayoutID, s.cfg.CommandStationID, client.Key)
+	if err != nil || !ok {
+		client.Paired = nil
+		return
+	}
+	copy := active
+	client.Paired = &copy
 }
 
 func (s *Server) handshakeReply(header uint16) ([]byte, bool) {
@@ -185,3 +274,6 @@ func virtualSerial(layoutID, commandStationID uint) uint32 {
 
 // RegistryForTest exposes the participant registry in tests.
 func (s *Server) RegistryForTest() *Registry { return s.registry }
+
+// PairingStoreForTest exposes the pairing store in tests.
+func (s *Server) PairingStoreForTest() *z21pairing.Store { return s.cfg.Pairing }

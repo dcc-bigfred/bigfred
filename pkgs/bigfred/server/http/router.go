@@ -201,7 +201,9 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			r.Get("/layouts/{id}/interlockings", layoutH.ListInterlockings)
 			r.Get("/layouts/{id}/command-stations", layoutH.ListCommandStations)
 			r.Get("/layouts/{id}/command-stations/{csid}/z21-remote", z21RemoteH.GetStatus)
+			r.Get("/layouts/{id}/command-stations/{csid}/z21-remote/clients", z21RemoteH.ListClients)
 			r.Post("/layouts/{id}/command-stations/{csid}/z21-remote/pairing", z21RemoteH.StartPairing)
+			r.Delete("/layouts/{id}/command-stations/{csid}/z21-remote/pairing", z21RemoteH.CancelPairing)
 			r.Patch("/layouts/{id}/command-stations/{csid}/z21-remote/session", z21RemoteH.UpdateSession)
 			r.Delete("/layouts/{id}/command-stations/{csid}/z21-remote/session", z21RemoteH.Unpair)
 

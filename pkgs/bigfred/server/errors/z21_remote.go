@@ -9,7 +9,8 @@ const (
 	CodeZ21VehicleNotDrivable   = "z21_vehicle_not_drivable"
 	CodeZ21VehicleNoDCCAddress  = "z21_vehicle_no_dcc_address"
 	CodeZ21SessionNotFound      = "z21_session_not_found"
-	CodeZ21PairingScopeInvalid  = "z21_pairing_scope_invalid"
+	CodeZ21PairingScopeInvalid      = "z21_pairing_scope_invalid"
+	CodeZ21HandsetBrakeSecsInvalid  = "z21_handset_brake_secs_invalid"
 )
 
 var (
@@ -20,4 +21,5 @@ var (
 	ErrZ21VehicleNoDCCAddress       = errors.New(CodeZ21VehicleNoDCCAddress)
 	ErrZ21SessionNotFound           = errors.New(CodeZ21SessionNotFound)
 	ErrZ21PairingScopeInvalid       = errors.New(CodeZ21PairingScopeInvalid)
+	ErrZ21HandsetBrakeSecsInvalid   = errors.New(CodeZ21HandsetBrakeSecsInvalid)
 )

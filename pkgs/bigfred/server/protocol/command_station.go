@@ -15,6 +15,7 @@ type CommandStationResponse struct {
 	DeadmanSecs      float64                   `json:"deadmanSecs"`
 	PollIntervalMs   uint                      `json:"pollIntervalMs"`
 	Z21ServerEnabled bool                      `json:"z21ServerEnabled"`
+	Z21IPStickiness  bool                      `json:"z21IpStickiness"`
 }
 
 func ToCommandStationResponse(cs domain.CommandStation) CommandStationResponse {
@@ -28,6 +29,7 @@ func ToCommandStationResponse(cs domain.CommandStation) CommandStationResponse {
 		DeadmanSecs:    cs.EffectiveDeadmanSecs(),
 		PollIntervalMs:   cs.EffectivePollIntervalMs(),
 		Z21ServerEnabled: cs.Z21ServerEnabled,
+		Z21IPStickiness:  cs.Z21IPStickiness,
 	}
 }
 
@@ -40,6 +42,7 @@ type CommandStationCreateRequest struct {
 	DeadmanSecs    float64                   `json:"deadmanSecs"`
 	PollIntervalMs   uint                      `json:"pollIntervalMs"`
 	Z21ServerEnabled bool                      `json:"z21ServerEnabled"`
+	Z21IPStickiness  bool                      `json:"z21IpStickiness"`
 }
 
 func (r CommandStationCreateRequest) ToCreateInput() cmd.CommandStationCreateInput {
@@ -52,6 +55,7 @@ func (r CommandStationCreateRequest) ToCreateInput() cmd.CommandStationCreateInp
 		DeadmanSecs:      r.DeadmanSecs,
 		PollIntervalMs:   r.PollIntervalMs,
 		Z21ServerEnabled: r.Z21ServerEnabled,
+		Z21IPStickiness:  r.Z21IPStickiness,
 	}
 }
 
@@ -64,6 +68,7 @@ type CommandStationUpdateRequest struct {
 	DeadmanSecs    *float64                   `json:"deadmanSecs"`
 	PollIntervalMs   *uint                      `json:"pollIntervalMs"`
 	Z21ServerEnabled *bool                    `json:"z21ServerEnabled"`
+	Z21IPStickiness  *bool                    `json:"z21IpStickiness"`
 }
 
 func (r CommandStationUpdateRequest) ToUpdateInput() cmd.CommandStationUpdateInput {
@@ -76,5 +81,6 @@ func (r CommandStationUpdateRequest) ToUpdateInput() cmd.CommandStationUpdateInp
 		DeadmanSecs:      r.DeadmanSecs,
 		PollIntervalMs:   r.PollIntervalMs,
 		Z21ServerEnabled: r.Z21ServerEnabled,
+		Z21IPStickiness:  r.Z21IPStickiness,
 	}
 }

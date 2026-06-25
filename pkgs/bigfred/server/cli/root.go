@@ -345,6 +345,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 			layoutCommandStations,
 			layoutVehicleSvc.LayoutRoster,
 			layoutVehicleSvc.LayoutRosterSnapshot,
+			users,
 		)
 	}
 

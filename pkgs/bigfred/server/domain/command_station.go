@@ -73,6 +73,9 @@ type CommandStation struct {
 	// Z21ServerEnabled turns on the inbound Z21 handset UDP server in
 	// dcc-bus for layouts attached to this command station.
 	Z21ServerEnabled bool `db:"z21_server_enabled"`
+	// Z21IPStickiness keys handset sessions by client IP only so a UDP
+	// port change on reconnect does not drop the paired session.
+	Z21IPStickiness bool `db:"z21_ip_stickiness"`
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
 }

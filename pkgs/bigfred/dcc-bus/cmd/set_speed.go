@@ -8,7 +8,6 @@ import (
 
 	"github.com/keskad/loco/pkgs/bigfred/contract"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/errors"
-	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/service"
 )
 
 // HandleSetSpeed forwards a throttle move to the command station, updates
@@ -70,6 +69,6 @@ func (r *Router) applyMemberSetSpeed(
 	if err := r.redis.StoreLocoCurrentState(ctx, snap, StateTTL); err != nil {
 		r.log.WithError(err).Debug("dcc-bus redis store")
 	}
-	service.BroadcastLocoState(ctx, r.hub, snap)
+	r.broadcastLocoState(ctx, snap)
 	return nil
 }

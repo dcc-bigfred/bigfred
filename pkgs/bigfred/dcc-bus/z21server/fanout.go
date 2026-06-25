@@ -27,6 +27,6 @@ func (s *Server) FanoutLocoState(ctx context.Context, snap contract.LocoStateWir
 		if !client.SubscribedTo(snap.Address) {
 			continue
 		}
-		_ = s.writeUDP(&client.Addr, pkt)
+		_ = s.writeUDP(&client.Addr, client.Key, pkt)
 	}
 }

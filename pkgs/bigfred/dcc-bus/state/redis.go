@@ -102,6 +102,28 @@ func (r *Redis) Publish(ctx context.Context, eventType string, payload any) erro
 	return r.client.Publish(ctx, r.EventChannel(), raw).Err()
 }
 
+// PublishZ21ClientsSnapshot stores the latest handset list and emits
+// z21.clients.changed on the event channel.
+func (r *Redis) PublishZ21ClientsSnapshot(ctx context.Context, snap contract.Z21ClientsSnapshotWire) error {
+	raw, err := contract.MarshalZ21ClientsSnapshot(snap)
+	if err != nil {
+		return err
+	}
+	pipe := r.client.TxPipeline()
+	pipe.Set(ctx, contract.Z21ClientsSnapshotKey(r.layoutID, r.commandStationID), raw, contract.Z21StickySessionIdle)
+	env, err := protocol.Frame("z21.clients.changed", snap)
+	if err != nil {
+		return err
+	}
+	frame, err := json.Marshal(env)
+	if err != nil {
+		return err
+	}
+	pipe.Publish(ctx, r.EventChannel(), frame)
+	_, err = pipe.Exec(ctx)
+	return err
+}
+
 // SubscribeCommands opens a pub/sub subscription on the daemon's
 // command channel. The returned *redis.PubSub MUST be Close'd by
 // the caller when ctx is cancelled.

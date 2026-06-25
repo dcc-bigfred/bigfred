@@ -62,6 +62,7 @@ type CreatePairingRequestInput struct {
 	VehicleIDs       []string
 	AllowedAddrs     []uint16
 	AllowAllVehicles bool
+	HandsetBrakeSecs uint
 }
 
 // CreatePairingRequest deletes any prior pending req for the user, generates a
@@ -97,6 +98,7 @@ func (s *Store) CreatePairingRequest(ctx context.Context, in CreatePairingReques
 			VehicleIDs:       append([]string(nil), in.VehicleIDs...),
 			AllowedAddrs:     append([]uint16(nil), in.AllowedAddrs...),
 			AllowAllVehicles: in.AllowAllVehicles,
+			HandsetBrakeSecs: contract.NormaliseHandsetBrakeSecs(in.HandsetBrakeSecs),
 			CreatedAt:        now,
 		}
 		payload, err := contract.MarshalZ21PairingReq(req)
@@ -211,6 +213,7 @@ func (s *Store) PairViaCV3CV4(ctx context.Context, layoutID, commandStationID ui
 		PairingCV4:       pairingCV4,
 		LastSeenAt:       pairedAt,
 		ClientKey:        clientKey,
+		HandsetBrakeSecs: contract.NormaliseHandsetBrakeSecs(req.HandsetBrakeSecs),
 	}
 	payload, err := contract.MarshalZ21PairingActive(active)
 	if err != nil {
@@ -241,8 +244,9 @@ func (s *Store) PairViaCV3CV4(ctx context.Context, layoutID, commandStationID ui
 	return active, true, nil
 }
 
-// TouchSeen updates lastSeenAt for a paired client.
-func (s *Store) TouchSeen(ctx context.Context, layoutID, commandStationID uint, clientKey string, lastSeenAt int64) error {
+// TouchSeen updates lastSeenAt for a paired client. sessionTTL, when
+// positive, refreshes the Redis key expiry (IP-sticky sessions).
+func (s *Store) TouchSeen(ctx context.Context, layoutID, commandStationID uint, clientKey string, lastSeenAt int64, sessionTTL time.Duration) error {
 	key := contract.Z21PairingActiveKey(layoutID, commandStationID, clientKey)
 	raw, err := s.client.Get(ctx, key).Result()
 	if err == redis.Nil {
@@ -259,6 +263,9 @@ func (s *Store) TouchSeen(ctx context.Context, layoutID, commandStationID uint, 
 	payload, err := contract.MarshalZ21PairingActive(active)
 	if err != nil {
 		return err
+	}
+	if sessionTTL > 0 {
+		return s.client.Set(ctx, key, payload, sessionTTL).Err()
 	}
 	return s.client.Set(ctx, key, payload, 0).Err()
 }
@@ -326,6 +333,11 @@ func (s *Store) UnpairAllForUser(ctx context.Context, layoutID, commandStationID
 	return nil
 }
 
+// CancelPendingPairing removes the user's pending pairing request, if any.
+func (s *Store) CancelPendingPairing(ctx context.Context, layoutID, commandStationID, userID uint) error {
+	return s.clearUserPending(ctx, layoutID, commandStationID, userID)
+}
+
 func (s *Store) clearUserPending(ctx context.Context, layoutID, commandStationID, userID uint) error {
 	req, ok, err := s.GetPendingByUser(ctx, layoutID, commandStationID, userID)
 	if err != nil {
@@ -352,4 +364,20 @@ func PendingExpiresAt(req contract.Z21PairingReqWire) time.Time {
 // ClientKeyFromAddr formats the Redis session key for a UDP endpoint.
 func ClientKeyFromAddr(ip string, port int) string {
 	return fmt.Sprintf("%s:%d", ip, port)
+}
+
+// GetClientsSnapshot reads the latest handset presence snapshot written by dcc-bus.
+func (s *Store) GetClientsSnapshot(ctx context.Context, layoutID, commandStationID uint) (contract.Z21ClientsSnapshotWire, bool, error) {
+	raw, err := s.client.Get(ctx, contract.Z21ClientsSnapshotKey(layoutID, commandStationID)).Result()
+	if err == redis.Nil {
+		return contract.Z21ClientsSnapshotWire{}, false, nil
+	}
+	if err != nil {
+		return contract.Z21ClientsSnapshotWire{}, false, err
+	}
+	snap, err := contract.UnmarshalZ21ClientsSnapshot([]byte(raw))
+	if err != nil {
+		return contract.Z21ClientsSnapshotWire{}, false, err
+	}
+	return snap, true, nil
 }

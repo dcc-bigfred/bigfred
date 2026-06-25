@@ -12,19 +12,28 @@ const (
 	HeaderSystemStateData    uint16 = 0x0084
 	HeaderSystemStateGetData uint16 = 0x0085
 	HeaderGetHWInfo          uint16 = 0x001A
+	HeaderGetCode            uint16 = 0x0018
+	HeaderRMBusGetData       uint16 = 0x0081
+	HeaderRMBusDataChanged   uint16 = 0x0080
+	HeaderGetLocoMode        uint16 = 0x0060
+	HeaderLocoNetFromLAN     uint16 = 0x00A2
+	// Undocumented Roco Z21 mobile app keepalive / session probes (not in LAN spec).
+	HeaderLanKeepalive  uint16 = 0x0035
+	HeaderLanSessionProbe uint16 = 0x0036
 )
 
-// Virtual hardware identity advertised to stock Z21 apps.
-const (
-	HwTypeZ21Small    uint32 = 0x00000203 // D_HWT_z21_SMALL
-	FirmwareVersion12 uint32 = 0x00000120 // BCD 1.20
-)
-
-// IdleEvictAfter is Z21 §1.1 — no UDP for this long removes the client.
+// IdleEvictAfter is Z21 §1.1 — no UDP for this long removes a non-sticky client.
 const IdleEvictAfter = 60
 
-// SweeperInterval is how often the server scans for idle clients.
-const SweeperInterval = 15
+// StickySessionIdleEvictAfter is the idle window before an IP-sticky paired
+// handset is unpaired (seconds).
+const StickySessionIdleEvictAfter = 30 * 60
+
+// SweeperInterval is how often the server scans clients.
+const SweeperInterval = 3
+
+// ClientsPublishMinInterval limits Redis/WS snapshot publish rate (seconds).
+const ClientsPublishMinInterval = 2
 
 func packetHeader(pkt []byte) (dataLen, header uint16, ok bool) {
 	if len(pkt) < 4 {
@@ -33,6 +42,23 @@ func packetHeader(pkt []byte) (dataLen, header uint16, ok bool) {
 	return binary.LittleEndian.Uint16(pkt[0:2]),
 		binary.LittleEndian.Uint16(pkt[2:4]),
 		true
+}
+
+// splitZ21Datagram splits a UDP payload into length-prefixed Z21 datasets (§1.3).
+func splitZ21Datagram(b []byte) [][]byte {
+	var out [][]byte
+	for len(b) >= 4 {
+		l := int(binary.LittleEndian.Uint16(b[0:2]))
+		if l < 4 || l > len(b) {
+			break
+		}
+		out = append(out, b[:l])
+		b = b[l:]
+	}
+	if len(out) == 0 && len(b) > 0 {
+		out = append(out, b)
+	}
+	return out
 }
 
 func buildReply(header uint16, data []byte) []byte {
@@ -55,25 +81,6 @@ func buildHWInfoReply(hwType, fwVersion uint32) []byte {
 	binary.LittleEndian.PutUint32(data[0:4], hwType)
 	binary.LittleEndian.PutUint32(data[4:8], fwVersion)
 	return buildReply(HeaderGetHWInfo, data)
-}
-
-// buildSystemStateReply returns track on, no programming mode, no short.
-func buildSystemStateReply() []byte {
-	data := make([]byte, 16)
-	// VCCVoltage 12000 mV — non-zero so apps treat track as live.
-	binary.LittleEndian.PutUint16(data[8:10], 12000)
-	binary.LittleEndian.PutUint16(data[10:12], 12000)
-	// CentralState / CentralStateEx / reserved / Capabilities left zero.
-	return buildReply(HeaderSystemStateData, data)
-}
-
-func isHandshakeHeader(header uint16) bool {
-	switch header {
-	case HeaderGetSerialNumber, HeaderGetHWInfo, HeaderSystemStateGetData, HeaderGetBroadcastFlags:
-		return true
-	default:
-		return false
-	}
 }
 
 func isDriveHeader(header uint16, pkt []byte) bool {

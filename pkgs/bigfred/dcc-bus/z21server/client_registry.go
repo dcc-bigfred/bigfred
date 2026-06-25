@@ -14,12 +14,18 @@ type Client struct {
 	Addr           net.UDPAddr
 	Key            string
 	LastSeen       time.Time
+	ConnectedAt    time.Time
+	IdleBraked     bool
 	BroadcastFlags uint32
 
 	Paired *contract.Z21PairingActiveWire
 
 	pairCV3 *int
 	pairCV4 *int
+	pairFnBuf []string
+	pairFnPrevGroup map[byte]byte
+
+	virtualCV map[uint32]byte
 
 	SubscribedLocos []uint16
 }
@@ -35,19 +41,40 @@ func NewRegistry() *Registry {
 	return &Registry{clients: make(map[string]*Client)}
 }
 
-// Touch returns the client for addr, creating it on first sight.
-func (r *Registry) Touch(addr *net.UDPAddr, now time.Time) *Client {
-	key := clientKey(addr)
+// Touch returns the client for addr, creating it on first sight. When
+// ipStickiness is set the session key is the client IP only so a UDP
+// port change reuses the same registry entry and paired session.
+func (r *Registry) Touch(addr *net.UDPAddr, now time.Time, ipStickiness bool) *Client {
+	key := sessionKey(addr, ipStickiness)
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	c, ok := r.clients[key]
 	if !ok {
-		c = &Client{Addr: *addr, Key: key, LastSeen: now}
+		c = &Client{Addr: *addr, Key: key, LastSeen: now, ConnectedAt: now}
 		r.clients[key] = c
 		return c
 	}
+	c.Addr = *addr
 	c.LastSeen = now
 	return c
+}
+
+// ClearIdleBraked resets the idle-brake latch after handset activity resumes.
+func (r *Registry) ClearIdleBraked(key string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if c, ok := r.clients[key]; ok {
+		c.IdleBraked = false
+	}
+}
+
+// SetIdleBraked marks a client as idle-braked until the next UDP packet.
+func (r *Registry) SetIdleBraked(key string, braked bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if c, ok := r.clients[key]; ok {
+		c.IdleBraked = braked
+	}
 }
 
 // Get returns a client by key.
@@ -83,6 +110,8 @@ func (r *Registry) SetPaired(key string, active *contract.Z21PairingActiveWire) 
 func (c *Client) clearPairingBuffer() {
 	c.pairCV3 = nil
 	c.pairCV4 = nil
+	c.pairFnBuf = nil
+	c.pairFnPrevGroup = nil
 }
 
 // BufferPairingCV records one CV3/CV4 POM value while pairing.
@@ -157,9 +186,17 @@ func (r *Registry) Len() int {
 	return len(r.clients)
 }
 
-func clientKey(addr *net.UDPAddr) string {
+func sessionKey(addr *net.UDPAddr, ipStickiness bool) string {
 	if addr == nil {
 		return ""
 	}
+	if ipStickiness {
+		return addr.IP.String()
+	}
 	return net.JoinHostPort(addr.IP.String(), strconv.Itoa(addr.Port))
+}
+
+// clientKey formats the default session key (IP:port).
+func clientKey(addr *net.UDPAddr) string {
+	return sessionKey(addr, false)
 }

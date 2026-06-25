@@ -2,11 +2,15 @@ package z21server
 
 import (
 	"context"
+	"errors"
 	"net"
+
+	"github.com/sirupsen/logrus"
 
 	"github.com/keskad/loco/pkgs/bigfred/contract"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/cmd"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/protocol"
+	"github.com/keskad/loco/pkgs/loco/commandstation"
 )
 
 // Responder sends Z21 LAN replies to one handset client.
@@ -43,7 +47,7 @@ func (r *Responder) SubscribedAddrs() []uint16 {
 func (r *Responder) SendLocoState(ctx context.Context, snap contract.LocoStateWire) error {
 	_ = ctx
 	pkt := buildLocoInfoReply(snap.Address, snap, r.server.cfg.SpeedSteps)
-	return r.server.writeUDP(&r.client.Addr, pkt)
+	return r.server.writeUDP(&r.client.Addr, r.client.Key, pkt)
 }
 
 func (r *Responder) SendLocoError(ctx context.Context, addr uint16, code, detail string) error {
@@ -95,51 +99,124 @@ func (a *Adapter) authorize(client *Client, addr uint16) bool {
 	)
 }
 
-func (a *Adapter) HandleSetLocoDrive(ctx context.Context, client *Client, pkt []byte) {
-	addr, speed, forward, ok := parseSetLocoDrive(pkt)
-	if !ok || !a.authorize(client, addr) {
-		return
-	}
-	resp := NewResponder(a.server, client)
-	_ = a.router.HandleSetSpeed(ctx, a.actor(client), resp, contract.LocoSetSpeedWire{
-		Address: addr,
-		Speed:   speed,
-		Forward: forward,
-	}, "")
-}
-
 func (a *Adapter) HandleSetLocoFunction(ctx context.Context, client *Client, pkt []byte) {
 	addr, fn, on, ok := parseSetLocoFunction(pkt)
-	if !ok || !a.authorize(client, addr) {
+	if !ok {
+		return
+	}
+	if !a.authorize(client, addr) {
+		a.logDriveRejected(client, addr, "set_function")
 		return
 	}
 	resp := NewResponder(a.server, client)
-	_ = a.router.HandleSetFunction(ctx, a.actor(client), resp, contract.LocoSetFunctionWire{
+	result := a.router.HandleSetFunction(ctx, a.actor(client), resp, contract.LocoSetFunctionWire{
 		Address:  addr,
 		Function: uint8(fn),
 		On:       on,
 	}, "")
+	if !result.OK {
+		a.logRouterFailure(client, addr, "set_function", result.Code)
+	}
+}
+
+func (a *Adapter) HandleSetLocoFunctionGroup(ctx context.Context, client *Client, pkt []byte) {
+	addr, updates, ok := parseSetLocoFunctionGroup(pkt)
+	if !ok || !a.authorize(client, addr) {
+		if ok {
+			a.logDriveRejected(client, addr, "set_function_group")
+		}
+		return
+	}
+	resp := NewResponder(a.server, client)
+	for _, u := range updates {
+		result := a.router.HandleSetFunction(ctx, a.actor(client), resp, contract.LocoSetFunctionWire{
+			Address:  addr,
+			Function: uint8(u.fn),
+			On:       u.on,
+		}, "")
+		if !result.OK {
+			a.logRouterFailure(client, addr, "set_function_group", result.Code)
+			return
+		}
+	}
 }
 
 func (a *Adapter) HandleGetLocoInfo(ctx context.Context, client *Client, pkt []byte) {
 	addr, ok := parseGetLocoInfo(pkt)
-	if !ok || !a.authorize(client, addr) {
+	if !ok {
+		return
+	}
+	if !a.authorize(client, addr) {
+		a.logDriveRejected(client, addr, "get_loco_info")
 		return
 	}
 	resp := NewResponder(a.server, client)
-	_ = a.router.HandleSubscribe(ctx, a.actor(client), resp, protocol.LocoSubscribePayload{
+	result := a.router.HandleSubscribe(ctx, a.actor(client), resp, protocol.LocoSubscribePayload{
 		Addresses: []uint16{addr},
 	}, "")
+	if !result.OK {
+		a.logRouterFailure(client, addr, "get_loco_info", result.Code)
+	}
+}
+
+func (a *Adapter) logDriveRejected(client *Client, addr uint16, action string) {
+	if a.server.log == nil {
+		return
+	}
+	a.server.log.WithFields(logrus.Fields{
+		"client": client.Key,
+		"loco":   addr,
+		"action": action,
+	}).Info("z21 drive rejected: not authorized")
+}
+
+func (a *Adapter) HandleSetLocoDrive(ctx context.Context, client *Client, pkt []byte) {
+	addr, speed, forward, ok := parseSetLocoDrive(pkt)
+	if !ok {
+		return
+	}
+	if !a.authorize(client, addr) {
+		a.logDriveRejected(client, addr, "set_speed")
+		return
+	}
+	resp := NewResponder(a.server, client)
+	result := a.router.HandleSetSpeed(ctx, a.actor(client), resp, contract.LocoSetSpeedWire{
+		Address: addr,
+		Speed:   speed,
+		Forward: forward,
+	}, "")
+	if !result.OK {
+		a.logRouterFailure(client, addr, "set_speed", result.Code)
+	}
+}
+
+func (a *Adapter) logRouterFailure(client *Client, addr uint16, action, code string) {
+	if a.server.log == nil {
+		return
+	}
+	a.server.log.WithFields(logrus.Fields{
+		"client": client.Key,
+		"loco":   addr,
+		"action": action,
+		"code":   code,
+	}).Info("z21 drive command failed")
+}
+
+func (a *Adapter) ReadLocoCV(addr uint16, cvNum commandstation.CVNum) (int, error) {
+	if a.router == nil {
+		return 0, errors.New("z21server: no router")
+	}
+	return a.router.ReadLocoCV(addr, cvNum)
 }
 
 func (a *Adapter) HandleSetBroadcastFlags(client *Client, pkt []byte) {
 	if len(pkt) < 8 {
 		return
 	}
-	client.BroadcastFlags = uint32(pkt[4]) | uint32(pkt[5])<<8 | uint32(pkt[6])<<16 | uint32(pkt[7])<<24
+	a.server.applyBroadcastFlags(client, broadcastFlagsFromPkt(pkt))
 }
 
 // WriteTo sends a UDP packet to a remote handset (used in tests).
 func (s *Server) WriteTo(addr *net.UDPAddr, pkt []byte) error {
-	return s.writeUDP(addr, pkt)
+	return s.writeUDP(addr, clientKey(addr), pkt)
 }

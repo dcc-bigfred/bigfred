@@ -192,6 +192,24 @@ func (r *Router) SetZ21Fanout(f service.Z21Fanout) {
 	r.z21Fanout = f
 }
 
+// broadcastLocoState fans a snapshot to WS sessions and subscribed Z21 handsets.
+func (r *Router) broadcastLocoState(ctx context.Context, snap contract.LocoStateWire) {
+	service.BroadcastLocoState(ctx, r.hub, snap)
+	if r.z21Fanout != nil {
+		r.z21Fanout.FanoutLocoState(ctx, snap)
+	}
+}
+
+// locoSnapOrDefault returns the cached Redis snapshot or a stopped default.
+func (r *Router) locoSnapOrDefault(ctx context.Context, addr uint16) contract.LocoStateWire {
+	if r.redis != nil {
+		if snap, ok, err := r.redis.GetLocoCurrentState(ctx, addr); err == nil && ok {
+			return snap
+		}
+	}
+	return contract.LocoStateWire{Address: addr, Forward: true}
+}
+
 // RunStateFeed mirrors external throttle changes into Redis and WS clients.
 func (r *Router) RunStateFeed(ctx context.Context) {
 	service.RunStateFeed(ctx, service.FeedDeps{

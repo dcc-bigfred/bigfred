@@ -67,6 +67,8 @@ type Config struct {
 	EnableZ21 bool
 	Z21Bind   string
 	Z21Port   uint16
+	// Z21IPStickiness keys handset sessions by client IP only.
+	Z21IPStickiness bool
 }
 
 // Daemon is the assembled dcc-bus instance.
@@ -355,8 +357,10 @@ func (d *Daemon) Run(ctx context.Context) error {
 			Bind:             d.cfg.Z21Bind,
 			Port:             d.cfg.Z21Port,
 			SpeedSteps:       d.cfg.CommandStation.EffectiveSpeedSteps(),
+			IPStickiness:     d.cfg.Z21IPStickiness,
 			Router:           d.router,
 			Pairing:          z21pairing.NewStore(d.rds),
+			ClientsPub:       d.redis,
 			Log:              d.log,
 		})
 		if err != nil {

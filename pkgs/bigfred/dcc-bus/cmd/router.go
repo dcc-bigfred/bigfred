@@ -53,6 +53,8 @@ type Router struct {
 	pulseMu     sync.Mutex
 	pulseActive map[service.FnKey]bool
 
+	z21Fanout service.Z21Fanout
+
 	shutdownOnce sync.Once
 	bootStopMu   sync.Mutex
 	bootStopDone bool
@@ -185,6 +187,11 @@ func (r *Router) findDefinedTrain(trainID string) (contract.DefinedTrain, bool) 
 	return contract.DefinedTrain{}, false
 }
 
+// SetZ21Fanout wires the inbound Z21 server for LAN_X_LOCO_INFO push.
+func (r *Router) SetZ21Fanout(f service.Z21Fanout) {
+	r.z21Fanout = f
+}
+
 // RunStateFeed mirrors external throttle changes into Redis and WS clients.
 func (r *Router) RunStateFeed(ctx context.Context) {
 	service.RunStateFeed(ctx, service.FeedDeps{
@@ -194,6 +201,7 @@ func (r *Router) RunStateFeed(ctx context.Context) {
 		Hub:          r.hub,
 		HubSubs:      r.hub,
 		FnCache:      r.cache,
+		Z21Fanout:    r.z21Fanout,
 		Log:          r.log,
 		PollInterval: r.pollInterval,
 		StateTTL:     StateTTL,

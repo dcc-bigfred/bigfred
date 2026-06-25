@@ -114,6 +114,28 @@ func (c *Client) SubscribeLoco(addr uint16) {
 	}
 }
 
+// SubscribedTo reports whether addr is in the client's subscription FIFO.
+func (c *Client) SubscribedTo(addr uint16) bool {
+	for _, existing := range c.SubscribedLocos {
+		if existing == addr {
+			return true
+		}
+	}
+	return false
+}
+
+// Snapshot returns a shallow copy of every registered client.
+func (r *Registry) Snapshot() []*Client {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make([]*Client, 0, len(r.clients))
+	for _, c := range r.clients {
+		cp := *c
+		out = append(out, &cp)
+	}
+	return out
+}
+
 // EvictIdle removes clients whose LastSeen is older than cutoff.
 func (r *Registry) EvictIdle(cutoff time.Time) []string {
 	r.mu.Lock()

@@ -26,9 +26,15 @@ type FeedDeps struct {
 	Hub          StateBroadcaster
 	HubSubs      SubscriptionSource
 	FnCache      *FunctionsCache
+	Z21Fanout    Z21Fanout
 	Log          *logrus.Logger
 	PollInterval time.Duration
 	StateTTL     time.Duration
+}
+
+// Z21Fanout pushes LAN_X_LOCO_INFO to inbound Z21 handset clients.
+type Z21Fanout interface {
+	FanoutLocoState(ctx context.Context, snap contract.LocoStateWire)
 }
 
 // SubscriptionSource exposes the union of subscribed locomotive addresses.
@@ -212,6 +218,9 @@ func applyObservation(ctx context.Context, deps FeedDeps, o commandstation.LocoO
 		}
 	}
 	BroadcastLocoState(ctx, deps.Hub, snap)
+	if deps.Z21Fanout != nil {
+		deps.Z21Fanout.FanoutLocoState(ctx, snap)
+	}
 	if deps.Log != nil {
 		deps.Log.WithFields(logrus.Fields{
 			"addr":    addr,

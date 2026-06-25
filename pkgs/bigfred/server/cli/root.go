@@ -22,6 +22,7 @@ import (
 	frontend "github.com/keskad/loco/web"
 
 	dccbuscli "github.com/keskad/loco/pkgs/bigfred/dcc-bus/cli"
+	"github.com/keskad/loco/pkgs/bigfred/z21pairing"
 	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
 	httpapi "github.com/keskad/loco/pkgs/bigfred/server/http"
 	bfotel "github.com/keskad/loco/pkgs/bigfred/otel"
@@ -336,6 +337,17 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	)
 	layoutVehicleSvc.SetRedisRosterPublisher(redisSvc)
 
+	var z21RemoteSvc *cmd.Z21Remote
+	if redisReady {
+		z21RemoteSvc = cmd.NewZ21Remote(
+			z21pairing.NewStore(redisSvc.Client()),
+			commandStations,
+			layoutCommandStations,
+			layoutVehicleSvc.LayoutRoster,
+			layoutVehicleSvc.LayoutRosterSnapshot,
+		)
+	}
+
 	go hub.Run(ctx)
 	if sudoElevations.RequiresJanitor() {
 		go sudoSvc.RunJanitor(ctx)
@@ -572,6 +584,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		Radio:            radioSvc,
 		Audit:            auditSvc,
 		Leases:           leaseSvc,
+		Z21Remote:        z21RemoteSvc,
 		AllowedOrigins:   f.AllowedOrigins,
 		SecureCookie:     f.SecureCookie,
 		StaticFS:         staticFS,

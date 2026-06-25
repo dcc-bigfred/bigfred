@@ -72,6 +72,38 @@ func TestHandshakeReplies(t *testing.T) {
 	if binary.LittleEndian.Uint16(buf[2:4]) != 0x001A {
 		t.Fatalf("hwinfo header: % x", buf[:n])
 	}
+	if binary.LittleEndian.Uint32(buf[4:8]) != z21server.HwTypeZ21Black {
+		t.Fatalf("hw type: % x", buf[4:8])
+	}
+	if binary.LittleEndian.Uint32(buf[8:12]) != z21server.FirmwareBCD {
+		t.Fatalf("fw bcd: % x", buf[8:12])
+	}
+
+	versionReq := []byte{0x07, 0x00, 0x40, 0x00, 0x21, 0x21, 0x00}
+	if _, err := client.Write(versionReq); err != nil {
+		t.Fatal(err)
+	}
+	_ = client.SetReadDeadline(time.Now().Add(time.Second))
+	n, err = client.Read(buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if buf[4] != 0x63 || buf[7] != z21server.CmdStationIDZ21 {
+		t.Fatalf("GET_VERSION reply: % x", buf[:n])
+	}
+
+	fwReq := []byte{0x07, 0x00, 0x40, 0x00, 0xF1, 0x0A, 0xFB}
+	if _, err := client.Write(fwReq); err != nil {
+		t.Fatal(err)
+	}
+	_ = client.SetReadDeadline(time.Now().Add(time.Second))
+	n, err = client.Read(buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if buf[4] != 0xF3 || buf[6] != z21server.FirmwareVersionMSB || buf[7] != z21server.FirmwareVersionLSB {
+		t.Fatalf("GET_FIRMWARE reply: % x", buf[:n])
+	}
 
 	sysReq := []byte{0x04, 0x00, 0x85, 0x00}
 	if _, err := client.Write(sysReq); err != nil {

@@ -17,6 +17,15 @@ const (
 	Z21PairingReqPairsKeyTmpl   = "bigfred:z21pair:reqpairs:%d:%d"
 	Z21PairingReqByUserKeyTmpl  = "bigfred:z21pair:reqbyuser:%d:%d:%d"
 	Z21PairingActiveKeyScanTmpl = "bigfred:z21pair:active:%d:%d:*"
+	Z21ClientsSnapshotKeyTmpl   = "bigfred:z21:clients:%d:%d"
+
+	// Z21StickySessionIdle is how long an IP-sticky handset session stays
+	// paired without UDP activity before unpair.
+	Z21StickySessionIdle = 30 * time.Minute
+
+	Z21HandsetBrakeSecsDefault = 6
+	Z21HandsetBrakeSecsMin     = 6
+	Z21HandsetBrakeSecsMax     = 60
 )
 
 // Z21PairingReqKey is the Redis STRING key for one pending handset pair.
@@ -47,6 +56,11 @@ func Z21PairingReqByUserKey(layoutID, commandStationID, userID uint) string {
 // Z21PairingActiveKeyScanPattern matches every active session on one CS.
 func Z21PairingActiveKeyScanPattern(layoutID, commandStationID uint) string {
 	return fmt.Sprintf(Z21PairingActiveKeyScanTmpl, layoutID, commandStationID)
+}
+
+// Z21ClientsSnapshotKey holds the latest handset presence snapshot for one CS.
+func Z21ClientsSnapshotKey(layoutID, commandStationID uint) string {
+	return fmt.Sprintf(Z21ClientsSnapshotKeyTmpl, layoutID, commandStationID)
 }
 
 // Z21PairLabel formats a CV3/CV4 pair for the reqpairs SET.
@@ -96,6 +110,7 @@ type Z21PairingReqWire struct {
 	VehicleIDs        []string `json:"vehicleIds"`
 	AllowedAddrs      []uint16 `json:"allowedAddrs"`
 	AllowAllVehicles  bool     `json:"allowAllVehicles"`
+	HandsetBrakeSecs  uint     `json:"handsetBrakeSecs"`
 	CreatedAt         int64    `json:"createdAt"` // unix ms UTC
 }
 
@@ -109,7 +124,46 @@ type Z21PairingActiveWire struct {
 	PairingCV3       int      `json:"pairingCV3"`
 	PairingCV4       int      `json:"pairingCV4"`
 	LastSeenAt       int64    `json:"lastSeenAt"`  // unix ms UTC
-	ClientKey        string   `json:"clientKey"`   // "<ip>:<port>"
+	ClientKey        string   `json:"clientKey"`   // "<ip>:<port>" or "<ip>" when sticky
+	HandsetBrakeSecs uint     `json:"handsetBrakeSecs"`
+}
+
+// Z21ClientWire describes one inbound Z21 UDP participant.
+type Z21ClientWire struct {
+	ClientKey        string `json:"clientKey"`
+	IP               string `json:"ip"`
+	Port             int    `json:"port"`
+	Paired           bool   `json:"paired"`
+	UserID           uint   `json:"userId,omitempty"`
+	UserLogin        string `json:"userLogin,omitempty"`
+	LastSeenAt       int64  `json:"lastSeenAt"`
+	ConnectedAt      int64  `json:"connectedAt"`
+	SessionExpiresAt int64  `json:"sessionExpiresAt,omitempty"`
+	IdleBraked       bool   `json:"idleBraked"`
+}
+
+// Z21ClientsSnapshotWire is stored at Z21ClientsSnapshotKey and pushed on
+// z21.clients.changed events.
+type Z21ClientsSnapshotWire struct {
+	LayoutID         uint            `json:"layoutId"`
+	CommandStationID uint            `json:"commandStationId"`
+	IPStickiness     bool            `json:"ipStickiness"`
+	UpdatedAt        int64           `json:"updatedAt"`
+	Clients          []Z21ClientWire `json:"clients"`
+}
+
+// MarshalZ21ClientsSnapshot encodes a clients snapshot for Redis SET.
+func MarshalZ21ClientsSnapshot(w Z21ClientsSnapshotWire) ([]byte, error) {
+	return json.Marshal(w)
+}
+
+// UnmarshalZ21ClientsSnapshot decodes a clients snapshot from Redis GET.
+func UnmarshalZ21ClientsSnapshot(raw []byte) (Z21ClientsSnapshotWire, error) {
+	var w Z21ClientsSnapshotWire
+	if err := json.Unmarshal(raw, &w); err != nil {
+		return Z21ClientsSnapshotWire{}, err
+	}
+	return w, nil
 }
 
 // MarshalZ21PairingReq encodes a pending pairing request for Redis SET.
@@ -138,4 +192,24 @@ func UnmarshalZ21PairingActive(raw []byte) (Z21PairingActiveWire, error) {
 		return Z21PairingActiveWire{}, err
 	}
 	return w, nil
+}
+
+// ValidHandsetBrakeSecs reports whether secs is in the allowed pairing range.
+func ValidHandsetBrakeSecs(secs uint) bool {
+	return secs >= Z21HandsetBrakeSecsMin && secs <= Z21HandsetBrakeSecsMax
+}
+
+// NormaliseHandsetBrakeSecs returns secs clamped to the allowed range, or the
+// default when secs is zero (legacy rows).
+func NormaliseHandsetBrakeSecs(secs uint) uint {
+	if secs == 0 {
+		return Z21HandsetBrakeSecsDefault
+	}
+	if secs < Z21HandsetBrakeSecsMin {
+		return Z21HandsetBrakeSecsMin
+	}
+	if secs > Z21HandsetBrakeSecsMax {
+		return Z21HandsetBrakeSecsMax
+	}
+	return secs
 }

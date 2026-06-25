@@ -12,22 +12,26 @@ const (
 	cvWireCV4          = 3
 )
 
-// parsePOMWriteByte extracts CV wire address and value from LAN_X_CV_POM_WRITE_BYTE.
-func parsePOMWriteByte(pkt []byte) (cvWire int, value int, ok bool) {
+// parsePOMWriteByte extracts loco address, CV wire index and value from LAN_X_CV_POM_WRITE_BYTE.
+func parsePOMWriteByte(pkt []byte) (locoAddr uint16, cvWire int, value int, ok bool) {
 	if len(pkt) < 12 {
-		return 0, 0, false
+		return 0, 0, 0, false
 	}
 	_, header, okHdr := packetHeader(pkt)
 	if !okHdr || header != HeaderXBus || pkt[4] != 0xE6 || pkt[5] != 0x30 {
-		return 0, 0, false
+		return 0, 0, 0, false
 	}
 	db3 := pkt[8]
 	if (db3 & 0xFC) != pomWriteByteOption {
-		return 0, 0, false
+		return 0, 0, 0, false
+	}
+	locoAddr, ok = parseLocoAddr(pkt, 6)
+	if !ok {
+		return 0, 0, 0, false
 	}
 	cvWire = int((db3&0x03)<<8) | int(pkt[9])
 	value = int(pkt[10])
-	return cvWire, value, true
+	return locoAddr, cvWire, value, true
 }
 
 func buildPOMWriteByte(locoAddr uint16, cvWire int, value byte) []byte {
@@ -57,7 +61,7 @@ func parseLocoAddr(pkt []byte, offset int) (uint16, bool) {
 }
 
 func parseSetLocoDrive(pkt []byte) (addr uint16, speed uint8, forward bool, ok bool) {
-	if len(pkt) < 11 {
+	if len(pkt) < 10 {
 		return 0, 0, false, false
 	}
 	_, header, okHdr := packetHeader(pkt)
@@ -74,7 +78,7 @@ func parseSetLocoDrive(pkt []byte) (addr uint16, speed uint8, forward bool, ok b
 }
 
 func parseSetLocoFunction(pkt []byte) (addr uint16, fn int, on bool, ok bool) {
-	if len(pkt) < 11 {
+	if len(pkt) < 10 {
 		return 0, 0, false, false
 	}
 	_, header, okHdr := packetHeader(pkt)
@@ -97,8 +101,51 @@ func parseSetLocoFunction(pkt []byte) (addr uint16, fn int, on bool, ok bool) {
 	return addr, int(db3 & 0x3F), on, true
 }
 
-func parseGetLocoInfo(pkt []byte) (addr uint16, ok bool) {
+func parseSetLocoFunctionGroup(pkt []byte) (addr uint16, updates []struct {
+	fn int
+	on bool
+}, ok bool) {
 	if len(pkt) < 10 {
+		return 0, nil, false
+	}
+	_, header, okHdr := packetHeader(pkt)
+	if !okHdr || header != HeaderXBus || pkt[4] != 0xE4 {
+		return 0, nil, false
+	}
+	group := pkt[5]
+	fnMap, okGroup := locoFunctionGroupMap[group]
+	if !okGroup {
+		return 0, nil, false
+	}
+	addr, ok = parseLocoAddr(pkt, 6)
+	if !ok {
+		return 0, nil, false
+	}
+	fnByte := pkt[8]
+	for bit, fn := range fnMap {
+		if fn < 0 {
+			continue
+		}
+		updates = append(updates, struct {
+			fn int
+			on bool
+		}{fn: fn, on: fnByte&(1<<uint(bit)) != 0})
+	}
+	return addr, updates, true
+}
+
+// locoFunctionGroupMap maps group id → bit index → function number (-1 = unused).
+var locoFunctionGroupMap = map[byte][8]int{
+	0x20: {1, 2, 3, 4, 0, -1, -1, -1},
+	0x21: {5, 6, 7, 8, -1, -1, -1, -1},
+	0x22: {9, 10, 11, 12, -1, -1, -1, -1},
+	0x23: {13, 14, 15, 16, 17, 18, 19, 20},
+	0x28: {21, 22, 23, 24, 25, 26, 27, 28},
+	0x29: {29, 30, 31, -1, -1, -1, -1, -1},
+}
+
+func parseGetLocoInfo(pkt []byte) (addr uint16, ok bool) {
+	if len(pkt) < 9 {
 		return 0, false
 	}
 	_, header, okHdr := packetHeader(pkt)
@@ -205,8 +252,10 @@ func encodeFunctionBytes(functions []bool) (b0, b1, b2, b3, b4 byte) {
 			return
 		}
 		switch {
+		case fn == 0:
+			b0 |= 0x10
 		case fn <= 4:
-			b0 |= 1 << uint(fn)
+			b0 |= 1 << uint(fn-1)
 		case fn <= 12:
 			b1 |= 1 << uint(fn-5)
 		case fn <= 20:
@@ -241,9 +290,9 @@ func xorSum(x []byte) byte {
 }
 
 func isPairingPOM(pkt []byte) bool {
-	cvWire, _, ok := parsePOMWriteByte(pkt)
+	_, cvWire, _, ok := parsePOMWriteByte(pkt)
 	if !ok {
 		return false
 	}
-	return cvWire == cvWireCV3 || cvWire == cvWireCV4
+	return isPairingCVWire(cvWire)
 }

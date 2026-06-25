@@ -96,7 +96,7 @@ func TestTouchSeenAndUnpair(t *testing.T) {
 	}
 
 	touch := contract.NowMS() + int64(time.Second/time.Millisecond)
-	if err := store.TouchSeen(ctx, 1, 2, clientKey, touch); err != nil {
+	if err := store.TouchSeen(ctx, 1, 2, clientKey, touch, 0); err != nil {
 		t.Fatal(err)
 	}
 	active, ok, err := store.GetActiveByClientKey(ctx, 1, 2, clientKey)

@@ -79,7 +79,7 @@ func (r *Router) setLocoFunction(ctx context.Context, addr uint16, userID uint, 
 	if err := r.redis.StoreLocoCurrentState(ctx, snap, StateTTL); err != nil {
 		r.log.WithError(err).Debug("dcc-bus redis store")
 	}
-	service.BroadcastLocoState(ctx, r.hub, snap)
+	r.broadcastLocoState(ctx, snap)
 	return nil
 }
 

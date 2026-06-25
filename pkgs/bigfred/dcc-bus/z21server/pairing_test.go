@@ -33,8 +33,8 @@ func TestPairingHandlerCompletesOnCV3CV4(t *testing.T) {
 
 	reg := NewRegistry()
 	addr := &net.UDPAddr{IP: net.IPv4(10, 0, 0, 2), Port: 40001}
-	client := reg.Touch(addr, time.Now().UTC())
-	handler := NewPairingHandler(store, 1, 2, reg)
+	client := reg.Touch(addr, time.Now().UTC(), false)
+	handler := NewPairingHandler(store, 1, 2, reg, nil)
 
 	if _, active := handler.Handle(ctx, client, 2, req.PairingCV3); active != nil {
 		t.Fatal("expected incomplete after CV3 only")
@@ -50,8 +50,8 @@ func TestPairingHandlerCompletesOnCV3CV4(t *testing.T) {
 
 func TestPOMWriteByteParse(t *testing.T) {
 	pkt := buildPOMWriteByte(99, 3, 145)
-	cvWire, value, ok := parsePOMWriteByte(pkt)
-	if !ok || cvWire != 3 || value != 145 {
-		t.Fatalf("parse pom: ok=%v cv=%d val=%d", ok, cvWire, value)
+	loco, cvWire, value, ok := parsePOMWriteByte(pkt)
+	if !ok || loco != 99 || cvWire != 3 || value != 145 {
+		t.Fatalf("parse pom: ok=%v loco=%d cv=%d val=%d", ok, loco, cvWire, value)
 	}
 }

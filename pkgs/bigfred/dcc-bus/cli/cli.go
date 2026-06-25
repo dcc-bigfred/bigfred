@@ -45,6 +45,7 @@ type Flags struct {
 	EnableZ21 bool
 	Z21Bind   string
 	Z21Port   uint16
+	Z21IPStickiness bool
 
 	AllowedOrigins []string
 }
@@ -93,6 +94,7 @@ should rarely be invoked manually.`,
 				EnableZ21:        f.EnableZ21,
 				Z21Bind:          f.Z21Bind,
 				Z21Port:          f.Z21Port,
+				Z21IPStickiness:  f.Z21IPStickiness,
 			}
 			d, err := dccbus.New(c.Context(), log, cfg)
 			if err != nil {
@@ -121,6 +123,7 @@ should rarely be invoked manually.`,
 	cmd.Flags().StringVar(&f.OTLPEndpoint, "otel-endpoint", "", "OTLP/gRPC metrics endpoint for Alloy (required for --enable-telemetry; defaults to OTEL_EXPORTER_OTLP_ENDPOINT)")
 	cmd.Flags().StringSliceVar(&f.AllowedOrigins, "allowed-origin", nil, "explicit WS Origin allow-list (empty == accept any; the reverse proxy on loco-server gates Origin in production)")
 	cmd.Flags().BoolVar(&f.EnableZ21, "enable-z21", false, "listen for inbound Z21 handset UDP connections")
+	cmd.Flags().BoolVar(&f.Z21IPStickiness, "z21-ip-stickiness", false, "key Z21 handset sessions by client IP only (survives UDP port changes on reconnect)")
 	cmd.Flags().StringVar(&f.Z21Bind, "z21-bind", "0.0.0.0", "interface to bind the inbound Z21 UDP listener on")
 	cmd.Flags().Uint16Var(&f.Z21Port, "z21-port", 21105, "UDP port for inbound Z21 handset connections")
 

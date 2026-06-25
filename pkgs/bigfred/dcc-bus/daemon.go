@@ -25,7 +25,9 @@ import (
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/state"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/ws"
 	bfotel "github.com/keskad/loco/pkgs/bigfred/otel"
+	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/z21server"
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
+	"github.com/keskad/loco/pkgs/bigfred/z21pairing"
 )
 
 // Config carries every runtime input the daemon needs. Populated
@@ -60,6 +62,11 @@ type Config struct {
 	// OTLPEndpoint is the gRPC host:port for metric export (Alloy).
 	// Telemetry stays off when this is empty.
 	OTLPEndpoint string
+
+	// EnableZ21 starts the inbound Z21 LAN UDP server for physical handsets.
+	EnableZ21 bool
+	Z21Bind   string
+	Z21Port   uint16
 }
 
 // Daemon is the assembled dcc-bus instance.
@@ -341,6 +348,25 @@ func (d *Daemon) Run(ctx context.Context) error {
 	go d.runDefinedTrainsConsumer(ctx, trainSub)
 	go d.runRadioStopConsumer(ctx, radioStopSub)
 	go d.router.RunStateFeed(ctx)
+
+	if d.cfg.EnableZ21 {
+		z21Srv, err := z21server.New(z21server.Config{
+			LayoutID:         d.cfg.LayoutID,
+			CommandStationID: d.cfg.CommandStationID,
+			Bind:             d.cfg.Z21Bind,
+			Port:             d.cfg.Z21Port,
+			Pairing:          z21pairing.NewStore(d.rds),
+			Log:              d.log,
+		})
+		if err != nil {
+			return fmt.Errorf("z21 server: %w", err)
+		}
+		go func() {
+			if err := z21Srv.Run(ctx); err != nil && ctx.Err() == nil {
+				d.log.WithError(err).Error("z21 inbound server stopped")
+			}
+		}()
+	}
 
 	serveErr := make(chan error, 1)
 	go func() {

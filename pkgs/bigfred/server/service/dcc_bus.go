@@ -412,6 +412,9 @@ func (d *DccBusService) buildProgramSpec(ctx context.Context, name string, layou
 		"--jwt-secret", string(d.cfg.JWTSecret),
 	}
 	args = dccbuscli.AppendStationFlags(args, cs)
+	if cs.Z21ServerEnabled {
+		args = append(args, "--enable-z21")
+	}
 	for _, origin := range d.cfg.AllowedOrigins {
 		args = append(args, "--allowed-origin", origin)
 	}

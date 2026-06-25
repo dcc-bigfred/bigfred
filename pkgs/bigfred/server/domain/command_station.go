@@ -70,6 +70,9 @@ type CommandStation struct {
 	// PollIntervalMs is the state-feed polling cadence for drivers without
 	// push notifications. Zero selects the dcc-bus daemon default (750 ms).
 	PollIntervalMs uint `db:"poll_interval_ms"`
+	// Z21ServerEnabled turns on the inbound Z21 handset UDP server in
+	// dcc-bus for layouts attached to this command station.
+	Z21ServerEnabled bool `db:"z21_server_enabled"`
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
 }

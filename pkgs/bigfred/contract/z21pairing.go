@@ -143,10 +143,11 @@ type Z21ClientWire struct {
 }
 
 // Z21ClientsSnapshotWire is stored at Z21ClientsSnapshotKey and pushed on
-// z21.clients.changed events.
+// remote.clients.changed events.
 type Z21ClientsSnapshotWire struct {
 	LayoutID         uint            `json:"layoutId"`
 	CommandStationID uint            `json:"commandStationId"`
+	Protocol         string          `json:"protocol,omitempty"`
 	IPStickiness     bool            `json:"ipStickiness"`
 	UpdatedAt        int64           `json:"updatedAt"`
 	Clients          []Z21ClientWire `json:"clients"`

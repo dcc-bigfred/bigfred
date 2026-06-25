@@ -5,12 +5,11 @@ import (
 	"time"
 
 	"github.com/keskad/loco/pkgs/bigfred/contract"
+	"github.com/keskad/loco/pkgs/bigfred/remotes"
 )
 
 // ClientsPublisher stores and fans out handset presence snapshots.
-type ClientsPublisher interface {
-	PublishZ21ClientsSnapshot(ctx context.Context, snap contract.Z21ClientsSnapshotWire) error
-}
+type ClientsPublisher = remotes.ClientsSnapshotPublisher
 
 func (s *Server) noteClientActivity(client *Client) {
 	if client == nil {
@@ -41,34 +40,32 @@ func (s *Server) publishClientsSnapshot(ctx context.Context) error {
 		return nil
 	}
 	snap := s.buildClientsSnapshot()
-	return s.clientsPub.PublishZ21ClientsSnapshot(ctx, snap)
+	return s.clientsPub.PublishClientsSnapshot(ctx, snap)
 }
 
-func (s *Server) buildClientsSnapshot() contract.Z21ClientsSnapshotWire {
+func (s *Server) buildClientsSnapshot() contract.RemoteClientsSnapshotWire {
 	now := time.Now().UTC()
 	clients := s.registry.Snapshot()
-	out := make([]contract.Z21ClientWire, 0, len(clients))
+	out := make([]contract.RemoteClientWire, 0, len(clients))
 	for _, c := range clients {
-		w := contract.Z21ClientWire{
+		w := contract.RemoteClientWire{
 			ClientKey:   c.Key,
 			IP:          c.Addr.IP.String(),
 			Port:        c.Addr.Port,
 			Paired:      c.Paired != nil,
-			LastSeenAt:  c.LastSeen.UTC().UnixMilli(),
-			ConnectedAt: c.ConnectedAt.UTC().UnixMilli(),
+			LastSeenAt:  c.LastSeen.UnixMilli(),
+			ConnectedAt: c.ConnectedAt.UnixMilli(),
 			IdleBraked:  c.IdleBraked,
 		}
 		if c.Paired != nil {
 			w.UserID = c.Paired.UserID
-			if s.cfg.IPStickiness {
-				w.SessionExpiresAt = c.LastSeen.UTC().Add(StickySessionIdleEvictAfter * time.Second).UnixMilli()
-			}
 		}
 		out = append(out, w)
 	}
-	return contract.Z21ClientsSnapshotWire{
+	return contract.RemoteClientsSnapshotWire{
 		LayoutID:         s.cfg.LayoutID,
 		CommandStationID: s.cfg.CommandStationID,
+		Protocol:         contract.RemoteProtocolZ21,
 		IPStickiness:     s.cfg.IPStickiness,
 		UpdatedAt:        now.UnixMilli(),
 		Clients:          out,

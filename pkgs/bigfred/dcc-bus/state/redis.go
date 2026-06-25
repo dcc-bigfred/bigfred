@@ -102,16 +102,16 @@ func (r *Redis) Publish(ctx context.Context, eventType string, payload any) erro
 	return r.client.Publish(ctx, r.EventChannel(), raw).Err()
 }
 
-// PublishZ21ClientsSnapshot stores the latest handset list and emits
-// z21.clients.changed on the event channel.
-func (r *Redis) PublishZ21ClientsSnapshot(ctx context.Context, snap contract.Z21ClientsSnapshotWire) error {
-	raw, err := contract.MarshalZ21ClientsSnapshot(snap)
+// PublishClientsSnapshot stores the latest handset list and emits
+// remote.clients.changed on the event channel.
+func (r *Redis) PublishClientsSnapshot(ctx context.Context, snap contract.RemoteClientsSnapshotWire) error {
+	raw, err := contract.MarshalRemoteClientsSnapshot(snap)
 	if err != nil {
 		return err
 	}
 	pipe := r.client.TxPipeline()
 	pipe.Set(ctx, contract.Z21ClientsSnapshotKey(r.layoutID, r.commandStationID), raw, contract.Z21StickySessionIdle)
-	env, err := protocol.Frame("z21.clients.changed", snap)
+	env, err := protocol.Frame(contract.RemoteClientsChangedEvent, snap)
 	if err != nil {
 		return err
 	}
@@ -124,6 +124,11 @@ func (r *Redis) PublishZ21ClientsSnapshot(ctx context.Context, snap contract.Z21
 	return err
 }
 
+// PublishZ21ClientsSnapshot is deprecated; use PublishClientsSnapshot.
+func (r *Redis) PublishZ21ClientsSnapshot(ctx context.Context, snap contract.Z21ClientsSnapshotWire) error {
+	return r.PublishClientsSnapshot(ctx, snap)
+}
+
 // SubscribeCommands opens a pub/sub subscription on the daemon's
 // command channel. The returned *redis.PubSub MUST be Close'd by
 // the caller when ctx is cancelled.
@@ -134,6 +139,19 @@ func (r *Redis) SubscribeCommands(ctx context.Context) (*redis.PubSub, error) {
 		return nil, err
 	}
 	return sub, nil
+}
+
+// PublishLayoutRadioStop notifies every dcc-bus daemon on the layout to run
+// the roster halt (§4.6.4). Used by loco-server and Z21 handsets.
+func (r *Redis) PublishLayoutRadioStop(ctx context.Context, cmd contract.RadioStopCommandWire) error {
+	if r == nil || r.layoutID == 0 {
+		return nil
+	}
+	raw, err := contract.BuildRadioStopCommandPayload(cmd)
+	if err != nil {
+		return err
+	}
+	return r.client.Publish(ctx, contract.LayoutRadioStopChannel(r.layoutID), raw).Err()
 }
 
 // SubscribeLayoutRadioStop listens for layout-wide Radio Stop commands

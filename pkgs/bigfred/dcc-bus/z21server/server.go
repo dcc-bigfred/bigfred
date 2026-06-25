@@ -11,7 +11,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/keskad/loco/pkgs/bigfred/contract"
-	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/cmd"
+	"github.com/keskad/loco/pkgs/bigfred/remotes"
 	"github.com/keskad/loco/pkgs/bigfred/z21pairing"
 )
 
@@ -29,7 +29,7 @@ type Config struct {
 
 	IPStickiness bool
 
-	Router       *cmd.Router
+	Drive       remotes.InboundDrivePort
 	Pairing      *z21pairing.Store
 	ClientsPub   ClientsPublisher
 	Log          *logrus.Logger
@@ -79,8 +79,8 @@ func New(cfg Config) (*Server, error) {
 	s.pairing = NewPairingHandler(cfg.Pairing, cfg.LayoutID, cfg.CommandStationID, s.registry, func(ctx context.Context) {
 		s.publishClientsSnapshotThrottled(ctx)
 	})
-	if cfg.Router != nil {
-		s.adapter = NewAdapter(s, cfg.Router)
+	if cfg.Drive != nil {
+		s.adapter = NewAdapter(s, cfg.Drive)
 	}
 	return s, nil
 }
@@ -237,6 +237,12 @@ func (s *Server) handlePacket(ctx context.Context, remote *net.UDPAddr, pkt []by
 	}
 
 	switch {
+	case isSetStop(header, pkt):
+		handled = true
+		s.handleSetStop(ctx, remote, client)
+	case isSetTrackPowerOff(header, pkt):
+		handled = true
+		s.handleTrackPowerOff(ctx, client)
 	case header == HeaderSetBroadcastFlags:
 		handled = true
 		s.adapter.HandleSetBroadcastFlags(client, pkt)
@@ -352,15 +358,20 @@ func (s *Server) sweepClients(ctx context.Context) {
 }
 
 func (s *Server) brakeHandsetLocos(ctx context.Context, client *Client) {
-	if s.adapter == nil || client.Paired == nil {
+	if s.cfg.Drive == nil || client.Paired == nil {
 		return
 	}
 	p := client.Paired
-	addrs := s.cfg.Router.CollectZ21PilotDriveTargets(ctx, p.UserID, client.SubscribedLocos, p.AllowedAddrs, p.AllowAllVehicles)
+	scope := remotes.DriveScope{
+		AllowedAddrs:     p.AllowedAddrs,
+		AllowAllVehicles: p.AllowAllVehicles,
+	}
+	session := remotes.HandsetSession{ClientKey: client.Key, UserID: p.UserID}
+	addrs := s.cfg.Drive.CollectHandsetDriveTargets(ctx, p.UserID, client.SubscribedLocos, scope)
 	if len(addrs) == 0 {
 		return
 	}
-	s.cfg.Router.ApplyZ21HandsetIdleBrake(ctx, p.UserID, client.Key, addrs)
+	s.cfg.Drive.ApplyHandsetIdleBrake(ctx, session, client.SubscribedLocos, scope)
 	s.log.WithFields(logrus.Fields{
 		"client": client.Key,
 		"userId": p.UserID,

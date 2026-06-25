@@ -19,6 +19,7 @@ type Z21Remote struct {
 	layoutCS *repo.LayoutCommandStations
 	roster   *LayoutRoster
 	snapshot *LayoutRosterSnapshot
+	users    *repo.Users
 	driveSec security.DriveSecurityContext
 }
 
@@ -29,6 +30,7 @@ func NewZ21Remote(
 	layoutCS *repo.LayoutCommandStations,
 	roster *LayoutRoster,
 	snapshot *LayoutRosterSnapshot,
+	users *repo.Users,
 ) *Z21Remote {
 	return &Z21Remote{
 		pairing:  pairing,
@@ -36,6 +38,7 @@ func NewZ21Remote(
 		layoutCS: layoutCS,
 		roster:   roster,
 		snapshot: snapshot,
+		users:    users,
 	}
 }
 
@@ -52,6 +55,7 @@ type Z21RemoteStatus struct {
 	PairingCV4       int
 	DisplayLabel     string
 	ExpiresAt        int64
+	HandsetBrakeSecs uint
 	Z21ServerEnabled bool
 }
 
@@ -65,6 +69,7 @@ type Z21RemoteVehicleRef struct {
 type Z21RemoteStartPairingInput struct {
 	VehicleIDs       []string
 	AllowAllVehicles bool
+	HandsetBrakeSecs uint
 }
 
 // Z21RemoteUpdateSessionInput updates scope on an active session.
@@ -92,6 +97,7 @@ func (s *Z21Remote) GetStatus(ctx context.Context, layoutID, csID, userID uint) 
 		out.PairingCV4 = pending.PairingCV4
 		out.DisplayLabel = pending.DisplayLabel
 		out.ExpiresAt = z21pairing.PendingExpiresAt(pending).UnixMilli()
+		out.HandsetBrakeSecs = contract.NormaliseHandsetBrakeSecs(pending.HandsetBrakeSecs)
 	}
 	sessions, err := s.pairing.ListActiveByUser(ctx, layoutID, csID, userID)
 	if err != nil {
@@ -106,8 +112,43 @@ func (s *Z21Remote) GetStatus(ctx context.Context, layoutID, csID, userID uint) 
 	out.PairedAt = active.PairedAt
 	out.LastSeenAt = active.LastSeenAt
 	out.AllowAllVehicles = active.AllowAllVehicles
+	out.HandsetBrakeSecs = contract.NormaliseHandsetBrakeSecs(active.HandsetBrakeSecs)
 	out.AllowedVehicles = s.vehiclesFromSession(ctx, layoutID, active.VehicleIDs)
 	return out, nil
+}
+
+// ListClients returns the live Z21 handset presence snapshot for one CS.
+func (s *Z21Remote) ListClients(ctx context.Context, layoutID, csID uint) (contract.Z21ClientsSnapshotWire, error) {
+	if _, err := s.ensureReady(ctx, layoutID, csID); err != nil {
+		return contract.Z21ClientsSnapshotWire{}, err
+	}
+	if s.pairing == nil {
+		return contract.Z21ClientsSnapshotWire{}, nil
+	}
+	snap, ok, err := s.pairing.GetClientsSnapshot(ctx, layoutID, csID)
+	if err != nil {
+		return contract.Z21ClientsSnapshotWire{}, err
+	}
+	if !ok {
+		cs, _ := s.stations.FindByID(ctx, csID)
+		return contract.Z21ClientsSnapshotWire{
+			LayoutID:         layoutID,
+			CommandStationID: csID,
+			IPStickiness:     cs.Z21IPStickiness,
+			Clients:          nil,
+		}, nil
+	}
+	if s.users != nil {
+		for i := range snap.Clients {
+			if snap.Clients[i].UserID == 0 {
+				continue
+			}
+			if u, err := s.users.FindByID(ctx, snap.Clients[i].UserID); err == nil {
+				snap.Clients[i].UserLogin = u.Login
+			}
+		}
+	}
+	return snap, nil
 }
 
 // StartPairing creates a pending CV3/CV4 pair for the user.
@@ -122,6 +163,12 @@ func (s *Z21Remote) StartPairing(ctx context.Context, layoutID, csID, userID uin
 	if err != nil {
 		return contract.Z21PairingReqWire{}, err
 	}
+	brakeSecs := in.HandsetBrakeSecs
+	if brakeSecs == 0 {
+		brakeSecs = contract.Z21HandsetBrakeSecsDefault
+	} else if !contract.ValidHandsetBrakeSecs(brakeSecs) {
+		return contract.Z21PairingReqWire{}, svcerrors.ErrZ21HandsetBrakeSecsInvalid
+	}
 	return s.pairing.CreatePairingRequest(ctx, z21pairing.CreatePairingRequestInput{
 		LayoutID:         layoutID,
 		CommandStationID: csID,
@@ -129,7 +176,19 @@ func (s *Z21Remote) StartPairing(ctx context.Context, layoutID, csID, userID uin
 		VehicleIDs:       vehicleIDs,
 		AllowedAddrs:     addrs,
 		AllowAllVehicles: in.AllowAllVehicles,
+		HandsetBrakeSecs: brakeSecs,
 	})
+}
+
+// CancelPairing deletes the current user's pending pairing code.
+func (s *Z21Remote) CancelPairing(ctx context.Context, layoutID, csID, userID uint) error {
+	if _, err := s.ensureReady(ctx, layoutID, csID); err != nil {
+		return err
+	}
+	if s.pairing == nil {
+		return errors.New("z21 pairing store not configured")
+	}
+	return s.pairing.CancelPendingPairing(ctx, layoutID, csID, userID)
 }
 
 // UpdateSession changes vehicle scope without re-pairing.

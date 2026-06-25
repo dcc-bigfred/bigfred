@@ -18,7 +18,7 @@ const (
 	HeaderGetLocoMode        uint16 = 0x0060
 	HeaderLocoNetFromLAN     uint16 = 0x00A2
 	// Undocumented Roco Z21 mobile app keepalive / session probes (not in LAN spec).
-	HeaderLanKeepalive  uint16 = 0x0035
+	HeaderLanKeepalive    uint16 = 0x0035
 	HeaderLanSessionProbe uint16 = 0x0036
 )
 

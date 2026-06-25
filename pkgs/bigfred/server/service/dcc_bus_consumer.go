@@ -138,6 +138,8 @@ func (c *DccBusEventConsumer) fanEnvelope(layoutID uint, eventType, id string, p
 	switch eventType {
 	case "system.estop.audit", "daemon.started", "daemon.stopped", "daemon.degraded":
 		c.hub.BroadcastToLayout(layoutID, "dcc-bus."+strings.TrimPrefix(eventType, "system."), payload)
+	case "z21.clients.changed":
+		c.hub.BroadcastToLayout(layoutID, "z21.clientsChanged", payload)
 	default:
 		// Unrouted frames are not broadcast but still logged so a
 		// daemon emitting a new event type is visible in dev logs.

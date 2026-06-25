@@ -67,6 +67,7 @@ type CommandStationCreateInput struct {
 	DeadmanSecs      float64
 	PollIntervalMs   uint
 	Z21ServerEnabled bool
+	Z21IPStickiness  bool
 }
 
 func (s *CommandStation) Create(ctx context.Context, eff domain.EffectiveRoles, in CommandStationCreateInput) (domain.CommandStation, error) {
@@ -101,6 +102,7 @@ func (s *CommandStation) Create(ctx context.Context, eff domain.EffectiveRoles, 
 		DeadmanSecs:      deadman,
 		PollIntervalMs:   pollInterval,
 		Z21ServerEnabled: in.Z21ServerEnabled,
+		Z21IPStickiness:  in.Z21IPStickiness,
 		CreatedAt:        now,
 		UpdatedAt:        now,
 	}
@@ -119,6 +121,7 @@ type CommandStationUpdateInput struct {
 	DeadmanSecs      *float64
 	PollIntervalMs   *uint
 	Z21ServerEnabled *bool
+	Z21IPStickiness  *bool
 }
 
 func (s *CommandStation) Update(ctx context.Context, eff domain.EffectiveRoles, id uint, in CommandStationUpdateInput) (domain.CommandStation, error) {
@@ -187,6 +190,9 @@ func (s *CommandStation) Update(ctx context.Context, eff domain.EffectiveRoles, 
 	}
 	if in.Z21ServerEnabled != nil {
 		row.Z21ServerEnabled = *in.Z21ServerEnabled
+	}
+	if in.Z21IPStickiness != nil {
+		row.Z21IPStickiness = *in.Z21IPStickiness
 	}
 	row.UpdatedAt = time.Now().UTC()
 

@@ -108,6 +108,7 @@ func register(m *migrator.Migrator) {
 	m.Register(migrationVersion(20260623, 1), addCommandStationTimingColumnsUp, addCommandStationTimingColumnsDown)
 	m.Register(migrationVersion(20260623, 2), addCommandStationPollIntervalColumnUp, addCommandStationPollIntervalColumnDown)
 	m.Register(migrationVersion(20260625, 1), addCommandStationZ21ServerEnabledColumnUp, addCommandStationZ21ServerEnabledColumnDown)
+	m.Register(migrationVersion(20260625, 2), addCommandStationZ21IPStickinessColumnUp, addCommandStationZ21IPStickinessColumnDown)
 }
 
 // createCommandStationsUp installs the `command_stations` catalogue
@@ -739,5 +740,15 @@ func addCommandStationZ21ServerEnabledColumnUp(s *rel.Schema) {
 }
 
 func addCommandStationZ21ServerEnabledColumnDown(s *rel.Schema) {
+	// SQLite cannot DROP COLUMN in older schemas; leave columns in place.
+}
+
+// addCommandStationZ21IPStickinessColumnUp enables per-station Z21 handset
+// session keys based on client IP only (survives UDP port changes on reconnect).
+func addCommandStationZ21IPStickinessColumnUp(s *rel.Schema) {
+	s.Exec(rel.Raw(`ALTER TABLE command_stations ADD COLUMN z21_ip_stickiness INTEGER NOT NULL DEFAULT 0`))
+}
+
+func addCommandStationZ21IPStickinessColumnDown(s *rel.Schema) {
 	// SQLite cannot DROP COLUMN in older schemas; leave columns in place.
 }

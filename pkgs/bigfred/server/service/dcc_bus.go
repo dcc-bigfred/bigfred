@@ -415,6 +415,9 @@ func (d *DccBusService) buildProgramSpec(ctx context.Context, name string, layou
 	if cs.Z21ServerEnabled {
 		args = append(args, "--enable-z21")
 	}
+	if cs.Z21IPStickiness {
+		args = append(args, "--z21-ip-stickiness")
+	}
 	for _, origin := range d.cfg.AllowedOrigins {
 		args = append(args, "--allowed-origin", origin)
 	}

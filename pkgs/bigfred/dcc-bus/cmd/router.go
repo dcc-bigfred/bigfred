@@ -46,8 +46,8 @@ type Router struct {
 	trainsMu sync.RWMutex
 	trains   []contract.DefinedTrain
 
-	dcc   *service.DCCWriter
-	cache *service.FunctionsCache
+	dcc        *service.DCCWriter
+	cache      *service.FunctionsCache
 	trainSpeed *service.TrainSpeedScheduler
 
 	pulseMu     sync.Mutex

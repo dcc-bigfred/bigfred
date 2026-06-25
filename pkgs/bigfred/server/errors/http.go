@@ -364,6 +364,8 @@ func Z21RemoteHTTPStatus(err error) (status int, code string) {
 		return http.StatusNotFound, CodeZ21SessionNotFound
 	case stderrors.Is(err, ErrZ21PairingScopeInvalid):
 		return http.StatusUnprocessableEntity, CodeZ21PairingScopeInvalid
+	case stderrors.Is(err, ErrZ21HandsetBrakeSecsInvalid):
+		return http.StatusUnprocessableEntity, CodeZ21HandsetBrakeSecsInvalid
 	default:
 		return http.StatusInternalServerError, "internal_error"
 	}

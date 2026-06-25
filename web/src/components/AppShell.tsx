@@ -11,6 +11,7 @@ import {
   useMediaQuery,
   useTheme,
 } from "@mui/material";
+import PhoneAndroidIcon from "@mui/icons-material/PhoneAndroid";
 import SpeedIcon from "@mui/icons-material/Speed";
 import MenuIcon from "@mui/icons-material/Menu";
 import DashboardIcon from "@mui/icons-material/Dashboard";
@@ -182,6 +183,12 @@ function AppShellContent() {
         label: t("nav.my.rentals"),
         icon: <HandshakeIcon fontSize="small" />,
         onClick: () => navigate("/rentals"),
+      },
+      {
+        id: "z21-remote",
+        label: t("nav.my.z21Remote"),
+        icon: <PhoneAndroidIcon fontSize="small" />,
+        onClick: () => navigate("/remotes/z21"),
       },
       {
         id: "templates",

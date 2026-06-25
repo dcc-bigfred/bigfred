@@ -1,0 +1,34 @@
+{
+  "title": "Pilot Z21",
+  "subtitle": "Sparuj aplikację Z21 z BigFredem i wybierz lokomotywy, którymi możesz sterować.",
+  "alerts": {
+    "noServer": "Żadna centralka na tej makiecie nie ma włączonego serwera pilota Z21. Poproś administratora o włączenie w",
+    "commandStationLink": "Centralkach"
+  },
+  "sections": {
+    "status": "Status",
+    "scope": "Zakres pojazdów"
+  },
+  "fields": {
+    "commandStation": "Centralka",
+    "allowAllVehicles": "Wszystkie pojazdy, którymi mogę sterować na makiecie",
+    "vehicles": "Dozwolone pojazdy",
+    "vehiclesPlaceholder": "Wybierz lokomotywy…"
+  },
+  "status": {
+    "paired": "Sparowany",
+    "notPaired": "Niesparowany",
+    "clientKey": "Pilot: {{key}}",
+    "pairedAt": "Sparowano {{time}}",
+    "lastSeenAt": "Ostatnia aktywność {{time}}",
+    "keepaliveHint": "Pozostaw aplikację Z21 otwartą — wysyłaj co najmniej jeden pakiet UDP na minutę (Z21 §1.1)."
+  },
+  "pending": {
+    "title": "Wpisz te wartości w aplikacji Z21 (POM)",
+    "expires": "Kod parowania wygasa za {{seconds}} s"
+  },
+  "actions": {
+    "generatePairing": "Wygeneruj kod parowania",
+    "unpair": "Rozłącz pilot"
+  }
+}

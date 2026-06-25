@@ -1,0 +1,34 @@
+{
+  "title": "Z21 handset",
+  "subtitle": "Pair a stock Z21 app with BigFred and choose which locomotives you may drive.",
+  "alerts": {
+    "noServer": "No command station on this layout has the Z21 handset server enabled. Ask an admin to turn it on under",
+    "commandStationLink": "Command stations"
+  },
+  "sections": {
+    "status": "Status",
+    "scope": "Vehicle scope"
+  },
+  "fields": {
+    "commandStation": "Command station",
+    "allowAllVehicles": "All vehicles I can drive on this layout",
+    "vehicles": "Allowed vehicles",
+    "vehiclesPlaceholder": "Pick locomotives…"
+  },
+  "status": {
+    "paired": "Paired",
+    "notPaired": "Not paired",
+    "clientKey": "Handset: {{key}}",
+    "pairedAt": "Paired at {{time}}",
+    "lastSeenAt": "Last seen {{time}}",
+    "keepaliveHint": "Keep the Z21 app open and connected — send at least one UDP packet per minute (Z21 §1.1)."
+  },
+  "pending": {
+    "title": "Enter these values in the Z21 app (POM)",
+    "expires": "Pairing code expires in {{seconds}} s"
+  },
+  "actions": {
+    "generatePairing": "Generate pairing code",
+    "unpair": "Disconnect handset"
+  }
+}

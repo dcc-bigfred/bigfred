@@ -1,0 +1,34 @@
+{
+  "title": "Z21-Handgerät",
+  "subtitle": "Koppeln Sie eine Z21-App mit BigFred und wählen Sie die Lokomotiven, die Sie fahren dürfen.",
+  "alerts": {
+    "noServer": "Keine Zentrale auf dieser Anlage hat den Z21-Handgeräte-Server aktiviert. Bitte einen Administrator bitten, ihn unter",
+    "commandStationLink": "Zentralen"
+  },
+  "sections": {
+    "status": "Status",
+    "scope": "Fahrzeugumfang"
+  },
+  "fields": {
+    "commandStation": "Zentrale",
+    "allowAllVehicles": "Alle Fahrzeuge, die ich auf dieser Anlage fahren darf",
+    "vehicles": "Erlaubte Fahrzeuge",
+    "vehiclesPlaceholder": "Lokomotiven wählen…"
+  },
+  "status": {
+    "paired": "Gekoppelt",
+    "notPaired": "Nicht gekoppelt",
+    "clientKey": "Handgerät: {{key}}",
+    "pairedAt": "Gekoppelt am {{time}}",
+    "lastSeenAt": "Zuletzt gesehen {{time}}",
+    "keepaliveHint": "Z21-App geöffnet lassen — mindestens ein UDP-Paket pro Minute senden (Z21 §1.1)."
+  },
+  "pending": {
+    "title": "Diese Werte in der Z21-App eingeben (POM)",
+    "expires": "Kopplungscode läuft ab in {{seconds}} s"
+  },
+  "actions": {
+    "generatePairing": "Kopplungscode erzeugen",
+    "unpair": "Handgerät trennen"
+  }
+}

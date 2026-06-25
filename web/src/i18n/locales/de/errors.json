@@ -98,5 +98,13 @@
   "lease_target_not_on_layout": "Das Fahrzeug oder der Zug ist nicht auf dieser Anlage.",
   "lease_invalid_speed_limit": "Geschwindigkeitsbegrenzung muss zwischen 0 % und 100 % liegen.",
   "lease_invalid_duration": "Ausleihdauer muss zwischen 1 Minute und 24 Stunden liegen.",
-  "lease_target_not_drivable": "Dieses Fahrzeug oder dieser Zug kann nicht verliehen werden."
+  "lease_target_not_drivable": "Dieses Fahrzeug oder dieser Zug kann nicht verliehen werden.",
+  "z21_server_disabled": "Der Z21-Handgeräte-Server ist für diese Zentrale deaktiviert.",
+  "command_station_not_on_layout": "Diese Zentrale ist Ihrer Anlage nicht zugewiesen.",
+  "z21_vehicle_not_on_roster": "Eines der gewählten Fahrzeuge steht nicht auf dem Anlagen-Roster.",
+  "z21_vehicle_not_drivable": "Sie dürfen eines der gewählten Fahrzeuge nicht fahren.",
+  "z21_vehicle_no_dcc_address": "Eines der gewählten Fahrzeuge hat keine DCC-Adresse.",
+  "z21_session_not_found": "Keine aktive Z21-Handgeräte-Sitzung gefunden.",
+  "z21_pairing_scope_invalid": "Mindestens ein Fahrzeug wählen oder „alle Fahrzeuge, die ich fahren darf“ aktivieren.",
+  "z21_remote_not_configured": "Z21-Kopplung ist nicht verfügbar (Redis offline)."
 }

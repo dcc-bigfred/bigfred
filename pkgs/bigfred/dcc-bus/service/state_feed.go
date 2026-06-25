@@ -9,6 +9,7 @@ import (
 	"github.com/keskad/loco/pkgs/bigfred/contract"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/service/station"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/state"
+	"github.com/keskad/loco/pkgs/bigfred/remotes"
 	"github.com/keskad/loco/pkgs/loco/commandstation"
 )
 
@@ -25,16 +26,11 @@ type FeedDeps struct {
 	Redis        *state.Redis
 	Hub          StateBroadcaster
 	HubSubs      SubscriptionSource
-	FnCache      *FunctionsCache
-	Z21Fanout    Z21Fanout
-	Log          *logrus.Logger
+	FnCache       *FunctionsCache
+	LocoObservers *remotes.LocoStateNotifier
+	Log           *logrus.Logger
 	PollInterval time.Duration
 	StateTTL     time.Duration
-}
-
-// Z21Fanout pushes LAN_X_LOCO_INFO to inbound Z21 handset clients.
-type Z21Fanout interface {
-	FanoutLocoState(ctx context.Context, snap contract.LocoStateWire)
 }
 
 // SubscriptionSource exposes the union of subscribed locomotive addresses.
@@ -218,8 +214,8 @@ func applyObservation(ctx context.Context, deps FeedDeps, o commandstation.LocoO
 		}
 	}
 	BroadcastLocoState(ctx, deps.Hub, snap)
-	if deps.Z21Fanout != nil {
-		deps.Z21Fanout.FanoutLocoState(ctx, snap)
+	if deps.LocoObservers != nil {
+		deps.LocoObservers.Notify(ctx, snap)
 	}
 	if deps.Log != nil {
 		deps.Log.WithFields(logrus.Fields{

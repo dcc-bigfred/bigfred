@@ -4,14 +4,17 @@ import (
 	"context"
 
 	"github.com/keskad/loco/pkgs/bigfred/contract"
+	"github.com/keskad/loco/pkgs/bigfred/remotes"
 )
+
+var _ remotes.LocoStateObserver = (*Server)(nil)
 
 // LAN_SET_BROADCASTFLAGS bit 0: push LAN_X_LOCO_INFO for subscribed locos.
 const broadcastFlagDriving uint32 = 0x00000001
 
-// FanoutLocoState pushes LAN_X_LOCO_INFO to paired clients that subscribed
+// OnLocoStateChanged pushes LAN_X_LOCO_INFO to paired clients that subscribed
 // to the address and enabled the driving broadcast flag.
-func (s *Server) FanoutLocoState(ctx context.Context, snap contract.LocoStateWire) {
+func (s *Server) OnLocoStateChanged(ctx context.Context, snap contract.LocoStateWire) {
 	_ = ctx
 	if s.conn == nil || s.registry == nil {
 		return

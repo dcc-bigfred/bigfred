@@ -358,7 +358,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 			Port:             d.cfg.Z21Port,
 			SpeedSteps:       d.cfg.CommandStation.EffectiveSpeedSteps(),
 			IPStickiness:     d.cfg.Z21IPStickiness,
-			Router:           d.router,
+			Drive:            d.router,
 			Pairing:          z21pairing.NewStore(d.rds),
 			ClientsPub:       d.redis,
 			Log:              d.log,
@@ -366,7 +366,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("z21 server: %w", err)
 		}
-		d.router.SetZ21Fanout(z21Srv)
+		d.router.RegisterLocoObserver(z21Srv)
 		go func() {
 			if err := z21Srv.Run(ctx); err != nil && ctx.Err() == nil {
 				d.log.WithError(err).Error("z21 inbound server stopped")

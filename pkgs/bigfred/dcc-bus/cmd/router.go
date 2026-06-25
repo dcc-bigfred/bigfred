@@ -14,6 +14,7 @@ import (
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/service"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/service/station"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/state"
+	"github.com/keskad/loco/pkgs/bigfred/remotes"
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
 	"github.com/keskad/loco/pkgs/loco/commandstation"
 )
@@ -53,7 +54,7 @@ type Router struct {
 	pulseMu     sync.Mutex
 	pulseActive map[service.FnKey]bool
 
-	z21Fanout service.Z21Fanout
+	locoObservers *remotes.LocoStateNotifier
 
 	shutdownOnce sync.Once
 	bootStopMu   sync.Mutex
@@ -104,6 +105,7 @@ func NewRouter(_ context.Context, cfg Config) (*Router, error) {
 		cache:       service.NewFunctionsCache(),
 		trainSpeed:  service.NewTrainSpeedScheduler(),
 		pulseActive: make(map[service.FnKey]bool, 8),
+		locoObservers: remotes.NewLocoStateNotifier(),
 	}
 	r.dcc.LogFields = r.stationLogFields
 	r.ApplyAllowedVehicles(context.Background(), cfg.AllowedVehicles)
@@ -187,17 +189,18 @@ func (r *Router) findDefinedTrain(trainID string) (contract.DefinedTrain, bool) 
 	return contract.DefinedTrain{}, false
 }
 
-// SetZ21Fanout wires the inbound Z21 server for LAN_X_LOCO_INFO push.
-func (r *Router) SetZ21Fanout(f service.Z21Fanout) {
-	r.z21Fanout = f
+// RegisterLocoObserver subscribes an inbound remote for locomotive state push.
+func (r *Router) RegisterLocoObserver(obs remotes.LocoStateObserver) {
+	if r == nil {
+		return
+	}
+	r.locoObservers.Register(obs)
 }
 
-// broadcastLocoState fans a snapshot to WS sessions and subscribed Z21 handsets.
+// broadcastLocoState fans a snapshot to WS sessions and registered remotes.
 func (r *Router) broadcastLocoState(ctx context.Context, snap contract.LocoStateWire) {
 	service.BroadcastLocoState(ctx, r.hub, snap)
-	if r.z21Fanout != nil {
-		r.z21Fanout.FanoutLocoState(ctx, snap)
-	}
+	r.locoObservers.Notify(ctx, snap)
 }
 
 // locoSnapOrDefault returns the cached Redis snapshot or a stopped default.
@@ -218,9 +221,9 @@ func (r *Router) RunStateFeed(ctx context.Context) {
 		Redis:        r.redis,
 		Hub:          r.hub,
 		HubSubs:      r.hub,
-		FnCache:      r.cache,
-		Z21Fanout:    r.z21Fanout,
-		Log:          r.log,
+		FnCache:       r.cache,
+		LocoObservers: r.locoObservers,
+		Log:           r.log,
 		PollInterval: r.pollInterval,
 		StateTTL:     StateTTL,
 	})

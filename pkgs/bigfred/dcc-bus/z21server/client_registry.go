@@ -28,6 +28,7 @@ type Client struct {
 	virtualCV map[uint32]byte
 
 	SubscribedLocos []uint16
+	LastActiveLoco  uint16
 }
 
 // Registry tracks active UDP participants for one virtual Z21 server.
@@ -128,6 +129,28 @@ func (c *Client) BufferPairingCV(cvWire int, value int) (cv3, cv4 int, ready boo
 		return *c.pairCV3, *c.pairCV4, true
 	}
 	return 0, 0, false
+}
+
+// SetLastActiveLoco records the handset's current locomotive and keeps the
+// subscription FIFO in sync (used for per-pilot estop).
+func (c *Client) SetLastActiveLoco(addr uint16) {
+	if addr == 0 {
+		return
+	}
+	c.LastActiveLoco = addr
+	c.SubscribeLoco(addr)
+}
+
+// CurrentLoco returns the pilot's active address: last drive/subscribe
+// target, or the newest entry in the Z21 subscription FIFO.
+func (c *Client) CurrentLoco() uint16 {
+	if c.LastActiveLoco != 0 {
+		return c.LastActiveLoco
+	}
+	if n := len(c.SubscribedLocos); n > 0 {
+		return c.SubscribedLocos[n-1]
+	}
+	return 0
 }
 
 // SubscribeLoco adds addr to the per-client FIFO (max 16 per Z21 spec).

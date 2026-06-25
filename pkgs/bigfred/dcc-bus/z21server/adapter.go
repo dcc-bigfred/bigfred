@@ -8,8 +8,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/keskad/loco/pkgs/bigfred/contract"
-	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/cmd"
-	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/protocol"
+	"github.com/keskad/loco/pkgs/bigfred/remotes"
 	"github.com/keskad/loco/pkgs/loco/commandstation"
 )
 
@@ -20,7 +19,9 @@ type Responder struct {
 	subscribed map[uint16]struct{}
 }
 
-// NewResponder adapts one Z21 client to cmd.Responder.
+var _ remotes.ThrottleResponder = (*Responder)(nil)
+
+// NewResponder adapts one Z21 client to remotes.ThrottleResponder.
 func NewResponder(server *Server, client *Client) *Responder {
 	return &Responder{
 		client:     client,
@@ -58,45 +59,43 @@ func (r *Responder) SendLocoError(ctx context.Context, addr uint16, code, detail
 	return nil
 }
 
-func (r *Responder) SendAck(ctx context.Context, requestID string, payload protocol.AckPayload) error {
-	_ = ctx
-	_ = requestID
-	_ = payload
-	return nil
-}
-
-// Adapter maps inbound Z21 packets to cmd.Router handlers.
+// Adapter maps inbound Z21 packets to remotes.InboundDrivePort.
 type Adapter struct {
 	server *Server
-	router *cmd.Router
+	drive  remotes.InboundDrivePort
 }
 
-// NewAdapter wires the shared command router into the Z21 server.
-func NewAdapter(server *Server, router *cmd.Router) *Adapter {
-	return &Adapter{server: server, router: router}
+// NewAdapter wires the shared drive port into the Z21 server.
+func NewAdapter(server *Server, drive remotes.InboundDrivePort) *Adapter {
+	return &Adapter{server: server, drive: drive}
 }
 
-func (a *Adapter) actor(client *Client) cmd.Actor {
+func (a *Adapter) throttleActor(client *Client) remotes.ThrottleActor {
 	userID := uint(0)
 	if client.Paired != nil {
 		userID = client.Paired.UserID
 	}
-	return cmd.Actor{
+	return remotes.ThrottleActor{
 		UserID:    userID,
-		SessionID: "z21:" + client.Key,
+		SessionID: remotes.HandsetSessionID(client.Key),
+	}
+}
+
+func (a *Adapter) driveScope(client *Client) remotes.DriveScope {
+	if client.Paired == nil {
+		return remotes.DriveScope{}
+	}
+	return remotes.DriveScope{
+		AllowedAddrs:     client.Paired.AllowedAddrs,
+		AllowAllVehicles: client.Paired.AllowAllVehicles,
 	}
 }
 
 func (a *Adapter) authorize(client *Client, addr uint16) bool {
-	if client.Paired == nil || a.router == nil {
+	if client.Paired == nil || a.drive == nil {
 		return false
 	}
-	return a.router.AuthorizeZ21Drive(
-		client.Paired.UserID,
-		addr,
-		client.Paired.AllowedAddrs,
-		client.Paired.AllowAllVehicles,
-	)
+	return a.drive.AuthorizeDrive(client.Paired.UserID, addr, a.driveScope(client))
 }
 
 func (a *Adapter) HandleSetLocoFunction(ctx context.Context, client *Client, pkt []byte) {
@@ -108,14 +107,14 @@ func (a *Adapter) HandleSetLocoFunction(ctx context.Context, client *Client, pkt
 		a.logDriveRejected(client, addr, "set_function")
 		return
 	}
-	resp := NewResponder(a.server, client)
-	result := a.router.HandleSetFunction(ctx, a.actor(client), resp, contract.LocoSetFunctionWire{
+	client.SetLastActiveLoco(addr)
+	result := a.drive.SetFunction(ctx, a.throttleActor(client), NewResponder(a.server, client), contract.LocoSetFunctionWire{
 		Address:  addr,
 		Function: uint8(fn),
 		On:       on,
-	}, "")
+	})
 	if !result.OK {
-		a.logRouterFailure(client, addr, "set_function", result.Code)
+		a.logDriveFailure(client, addr, "set_function", result.Code)
 	}
 }
 
@@ -127,15 +126,17 @@ func (a *Adapter) HandleSetLocoFunctionGroup(ctx context.Context, client *Client
 		}
 		return
 	}
+	client.SetLastActiveLoco(addr)
 	resp := NewResponder(a.server, client)
+	actor := a.throttleActor(client)
 	for _, u := range updates {
-		result := a.router.HandleSetFunction(ctx, a.actor(client), resp, contract.LocoSetFunctionWire{
+		result := a.drive.SetFunction(ctx, actor, resp, contract.LocoSetFunctionWire{
 			Address:  addr,
 			Function: uint8(u.fn),
 			On:       u.on,
-		}, "")
+		})
 		if !result.OK {
-			a.logRouterFailure(client, addr, "set_function_group", result.Code)
+			a.logDriveFailure(client, addr, "set_function_group", result.Code)
 			return
 		}
 	}
@@ -150,12 +151,10 @@ func (a *Adapter) HandleGetLocoInfo(ctx context.Context, client *Client, pkt []b
 		a.logDriveRejected(client, addr, "get_loco_info")
 		return
 	}
-	resp := NewResponder(a.server, client)
-	result := a.router.HandleSubscribe(ctx, a.actor(client), resp, protocol.LocoSubscribePayload{
-		Addresses: []uint16{addr},
-	}, "")
+	client.SetLastActiveLoco(addr)
+	result := a.drive.Subscribe(ctx, a.throttleActor(client), NewResponder(a.server, client), []uint16{addr})
 	if !result.OK {
-		a.logRouterFailure(client, addr, "get_loco_info", result.Code)
+		a.logDriveFailure(client, addr, "get_loco_info", result.Code)
 	}
 }
 
@@ -179,18 +178,18 @@ func (a *Adapter) HandleSetLocoDrive(ctx context.Context, client *Client, pkt []
 		a.logDriveRejected(client, addr, "set_speed")
 		return
 	}
-	resp := NewResponder(a.server, client)
-	result := a.router.HandleSetSpeed(ctx, a.actor(client), resp, contract.LocoSetSpeedWire{
+	client.SetLastActiveLoco(addr)
+	result := a.drive.SetSpeed(ctx, a.throttleActor(client), NewResponder(a.server, client), contract.LocoSetSpeedWire{
 		Address: addr,
 		Speed:   speed,
 		Forward: forward,
-	}, "")
+	})
 	if !result.OK {
-		a.logRouterFailure(client, addr, "set_speed", result.Code)
+		a.logDriveFailure(client, addr, "set_speed", result.Code)
 	}
 }
 
-func (a *Adapter) logRouterFailure(client *Client, addr uint16, action, code string) {
+func (a *Adapter) logDriveFailure(client *Client, addr uint16, action, code string) {
 	if a.server.log == nil {
 		return
 	}
@@ -203,10 +202,10 @@ func (a *Adapter) logRouterFailure(client *Client, addr uint16, action, code str
 }
 
 func (a *Adapter) ReadLocoCV(addr uint16, cvNum commandstation.CVNum) (int, error) {
-	if a.router == nil {
-		return 0, errors.New("z21server: no router")
+	if a.drive == nil {
+		return 0, errors.New("z21server: no drive port")
 	}
-	return a.router.ReadLocoCV(addr, cvNum)
+	return a.drive.ReadLocoCV(addr, cvNum)
 }
 
 func (a *Adapter) HandleSetBroadcastFlags(client *Client, pkt []byte) {

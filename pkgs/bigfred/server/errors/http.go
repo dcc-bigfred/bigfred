@@ -344,3 +344,27 @@ func LeaseHTTPStatus(err error) (status int, code string) {
 		return http.StatusInternalServerError, "internal_error"
 	}
 }
+
+// Z21RemoteHTTPStatus maps z21-remote errors to HTTP status codes.
+func Z21RemoteHTTPStatus(err error) (status int, code string) {
+	switch {
+	case stderrors.Is(err, ErrZ21ServerDisabled):
+		return http.StatusConflict, CodeZ21ServerDisabled
+	case stderrors.Is(err, ErrZ21CommandStationNotOnLayout):
+		return http.StatusNotFound, CodeZ21CommandStationNotOnLayout
+	case stderrors.Is(err, ErrCommandStationNotFound):
+		return http.StatusNotFound, CodeCommandStationNotFound
+	case stderrors.Is(err, ErrZ21VehicleNotOnRoster):
+		return http.StatusUnprocessableEntity, CodeZ21VehicleNotOnRoster
+	case stderrors.Is(err, ErrZ21VehicleNotDrivable):
+		return http.StatusForbidden, CodeZ21VehicleNotDrivable
+	case stderrors.Is(err, ErrZ21VehicleNoDCCAddress):
+		return http.StatusUnprocessableEntity, CodeZ21VehicleNoDCCAddress
+	case stderrors.Is(err, ErrZ21SessionNotFound):
+		return http.StatusNotFound, CodeZ21SessionNotFound
+	case stderrors.Is(err, ErrZ21PairingScopeInvalid):
+		return http.StatusUnprocessableEntity, CodeZ21PairingScopeInvalid
+	default:
+		return http.StatusInternalServerError, "internal_error"
+	}
+}

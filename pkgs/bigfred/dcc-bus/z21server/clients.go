@@ -11,15 +11,14 @@ import (
 // ClientsPublisher stores and fans out handset presence snapshots.
 type ClientsPublisher = remotes.ClientsSnapshotPublisher
 
-func (s *Server) noteClientActivity(client *Client) {
+func (s *Server) noteClientActivity(ctx context.Context, client *Client) {
 	if client == nil {
 		return
 	}
-	if client.Paired != nil && client.IdleBraked {
+	if s.registry.IsPaired(client.Key) && s.registry.IdleBraked(client.Key) {
 		s.registry.ClearIdleBraked(client.Key)
-		client.IdleBraked = false
 	}
-	s.publishClientsSnapshotThrottled(context.Background())
+	s.publishClientsSnapshotThrottled(ctx)
 }
 
 func (s *Server) publishClientsSnapshotThrottled(ctx context.Context) {

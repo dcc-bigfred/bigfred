@@ -19,13 +19,22 @@ func NewZ21RemoteHandler(svc *cmd.Z21Remote) *Z21RemoteHandler {
 	return &Z21RemoteHandler{svc: svc}
 }
 
+func (h *Z21RemoteHandler) requireZ21Remote(w http.ResponseWriter, r *http.Request) (uint, cmd.Identity, bool) {
+	layoutID, actor, ok := requireOwnLayout(w, r)
+	if !ok {
+		return 0, actor, false
+	}
+	if h.svc == nil {
+		writeJSONError(w, http.StatusServiceUnavailable, "z21_remote_not_configured")
+		return 0, actor, false
+	}
+	return layoutID, actor, true
+}
+
 // GetStatus handles GET …/z21-remote.
 func (h *Z21RemoteHandler) GetStatus(w http.ResponseWriter, r *http.Request) {
-	layoutID, actor, ok := requireOwnLayout(w, r)
-	if !ok || h.svc == nil {
-		if h.svc == nil {
-			writeJSONError(w, http.StatusServiceUnavailable, "z21_remote_not_configured")
-		}
+	layoutID, actor, ok := h.requireZ21Remote(w, r)
+	if !ok {
 		return
 	}
 	csID, ok := parseUintParam(r, "csid")
@@ -44,11 +53,8 @@ func (h *Z21RemoteHandler) GetStatus(w http.ResponseWriter, r *http.Request) {
 
 // ListClients handles GET …/z21-remote/clients.
 func (h *Z21RemoteHandler) ListClients(w http.ResponseWriter, r *http.Request) {
-	layoutID, _, ok := requireOwnLayout(w, r)
-	if !ok || h.svc == nil {
-		if h.svc == nil {
-			writeJSONError(w, http.StatusServiceUnavailable, "z21_remote_not_configured")
-		}
+	layoutID, _, ok := h.requireZ21Remote(w, r)
+	if !ok {
 		return
 	}
 	csID, ok := parseUintParam(r, "csid")
@@ -73,11 +79,8 @@ type z21RemotePairingRequest struct {
 
 // StartPairing handles POST …/z21-remote/pairing.
 func (h *Z21RemoteHandler) StartPairing(w http.ResponseWriter, r *http.Request) {
-	layoutID, actor, ok := requireOwnLayout(w, r)
-	if !ok || h.svc == nil {
-		if h.svc == nil {
-			writeJSONError(w, http.StatusServiceUnavailable, "z21_remote_not_configured")
-		}
+	layoutID, actor, ok := h.requireZ21Remote(w, r)
+	if !ok {
 		return
 	}
 	csID, ok := parseUintParam(r, "csid")
@@ -106,11 +109,8 @@ func (h *Z21RemoteHandler) StartPairing(w http.ResponseWriter, r *http.Request) 
 
 // CancelPairing handles DELETE …/z21-remote/pairing.
 func (h *Z21RemoteHandler) CancelPairing(w http.ResponseWriter, r *http.Request) {
-	layoutID, actor, ok := requireOwnLayout(w, r)
-	if !ok || h.svc == nil {
-		if h.svc == nil {
-			writeJSONError(w, http.StatusServiceUnavailable, "z21_remote_not_configured")
-		}
+	layoutID, actor, ok := h.requireZ21Remote(w, r)
+	if !ok {
 		return
 	}
 	csID, ok := parseUintParam(r, "csid")
@@ -132,11 +132,8 @@ type z21RemoteSessionRequest struct {
 
 // UpdateSession handles PATCH …/z21-remote/session.
 func (h *Z21RemoteHandler) UpdateSession(w http.ResponseWriter, r *http.Request) {
-	layoutID, actor, ok := requireOwnLayout(w, r)
-	if !ok || h.svc == nil {
-		if h.svc == nil {
-			writeJSONError(w, http.StatusServiceUnavailable, "z21_remote_not_configured")
-		}
+	layoutID, actor, ok := h.requireZ21Remote(w, r)
+	if !ok {
 		return
 	}
 	csID, ok := parseUintParam(r, "csid")
@@ -168,11 +165,8 @@ func (h *Z21RemoteHandler) UpdateSession(w http.ResponseWriter, r *http.Request)
 
 // Unpair handles DELETE …/z21-remote/session.
 func (h *Z21RemoteHandler) Unpair(w http.ResponseWriter, r *http.Request) {
-	layoutID, actor, ok := requireOwnLayout(w, r)
-	if !ok || h.svc == nil {
-		if h.svc == nil {
-			writeJSONError(w, http.StatusServiceUnavailable, "z21_remote_not_configured")
-		}
+	layoutID, actor, ok := h.requireZ21Remote(w, r)
+	if !ok {
 		return
 	}
 	csID, ok := parseUintParam(r, "csid")

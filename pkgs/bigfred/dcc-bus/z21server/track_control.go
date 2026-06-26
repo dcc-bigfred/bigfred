@@ -25,10 +25,11 @@ func buildBCStoppedReply() []byte {
 }
 
 func (s *Server) handleSetStop(ctx context.Context, remote *net.UDPAddr, client *Client) {
-	if client.Paired == nil || s.cfg.Drive == nil {
+	p, ok := s.registry.Paired(client.Key)
+	if !ok || s.cfg.Drive == nil {
 		return
 	}
-	addr := client.CurrentLoco()
+	addr := s.registry.CurrentLoco(client.Key)
 	if addr == 0 {
 		if s.log != nil {
 			s.log.WithField("client", client.Key).Info("z21 estop ignored: no active loco")
@@ -37,24 +38,25 @@ func (s *Server) handleSetStop(ctx context.Context, remote *net.UDPAddr, client 
 		return
 	}
 	scope := remotes.DriveScope{
-		AllowedAddrs:     client.Paired.AllowedAddrs,
-		AllowAllVehicles: client.Paired.AllowAllVehicles,
+		AllowedAddrs:     p.AllowedAddrs,
+		AllowAllVehicles: p.AllowAllVehicles,
 	}
-	if !s.cfg.Drive.AuthorizeDrive(client.Paired.UserID, addr, scope) {
+	if !s.cfg.Drive.AuthorizeDrive(p.UserID, addr, scope) {
 		if s.log != nil {
 			s.log.WithFields(logrus.Fields{
 				"client": client.Key,
 				"loco":   addr,
 			}).Info("z21 estop rejected: not authorized")
 		}
+		_ = s.writeUDP(remote, client.Key, buildBCStoppedReply())
 		return
 	}
-	session := remotes.HandsetSession{ClientKey: client.Key, UserID: client.Paired.UserID}
+	session := remotes.HandsetSession{ClientKey: client.Key, UserID: p.UserID}
 	s.cfg.Drive.ApplyHandsetPilotEStop(ctx, session, addr)
 	if s.log != nil {
 		s.log.WithFields(logrus.Fields{
 			"client": client.Key,
-			"userId": client.Paired.UserID,
+			"userId": p.UserID,
 			"loco":   addr,
 		}).Info("z21 handset estop")
 	}
@@ -62,17 +64,18 @@ func (s *Server) handleSetStop(ctx context.Context, remote *net.UDPAddr, client 
 }
 
 func (s *Server) handleTrackPowerOff(ctx context.Context, client *Client) {
-	if client.Paired == nil || s.cfg.Drive == nil {
+	p, ok := s.registry.Paired(client.Key)
+	if !ok || s.cfg.Drive == nil {
 		return
 	}
-	if err := s.cfg.Drive.TriggerLayoutRadioStop(ctx, client.Paired.UserID, contract.RemoteProtocolZ21); err != nil && s.log != nil {
+	if err := s.cfg.Drive.TriggerLayoutRadioStop(ctx, p.UserID, contract.RemoteProtocolZ21); err != nil && s.log != nil {
 		s.log.WithError(err).WithField("client", client.Key).Warn("z21 radio stop publish failed")
 		return
 	}
 	if s.log != nil {
 		s.log.WithFields(logrus.Fields{
 			"client": client.Key,
-			"userId": client.Paired.UserID,
+			"userId": p.UserID,
 		}).Info("z21 handset radio stop")
 	}
 }

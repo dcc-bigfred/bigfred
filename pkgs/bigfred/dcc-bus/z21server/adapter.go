@@ -33,7 +33,7 @@ func NewResponder(server *Server, client *Client) *Responder {
 func (r *Responder) Subscribe(addrs ...uint16) {
 	for _, addr := range addrs {
 		r.subscribed[addr] = struct{}{}
-		r.client.SubscribeLoco(addr)
+		r.server.registry.SubscribeLoco(r.client.Key, addr)
 	}
 }
 
@@ -72,8 +72,8 @@ func NewAdapter(server *Server, drive remotes.InboundDrivePort) *Adapter {
 
 func (a *Adapter) throttleActor(client *Client) remotes.ThrottleActor {
 	userID := uint(0)
-	if client.Paired != nil {
-		userID = client.Paired.UserID
+	if p, ok := a.server.registry.Paired(client.Key); ok {
+		userID = p.UserID
 	}
 	return remotes.ThrottleActor{
 		UserID:    userID,
@@ -82,20 +82,22 @@ func (a *Adapter) throttleActor(client *Client) remotes.ThrottleActor {
 }
 
 func (a *Adapter) driveScope(client *Client) remotes.DriveScope {
-	if client.Paired == nil {
+	p, ok := a.server.registry.Paired(client.Key)
+	if !ok {
 		return remotes.DriveScope{}
 	}
 	return remotes.DriveScope{
-		AllowedAddrs:     client.Paired.AllowedAddrs,
-		AllowAllVehicles: client.Paired.AllowAllVehicles,
+		AllowedAddrs:     p.AllowedAddrs,
+		AllowAllVehicles: p.AllowAllVehicles,
 	}
 }
 
 func (a *Adapter) authorize(client *Client, addr uint16) bool {
-	if client.Paired == nil || a.drive == nil {
+	p, ok := a.server.registry.Paired(client.Key)
+	if !ok || a.drive == nil {
 		return false
 	}
-	return a.drive.AuthorizeDrive(client.Paired.UserID, addr, a.driveScope(client))
+	return a.drive.AuthorizeDrive(p.UserID, addr, a.driveScope(client))
 }
 
 func (a *Adapter) HandleSetLocoFunction(ctx context.Context, client *Client, pkt []byte) {
@@ -107,7 +109,7 @@ func (a *Adapter) HandleSetLocoFunction(ctx context.Context, client *Client, pkt
 		a.logDriveRejected(client, addr, "set_function")
 		return
 	}
-	client.SetLastActiveLoco(addr)
+	a.server.registry.SetLastActiveLoco(client.Key, addr)
 	result := a.drive.SetFunction(ctx, a.throttleActor(client), NewResponder(a.server, client), contract.LocoSetFunctionWire{
 		Address:  addr,
 		Function: uint8(fn),
@@ -126,7 +128,7 @@ func (a *Adapter) HandleSetLocoFunctionGroup(ctx context.Context, client *Client
 		}
 		return
 	}
-	client.SetLastActiveLoco(addr)
+	a.server.registry.SetLastActiveLoco(client.Key, addr)
 	resp := NewResponder(a.server, client)
 	actor := a.throttleActor(client)
 	for _, u := range updates {
@@ -151,7 +153,7 @@ func (a *Adapter) HandleGetLocoInfo(ctx context.Context, client *Client, pkt []b
 		a.logDriveRejected(client, addr, "get_loco_info")
 		return
 	}
-	client.SetLastActiveLoco(addr)
+	a.server.registry.SetLastActiveLoco(client.Key, addr)
 	result := a.drive.Subscribe(ctx, a.throttleActor(client), NewResponder(a.server, client), []uint16{addr})
 	if !result.OK {
 		a.logDriveFailure(client, addr, "get_loco_info", result.Code)
@@ -178,7 +180,7 @@ func (a *Adapter) HandleSetLocoDrive(ctx context.Context, client *Client, pkt []
 		a.logDriveRejected(client, addr, "set_speed")
 		return
 	}
-	client.SetLastActiveLoco(addr)
+	a.server.registry.SetLastActiveLoco(client.Key, addr)
 	result := a.drive.SetSpeed(ctx, a.throttleActor(client), NewResponder(a.server, client), contract.LocoSetSpeedWire{
 		Address: addr,
 		Speed:   speed,

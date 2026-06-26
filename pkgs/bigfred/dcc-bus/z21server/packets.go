@@ -29,7 +29,7 @@ func parsePOMWriteByte(pkt []byte) (locoAddr uint16, cvWire int, value int, ok b
 	if !ok {
 		return 0, 0, 0, false
 	}
-	cvWire = int((db3&0x03)<<8) | int(pkt[9])
+	cvWire = int(db3&0x03)<<8 | int(pkt[9])
 	value = int(pkt[10])
 	return locoAddr, cvWire, value, true
 }
@@ -287,12 +287,4 @@ func xorSum(x []byte) byte {
 		v ^= b
 	}
 	return v
-}
-
-func isPairingPOM(pkt []byte) bool {
-	_, cvWire, _, ok := parsePOMWriteByte(pkt)
-	if !ok {
-		return false
-	}
-	return isPairingCVWire(cvWire)
 }

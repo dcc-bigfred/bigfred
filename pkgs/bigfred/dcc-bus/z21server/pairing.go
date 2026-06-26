@@ -34,7 +34,7 @@ func (h *PairingHandler) Handle(ctx context.Context, client *Client, cvWire, val
 	if h.store == nil {
 		return true, nil
 	}
-	cv3, cv4, ready := client.BufferPairingCV(cvWire, value)
+	cv3, cv4, ready := h.registry.BufferPairingCV(client.Key, cvWire, value)
 	if !ready {
 		return true, nil
 	}
@@ -47,7 +47,7 @@ func (h *PairingHandler) HandleFn(ctx context.Context, client *Client, fn int) (
 	if h.store == nil {
 		return false, nil
 	}
-	cv3, cv4, ready := client.BufferPairingFn(fn)
+	cv3, cv4, ready := h.registry.BufferPairingFn(client.Key, fn)
 	if !ready {
 		return true, nil
 	}
@@ -57,7 +57,7 @@ func (h *PairingHandler) HandleFn(ctx context.Context, client *Client, fn int) (
 func (h *PairingHandler) completePairing(ctx context.Context, client *Client, cv3, cv4 int) (bool, *contract.Z21PairingActiveWire) {
 	active, ok, err := h.store.PairViaCV3CV4(ctx, h.layoutID, h.commandStationID, cv3, cv4, client.Key, contract.NowMS())
 	if err != nil || !ok {
-		client.clearPairingBuffer()
+		h.registry.ClearPairingBuffer(client.Key)
 		return true, nil
 	}
 	h.registry.SetPaired(client.Key, &active)

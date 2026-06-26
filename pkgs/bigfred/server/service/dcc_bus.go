@@ -414,6 +414,7 @@ func (d *DccBusService) buildProgramSpec(ctx context.Context, name string, layou
 	args = dccbuscli.AppendStationFlags(args, cs)
 	if cs.Z21ServerEnabled {
 		args = append(args, "--enable-z21")
+		args = append(args, "--z21-port", strconv.FormatUint(uint64(cs.EffectiveZ21InboundPort()), 10))
 	}
 	if cs.Z21IPStickiness {
 		args = append(args, "--z21-ip-stickiness")

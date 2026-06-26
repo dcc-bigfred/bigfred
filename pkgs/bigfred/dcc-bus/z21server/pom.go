@@ -12,24 +12,9 @@ func virtualCVKey(loco uint16, cvWire int) uint32 {
 	return uint32(loco)<<16 | uint32(cvWire&0xffff)
 }
 
-func (c *Client) setVirtualCV(loco uint16, cvWire int, value byte) {
-	if c.virtualCV == nil {
-		c.virtualCV = make(map[uint32]byte)
-	}
-	c.virtualCV[virtualCVKey(loco, cvWire)] = value
-}
-
-func (c *Client) getVirtualCV(loco uint16, cvWire int) (byte, bool) {
-	if c.virtualCV == nil {
-		return 0, false
-	}
-	v, ok := c.virtualCV[virtualCVKey(loco, cvWire)]
-	return v, ok
-}
-
 func isPOMWriteByte(pkt []byte) bool {
-	_, cvWire, _, ok := parsePOMWriteByte(pkt)
-	return ok && cvWire >= 0
+	_, _, _, ok := parsePOMWriteByte(pkt)
+	return ok
 }
 
 func isPOMReadByte(pkt []byte) bool {
@@ -58,7 +43,7 @@ func parsePOMReadByte(pkt []byte) (locoAddr uint16, cvWire int, ok bool) {
 	if !ok {
 		return 0, 0, false
 	}
-	cvWire = int((db3&0x03)<<8) | int(pkt[9])
+	cvWire = int(db3&0x03)<<8 | int(pkt[9])
 	return locoAddr, cvWire, true
 }
 

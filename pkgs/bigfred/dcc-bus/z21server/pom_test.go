@@ -3,7 +3,9 @@ package z21server
 import (
 	"context"
 	"encoding/binary"
+	"net"
 	"testing"
+	"time"
 
 	"github.com/keskad/loco/pkgs/bigfred/contract"
 )
@@ -22,46 +24,61 @@ func buildPOMReadByte(locoAddr uint16, cvWire int) []byte {
 }
 
 func TestVirtualPOMReadWriteUnpaired(t *testing.T) {
-	client := &Client{Key: "test"}
+	reg := NewRegistry()
+	remote := &net.UDPAddr{IP: net.IPv4(10, 0, 0, 1), Port: 40000}
+	client := reg.Touch(remote, time.Now().UTC(), false)
+	s := &Server{
+		registry: reg,
+		pairing:  NewPairingHandler(nil, 1, 1, reg, nil),
+	}
 	write := buildPOMWriteByte(3, 5, 42)
-	s := &Server{pairing: NewPairingHandler(nil, 1, 1, NewRegistry(), nil)}
-	s.handlePOMWrite(context.Background(), client, write)
+	s.handlePOMWrite(context.Background(), remote, client, write)
 
 	read := buildPOMReadByte(3, 5)
 	loco, cvWire, ok := parsePOMReadByte(read)
 	if !ok || loco != 3 || cvWire != 5 {
 		t.Fatalf("parse read: %v %d %d", ok, loco, cvWire)
 	}
-	v, found := client.getVirtualCV(3, 5)
+	v, found := reg.GetVirtualCV(client.Key, 3, 5)
 	if !found || v != 42 {
 		t.Fatalf("virtual cv: found=%v v=%d", found, v)
 	}
 }
 
 func TestPOMWriteIgnoredWhenPaired(t *testing.T) {
-	client := &Client{
-		Key:    "test",
-		Paired: &contract.Z21PairingActiveWire{UserID: 1},
+	reg := NewRegistry()
+	remote := &net.UDPAddr{IP: net.IPv4(10, 0, 0, 2), Port: 40001}
+	client := reg.Touch(remote, time.Now().UTC(), false)
+	reg.SetPaired(client.Key, &contract.Z21PairingActiveWire{UserID: 1})
+	s := &Server{
+		registry: reg,
+		pairing:  NewPairingHandler(nil, 1, 1, reg, nil),
 	}
-	s := &Server{pairing: NewPairingHandler(nil, 1, 1, NewRegistry(), nil)}
-	s.handlePOMWrite(context.Background(), client, buildPOMWriteByte(3, 5, 99))
-	if _, found := client.getVirtualCV(3, 5); found {
+	s.handlePOMWrite(context.Background(), remote, client, buildPOMWriteByte(3, 5, 99))
+	if _, found := reg.GetVirtualCV(client.Key, 3, 5); found {
 		t.Fatal("paired client should not get virtual cv writes")
 	}
 }
 
 func TestPOMReadVirtualValue(t *testing.T) {
-	s := &Server{}
-	client := &Client{Key: "test"}
-	client.setVirtualCV(3, 10, 77)
+	reg := NewRegistry()
+	remote := &net.UDPAddr{IP: net.IPv4(10, 0, 0, 3), Port: 40002}
+	client := reg.Touch(remote, time.Now().UTC(), false)
+	reg.SetVirtualCV(client.Key, 3, 10, 77)
+	s := &Server{registry: reg}
 
-	reply := buildCVResultReply(10, 0)
-	s.handlePOMRead(context.Background(), &client.Addr, client, buildPOMReadByte(3, 10))
-	_ = reply
-
-	value, found := client.getVirtualCV(3, 10)
+	s.handlePOMRead(context.Background(), remote, client, buildPOMReadByte(3, 10))
+	value, found := reg.GetVirtualCV(client.Key, 3, 10)
 	if !found || value != 77 {
 		t.Fatalf("virtual store: %d found=%v", value, found)
+	}
+}
+
+func TestParsePOMWriteByteHighCVWire(t *testing.T) {
+	pkt := buildPOMWriteByte(3, 258, 42)
+	loco, cvWire, value, ok := parsePOMWriteByte(pkt)
+	if !ok || loco != 3 || cvWire != 258 || value != 42 {
+		t.Fatalf("parse pom high cv: ok=%v loco=%d cv=%d val=%d", ok, loco, cvWire, value)
 	}
 }
 

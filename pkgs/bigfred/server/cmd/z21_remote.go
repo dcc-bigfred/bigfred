@@ -20,7 +20,6 @@ type Z21Remote struct {
 	roster   *LayoutRoster
 	snapshot *LayoutRosterSnapshot
 	users    *repo.Users
-	driveSec security.DriveSecurityContext
 }
 
 // NewZ21Remote returns a Z21Remote service.
@@ -322,7 +321,8 @@ func (s *Z21Remote) resolvePairingScope(ctx context.Context, layoutID, userID ui
 			return nil, nil, svcerrors.ErrZ21VehicleNotOnRoster
 		}
 		entry := byID[id]
-		if !s.driveSec.CanDrive(domain.User{ID: userID}, entry.Vehicle.OwnerUserID, domain.VehicleLesseeUserIDs(lessees[entry.Vehicle.ID])).Allowed {
+		driveSec := security.DriveSecurityContext{}
+		if !driveSec.CanDrive(domain.User{ID: userID}, entry.Vehicle.OwnerUserID, domain.VehicleLesseeUserIDs(lessees[entry.Vehicle.ID])).Allowed {
 			return nil, nil, svcerrors.ErrZ21VehicleNotDrivable
 		}
 		if entry.Vehicle.DCCAddress == nil {

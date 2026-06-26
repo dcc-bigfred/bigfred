@@ -61,7 +61,7 @@ func TestProgTrackCVWritePairsUnpairedClient(t *testing.T) {
 	if !ok {
 		t.Fatal("parse CV3 write")
 	}
-	client.setVirtualCV(progTrackLoco, cvWire, byte(value))
+	reg.SetVirtualCV(client.Key, progTrackLoco, cvWire, byte(value))
 	if _, active := handler.Handle(ctx, client, cvWire, value); active != nil {
 		t.Fatal("expected incomplete after CV3 only")
 	}
@@ -71,7 +71,7 @@ func TestProgTrackCVWritePairsUnpairedClient(t *testing.T) {
 	if !ok {
 		t.Fatal("parse CV4 write")
 	}
-	client.setVirtualCV(progTrackLoco, cvWire, byte(value))
+	reg.SetVirtualCV(client.Key, progTrackLoco, cvWire, byte(value))
 	_, active := handler.Handle(ctx, client, cvWire, value)
 	if active == nil || active.UserID != 3 {
 		t.Fatalf("expected paired, got %+v", active)
@@ -82,12 +82,11 @@ func TestProgTrackCVReadVirtualValue(t *testing.T) {
 	reg := NewRegistry()
 	addr := &net.UDPAddr{IP: net.IPv4(10, 0, 0, 10), Port: 40010}
 	client := reg.Touch(addr, time.Now().UTC(), false)
-	client.setVirtualCV(progTrackLoco, cvWireCV4, 145)
+	reg.SetVirtualCV(client.Key, progTrackLoco, cvWireCV4, 145)
 
 	s := &Server{registry: reg}
 	s.handleProgTrackCVRead(context.Background(), addr, client, buildProgTrackCVRead(cvWireCV4))
-	// no conn — handler should not panic; virtual read path exercised via direct call
-	value, found := client.getVirtualCV(progTrackLoco, cvWireCV4)
+	value, found := reg.GetVirtualCV(client.Key, progTrackLoco, cvWireCV4)
 	if !found || value != 145 {
 		t.Fatalf("virtual cv: found=%v value=%d", found, value)
 	}

@@ -135,9 +135,10 @@ func (s *Server) handlePacket(ctx context.Context, remote *net.UDPAddr, pkt []by
 	now := time.Now().UTC()
 	client := s.registry.Touch(remote, now, s.cfg.IPStickiness)
 	s.syncPaired(ctx, client)
-	s.noteClientActivity(client)
+	s.noteClientActivity(ctx, client)
 
-	if client.Paired != nil && s.cfg.Pairing != nil {
+	isPaired := s.registry.IsPaired(client.Key)
+	if isPaired && s.cfg.Pairing != nil {
 		var sessionTTL time.Duration
 		if s.cfg.IPStickiness {
 			sessionTTL = StickySessionIdleEvictAfter * time.Second
@@ -147,11 +148,11 @@ func (s *Server) handlePacket(ctx context.Context, remote *net.UDPAddr, pkt []by
 
 	_, header, ok := packetHeader(pkt)
 	if !ok {
-		s.logUnhandled(client.Key, pkt, client.Paired != nil, "truncated")
+		s.logUnhandled(client.Key, pkt, isPaired, "truncated")
 		return
 	}
 
-	paired := client.Paired != nil
+	paired := isPaired
 	handled := false
 	defer func() {
 		if !handled {
@@ -180,7 +181,7 @@ func (s *Server) handlePacket(ctx context.Context, remote *net.UDPAddr, pkt []by
 
 	if isPOMWriteByte(pkt) {
 		handled = true
-		s.handlePOMWrite(ctx, client, pkt)
+		s.handlePOMWrite(ctx, remote, client, pkt)
 		return
 	}
 
@@ -196,7 +197,7 @@ func (s *Server) handlePacket(ctx context.Context, remote *net.UDPAddr, pkt []by
 		return
 	}
 
-	if client.Paired == nil {
+	if !isPaired {
 		if reply, replied := s.handshakeReply(pkt); replied {
 			handled = true
 			_ = s.writeUDP(remote, client.Key, reply)
@@ -217,7 +218,7 @@ func (s *Server) handlePacket(ctx context.Context, remote *net.UDPAddr, pkt []by
 		if isSetLocoFunctionGroup(header, pkt) {
 			handled = true
 			if addr, _, ok := parseSetLocoFunctionGroup(pkt); ok && len(pkt) >= 9 {
-				for _, fn := range client.pairingFnRisingEdges(pkt[5], pkt[8]) {
+				for _, fn := range s.registry.PairingFnRisingEdges(client.Key, pkt[5], pkt[8]) {
 					if s.handleUnpairedPairingFn(ctx, client, addr, fn) {
 						break
 					}
@@ -294,7 +295,7 @@ func (s *Server) handleUnpairedPairingFn(ctx context.Context, client *Client, lo
 	if s.pairing == nil {
 		return false
 	}
-	client.SubscribeLoco(locoAddr)
+	s.registry.SubscribeLoco(client.Key, locoAddr)
 	_, active := s.pairing.HandleFn(ctx, client, fn)
 	if active == nil {
 		return false
@@ -310,16 +311,15 @@ func (s *Server) handleUnpairedPairingFn(ctx context.Context, client *Client, lo
 
 func (s *Server) syncPaired(ctx context.Context, client *Client) {
 	if s.cfg.Pairing == nil {
-		client.Paired = nil
+		s.registry.SetPaired(client.Key, nil)
 		return
 	}
 	active, ok, err := s.cfg.Pairing.GetActiveByClientKey(ctx, s.cfg.LayoutID, s.cfg.CommandStationID, client.Key)
 	if err != nil || !ok {
-		client.Paired = nil
+		s.registry.SetPaired(client.Key, nil)
 		return
 	}
-	copy := active
-	client.Paired = &copy
+	s.registry.SetPaired(client.Key, &active)
 }
 
 func (s *Server) runSweeper(ctx context.Context) {

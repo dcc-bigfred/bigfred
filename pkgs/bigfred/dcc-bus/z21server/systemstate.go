@@ -84,7 +84,7 @@ func (s *Server) pushSystemState(client *Client) {
 }
 
 func (s *Server) applyBroadcastFlags(client *Client, flags uint32) {
-	client.BroadcastFlags = flags
+	s.registry.SetBroadcastFlags(client.Key, flags)
 	if flags&broadcastFlagSystemState != 0 {
 		s.pushSystemState(client)
 	}

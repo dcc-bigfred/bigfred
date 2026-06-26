@@ -55,12 +55,12 @@ func (s *Server) handleProgTrackCVWrite(ctx context.Context, remote *net.UDPAddr
 	if !ok {
 		return
 	}
-	if client.Paired != nil {
+	if s.registry.IsPaired(client.Key) {
 		_ = s.writeUDP(remote, client.Key, buildCVNackReply())
 		return
 	}
 
-	client.setVirtualCV(progTrackLoco, cvWire, byte(value))
+	s.registry.SetVirtualCV(client.Key, progTrackLoco, cvWire, byte(value))
 	_ = s.writeUDP(remote, client.Key, buildProgrammingModeReply())
 
 	if isPairingCVWire(cvWire) {
@@ -77,16 +77,17 @@ func (s *Server) handleProgTrackCVWrite(ctx context.Context, remote *net.UDPAddr
 }
 
 func (s *Server) handleProgTrackCVRead(ctx context.Context, remote *net.UDPAddr, client *Client, pkt []byte) {
+	_ = ctx
 	cvWire, ok := parseProgTrackCVRead(pkt)
 	if !ok {
 		return
 	}
-	if client.Paired != nil {
+	if s.registry.IsPaired(client.Key) {
 		_ = s.writeUDP(remote, client.Key, buildCVNackReply())
 		return
 	}
 
-	value, found := client.getVirtualCV(progTrackLoco, cvWire)
+	value, found := s.registry.GetVirtualCV(client.Key, progTrackLoco, cvWire)
 	if !found {
 		value = 0
 	}

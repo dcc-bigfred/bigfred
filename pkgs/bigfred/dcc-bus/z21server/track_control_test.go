@@ -2,7 +2,9 @@ package z21server
 
 import (
 	"encoding/binary"
+	"net"
 	"testing"
+	"time"
 )
 
 func TestIsSetStop(t *testing.T) {
@@ -44,18 +46,21 @@ func TestBuildBCStoppedReply(t *testing.T) {
 	}
 }
 
-func TestClientCurrentLoco(t *testing.T) {
+func TestRegistryCurrentLoco(t *testing.T) {
 	t.Parallel()
-	c := &Client{}
-	if c.CurrentLoco() != 0 {
+	reg := NewRegistry()
+	now := time.Now().UTC()
+	addr := &net.UDPAddr{IP: net.IPv4(192, 168, 0, 1), Port: 21105}
+	c := reg.Touch(addr, now, false)
+	if reg.CurrentLoco(c.Key) != 0 {
 		t.Fatal("expected zero with no history")
 	}
-	c.SubscribeLoco(3)
-	if c.CurrentLoco() != 3 {
-		t.Fatalf("fallback = %d, want newest subscription 3", c.CurrentLoco())
+	reg.SubscribeLoco(c.Key, 3)
+	if reg.CurrentLoco(c.Key) != 3 {
+		t.Fatalf("fallback = %d, want newest subscription 3", reg.CurrentLoco(c.Key))
 	}
-	c.SetLastActiveLoco(7)
-	if c.CurrentLoco() != 7 {
-		t.Fatalf("active = %d, want 7", c.CurrentLoco())
+	reg.SetLastActiveLoco(c.Key, 7)
+	if reg.CurrentLoco(c.Key) != 7 {
+		t.Fatalf("active = %d, want 7", reg.CurrentLoco(c.Key))
 	}
 }

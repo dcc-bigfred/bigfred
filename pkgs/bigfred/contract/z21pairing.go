@@ -93,10 +93,11 @@ func AllValidPairingCVs() []int {
 	return out
 }
 
+var allValidPairingCVs = AllValidPairingCVs()
+
 // RandomPairingCV picks one valid CV value using rng.
 func RandomPairingCV(rng *rand.Rand) int {
-	vals := AllValidPairingCVs()
-	return vals[rng.Intn(len(vals))]
+	return allValidPairingCVs[rng.Intn(len(allValidPairingCVs))]
 }
 
 // Z21PairingReqWire is stored at Z21PairingReqKey with a 5-minute TTL.

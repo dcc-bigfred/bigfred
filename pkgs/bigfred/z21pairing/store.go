@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"sync"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -46,6 +47,7 @@ return 1
 // Store is a Redis-backed Z21 pairing session store.
 type Store struct {
 	client *redis.Client
+	mu     sync.Mutex
 	rng    *rand.Rand
 }
 
@@ -76,8 +78,10 @@ func (s *Store) CreatePairingRequest(ctx context.Context, in CreatePairingReques
 	now := contract.NowMS()
 
 	for attempt := 0; attempt < maxPairGenerationAttempts; attempt++ {
+		s.mu.Lock()
 		cv3 := contract.RandomPairingCV(s.rng)
 		cv4 := contract.RandomPairingCV(s.rng)
+		s.mu.Unlock()
 		label := contract.Z21PairLabel(cv3, cv4)
 
 		added, err := s.client.SAdd(ctx, reqPairsKey, label).Result()

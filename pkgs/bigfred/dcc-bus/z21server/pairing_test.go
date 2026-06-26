@@ -43,8 +43,8 @@ func TestPairingHandlerCompletesOnCV3CV4(t *testing.T) {
 	if active == nil || active.UserID != 7 {
 		t.Fatalf("expected paired session, got %+v", active)
 	}
-	if client.Paired == nil || client.Paired.ClientKey != client.Key {
-		t.Fatalf("client mirror: %+v", client.Paired)
+	if p, ok := reg.Paired(client.Key); !ok || p.ClientKey != client.Key {
+		t.Fatalf("client mirror: %+v", p)
 	}
 }
 

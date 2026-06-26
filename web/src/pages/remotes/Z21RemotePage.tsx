@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Autocomplete,
@@ -125,6 +125,7 @@ export default function Z21RemotePage() {
     Z21_HANDSET_BRAKE_SECS_DEFAULT,
   );
   const [actionError, setActionError] = useState<string | null>(null);
+  const lastSeededKey = useRef<string | undefined>(undefined);
 
   const drivableVehicles = useMemo(
     () =>
@@ -136,6 +137,13 @@ export default function Z21RemotePage() {
 
   useEffect(() => {
     if (!status.data) return;
+    const seedKey = status.data.paired
+      ? status.data.clientKey ?? "paired"
+      : status.data.pendingPairing
+        ? `pending:${status.data.pendingPairing.pairingCV3}:${status.data.pendingPairing.pairingCV4}`
+        : "empty";
+    if (lastSeededKey.current === seedKey) return;
+    lastSeededKey.current = seedKey;
     setAllowAll(status.data.allowAllVehicles);
     if (status.data.allowAllVehicles) {
       setSelectedVehicles([]);
@@ -192,6 +200,7 @@ export default function Z21RemotePage() {
         ...scopePayload(),
         clientKey: status.data.clientKey,
       });
+      lastSeededKey.current = undefined;
     } catch (err) {
       setActionError(translateError(err));
     }

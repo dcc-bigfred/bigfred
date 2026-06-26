@@ -370,6 +370,13 @@ func (d *Daemon) Run(ctx context.Context) error {
 		go func() {
 			if err := z21Srv.Run(ctx); err != nil && ctx.Err() == nil {
 				d.log.WithError(err).Error("z21 inbound server stopped")
+				_ = d.redis.Publish(ctx, "daemon.degraded", map[string]any{
+					"layoutId":         d.cfg.LayoutID,
+					"commandStationId": d.cfg.CommandStationID,
+					"reason":           "z21_bind_failed",
+					"error":            err.Error(),
+					"at":               time.Now().UTC().UnixMilli(),
+				})
 			}
 		}()
 	}

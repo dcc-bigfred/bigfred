@@ -78,12 +78,12 @@ func (s *Server) logLocoNetFromLAN(clientKey string, pkt []byte) {
 	}).Info("z21 loconet from lan")
 }
 
-func (s *Server) handlePOMWrite(ctx context.Context, client *Client, pkt []byte) {
+func (s *Server) handlePOMWrite(ctx context.Context, remote *net.UDPAddr, client *Client, pkt []byte) {
 	loco, cvWire, value, ok := parsePOMWriteByte(pkt)
 	if !ok {
 		return
 	}
-	if client.Paired != nil {
+	if s.registry.IsPaired(client.Key) {
 		if s.log != nil {
 			s.log.WithFields(logrus.Fields{
 				"client": client.Key,
@@ -91,10 +91,12 @@ func (s *Server) handlePOMWrite(ctx context.Context, client *Client, pkt []byte)
 				"cvWire": cvWire,
 			}).Info("z21 pom write ignored when paired")
 		}
+		_ = s.writeUDP(remote, client.Key, buildCVNackReply())
 		return
 	}
 
-	client.setVirtualCV(loco, cvWire, byte(value))
+	s.registry.SetVirtualCV(client.Key, loco, cvWire, byte(value))
+	_ = s.writeUDP(remote, client.Key, buildCVResultReply(cvWire, byte(value)))
 	if isPairingCVWire(cvWire) {
 		if _, active := s.pairing.Handle(ctx, client, cvWire, value); active != nil {
 			s.syncPaired(ctx, client)
@@ -112,8 +114,8 @@ func (s *Server) handlePOMRead(ctx context.Context, remote *net.UDPAddr, client 
 		return
 	}
 
-	if client.Paired == nil {
-		value, found := client.getVirtualCV(loco, cvWire)
+	if !s.registry.IsPaired(client.Key) {
+		value, found := s.registry.GetVirtualCV(client.Key, loco, cvWire)
 		if !found {
 			value = 0
 		}

@@ -107,5 +107,7 @@
   "z21_session_not_found": "Keine aktive Z21-Handgeräte-Sitzung gefunden.",
   "z21_pairing_scope_invalid": "Mindestens ein Fahrzeug wählen oder „alle Fahrzeuge, die ich fahren darf“ aktivieren.",
   "z21_handset_brake_secs_invalid": "Die Bremszeit muss zwischen 6 und 60 Sekunden liegen.",
-  "z21_remote_not_configured": "Z21-Kopplung ist nicht verfügbar (Redis offline)."
+  "remote_protocol_unknown": "Unbekanntes Handgeräte-Protokoll.",
+  "remote_user_already_paired": "Sie haben bereits eine aktive Handgeräte-Sitzung. Trennen Sie zuerst oder warten Sie auf Ablauf.",
+  "remote_not_configured": "Handgeräte-Kopplung ist nicht verfügbar (Redis offline)."
 }

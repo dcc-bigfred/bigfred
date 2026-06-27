@@ -43,7 +43,7 @@ import {
   Z21_HANDSET_BRAKE_SECS_MAX,
   Z21_HANDSET_BRAKE_SECS_MIN,
   type Z21RemoteClient,
-} from "../../api/z21_remote";
+} from "../../api/remotes";
 
 function formatTime(ms: number | undefined, locale: string): string {
   if (ms == null || ms <= 0) return "—";

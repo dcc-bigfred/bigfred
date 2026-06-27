@@ -425,9 +425,7 @@ func (c *Coordinator) sweep(ctx context.Context) {
 			evictAfter = policy.StickyIdleEvict
 		}
 		if policy.HeartbeatTimeout > 0 && cl.Session != nil && idle >= policy.HeartbeatTimeout {
-			// TODO(withrottle): emit a handset emergency stop for the
-			// session's locos before evicting (WiThrottle dead-man's
-			// switch). Z21 does not set HeartbeatTimeout.
+			c.estopHandsetLocos(ctx, cl)
 			evictAfter = policy.HeartbeatTimeout
 		}
 		if idle >= evictAfter {
@@ -472,6 +470,30 @@ func (c *Coordinator) brakeHandsetLocos(ctx context.Context, client *inbound.Cli
 		"protocol": client.Protocol,
 		"addrs":    addrs,
 	}).Info("handset idle brake")
+}
+
+func (c *Coordinator) estopHandsetLocos(ctx context.Context, client *inbound.Client) {
+	if c.cfg.Drive == nil || client.Session == nil {
+		return
+	}
+	p := client.Session
+	scope := DriveScope{
+		AllowedAddrs:     p.AllowedAddrs,
+		AllowAllVehicles: p.AllowAllVehicles,
+	}
+	session := HandsetSession{ClientKey: client.Key, UserID: p.UserID}
+	addrs := c.cfg.Drive.CollectHandsetDriveTargets(ctx, p.UserID, client.SubscribedLocos, scope)
+	for _, addr := range addrs {
+		c.cfg.Drive.ApplyHandsetPilotEStop(ctx, session, addr)
+	}
+	if len(addrs) > 0 {
+		c.cfg.Log.WithFields(logrus.Fields{
+			"client":   client.Key,
+			"userId":   p.UserID,
+			"protocol": client.Protocol,
+			"addrs":    addrs,
+		}).Info("handset heartbeat estop")
+	}
 }
 
 func (c *Coordinator) evictClient(ctx context.Context, key string) {

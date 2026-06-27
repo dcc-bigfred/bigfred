@@ -32,6 +32,8 @@ type Config struct {
 
 	IPStickiness bool
 
+	OnListening func(ctx context.Context)
+
 	Drive       remotes.InboundDrivePort
 	Coordinator *remotes.Coordinator
 	Store       *remotepairing.Store
@@ -145,6 +147,9 @@ func NewGateway(_ context.Context, cfg remotes.GatewayConfig) (remotes.RemotePro
 		if v, ok := cfg.Extra["speedSteps"].(uint); ok {
 			z21.SpeedSteps = v
 		}
+		if v, ok := cfg.Extra["onListening"].(func(context.Context)); ok {
+			z21.OnListening = v
+		}
 	}
 	return New(z21)
 }
@@ -172,6 +177,10 @@ func (s *Server) Run(ctx context.Context) error {
 		"commandStationId": s.cfg.CommandStationID,
 		"ipStickiness":     s.cfg.IPStickiness,
 	}).Info("z21 inbound server listening")
+
+	if s.cfg.OnListening != nil {
+		go s.cfg.OnListening(ctx)
+	}
 
 	if s.coordinator != nil {
 		go func() { _ = s.coordinator.PublishSnapshot(ctx) }()

@@ -460,6 +460,7 @@ func (d *Daemon) startRemoteGateways(ctx context.Context) error {
 		gw     remotes.RemoteProtocol
 	}
 	var runners []gatewayRunner
+	discGate := d.newDiscoveryGate(ctx)
 
 	if d.cfg.EnableZ21 {
 		remotes.RegisterGatewayFactory(z21server.GatewayName, z21server.NewGateway)
@@ -480,6 +481,7 @@ func (d *Daemon) startRemoteGateways(ctx context.Context) error {
 				"port":         d.cfg.Z21Port,
 				"ipStickiness": d.cfg.Z21IPStickiness,
 				"speedSteps":   d.cfg.CommandStation.EffectiveSpeedSteps(),
+				"onListening":  d.protocolListeningCallback(discGate, contract.RemoteProtocolZ21),
 			},
 		})
 		if err != nil {
@@ -513,6 +515,7 @@ func (d *Daemon) startRemoteGateways(ctx context.Context) error {
 				"heartbeatSecs":   heartbeatSecs,
 				"speedSteps":      d.cfg.CommandStation.EffectiveSpeedSteps(),
 				"allowedVehicles": d.router.AllowedVehiclesSnapshot(),
+				"onListening":     d.protocolListeningCallback(discGate, contract.RemoteProtocolWithrottle),
 			},
 		})
 		if err != nil {

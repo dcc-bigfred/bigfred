@@ -98,6 +98,11 @@ func buildStatusChangedReply() []byte {
 	return buildXBusReply(x)
 }
 
+// VirtualSerial returns a stable serial in the range seen on retail Z21 units.
+func VirtualSerial(layoutID, commandStationID uint) uint32 {
+	return rocoVirtualSerial(layoutID, commandStationID)
+}
+
 // rocoVirtualSerial returns a stable serial in the range seen on retail Z21 units.
 func rocoVirtualSerial(layoutID, commandStationID uint) uint32 {
 	return uint32(258_000_000 + layoutID*1000 + commandStationID)

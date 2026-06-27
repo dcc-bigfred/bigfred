@@ -71,6 +71,11 @@ func buildReply(header uint16, data []byte) []byte {
 }
 
 func buildSerialReply(serial uint32) []byte {
+	return SerialReply(serial)
+}
+
+// SerialReply builds a LAN_GET_SERIAL_NUMBER reply frame for the given serial.
+func SerialReply(serial uint32) []byte {
 	data := make([]byte, 4)
 	binary.LittleEndian.PutUint32(data, serial)
 	return buildReply(HeaderGetSerialNumber, data)

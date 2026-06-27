@@ -6,26 +6,30 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/keskad/loco/pkgs/bigfred/contract"
-	"github.com/keskad/loco/pkgs/bigfred/z21pairing"
+	"github.com/keskad/loco/pkgs/bigfred/remotepairing"
 )
 
 // PairingHandler buffers CV3/CV4 POM writes and completes Redis pairing.
 type PairingHandler struct {
-	store            *z21pairing.Store
+	store            *remotepairing.Store
 	layoutID         uint
 	commandStationID uint
 	registry         *Registry
 	onPaired         func(ctx context.Context)
+	onEvictedClient  func(ctx context.Context, clientKey string)
 }
 
-// NewPairingHandler returns a handler for CV3/CV4 intercept.
-func NewPairingHandler(store *z21pairing.Store, layoutID, commandStationID uint, registry *Registry, onPaired func(ctx context.Context)) *PairingHandler {
+// NewPairingHandler returns a handler for CV3/CV4 intercept. onEvictedClient
+// is invoked when completing pairing evicted a prior session for the same user
+// so the caller can clean up that client's in-process registry/wire state.
+func NewPairingHandler(store *remotepairing.Store, layoutID, commandStationID uint, registry *Registry, onPaired func(ctx context.Context), onEvictedClient func(ctx context.Context, clientKey string)) *PairingHandler {
 	return &PairingHandler{
 		store:            store,
 		layoutID:         layoutID,
 		commandStationID: commandStationID,
 		registry:         registry,
 		onPaired:         onPaired,
+		onEvictedClient:  onEvictedClient,
 	}
 }
 
@@ -55,10 +59,16 @@ func (h *PairingHandler) HandleFn(ctx context.Context, client *Client, fn int) (
 }
 
 func (h *PairingHandler) completePairing(ctx context.Context, client *Client, cv3, cv4 int) (bool, *contract.Z21PairingActiveWire) {
-	active, ok, err := h.store.PairViaCV3CV4(ctx, h.layoutID, h.commandStationID, cv3, cv4, client.Key, contract.NowMS())
+	active, ok, evicted, err := h.store.PairViaCV3CV4(ctx, h.layoutID, h.commandStationID, cv3, cv4, client.Key, contract.NowMS())
 	if err != nil || !ok {
 		h.registry.ClearPairingBuffer(client.Key)
 		return true, nil
+	}
+	// Pairing evicted a prior handset for the same user (re-pair on a new
+	// IP:port). Drop the old client's in-process state immediately so it
+	// cannot keep driving until its next packet/self-heal.
+	if evicted != "" && h.onEvictedClient != nil && evicted != client.Key {
+		h.onEvictedClient(ctx, evicted)
 	}
 	h.registry.SetPaired(client.Key, &active)
 	if h.onPaired != nil {

@@ -5,15 +5,18 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
 
 	"github.com/keskad/loco/pkgs/bigfred/contract"
 	"github.com/keskad/loco/pkgs/bigfred/remotes"
-	"github.com/keskad/loco/pkgs/bigfred/z21pairing"
+	"github.com/keskad/loco/pkgs/bigfred/remotes/inbound"
+	"github.com/keskad/loco/pkgs/bigfred/remotepairing"
 )
+
+// GatewayName is the remotes gateway factory key for Z21 LAN.
+const GatewayName = contract.RemoteProtocolZ21
 
 // Config wires the inbound Z21 UDP server for one dcc-bus daemon.
 type Config struct {
@@ -30,24 +33,38 @@ type Config struct {
 	IPStickiness bool
 
 	Drive       remotes.InboundDrivePort
-	Pairing      *z21pairing.Store
-	ClientsPub   ClientsPublisher
-	Log          *logrus.Logger
+	Coordinator *remotes.Coordinator
+	Store       *remotepairing.Store
+	Log         *logrus.Logger
 }
 
 // Server listens for Z21 LAN UDP and answers handshake packets.
 type Server struct {
-	cfg      Config
-	log      *logrus.Logger
-	conn     *net.UDPConn
-	registry *Registry
-	pairing  *PairingHandler
-	adapter  *Adapter
-
-	clientsPub    ClientsPublisher
-	clientsPubMu  sync.Mutex
-	lastClientsPub time.Time
+	cfg         Config
+	log         *logrus.Logger
+	conn        *net.UDPConn
+	registry    *Registry
+	pairing     *PairingHandler
+	adapter     *Adapter
+	coordinator *remotes.Coordinator
+	dispatch    *dispatcher
 }
+
+const (
+	// dispatchShards spreads per-client packet processing so one slow
+	// Redis round-trip cannot stall handsets on other shards.
+	dispatchShards = 32
+	// dispatchShardBuf per-shard queue depth. Large enough to absorb
+	// bursts from one handset; when exceeded the read loop falls back
+	// to inline (counted via dispatcher.InlineFallbacks) rather than
+	// stalling.
+	dispatchShardBuf = 128
+	// sessionSyncStale is the safety window after which a per-packet
+	// sync re-fetches the session from Redis. Event-driven sync (WS-1)
+	// keeps the registry fresh in between; this only catches a lost
+	// pub/sub event or daemon restart.
+	sessionSyncStale = 30 * time.Second
+)
 
 // New validates cfg and returns a server that is not yet listening.
 func New(cfg Config) (*Server, error) {
@@ -70,20 +87,70 @@ func New(cfg Config) (*Server, error) {
 	if log == nil {
 		log = logrus.New()
 	}
-	s := &Server{
-		cfg:        cfg,
-		log:        log,
-		registry:   NewRegistry(),
-		clientsPub: cfg.ClientsPub,
+	wire := NewWireState()
+	var inboundReg *inbound.ClientRegistry
+	if cfg.Coordinator != nil {
+		inboundReg = cfg.Coordinator.Registry()
+		cfg.Coordinator.RegisterOnEvict(wire.Remove)
 	}
-	s.pairing = NewPairingHandler(cfg.Pairing, cfg.LayoutID, cfg.CommandStationID, s.registry, func(ctx context.Context) {
-		s.publishClientsSnapshotThrottled(ctx)
+	registry := NewRegistry(inboundReg, wire)
+	s := &Server{
+		cfg:         cfg,
+		log:         log,
+		registry:    registry,
+		coordinator: cfg.Coordinator,
+	}
+	if cfg.Coordinator != nil {
+		cfg.Coordinator.RegisterSessionSyncHandler(contract.RemoteProtocolZ21, func(ctx context.Context, clientKey string) {
+			s.syncPairedByKey(ctx, clientKey)
+		})
+	}
+	s.pairing = NewPairingHandler(cfg.Store, cfg.LayoutID, cfg.CommandStationID, s.registry, func(ctx context.Context) {
+		if s.coordinator != nil {
+			s.coordinator.PublishSnapshotThrottled(ctx)
+		}
+	}, func(ctx context.Context, evictedClientKey string) {
+		if s.coordinator != nil {
+			s.coordinator.Evict(ctx, evictedClientKey)
+		} else {
+			s.registry.Remove(evictedClientKey)
+		}
 	})
 	if cfg.Drive != nil {
 		s.adapter = NewAdapter(s, cfg.Drive)
 	}
 	return s, nil
 }
+
+// NewGateway builds a Z21 inbound listener from shared remotes wiring.
+func NewGateway(_ context.Context, cfg remotes.GatewayConfig) (remotes.RemoteProtocol, error) {
+	z21 := Config{
+		LayoutID:         cfg.LayoutID,
+		CommandStationID: cfg.CommandStationID,
+		Drive:            cfg.Drive,
+		Coordinator:      cfg.Coordinator,
+		Store:            cfg.Store,
+		Log:              cfg.Log,
+	}
+	if cfg.Extra != nil {
+		if v, ok := cfg.Extra["bind"].(string); ok {
+			z21.Bind = v
+		}
+		if v, ok := cfg.Extra["port"].(uint16); ok {
+			z21.Port = v
+		}
+		if v, ok := cfg.Extra["ipStickiness"].(bool); ok {
+			z21.IPStickiness = v
+		}
+		if v, ok := cfg.Extra["speedSteps"].(uint); ok {
+			z21.SpeedSteps = v
+		}
+	}
+	return New(z21)
+}
+
+// Name implements remotes.RemoteProtocol.
+func (s *Server) Name() string { return contract.RemoteProtocolZ21 }
 
 // Run listens until ctx is cancelled.
 func (s *Server) Run(ctx context.Context) error {
@@ -97,6 +164,7 @@ func (s *Server) Run(ctx context.Context) error {
 	}
 	s.conn = conn
 	defer conn.Close()
+	defer s.stopDispatch()
 
 	s.log.WithFields(logrus.Fields{
 		"bind":             conn.LocalAddr().String(),
@@ -105,10 +173,15 @@ func (s *Server) Run(ctx context.Context) error {
 		"ipStickiness":     s.cfg.IPStickiness,
 	}).Info("z21 inbound server listening")
 
-	go s.runSweeper(ctx)
-	go func() { _ = s.publishClientsSnapshot(ctx) }()
+	if s.coordinator != nil {
+		go func() { _ = s.coordinator.PublishSnapshot(ctx) }()
+	}
+
+	s.startDispatch()
 
 	buf := make([]byte, 2048)
+	var lastInlineLog time.Time
+	var lastInline int64
 	for {
 		if err := conn.SetReadDeadline(time.Now().Add(1 * time.Second)); err != nil {
 			return err
@@ -120,30 +193,65 @@ func (s *Server) Run(ctx context.Context) error {
 			}
 			var netErr net.Error
 			if errors.As(err, &netErr) && netErr.Timeout() {
+				// Opportunistic overload log: the read deadline fires
+				// once a second, so throttle to ~10s and only when the
+				// inline-fallback counter actually grew.
+				if now := time.Now(); now.Sub(lastInlineLog) >= 10*time.Second {
+					if cur := s.dispatch.InlineFallbacks(); cur != lastInline {
+						s.log.WithField("inlineFallbacks", cur).Warn("z21 dispatch: shard queue saturated, ran tasks inline")
+						lastInline = cur
+						lastInlineLog = now
+					}
+				}
 				continue
 			}
 			return err
 		}
+		// Route every dataset from this source to the same shard so
+		// per-handset ordering (drive commands, CV pairing sequence)
+		// is preserved while Redis ops are offloaded from the read loop.
+		key := inbound.ClientKey(contract.RemoteProtocolZ21, inbound.EndpointFromAddr(remote, s.cfg.IPStickiness))
 		datagram := append([]byte(nil), buf[:n]...)
-		for _, pkt := range splitZ21Datagram(datagram) {
-			s.handlePacket(ctx, remote, pkt)
-		}
+		remoteCopy := *remote
+		s.dispatch.dispatch(key, func() {
+			for _, pkt := range splitZ21Datagram(datagram) {
+				s.handlePacket(ctx, &remoteCopy, pkt)
+			}
+		})
+	}
+}
+
+func (s *Server) startDispatch() {
+	if s.dispatch == nil {
+		s.dispatch = newDispatcher(dispatchShards, dispatchShardBuf)
+	}
+}
+
+func (s *Server) stopDispatch() {
+	if s.dispatch != nil {
+		s.dispatch.close()
+		s.dispatch = nil
 	}
 }
 
 func (s *Server) handlePacket(ctx context.Context, remote *net.UDPAddr, pkt []byte) {
 	now := time.Now().UTC()
 	client := s.registry.Touch(remote, now, s.cfg.IPStickiness)
-	s.syncPaired(ctx, client)
+	// Reconcile the session against Redis only on first sight (covers
+	// daemon restart) or after the safety window — REST mutations arrive
+	// via the session-sync pub/sub channel and update the registry out of
+	// band, so the per-packet Redis GET is gone from the hot path.
+	if s.registry.NeedsSync(client.Key, sessionSyncStale) {
+		s.syncPaired(ctx, client)
+		s.registry.MarkSynced(client.Key)
+	}
 	s.noteClientActivity(ctx, client)
 
 	isPaired := s.registry.IsPaired(client.Key)
-	if isPaired && s.cfg.Pairing != nil {
-		var sessionTTL time.Duration
-		if s.cfg.IPStickiness {
-			sessionTTL = StickySessionIdleEvictAfter * time.Second
-		}
-		_ = s.cfg.Pairing.TouchSeen(ctx, s.cfg.LayoutID, s.cfg.CommandStationID, client.Key, contract.NowMS(), sessionTTL)
+	if isPaired && s.cfg.Store != nil {
+		// Stage the lastSeenAt update for the coordinator's batched
+		// flusher (WS-1b) instead of a per-packet Redis SET.
+		s.registry.MarkSeenDirty(client.Key, contract.NowMS())
 	}
 
 	_, header, ok := packetHeader(pkt)
@@ -310,83 +418,36 @@ func (s *Server) handleUnpairedPairingFn(ctx context.Context, client *Client, lo
 }
 
 func (s *Server) syncPaired(ctx context.Context, client *Client) {
-	if s.cfg.Pairing == nil {
-		s.registry.SetPaired(client.Key, nil)
+	s.syncPairedByKey(ctx, client.Key)
+}
+
+// syncPairedByKey reconciles one client's paired state from Redis and
+// clears the Z21 wire pairing buffer when the session is gone. Used both
+// from the per-packet safety path and the session-sync pub/sub handler.
+func (s *Server) syncPairedByKey(ctx context.Context, key string) {
+	if s.cfg.Store == nil {
+		s.registry.SetPaired(key, nil)
 		return
 	}
-	active, ok, err := s.cfg.Pairing.GetActiveByClientKey(ctx, s.cfg.LayoutID, s.cfg.CommandStationID, client.Key)
+	active, ok, err := s.cfg.Store.GetActiveByClientKey(ctx, s.cfg.LayoutID, s.cfg.CommandStationID, key)
 	if err != nil || !ok {
-		s.registry.SetPaired(client.Key, nil)
+		s.registry.SetPaired(key, nil)
 		return
 	}
-	s.registry.SetPaired(client.Key, &active)
-}
-
-func (s *Server) runSweeper(ctx context.Context) {
-	ticker := time.NewTicker(SweeperInterval * time.Second)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			s.sweepClients(ctx)
-		}
-	}
-}
-
-func (s *Server) sweepClients(ctx context.Context) {
-	now := time.Now().UTC()
-	for _, c := range s.registry.Snapshot() {
-		idle := now.Sub(c.LastSeen)
-		if c.Paired != nil {
-			brakeAfter := time.Duration(contract.NormaliseHandsetBrakeSecs(c.Paired.HandsetBrakeSecs)) * time.Second
-			if idle >= brakeAfter && !c.IdleBraked {
-				s.brakeHandsetLocos(ctx, c)
-				s.registry.SetIdleBraked(c.Key, true)
-			}
-		}
-		evictAfter := time.Duration(IdleEvictAfter) * time.Second
-		if s.cfg.IPStickiness && c.Paired != nil {
-			evictAfter = StickySessionIdleEvictAfter * time.Second
-		}
-		if idle >= evictAfter {
-			s.evictClient(ctx, c.Key)
-		}
-	}
-	_ = s.publishClientsSnapshot(ctx)
-}
-
-func (s *Server) brakeHandsetLocos(ctx context.Context, client *Client) {
-	if s.cfg.Drive == nil || client.Paired == nil {
-		return
-	}
-	p := client.Paired
-	scope := remotes.DriveScope{
-		AllowedAddrs:     p.AllowedAddrs,
-		AllowAllVehicles: p.AllowAllVehicles,
-	}
-	session := remotes.HandsetSession{ClientKey: client.Key, UserID: p.UserID}
-	addrs := s.cfg.Drive.CollectHandsetDriveTargets(ctx, p.UserID, client.SubscribedLocos, scope)
-	if len(addrs) == 0 {
-		return
-	}
-	s.cfg.Drive.ApplyHandsetIdleBrake(ctx, session, client.SubscribedLocos, scope)
-	s.log.WithFields(logrus.Fields{
-		"client": client.Key,
-		"userId": p.UserID,
-		"addrs":  addrs,
-	}).Info("z21 handset idle brake")
+	s.registry.SetPaired(key, &active)
 }
 
 func (s *Server) evictClient(ctx context.Context, key string) {
+	if s.coordinator != nil {
+		s.coordinator.Evict(ctx, key)
+		return
+	}
 	s.registry.Remove(key)
-	if s.cfg.Pairing != nil {
-		if err := s.cfg.Pairing.Unpair(ctx, s.cfg.LayoutID, s.cfg.CommandStationID, key); err != nil {
+	if s.cfg.Store != nil {
+		if err := s.cfg.Store.Unpair(ctx, s.cfg.LayoutID, s.cfg.CommandStationID, key); err != nil {
 			s.log.WithError(err).WithField("client", key).Debug("z21 unpair on evict")
 		}
 	}
-	s.publishClientsSnapshotThrottled(ctx)
 }
 
 func (s *Server) writeUDP(addr *net.UDPAddr, clientKey string, pkt []byte) error {
@@ -402,4 +463,4 @@ func (s *Server) writeUDP(addr *net.UDPAddr, clientKey string, pkt []byte) error
 func (s *Server) RegistryForTest() *Registry { return s.registry }
 
 // PairingStoreForTest exposes the pairing store in tests.
-func (s *Server) PairingStoreForTest() *z21pairing.Store { return s.cfg.Pairing }
+func (s *Server) PairingStoreForTest() *remotepairing.Store { return s.cfg.Store }

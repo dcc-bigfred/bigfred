@@ -26,8 +26,9 @@ import (
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/ws"
 	bfotel "github.com/keskad/loco/pkgs/bigfred/otel"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/z21server"
+	"github.com/keskad/loco/pkgs/bigfred/remotes"
+	"github.com/keskad/loco/pkgs/bigfred/remotepairing"
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
-	"github.com/keskad/loco/pkgs/bigfred/z21pairing"
 )
 
 // Config carries every runtime input the daemon needs. Populated
@@ -351,24 +352,43 @@ func (d *Daemon) Run(ctx context.Context) error {
 	go d.runRadioStopConsumer(ctx, radioStopSub)
 
 	if d.cfg.EnableZ21 {
-		z21Srv, err := z21server.New(z21server.Config{
+		remotes.RegisterGatewayFactory(z21server.GatewayName, z21server.NewGateway)
+		pairStore := remotepairing.NewStore(d.rds)
+		coordinator := remotes.NewCoordinator(remotes.CoordinatorConfig{
 			LayoutID:         d.cfg.LayoutID,
 			CommandStationID: d.cfg.CommandStationID,
-			Bind:             d.cfg.Z21Bind,
-			Port:             d.cfg.Z21Port,
-			SpeedSteps:       d.cfg.CommandStation.EffectiveSpeedSteps(),
-			IPStickiness:     d.cfg.Z21IPStickiness,
+			Store:            pairStore,
 			Drive:            d.router,
-			Pairing:          z21pairing.NewStore(d.rds),
-			ClientsPub:       d.redis,
+			Publisher:        d.redis,
 			Log:              d.log,
 		})
+		coordinator.RegisterPolicy(contract.RemoteProtocolZ21, remotes.ProtocolPolicy{
+			IdleEvict:       z21server.IdleEvictAfter * time.Second,
+			StickyIdleEvict: z21server.StickySessionIdleEvictAfter * time.Second,
+			IPStickiness:    d.cfg.Z21IPStickiness,
+		})
+		go coordinator.Run(ctx)
+
+		gw, err := remotes.NewGateway(ctx, z21server.GatewayName, remotes.GatewayConfig{
+			LayoutID:         d.cfg.LayoutID,
+			CommandStationID: d.cfg.CommandStationID,
+			Coordinator:      coordinator,
+			Store:            pairStore,
+			Drive:            d.router,
+			Log:              d.log,
+			Extra: map[string]any{
+				"bind":         d.cfg.Z21Bind,
+				"port":         d.cfg.Z21Port,
+				"ipStickiness": d.cfg.Z21IPStickiness,
+				"speedSteps":   d.cfg.CommandStation.EffectiveSpeedSteps(),
+			},
+		})
 		if err != nil {
-			return fmt.Errorf("z21 server: %w", err)
+			return fmt.Errorf("z21 gateway: %w", err)
 		}
-		d.router.RegisterLocoObserver(z21Srv)
+		d.router.RegisterLocoObserver(gw)
 		go func() {
-			if err := z21Srv.Run(ctx); err != nil && ctx.Err() == nil {
+			if err := gw.Run(ctx); err != nil && ctx.Err() == nil {
 				d.log.WithError(err).Error("z21 inbound server stopped")
 				_ = d.redis.Publish(ctx, "daemon.degraded", map[string]any{
 					"layoutId":         d.cfg.LayoutID,

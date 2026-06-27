@@ -47,8 +47,7 @@ func pairingCodeFromFragments(fragments []string) (cv3, cv4 int, ok bool) {
 	return parsePairingCodeDigits(concat)
 }
 
-// BufferPairingFn records one function-key ON press while pairing.
-func (c *Client) BufferPairingFn(fn int) (cv3, cv4 int, ready bool) {
+func (c *wireClient) bufferPairingFn(fn int) (cv3, cv4 int, ready bool) {
 	frag, ok := pairingDigitsFromFn(fn)
 	if !ok {
 		return 0, 0, false
@@ -57,13 +56,10 @@ func (c *Client) BufferPairingFn(fn int) (cv3, cv4 int, ready bool) {
 	if len(c.pairFnBuf) > pairingFnBufferSize {
 		c.pairFnBuf = c.pairFnBuf[len(c.pairFnBuf)-pairingFnBufferSize:]
 	}
-	cv3, cv4, ready = pairingCodeFromFragments(c.pairFnBuf)
-	return cv3, cv4, ready
+	return pairingCodeFromFragments(c.pairFnBuf)
 }
 
-// pairingFnRisingEdges returns function numbers that turned on in a group
-// state update (0→1). Held and turned-off keys are ignored.
-func (c *Client) pairingFnRisingEdges(group, fnByte byte) []int {
+func (c *wireClient) pairingFnRisingEdges(group, fnByte byte) []int {
 	fnMap, ok := locoFunctionGroupMap[group]
 	if !ok {
 		return nil
@@ -84,4 +80,26 @@ func (c *Client) pairingFnRisingEdges(group, fnByte byte) []int {
 		}
 	}
 	return risen
+}
+
+func (c *wireClient) clearPairingBuffer() {
+	c.pairCV3 = nil
+	c.pairCV4 = nil
+	c.pairFnBuf = nil
+	c.pairFnPrevGroup = nil
+}
+
+func (c *wireClient) bufferPairingCV(cvWire int, value int) (cv3, cv4 int, ready bool) {
+	switch cvWire {
+	case 2:
+		c.pairCV3 = &value
+	case 3:
+		c.pairCV4 = &value
+	default:
+		return 0, 0, false
+	}
+	if c.pairCV3 != nil && c.pairCV4 != nil {
+		return *c.pairCV3, *c.pairCV4, true
+	}
+	return 0, 0, false
 }

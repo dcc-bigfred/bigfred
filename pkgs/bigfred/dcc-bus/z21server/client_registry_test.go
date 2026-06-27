@@ -4,11 +4,14 @@ import (
 	"net"
 	"testing"
 	"time"
+
+	"github.com/keskad/loco/pkgs/bigfred/contract"
+	"github.com/keskad/loco/pkgs/bigfred/remotes/inbound"
 )
 
 func TestRegistryTouchIPStickinessReusesSessionOnPortChange(t *testing.T) {
 	t.Parallel()
-	reg := NewRegistry()
+	reg := NewRegistry(nil, nil)
 	now := time.Now().UTC()
 	addr1 := &net.UDPAddr{IP: net.IPv4(192, 168, 0, 214), Port: 60495}
 	addr2 := &net.UDPAddr{IP: net.IPv4(192, 168, 0, 214), Port: 60512}
@@ -16,7 +19,7 @@ func TestRegistryTouchIPStickinessReusesSessionOnPortChange(t *testing.T) {
 	c1 := reg.Touch(addr1, now, true)
 	c2 := reg.Touch(addr2, now.Add(time.Second), true)
 
-	if c1.Key != "192.168.0.214" || c2.Key != c1.Key {
+	if c1.Key != inbound.ClientKey(contract.RemoteProtocolZ21, "192.168.0.214") || c2.Key != c1.Key {
 		t.Fatalf("keys = %q / %q, want sticky IP key", c1.Key, c2.Key)
 	}
 	if c1 != c2 {
@@ -32,7 +35,7 @@ func TestRegistryTouchIPStickinessReusesSessionOnPortChange(t *testing.T) {
 
 func TestRegistryTouchWithoutStickinessUsesPort(t *testing.T) {
 	t.Parallel()
-	reg := NewRegistry()
+	reg := NewRegistry(nil, nil)
 	now := time.Now().UTC()
 	addr1 := &net.UDPAddr{IP: net.IPv4(192, 168, 0, 214), Port: 60495}
 	addr2 := &net.UDPAddr{IP: net.IPv4(192, 168, 0, 214), Port: 60512}

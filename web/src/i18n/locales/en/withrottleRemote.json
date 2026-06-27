@@ -1,0 +1,39 @@
+{
+  "title": "WiThrottle handset",
+  "subtitle": "Pair Engine Driver or WiThrottle with BigFred and choose which locomotives you may drive.",
+  "alerts": {
+    "noServer": "No command station on this layout has the WiThrottle server enabled. Ask an admin to turn it on under",
+    "commandStationLink": "Command stations"
+  },
+  "sections": {
+    "status": "Status",
+    "scope": "Vehicle scope"
+  },
+  "fields": {
+    "commandStation": "Command station",
+    "allowAllVehicles": "All vehicles I have permission to drive on this layout",
+    "vehicles": "Allowed vehicles",
+    "vehiclesPlaceholder": "Pick locomotives…",
+    "handsetBrakeSecs": "Time until trains are braked (s)",
+    "handsetBrakeSecsHint": "{{min}}–{{max}} seconds without handset communication with BigFred"
+  },
+  "status": {
+    "paired": "Paired",
+    "notPaired": "Not paired",
+    "clientKey": "Handset: {{key}}",
+    "pairedAt": "Paired at {{time}}",
+    "lastSeenAt": "Last seen {{time}}",
+    "keepaliveHint": "After {{seconds}} seconds without communication with BigFred, trains controlled by the handset are emergency-stopped"
+  },
+  "pending": {
+    "title": "Pairing code",
+    "instructions": "In Engine Driver or WiThrottle:\n• Acquire the “Pair with BigFred” sentinel loco from the roster and press function keys F0–F9 for each digit (e.g. 1 2 2 1 4 5), or\n• Set Device Name (N) to the six-digit code without spaces.",
+    "expires": "Pairing code expires in {{seconds}} s"
+  },
+  "actions": {
+    "generatePairing": "Generate pairing code",
+    "cancelPairing": "Cancel pairing",
+    "saveScope": "Save vehicle scope",
+    "unpair": "Disconnect handset"
+  }
+}

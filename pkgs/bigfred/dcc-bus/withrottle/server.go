@@ -46,6 +46,8 @@ type Config struct {
 	TrackPowerOn     bool
 	AllowedVehicles  contract.AllowedVehicles
 
+	OnListening func(ctx context.Context)
+
 	Drive       remotes.InboundDrivePort
 	Coordinator *remotes.Coordinator
 	Store       *remotepairing.Store
@@ -164,6 +166,9 @@ func NewGateway(_ context.Context, cfg remotes.GatewayConfig) (remotes.RemotePro
 		if v, ok := cfg.Extra["allowedVehicles"].(contract.AllowedVehicles); ok {
 			wt.AllowedVehicles = v
 		}
+		if v, ok := cfg.Extra["onListening"].(func(context.Context)); ok {
+			wt.OnListening = v
+		}
 	}
 	return New(wt)
 }
@@ -186,6 +191,10 @@ func (s *Server) Run(ctx context.Context) error {
 		"layoutId":         s.cfg.LayoutID,
 		"commandStationId": s.cfg.CommandStationID,
 	}).Info("withrottle inbound server listening")
+
+	if s.cfg.OnListening != nil {
+		go s.cfg.OnListening(ctx)
+	}
 
 	for {
 		if ctx.Err() != nil {

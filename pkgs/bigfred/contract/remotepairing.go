@@ -108,6 +108,8 @@ type RemotePendingWire struct {
 	// Z21-only pairing CV values (omitempty for other protocols).
 	PairingCV3 int `json:"pairingCV3,omitempty"`
 	PairingCV4 int `json:"pairingCV4,omitempty"`
+	// WiThrottle-only 6-digit pairing code (omitempty for other protocols).
+	PairingCode string `json:"pairingCode,omitempty"`
 }
 
 // RemoteSessionWire is stored at RemotePairingActiveKey until idle evict or logoff.
@@ -123,6 +125,7 @@ type RemoteSessionWire struct {
 	HandsetBrakeSecs uint     `json:"handsetBrakeSecs"`
 	PairingCV3       int      `json:"pairingCV3,omitempty"`
 	PairingCV4       int      `json:"pairingCV4,omitempty"`
+	PairingCode      string   `json:"pairingCode,omitempty"`
 }
 
 // MarshalRemotePending encodes a pending pairing request for Redis SET.

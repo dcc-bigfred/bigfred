@@ -291,6 +291,79 @@ type CreateZ21PairingInput struct {
 	HandsetBrakeSecs uint
 }
 
+// CreateWithrottlePairingInput carries the user-selected vehicle scope for WiThrottle pairing.
+type CreateWithrottlePairingInput struct {
+	LayoutID         uint
+	CommandStationID uint
+	UserID           uint
+	VehicleIDs       []string
+	AllowedAddrs     []uint16
+	AllowAllVehicles bool
+	HandsetBrakeSecs uint
+}
+
+// CreateWithrottlePairingRequest generates a unique 6-digit code and stores a WiThrottle pending req.
+func (s *Store) CreateWithrottlePairingRequest(ctx context.Context, in CreateWithrottlePairingInput) (contract.RemotePendingWire, error) {
+	if err := s.rejectIfUserPaired(ctx, in.LayoutID, in.CommandStationID, in.UserID); err != nil {
+		return contract.RemotePendingWire{}, err
+	}
+	if err := s.clearUserPending(ctx, in.LayoutID, in.CommandStationID, in.UserID); err != nil {
+		return contract.RemotePendingWire{}, err
+	}
+
+	dedupKey := contract.RemotePairingReqDedupKey(in.LayoutID, in.CommandStationID, contract.RemoteProtocolWithrottle)
+	now := contract.NowMS()
+
+	for attempt := 0; attempt < maxPairGenerationAttempts; attempt++ {
+		s.mu.Lock()
+		code := contract.RandomPairingCode(s.rng)
+		s.mu.Unlock()
+		label := contract.WithrottlePairLabel(code)
+		reqID := contract.WithrottlePairReqID(code)
+
+		added, err := s.client.SAdd(ctx, dedupKey, label).Result()
+		if err != nil {
+			return contract.RemotePendingWire{}, err
+		}
+		if added == 0 {
+			continue
+		}
+
+		req := contract.RemotePendingWire{
+			LayoutID:         in.LayoutID,
+			CommandStationID: in.CommandStationID,
+			Protocol:         contract.RemoteProtocolWithrottle,
+			UserID:           in.UserID,
+			ReqID:            reqID,
+			DisplayLabel:     contract.WithrottlePairingDisplayLabel(code),
+			VehicleIDs:       append([]string(nil), in.VehicleIDs...),
+			AllowedAddrs:     append([]uint16(nil), in.AllowedAddrs...),
+			AllowAllVehicles: in.AllowAllVehicles,
+			HandsetBrakeSecs: contract.NormaliseHandsetBrakeSecs(in.HandsetBrakeSecs),
+			CreatedAt:        now,
+			PairingCode:      code,
+		}
+		payload, err := contract.MarshalRemotePending(req)
+		if err != nil {
+			_, _ = s.client.SRem(ctx, dedupKey, label).Result()
+			return contract.RemotePendingWire{}, err
+		}
+
+		reqKey := contract.RemotePairingReqKey(in.LayoutID, in.CommandStationID, reqID)
+		reqByUserKey := contract.RemotePairingReqByUserKey(in.LayoutID, in.CommandStationID, in.UserID)
+		pipe := s.client.TxPipeline()
+		pipe.Set(ctx, reqKey, payload, contract.RemotePairingReqTTL)
+		pipe.Set(ctx, reqByUserKey, reqKey, contract.RemotePairingReqTTL)
+		pipe.Expire(ctx, dedupKey, contract.RemotePairingReqTTL+dedupTTLSlack)
+		if _, err := pipe.Exec(ctx); err != nil {
+			_, _ = s.client.SRem(ctx, dedupKey, label).Result()
+			return contract.RemotePendingWire{}, err
+		}
+		return req, nil
+	}
+	return contract.RemotePendingWire{}, ErrDuplicatePair
+}
+
 func (s *Store) rejectIfUserPaired(ctx context.Context, layoutID, commandStationID, userID uint) error {
 	activeByUser := contract.RemotePairingByUserKey(layoutID, commandStationID, userID)
 	if prior, err := s.client.Get(ctx, activeByUser).Result(); err == nil && prior != "" {
@@ -388,6 +461,7 @@ func (s *Store) CompletePairing(ctx context.Context, layoutID, commandStationID 
 		PairedAt:         pairedAt,
 		PairingCV3:       req.PairingCV3,
 		PairingCV4:       req.PairingCV4,
+		PairingCode:      req.PairingCode,
 		LastSeenAt:       pairedAt,
 		ClientKey:        clientKey,
 		HandsetBrakeSecs: contract.NormaliseHandsetBrakeSecs(req.HandsetBrakeSecs),
@@ -443,6 +517,17 @@ func (s *Store) PairViaCV3CV4(ctx context.Context, layoutID, commandStationID ui
 	}
 	reqID := contract.Z21PairReqID(pairingCV3, pairingCV4)
 	label := contract.Z21PairLabel(pairingCV3, pairingCV4)
+	active, ok, evicted, err := s.CompletePairing(ctx, layoutID, commandStationID, reqID, clientKey, pairedAt, label)
+	return active, ok, evicted, err
+}
+
+// PairViaWithrottleCode completes WiThrottle pairing from a 6-digit code.
+func (s *Store) PairViaWithrottleCode(ctx context.Context, layoutID, commandStationID uint, code, clientKey string, pairedAt int64) (contract.RemoteSessionWire, bool, string, error) {
+	if !contract.ValidWithrottleCode(code) {
+		return contract.RemoteSessionWire{}, false, "", errors.New("remotepairing: invalid withrottle pairing code")
+	}
+	reqID := contract.WithrottlePairReqID(code)
+	label := contract.WithrottlePairLabel(code)
 	active, ok, evicted, err := s.CompletePairing(ctx, layoutID, commandStationID, reqID, clientKey, pairedAt, label)
 	return active, ok, evicted, err
 }
@@ -594,6 +679,9 @@ func (s *Store) clearUserPending(ctx context.Context, layoutID, commandStationID
 	if req.Protocol == contract.RemoteProtocolZ21 && req.PairingCV3 != 0 && req.PairingCV4 != 0 {
 		label := contract.Z21PairLabel(req.PairingCV3, req.PairingCV4)
 		pipe.SRem(ctx, contract.RemotePairingReqDedupKey(layoutID, commandStationID, req.Protocol), label)
+	}
+	if req.Protocol == contract.RemoteProtocolWithrottle && req.PairingCode != "" {
+		pipe.SRem(ctx, contract.RemotePairingReqDedupKey(layoutID, commandStationID, req.Protocol), contract.WithrottlePairLabel(req.PairingCode))
 	}
 	_, err = pipe.Exec(ctx)
 	return err

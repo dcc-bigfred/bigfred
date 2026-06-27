@@ -138,8 +138,10 @@ func (c *DccBusEventConsumer) fanEnvelope(layoutID uint, eventType, id string, p
 	switch eventType {
 	case "system.estop.audit", "daemon.started", "daemon.stopped", "daemon.degraded":
 		c.hub.BroadcastToLayout(layoutID, "dcc-bus."+strings.TrimPrefix(eventType, "system."), payload)
-	case contract.RemoteClientsChangedEvent, "z21.clients.changed":
-		c.hub.BroadcastToLayout(layoutID, "z21.clientsChanged", payload)
+	case contract.RemoteClientsChangedEvent:
+		// Admin-only: the snapshot carries IPs and user logins for every
+		// connected handset. Non-admin operators must not see it.
+		c.hub.BroadcastToLayoutAdmins(layoutID, "remote.clientsChanged", payload)
 	default:
 		// Unrouted frames are not broadcast but still logged so a
 		// daemon emitting a new event type is visible in dev logs.
@@ -162,20 +164,24 @@ func parseEventChannel(ch string) (uint, uint) {
 	if len(parts) != 2 {
 		return 0, 0
 	}
-	var layoutID, commandStationID uint
-	for _, p := range parts[:1] {
-		for _, ch := range p {
-			if ch < '0' || ch > '9' {
-				return 0, 0
-			}
-			layoutID = layoutID*10 + uint(ch-'0')
-		}
+	layoutID, ok := parseUint(parts[0])
+	if !ok {
+		return 0, 0
 	}
-	for _, ch := range parts[1] {
-		if ch < '0' || ch > '9' {
-			return 0, 0
-		}
-		commandStationID = commandStationID*10 + uint(ch-'0')
+	commandStationID, ok := parseUint(parts[1])
+	if !ok {
+		return 0, 0
 	}
 	return layoutID, commandStationID
+}
+
+func parseUint(s string) (uint, bool) {
+	var n uint
+	for _, ch := range s {
+		if ch < '0' || ch > '9' {
+			return 0, false
+		}
+		n = n*10 + uint(ch-'0')
+	}
+	return n, true
 }

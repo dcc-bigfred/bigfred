@@ -9,12 +9,12 @@ import (
 	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
 	"github.com/keskad/loco/pkgs/bigfred/server/repo"
 	"github.com/keskad/loco/pkgs/bigfred/server/security"
-	"github.com/keskad/loco/pkgs/bigfred/z21pairing"
+	"github.com/keskad/loco/pkgs/bigfred/remotepairing"
 )
 
 // Z21Remote manages handset pairing for one layout command station.
 type Z21Remote struct {
-	pairing  *z21pairing.Store
+	pairing  *remotepairing.Store
 	stations *repo.CommandStations
 	layoutCS *repo.LayoutCommandStations
 	roster   *LayoutRoster
@@ -24,7 +24,7 @@ type Z21Remote struct {
 
 // NewZ21Remote returns a Z21Remote service.
 func NewZ21Remote(
-	pairing *z21pairing.Store,
+	pairing *remotepairing.Store,
 	stations *repo.CommandStations,
 	layoutCS *repo.LayoutCommandStations,
 	roster *LayoutRoster,
@@ -95,7 +95,7 @@ func (s *Z21Remote) GetStatus(ctx context.Context, layoutID, csID, userID uint) 
 		out.PairingCV3 = pending.PairingCV3
 		out.PairingCV4 = pending.PairingCV4
 		out.DisplayLabel = pending.DisplayLabel
-		out.ExpiresAt = z21pairing.PendingExpiresAt(pending).UnixMilli()
+		out.ExpiresAt = remotepairing.PendingExpiresAt(pending).UnixMilli()
 		out.HandsetBrakeSecs = contract.NormaliseHandsetBrakeSecs(pending.HandsetBrakeSecs)
 	}
 	sessions, err := s.pairing.ListActiveByUser(ctx, layoutID, csID, userID)
@@ -168,7 +168,7 @@ func (s *Z21Remote) StartPairing(ctx context.Context, layoutID, csID, userID uin
 	} else if !contract.ValidHandsetBrakeSecs(brakeSecs) {
 		return contract.Z21PairingReqWire{}, svcerrors.ErrZ21HandsetBrakeSecsInvalid
 	}
-	return s.pairing.CreatePairingRequest(ctx, z21pairing.CreatePairingRequestInput{
+	req, err := s.pairing.CreateZ21PairingRequest(ctx, remotepairing.CreateZ21PairingInput{
 		LayoutID:         layoutID,
 		CommandStationID: csID,
 		UserID:           userID,
@@ -177,6 +177,7 @@ func (s *Z21Remote) StartPairing(ctx context.Context, layoutID, csID, userID uin
 		AllowAllVehicles: in.AllowAllVehicles,
 		HandsetBrakeSecs: brakeSecs,
 	})
+	return req, MapUserAlreadyPaired(err)
 }
 
 // CancelPairing deletes the current user's pending pairing code.
@@ -234,6 +235,9 @@ func (s *Z21Remote) UpdateSession(ctx context.Context, layoutID, csID, userID ui
 	if !ok {
 		return svcerrors.ErrZ21SessionNotFound
 	}
+	// Notify dcc-bus so the daemon's in-process session mirror picks up
+	// the new scope without a per-packet Redis read.
+	_ = s.pairing.PublishSessionSync(ctx, layoutID, csID, clientKey, contract.RemoteSessionSyncScope)
 	return nil
 }
 
@@ -253,9 +257,27 @@ func (s *Z21Remote) Unpair(ctx context.Context, layoutID, csID, userID uint, cli
 		if !ok || active.UserID != userID {
 			return svcerrors.ErrZ21SessionNotFound
 		}
-		return s.pairing.Unpair(ctx, layoutID, csID, clientKey)
+		if err := s.pairing.Unpair(ctx, layoutID, csID, clientKey); err != nil {
+			return err
+		}
+		_ = s.pairing.PublishSessionSync(ctx, layoutID, csID, clientKey, contract.RemoteSessionSyncUnpair)
+		return nil
 	}
-	return s.pairing.UnpairAllForUser(ctx, layoutID, csID, userID)
+	// Empty clientKey: resolve the user's active session so the sync event
+	// targets the right handset, then unpair explicitly.
+	sessions, err := s.pairing.ListActiveByUser(ctx, layoutID, csID, userID)
+	if err != nil {
+		return err
+	}
+	if len(sessions) == 0 {
+		return nil
+	}
+	resolved := sessions[0].ClientKey
+	if err := s.pairing.Unpair(ctx, layoutID, csID, resolved); err != nil {
+		return err
+	}
+	_ = s.pairing.PublishSessionSync(ctx, layoutID, csID, resolved, contract.RemoteSessionSyncUnpair)
+	return nil
 }
 
 func (s *Z21Remote) ensureReady(ctx context.Context, layoutID, csID uint) (domain.CommandStation, error) {

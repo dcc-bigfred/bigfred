@@ -40,7 +40,7 @@ type RouterConfig struct {
 	Radio            *service.RadioService
 	Audit            *service.AuditService
 	Leases           *service.LeaseService
-	Z21Remote        *cmd.Z21Remote
+	Remote           *cmd.Remote
 
 	// AllowedOrigins is forwarded verbatim to the CORS middleware.
 	// In development the Vite dev server lives on a different port
@@ -99,7 +99,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	radioH := NewRadioHandler(cfg.Radio)
 	auditH := NewAuditHandler(cfg.Audit)
 	leaseH := NewLeaseHandler(cfg.Leases, cfg.Auth)
-	z21RemoteH := NewZ21RemoteHandler(cfg.Z21Remote)
+	remoteH := NewRemoteHandler(cfg.Remote, cfg.Auth)
 
 	r.Route("/api/v1", func(r chi.Router) {
 		// WebSocket upgrade — auth reads cookie / ?token= inline.
@@ -200,12 +200,12 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			r.Get("/layouts/{id}", layoutH.Get)
 			r.Get("/layouts/{id}/interlockings", layoutH.ListInterlockings)
 			r.Get("/layouts/{id}/command-stations", layoutH.ListCommandStations)
-			r.Get("/layouts/{id}/command-stations/{csid}/z21-remote", z21RemoteH.GetStatus)
-			r.Get("/layouts/{id}/command-stations/{csid}/z21-remote/clients", z21RemoteH.ListClients)
-			r.Post("/layouts/{id}/command-stations/{csid}/z21-remote/pairing", z21RemoteH.StartPairing)
-			r.Delete("/layouts/{id}/command-stations/{csid}/z21-remote/pairing", z21RemoteH.CancelPairing)
-			r.Patch("/layouts/{id}/command-stations/{csid}/z21-remote/session", z21RemoteH.UpdateSession)
-			r.Delete("/layouts/{id}/command-stations/{csid}/z21-remote/session", z21RemoteH.Unpair)
+			r.Get("/layouts/{id}/command-stations/{csid}/remotes/status", remoteH.GetStatus)
+			r.Get("/layouts/{id}/command-stations/{csid}/remotes/clients", remoteH.ListClients)
+			r.Post("/layouts/{id}/command-stations/{csid}/remotes/{protocol}/pairing", remoteH.StartPairing)
+			r.Delete("/layouts/{id}/command-stations/{csid}/remotes/pairing", remoteH.CancelPairing)
+			r.Patch("/layouts/{id}/command-stations/{csid}/remotes/session", remoteH.UpdateSession)
+			r.Delete("/layouts/{id}/command-stations/{csid}/remotes/session", remoteH.Unpair)
 
 			// Sudo elevation (§7a.7) — open to every authenticated
 			// caller; the service guards entry with the layout

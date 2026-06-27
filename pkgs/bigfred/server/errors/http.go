@@ -368,6 +368,8 @@ func Z21RemoteHTTPStatus(err error) (status int, code string) {
 		return http.StatusUnprocessableEntity, CodeZ21HandsetBrakeSecsInvalid
 	case stderrors.Is(err, ErrWithrottleServerDisabled):
 		return http.StatusConflict, CodeWithrottleServerDisabled
+	case stderrors.Is(err, ErrWithrottleSessionNotFound):
+		return http.StatusNotFound, CodeWithrottleSessionNotFound
 	default:
 		return http.StatusInternalServerError, "internal_error"
 	}
@@ -380,6 +382,10 @@ func RemoteHTTPStatus(err error) (status int, code string) {
 		return http.StatusNotFound, CodeRemoteProtocolUnknown
 	case stderrors.Is(err, ErrRemoteUserAlreadyPaired):
 		return http.StatusConflict, CodeRemoteUserAlreadyPaired
+	case stderrors.Is(err, ErrRemoteServerDisabled):
+		return http.StatusConflict, CodeRemoteServerDisabled
+	case stderrors.Is(err, ErrRemoteSessionNotFound):
+		return http.StatusNotFound, CodeRemoteSessionNotFound
 	default:
 		return Z21RemoteHTTPStatus(err)
 	}

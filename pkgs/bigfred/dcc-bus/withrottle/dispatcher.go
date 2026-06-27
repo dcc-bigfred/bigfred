@@ -2,7 +2,6 @@ package withrottle
 
 import (
 	"sync"
-	"sync/atomic"
 )
 
 type task func()
@@ -10,7 +9,6 @@ type task func()
 type dispatcher struct {
 	shards []chan task
 	wg     sync.WaitGroup
-	inline atomic.Int64
 }
 
 func newDispatcher(shards, buf int) *dispatcher {
@@ -44,16 +42,14 @@ func shardIndex(key string, shards int) int {
 }
 
 func (d *dispatcher) dispatch(key string, t task) {
-	ch := d.shards[shardIndex(key, len(d.shards))]
-	select {
-	case ch <- t:
-	default:
-		d.inline.Add(1)
-		t()
+	if d == nil {
+		return
 	}
+	ch := d.shards[shardIndex(key, len(d.shards))]
+	ch <- t
 }
 
-func (d *dispatcher) InlineFallbacks() int64 { return d.inline.Load() }
+func (d *dispatcher) InlineFallbacks() int64 { return 0 }
 
 func (d *dispatcher) close() {
 	for _, ch := range d.shards {

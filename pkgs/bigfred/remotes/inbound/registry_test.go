@@ -18,6 +18,20 @@ func mustAddr(t *testing.T, ip string, port int) *net.UDPAddr {
 	return a
 }
 
+func TestUnsubscribeLoco(t *testing.T) {
+	r := NewClientRegistry()
+	c := r.Touch(contract.RemoteProtocolWithrottle, mustAddr(t, "10.0.0.3", 40000), time.Now().UTC(), false)
+	r.SubscribeLoco(c.Key, 3)
+	r.SubscribeLoco(c.Key, 7)
+	r.UnsubscribeLoco(c.Key, 3)
+	if got := r.Subscribers(3); len(got) != 0 {
+		t.Fatalf("subscribers(3) after unsubscribe=%v", got)
+	}
+	if got := r.Subscribers(7); len(got) != 1 || got[0] != c.Key {
+		t.Fatalf("subscribers(7)=%v", got)
+	}
+}
+
 func TestSubscriberIndexAddRemove(t *testing.T) {
 	r := NewClientRegistry()
 	c := r.Touch(contract.RemoteProtocolZ21, mustAddr(t, "10.0.0.1", 40000), time.Now().UTC(), false)

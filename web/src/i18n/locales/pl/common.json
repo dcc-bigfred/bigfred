@@ -53,8 +53,7 @@
       "templates": "Szablony pojazdów",
       "throttle": "Sterowanie",
       "rentals": "Wypożyczenia",
-      "z21Remote": "Pilot Z21",
-      "withrottleRemote": "WiThrottle"
+      "remotes": "Piloty"
     },
     "fleet": {
       "menuLabel": "Tabor",

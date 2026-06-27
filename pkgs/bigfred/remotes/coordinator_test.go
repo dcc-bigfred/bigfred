@@ -144,6 +144,17 @@ func TestSessionSyncEventUpdatesRegistry(t *testing.T) {
 	defer cancel()
 	go c.Run(ctx)
 
+	// Allow the coordinator's pub/sub subscriber to connect before publishing.
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		sub, err := store.SubscribeSessionSync(ctx, 1, 2)
+		if err == nil {
+			_ = sub.Close()
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
 	// Seed an active session in Redis for the client the event will name.
 	clientKey := contract.RemoteProtocolZ21 + ":10.0.0.55:40001"
 	active := contract.RemoteSessionWire{
@@ -159,7 +170,7 @@ func TestSessionSyncEventUpdatesRegistry(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	deadline := time.Now().Add(2 * time.Second)
+	deadline = time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
 		if atomic.LoadInt32(&called) > 0 {
 			break

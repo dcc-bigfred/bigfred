@@ -13,9 +13,6 @@ func BuildRosterLine(session *contract.RemoteSessionWire, allowedVehicles contra
 	if !paired {
 		return contract.FormatWithrottleSentinelRosterLine(sentinelAddr)
 	}
-	if session != nil && session.AllowAllVehicles {
-		return "RL0"
-	}
 	entries := rosterEntries(session, allowedVehicles)
 	if len(entries) == 0 {
 		return "RL0"
@@ -47,6 +44,26 @@ type rosterEntry struct {
 func rosterEntries(session *contract.RemoteSessionWire, allowed contract.AllowedVehicles) []rosterEntry {
 	if session == nil {
 		return nil
+	}
+	if session.AllowAllVehicles {
+		seen := make(map[uint16]struct{}, len(allowed.Vehicles))
+		out := make([]rosterEntry, 0, len(allowed.Vehicles))
+		for _, v := range allowed.Vehicles {
+			if _, dup := seen[v.Addr]; dup {
+				continue
+			}
+			seen[v.Addr] = struct{}{}
+			name := v.VehicleID
+			if name == "" {
+				name = fmt.Sprintf("Loco %d", v.Addr)
+			}
+			out = append(out, rosterEntry{
+				name:   name,
+				addr:   v.Addr,
+				isLong: v.Addr >= 128,
+			})
+		}
+		return out
 	}
 	addrAllow := make(map[uint16]struct{}, len(session.AllowedAddrs))
 	for _, a := range session.AllowedAddrs {

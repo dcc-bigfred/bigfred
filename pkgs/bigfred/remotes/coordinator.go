@@ -424,7 +424,7 @@ func (c *Coordinator) sweep(ctx context.Context) {
 		if policy.IPStickiness && cl.Session != nil {
 			evictAfter = policy.StickyIdleEvict
 		}
-		if policy.HeartbeatTimeout > 0 && cl.Session != nil && idle >= policy.HeartbeatTimeout {
+		if policy.HeartbeatTimeout > 0 && cl.Session != nil && cl.HeartbeatMonitor && idle >= policy.HeartbeatTimeout {
 			c.estopHandsetLocos(ctx, cl)
 			evictAfter = policy.HeartbeatTimeout
 		}

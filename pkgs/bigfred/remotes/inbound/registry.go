@@ -30,6 +30,8 @@ type Client struct {
 	// in batch by the coordinator (WS-1b), replacing a per-packet SET.
 	seenDirty   bool
 	pendingSeen int64
+	// HeartbeatMonitor is set by WiThrottle *+ / *- (dead-man E-stop only when on).
+	HeartbeatMonitor bool
 }
 
 // ClientRegistry tracks active inbound participants for one command station.
@@ -181,6 +183,33 @@ func (r *ClientRegistry) Session(key string) (*contract.RemoteSessionWire, bool)
 	}
 	copy := *c.Session
 	return &copy, true
+}
+
+// SetHeartbeatMonitor toggles WiThrottle dead-man monitoring for one client.
+func (r *ClientRegistry) SetHeartbeatMonitor(key string, on bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if c, ok := r.clients[key]; ok {
+		c.HeartbeatMonitor = on
+	}
+}
+
+// UnsubscribeLoco removes addr from the client's subscription FIFO and index.
+func (r *ClientRegistry) UnsubscribeLoco(key string, addr uint16) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	c, ok := r.clients[key]
+	if !ok {
+		return
+	}
+	kept := c.SubscribedLocos[:0]
+	for _, a := range c.SubscribedLocos {
+		if a != addr {
+			kept = append(kept, a)
+		}
+	}
+	c.SubscribedLocos = kept
+	r.removeSubscriberLocked(addr, key)
 }
 
 // SubscribeLoco adds addr to the per-client FIFO (max 16 per Z21 spec).

@@ -6,12 +6,15 @@ import (
 	"sync"
 )
 
+const maxWiThrottleFunction = 31
+
 // throttleWire tracks one MultiThrottle instance on a WiThrottle connection.
 type throttleWire struct {
 	locos      map[uint16]string // addr → wire key (Snnn / Lnnn)
 	forward    bool
 	lastLoco   uint16
 	speedSteps int
+	lastSpeed  map[uint16]uint8 // last known DCC speed per acquired addr
 }
 
 // WireState holds WiThrottle wire fields that are not shared across protocols.
@@ -22,6 +25,7 @@ type WireState struct {
 
 type wireClient struct {
 	conn             net.Conn
+	writeMu          sync.Mutex
 	deviceID         string
 	deviceName       string
 	heartbeatMonitor bool
@@ -29,6 +33,7 @@ type wireClient struct {
 	pairFnPrevFn     map[int]bool
 	multiThrottle    map[byte]*throttleWire
 	sentinelAcquired bool
+	initialBurstSent bool
 }
 
 // NewWireState returns an empty WiThrottle wire-state table.
@@ -57,11 +62,28 @@ func (w *WireState) Remove(key string) {
 	delete(w.m, key)
 }
 
-// SetConn stores the live TCP connection for key.
-func (w *WireState) SetConn(key string, conn net.Conn) {
+// CloseAll closes every live TCP connection (daemon shutdown).
+func (w *WireState) CloseAll() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	w.client(key).conn = conn
+	for _, c := range w.m {
+		if c.conn != nil {
+			_ = c.conn.Close()
+		}
+	}
+}
+
+// SetConn stores the live TCP connection for key, closing any prior connection.
+func (w *WireState) SetConn(key string, conn net.Conn) {
+	w.mu.Lock()
+	c := w.client(key)
+	c.writeMu.Lock()
+	if c.conn != nil && c.conn != conn {
+		_ = c.conn.Close()
+	}
+	c.conn = conn
+	c.writeMu.Unlock()
+	w.mu.Unlock()
 }
 
 // Conn returns the TCP connection for key.
@@ -124,6 +146,20 @@ func (w *WireState) HeartbeatMonitor(key string) bool {
 	return w.client(key).heartbeatMonitor
 }
 
+// MarkInitialBurstSent records that the post-N initial burst was sent.
+func (w *WireState) MarkInitialBurstSent(key string) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.client(key).initialBurstSent = true
+}
+
+// InitialBurstSent reports whether the initial burst was already sent.
+func (w *WireState) InitialBurstSent(key string) bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.client(key).initialBurstSent
+}
+
 // BufferPairingFn records one function-key ON press while pairing.
 func (w *WireState) BufferPairingFn(key string, fn int) (code string, ready bool) {
 	w.mu.Lock()
@@ -161,11 +197,43 @@ func (w *WireState) SentinelAcquired(key string) bool {
 	return w.client(key).sentinelAcquired
 }
 
+// SetLastSpeed caches the last known DCC speed for one acquired loco.
+func (w *WireState) SetLastSpeed(key string, id byte, addr uint16, speed uint8) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	tw := w.client(key).throttle(id)
+	if tw.lastSpeed == nil {
+		tw.lastSpeed = make(map[uint16]uint8, 4)
+	}
+	tw.lastSpeed[addr] = speed
+}
+
+// LastSpeed returns the cached DCC speed for addr on throttle id.
+func (w *WireState) LastSpeed(key string, id byte, addr uint16) (uint8, bool) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	c, ok := w.m[key]
+	if !ok {
+		return 0, false
+	}
+	tw, ok := c.multiThrottle[id]
+	if !ok || tw.lastSpeed == nil {
+		return 0, false
+	}
+	speed, ok := tw.lastSpeed[addr]
+	return speed, ok
+}
+
 // ThrottleLocked returns throttle state; caller must hold WireState.mu.
 func (c *wireClient) throttle(id byte) *throttleWire {
 	t, ok := c.multiThrottle[id]
 	if !ok {
-		t = &throttleWire{locos: make(map[uint16]string), speedSteps: 1}
+		t = &throttleWire{
+			locos:     make(map[uint16]string),
+			forward:   true,
+			lastSpeed: make(map[uint16]uint8, 4),
+			speedSteps: 1,
+		}
 		c.multiThrottle[id] = t
 	}
 	return t
@@ -191,14 +259,14 @@ func (w *WireState) FindThrottleForAddr(key string, addr uint16) (id byte, locoK
 func (w *WireState) WriteLine(key, line string) error {
 	w.mu.Lock()
 	c, ok := w.m[key]
-	var conn net.Conn
-	if ok {
-		conn = c.conn
-	}
-	w.mu.Unlock()
-	if conn == nil {
+	if !ok || c.conn == nil {
+		w.mu.Unlock()
 		return errNoConn
 	}
+	c.writeMu.Lock()
+	conn := c.conn
+	w.mu.Unlock()
+	defer c.writeMu.Unlock()
 	_, err := conn.Write(append([]byte(line), '\n'))
 	return err
 }

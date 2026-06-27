@@ -89,12 +89,9 @@ func (r *Registry) SubscribeLoco(key string, addr uint16) {
 	r.inbound.SubscribeLoco(key, addr)
 }
 
-// UnsubscribeLoco removes addr from subscriptions (best-effort via resubscribe trim).
+// UnsubscribeLoco removes addr from subscriptions and the fanout index.
 func (r *Registry) UnsubscribeLoco(key string, addr uint16) {
-	// inbound registry has no explicit unsubscribe; release uses coordinator paths.
-	// Loco release clears wire throttle maps; subscriber index is updated on Remove.
-	_ = addr
-	_ = key
+	r.inbound.UnsubscribeLoco(key, addr)
 }
 
 // Subscribers returns the client keys subscribed to addr.
@@ -162,6 +159,23 @@ func (r *Registry) deviceName(key string) string {
 
 func (r *Registry) setHeartbeatMonitor(key string, on bool) {
 	r.wire.SetHeartbeatMonitor(key, on)
+	r.inbound.SetHeartbeatMonitor(key, on)
+}
+
+func (r *Registry) initialBurstSent(key string) bool {
+	return r.wire.InitialBurstSent(key)
+}
+
+func (r *Registry) markInitialBurstSent(key string) {
+	r.wire.MarkInitialBurstSent(key)
+}
+
+func (r *Registry) setLastSpeed(key string, id byte, addr uint16, speed uint8) {
+	r.wire.SetLastSpeed(key, id, addr, speed)
+}
+
+func (r *Registry) lastSpeed(key string, id byte, addr uint16) (uint8, bool) {
+	return r.wire.LastSpeed(key, id, addr)
 }
 
 func (r *Registry) sentinelAcquired(key string) bool {

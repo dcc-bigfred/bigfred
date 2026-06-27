@@ -185,15 +185,10 @@ function AppShellContent() {
         onClick: () => navigate("/rentals"),
       },
       {
-        id: "z21-remote",
-        label: t("nav.my.z21Remote"),
+        id: "remotes",
+        label: t("nav.my.remotes"),
         icon: <Z21Icon size={24} />,
-        onClick: () => navigate("/remotes/z21"),
-      },
-      {
-        id: "withrottle-remote",
-        label: t("nav.my.withrottleRemote"),
-        onClick: () => navigate("/remotes/withrottle"),
+        onClick: () => navigate("/remotes"),
       },
       {
         id: "templates",

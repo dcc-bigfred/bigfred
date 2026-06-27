@@ -8,6 +8,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -60,6 +61,7 @@ type Server struct {
 	adapter     *Adapter
 	coordinator *remotes.Coordinator
 	dispatch    *dispatcher
+	allowedMu   sync.RWMutex
 }
 
 // HeartbeatTimeout returns coordinator policy timeout with grace slack.
@@ -80,6 +82,9 @@ func New(cfg Config) (*Server, error) {
 	}
 	if cfg.PairingAddr == 0 {
 		cfg.PairingAddr = defaultSentinel
+	}
+	if cfg.PairingAddr > 10239 {
+		return nil, errors.New("withrottle: pairing addr must be <= 10239 for L addressing")
 	}
 	if cfg.HeartbeatSecs == 0 {
 		cfg.HeartbeatSecs = defaultHeartbeatSecs
@@ -182,12 +187,9 @@ func (s *Server) Run(ctx context.Context) error {
 		"commandStationId": s.cfg.CommandStationID,
 	}).Info("withrottle inbound server listening")
 
-	if s.coordinator != nil {
-		go func() { _ = s.coordinator.PublishSnapshot(ctx) }()
-	}
-
 	for {
 		if ctx.Err() != nil {
+			s.registry.wire.CloseAll()
 			return nil
 		}
 		if tcpLn, ok := ln.(*net.TCPListener); ok {
@@ -211,11 +213,20 @@ func (s *Server) Run(ctx context.Context) error {
 func (s *Server) serveConn(ctx context.Context, conn net.Conn) {
 	r := bufio.NewReaderSize(conn, 512)
 	defer conn.Close()
+	readTimeout := s.readTimeout()
 	var clientKey string
 	for {
+		if ctx.Err() != nil {
+			s.handleDisconnect(ctx, clientKey, conn)
+			return
+		}
+		if err := conn.SetReadDeadline(time.Now().Add(readTimeout)); err != nil {
+			s.handleDisconnect(ctx, clientKey, conn)
+			return
+		}
 		line, err := r.ReadString('\n')
 		if err != nil {
-			s.handleDisconnect(ctx, clientKey)
+			s.handleDisconnect(ctx, clientKey, conn)
 			return
 		}
 		line = strings.TrimRight(line, "\r\n")
@@ -232,10 +243,23 @@ func (s *Server) serveConn(ctx context.Context, conn net.Conn) {
 			continue
 		}
 		key := clientKey
-		s.dispatch.dispatch(key, func() {
+		d := s.dispatch
+		if d == nil {
+			s.handleLine(ctx, conn, key, line)
+			continue
+		}
+		d.dispatch(key, func() {
 			s.handleLine(ctx, conn, key, line)
 		})
 	}
+}
+
+func (s *Server) readTimeout() time.Duration {
+	secs := s.cfg.HeartbeatSecs
+	if secs <= 0 {
+		secs = defaultHeartbeatSecs
+	}
+	return time.Duration(secs*2+5) * time.Second
 }
 
 func (s *Server) handleAnonymous(ctx context.Context, conn net.Conn, line string) (handled bool, clientKey string) {
@@ -295,7 +319,12 @@ func (s *Server) handleLine(ctx context.Context, conn net.Conn, clientKey, line 
 				return
 			}
 		}
+		if paired || s.registry.initialBurstSent(clientKey) {
+			_ = s.writeLine(clientKey, fmt.Sprintf("*%g", s.cfg.HeartbeatSecs))
+			return
+		}
 		s.sendInitialBurst(ctx, clientKey)
+		s.registry.markInitialBurstSent(clientKey)
 		return
 	case line == "Q":
 		s.evictClient(ctx, clientKey)
@@ -305,6 +334,8 @@ func (s *Server) handleLine(ctx context.Context, conn net.Conn, clientKey, line 
 		return
 	case line == "*-":
 		s.registry.setHeartbeatMonitor(clientKey, false)
+		return
+	case line == "*":
 		return
 	case strings.HasPrefix(line, "PPA"):
 		// track power from client ignored in v1
@@ -432,7 +463,7 @@ func (s *Server) sendInitialBurst(ctx context.Context, clientKey string) {
 	_ = s.writeLine(clientKey, "VN2.0")
 	_ = s.writeLine(clientKey, fmt.Sprintf("*%g", s.cfg.HeartbeatSecs))
 	_ = s.writeLine(clientKey, s.trackPowerLine())
-	_ = s.writeLine(clientKey, BuildRosterLine(sess, s.cfg.AllowedVehicles, s.cfg.PairingAddr, paired))
+	_ = s.writeLine(clientKey, BuildRosterLine(sess, s.allowedVehicles(), s.cfg.PairingAddr, paired))
 	_ = s.writeLine(clientKey, "HTBigFred")
 }
 
@@ -495,7 +526,13 @@ func (s *Server) emitRosterUpdate(key string) {
 	if !ok {
 		return
 	}
-	_ = s.writeLine(key, BuildRosterLine(sess, s.cfg.AllowedVehicles, s.cfg.PairingAddr, true))
+	_ = s.writeLine(key, BuildRosterLine(sess, s.allowedVehicles(), s.cfg.PairingAddr, true))
+}
+
+func (s *Server) allowedVehicles() contract.AllowedVehicles {
+	s.allowedMu.RLock()
+	defer s.allowedMu.RUnlock()
+	return s.cfg.AllowedVehicles
 }
 
 // UpdateAllowedVehicles refreshes the layout roster used for RL emission.
@@ -503,7 +540,9 @@ func (s *Server) UpdateAllowedVehicles(snap contract.AllowedVehicles) {
 	if s == nil {
 		return
 	}
+	s.allowedMu.Lock()
 	s.cfg.AllowedVehicles = snap
+	s.allowedMu.Unlock()
 	if s.registry == nil {
 		return
 	}
@@ -528,8 +567,11 @@ func (s *Server) evictClient(ctx context.Context, key string) {
 	}
 }
 
-func (s *Server) handleDisconnect(ctx context.Context, clientKey string) {
+func (s *Server) handleDisconnect(ctx context.Context, clientKey string, staleConn net.Conn) {
 	if clientKey == "" {
+		return
+	}
+	if s.registry.wire.Conn(clientKey) != staleConn {
 		return
 	}
 	s.evictClient(ctx, clientKey)

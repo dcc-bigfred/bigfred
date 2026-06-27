@@ -47,7 +47,24 @@ func (c *wireClient) pairingFnRisingEdge(fn int, on bool) bool {
 	return on && !prev
 }
 
+// pairingFnAccept reports whether a function action should append a pairing digit.
+// Engine Driver uses locked (force) keys: repeat presses send f1N while still on,
+// so force+on must not require a rising edge. Momentary F keys still do.
+func pairingFnAccept(on, force, rising bool) bool {
+	if !on {
+		return false
+	}
+	if force {
+		return true
+	}
+	return rising
+}
+
 func (c *wireClient) clearPairingBuffer() {
 	c.pairFnBuf = nil
 	c.pairFnPrevFn = nil
+}
+
+func (c *wireClient) pairingBufferDigits() string {
+	return strings.Join(c.pairFnBuf, "")
 }

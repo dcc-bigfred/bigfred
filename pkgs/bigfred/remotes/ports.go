@@ -39,6 +39,5 @@ type ClientsSnapshotPublisher interface {
 // InboundGateway is a protocol-specific inbound listener registered by
 // the composition root (e.g. dcc-bus daemon).
 type InboundGateway interface {
-	LocoStateObserver
-	Run(ctx context.Context) error
+	RemoteProtocol
 }

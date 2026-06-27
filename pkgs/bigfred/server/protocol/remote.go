@@ -38,6 +38,7 @@ type RemotePendingPairing struct {
 	Protocol         string `json:"protocol"`
 	PairingCV3       int    `json:"pairingCV3,omitempty"`
 	PairingCV4       int    `json:"pairingCV4,omitempty"`
+	PairingCode      string `json:"pairingCode,omitempty"`
 	DisplayLabel     string `json:"displayLabel"`
 	ExpiresAt        int64  `json:"expiresAt"`
 	HandsetBrakeSecs uint   `json:"handsetBrakeSecs,omitempty"`
@@ -48,6 +49,7 @@ type RemotePairingResponse struct {
 	Protocol         string `json:"protocol"`
 	PairingCV3       int    `json:"pairingCV3,omitempty"`
 	PairingCV4       int    `json:"pairingCV4,omitempty"`
+	PairingCode      string `json:"pairingCode,omitempty"`
 	DisplayLabel     string `json:"displayLabel"`
 	ExpiresAt        int64  `json:"expiresAt"`
 	HandsetBrakeSecs uint   `json:"handsetBrakeSecs"`
@@ -90,6 +92,10 @@ func ToRemotePairingResponse(req contract.RemotePendingWire) RemotePairingRespon
 		out.PairingCV3 = req.PairingCV3
 		out.PairingCV4 = req.PairingCV4
 		out.Instructions = "Enter CV3 and CV4 via POM, programming track, or function keys F0–F32."
+	}
+	if req.Protocol == contract.RemoteProtocolWithrottle {
+		out.PairingCode = req.PairingCode
+		out.Instructions = "In Engine Driver: acquire the Pair with BigFred sentinel loco and press F-keys for each digit, or set Device Name (N) to the 6-digit code."
 	}
 	return out
 }

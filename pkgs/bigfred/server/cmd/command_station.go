@@ -68,6 +68,7 @@ type CommandStationCreateInput struct {
 	PollIntervalMs   uint
 	Z21ServerEnabled bool
 	Z21IPStickiness  bool
+	WithrottleServerEnabled bool
 }
 
 func (s *CommandStation) Create(ctx context.Context, eff domain.EffectiveRoles, in CommandStationCreateInput) (domain.CommandStation, error) {
@@ -103,6 +104,7 @@ func (s *CommandStation) Create(ctx context.Context, eff domain.EffectiveRoles, 
 		PollIntervalMs:   pollInterval,
 		Z21ServerEnabled: in.Z21ServerEnabled,
 		Z21IPStickiness:  in.Z21IPStickiness,
+		WithrottleServerEnabled: in.WithrottleServerEnabled,
 		CreatedAt:        now,
 		UpdatedAt:        now,
 	}
@@ -122,6 +124,7 @@ type CommandStationUpdateInput struct {
 	PollIntervalMs   *uint
 	Z21ServerEnabled *bool
 	Z21IPStickiness  *bool
+	WithrottleServerEnabled *bool
 }
 
 func (s *CommandStation) Update(ctx context.Context, eff domain.EffectiveRoles, id uint, in CommandStationUpdateInput) (domain.CommandStation, error) {
@@ -193,6 +196,9 @@ func (s *CommandStation) Update(ctx context.Context, eff domain.EffectiveRoles, 
 	}
 	if in.Z21IPStickiness != nil {
 		row.Z21IPStickiness = *in.Z21IPStickiness
+	}
+	if in.WithrottleServerEnabled != nil {
+		row.WithrottleServerEnabled = *in.WithrottleServerEnabled
 	}
 	row.UpdatedAt = time.Now().UTC()
 

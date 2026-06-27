@@ -419,6 +419,12 @@ func (d *DccBusService) buildProgramSpec(ctx context.Context, name string, layou
 	if cs.Z21IPStickiness {
 		args = append(args, "--z21-ip-stickiness")
 	}
+	if cs.WithrottleServerEnabled {
+		args = append(args, "--enable-withrottle")
+		args = append(args, "--withrottle-port", strconv.FormatUint(uint64(cs.EffectiveWithrottleInboundPort()), 10))
+		args = append(args, "--withrottle-pairing-addr", strconv.FormatUint(uint64(cs.EffectiveWithrottlePairingAddr()), 10))
+		args = append(args, "--withrottle-heartbeat-secs", strconv.FormatFloat(cs.EffectiveWithrottleHeartbeatSecs(), 'f', -1, 64))
+	}
 	for _, origin := range d.cfg.AllowedOrigins {
 		args = append(args, "--allowed-origin", origin)
 	}

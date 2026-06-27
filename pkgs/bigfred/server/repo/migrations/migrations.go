@@ -110,6 +110,7 @@ func register(m *migrator.Migrator) {
 	m.Register(migrationVersion(20260625, 1), addCommandStationZ21ServerEnabledColumnUp, addCommandStationZ21ServerEnabledColumnDown)
 	m.Register(migrationVersion(20260625, 2), addCommandStationZ21IPStickinessColumnUp, addCommandStationZ21IPStickinessColumnDown)
 	m.Register(migrationVersion(20260626, 1), addCommandStationZ21InboundPortColumnUp, addCommandStationZ21InboundPortColumnDown)
+	m.Register(migrationVersion(20260627, 1), addCommandStationWithrottleColumnsUp, addCommandStationWithrottleColumnsDown)
 }
 
 // createCommandStationsUp installs the `command_stations` catalogue
@@ -760,5 +761,17 @@ func addCommandStationZ21InboundPortColumnUp(s *rel.Schema) {
 }
 
 func addCommandStationZ21InboundPortColumnDown(s *rel.Schema) {
+	// SQLite cannot DROP COLUMN in older schemas; leave columns in place.
+}
+
+// addCommandStationWithrottleColumnsUp enables per-station inbound WiThrottle TCP in dcc-bus.
+func addCommandStationWithrottleColumnsUp(s *rel.Schema) {
+	s.Exec(rel.Raw(`ALTER TABLE command_stations ADD COLUMN withrottle_server_enabled INTEGER NOT NULL DEFAULT 0`))
+	s.Exec(rel.Raw(`ALTER TABLE command_stations ADD COLUMN withrottle_inbound_port INTEGER NOT NULL DEFAULT 12090`))
+	s.Exec(rel.Raw(`ALTER TABLE command_stations ADD COLUMN withrottle_pairing_addr INTEGER NOT NULL DEFAULT 10239`))
+	s.Exec(rel.Raw(`ALTER TABLE command_stations ADD COLUMN withrottle_heartbeat_secs REAL NOT NULL DEFAULT 10`))
+}
+
+func addCommandStationWithrottleColumnsDown(s *rel.Schema) {
 	// SQLite cannot DROP COLUMN in older schemas; leave columns in place.
 }

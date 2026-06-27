@@ -347,17 +347,26 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	layoutVehicleSvc.SetRedisRosterPublisher(redisSvc)
 
 	var z21RemoteSvc *cmd.Z21Remote
+	var withrottleRemoteSvc *cmd.WithrottleRemote
 	var remoteSvc *cmd.Remote
 	if redisReady {
+		pairStore := remotepairing.NewStore(redisSvc.Client())
 		z21RemoteSvc = cmd.NewZ21Remote(
-			remotepairing.NewStore(redisSvc.Client()),
+			pairStore,
 			commandStations,
 			layoutCommandStations,
 			layoutVehicleSvc.LayoutRoster,
 			layoutVehicleSvc.LayoutRosterSnapshot,
 			users,
 		)
-		remoteSvc = cmd.NewRemote(z21RemoteSvc)
+		withrottleRemoteSvc = cmd.NewWithrottleRemote(
+			pairStore,
+			commandStations,
+			layoutCommandStations,
+			layoutVehicleSvc.LayoutRoster,
+			layoutVehicleSvc.LayoutRosterSnapshot,
+		)
+		remoteSvc = cmd.NewRemote(z21RemoteSvc, withrottleRemoteSvc)
 	}
 
 	go hub.Run(ctx)

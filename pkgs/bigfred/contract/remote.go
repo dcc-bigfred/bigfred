@@ -9,6 +9,8 @@ const (
 	RemoteClientsChangedEvent = "remote.clients.changed"
 	// RemoteProtocolZ21 identifies the Roco Z21 LAN adapter.
 	RemoteProtocolZ21 = "z21"
+	// RemoteProtocolWithrottle identifies the WiThrottle TCP adapter.
+	RemoteProtocolWithrottle = "withrottle"
 )
 
 // RemoteClientWire describes one inbound handset participant.

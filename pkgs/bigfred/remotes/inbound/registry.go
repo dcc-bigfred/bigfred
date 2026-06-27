@@ -2,6 +2,7 @@ package inbound
 
 import (
 	"net"
+	"strconv"
 	"sync"
 	"time"
 
@@ -68,6 +69,51 @@ func (r *ClientRegistry) Touch(protocol string, addr *net.UDPAddr, now time.Time
 	c.Addr = *addr
 	c.LastSeen = now
 	return c
+}
+
+// TouchByEndpoint registers or updates a client keyed by protocol and an
+// opaque endpoint (e.g. WiThrottle HU device id), not IP:port.
+func (r *ClientRegistry) TouchByEndpoint(protocol, endpoint string, remote net.Addr, now time.Time) *Client {
+	key := ClientKey(protocol, endpoint)
+	udp := udpAddrFromNet(remote)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	c, ok := r.clients[key]
+	if !ok {
+		c = &Client{
+			Key:         key,
+			Protocol:    protocol,
+			Endpoint:    endpoint,
+			Addr:        udp,
+			LastSeen:    now,
+			ConnectedAt: now,
+		}
+		r.clients[key] = c
+		return c
+	}
+	if remote != nil {
+		c.Addr = udpAddrFromNet(remote)
+	}
+	c.LastSeen = now
+	return c
+}
+
+func udpAddrFromNet(a net.Addr) net.UDPAddr {
+	if a == nil {
+		return net.UDPAddr{}
+	}
+	if ua, ok := a.(*net.UDPAddr); ok {
+		return *ua
+	}
+	if ta, ok := a.(*net.TCPAddr); ok {
+		return net.UDPAddr{IP: ta.IP, Port: ta.Port, Zone: ta.Zone}
+	}
+	host, port, err := net.SplitHostPort(a.String())
+	if err != nil {
+		return net.UDPAddr{}
+	}
+	p, _ := strconv.Atoi(port)
+	return net.UDPAddr{IP: net.ParseIP(host), Port: p}
 }
 
 // ClearIdleBraked resets the idle-brake latch after handset activity resumes.

@@ -8,18 +8,14 @@ import (
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
 	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
 	"github.com/keskad/loco/pkgs/bigfred/server/repo"
-	"github.com/keskad/loco/pkgs/bigfred/server/security"
 	"github.com/keskad/loco/pkgs/bigfred/remotepairing"
 )
 
 // Z21Remote manages handset pairing for one layout command station.
 type Z21Remote struct {
-	pairing  *remotepairing.Store
-	stations *repo.CommandStations
-	layoutCS *repo.LayoutCommandStations
-	roster   *LayoutRoster
-	snapshot *LayoutRosterSnapshot
-	users    *repo.Users
+	handsetRemoteDeps
+	pairing *remotepairing.Store
+	users   *repo.Users
 }
 
 // NewZ21Remote returns a Z21Remote service.
@@ -32,12 +28,14 @@ func NewZ21Remote(
 	users *repo.Users,
 ) *Z21Remote {
 	return &Z21Remote{
-		pairing:  pairing,
-		stations: stations,
-		layoutCS: layoutCS,
-		roster:   roster,
-		snapshot: snapshot,
-		users:    users,
+		pairing: pairing,
+		users:   users,
+		handsetRemoteDeps: handsetRemoteDeps{
+			stations: stations,
+			layoutCS: layoutCS,
+			roster:   roster,
+			snapshot: snapshot,
+		},
 	}
 }
 
@@ -80,7 +78,7 @@ type Z21RemoteUpdateSessionInput struct {
 
 // GetStatus returns pairing state for the current user.
 func (s *Z21Remote) GetStatus(ctx context.Context, layoutID, csID, userID uint) (Z21RemoteStatus, error) {
-	cs, err := s.ensureReady(ctx, layoutID, csID)
+	cs, err := s.findCommandStation(ctx, layoutID, csID)
 	if err != nil {
 		return Z21RemoteStatus{}, err
 	}
@@ -90,7 +88,7 @@ func (s *Z21Remote) GetStatus(ctx context.Context, layoutID, csID, userID uint) 
 	}
 	if pending, ok, err := s.pairing.GetPendingByUser(ctx, layoutID, csID, userID); err != nil {
 		return Z21RemoteStatus{}, err
-	} else if ok {
+	} else if ok && pending.Protocol == contract.RemoteProtocolZ21 {
 		out.PendingReq = true
 		out.PairingCV3 = pending.PairingCV3
 		out.PairingCV4 = pending.PairingCV4
@@ -105,14 +103,19 @@ func (s *Z21Remote) GetStatus(ctx context.Context, layoutID, csID, userID uint) 
 	if len(sessions) == 0 {
 		return out, nil
 	}
-	active := sessions[0]
-	out.Paired = true
-	out.ClientKey = active.ClientKey
-	out.PairedAt = active.PairedAt
-	out.LastSeenAt = active.LastSeenAt
-	out.AllowAllVehicles = active.AllowAllVehicles
-	out.HandsetBrakeSecs = contract.NormaliseHandsetBrakeSecs(active.HandsetBrakeSecs)
-	out.AllowedVehicles = s.vehiclesFromSession(ctx, layoutID, active.VehicleIDs)
+	for _, active := range sessions {
+		if active.Protocol != contract.RemoteProtocolZ21 {
+			continue
+		}
+		out.Paired = true
+		out.ClientKey = active.ClientKey
+		out.PairedAt = active.PairedAt
+		out.LastSeenAt = active.LastSeenAt
+		out.AllowAllVehicles = active.AllowAllVehicles
+		out.HandsetBrakeSecs = contract.NormaliseHandsetBrakeSecs(active.HandsetBrakeSecs)
+		out.AllowedVehicles = z21VehiclesFromSession(s, ctx, layoutID, active.VehicleIDs)
+		break
+	}
 	return out, nil
 }
 
@@ -158,7 +161,10 @@ func (s *Z21Remote) StartPairing(ctx context.Context, layoutID, csID, userID uin
 	if s.pairing == nil {
 		return contract.Z21PairingReqWire{}, errors.New("z21 pairing store not configured")
 	}
-	vehicleIDs, addrs, err := s.resolvePairingScope(ctx, layoutID, userID, in)
+	vehicleIDs, addrs, err := s.resolvePairingScope(ctx, layoutID, userID, handsetPairingScopeInput{
+		VehicleIDs:       in.VehicleIDs,
+		AllowAllVehicles: in.AllowAllVehicles,
+	})
 	if err != nil {
 		return contract.Z21PairingReqWire{}, err
 	}
@@ -182,7 +188,7 @@ func (s *Z21Remote) StartPairing(ctx context.Context, layoutID, csID, userID uin
 
 // CancelPairing deletes the current user's pending pairing code.
 func (s *Z21Remote) CancelPairing(ctx context.Context, layoutID, csID, userID uint) error {
-	if _, err := s.ensureReady(ctx, layoutID, csID); err != nil {
+	if _, err := s.findCommandStation(ctx, layoutID, csID); err != nil {
 		return err
 	}
 	if s.pairing == nil {
@@ -193,7 +199,7 @@ func (s *Z21Remote) CancelPairing(ctx context.Context, layoutID, csID, userID ui
 
 // UpdateSession changes vehicle scope without re-pairing.
 func (s *Z21Remote) UpdateSession(ctx context.Context, layoutID, csID, userID uint, in Z21RemoteUpdateSessionInput) error {
-	if _, err := s.ensureReady(ctx, layoutID, csID); err != nil {
+	if _, err := s.findCommandStation(ctx, layoutID, csID); err != nil {
 		return err
 	}
 	if s.pairing == nil {
@@ -221,7 +227,7 @@ func (s *Z21Remote) UpdateSession(ctx context.Context, layoutID, csID, userID ui
 	if in.AllowAllVehicles != nil {
 		allowAll = *in.AllowAllVehicles
 	}
-	vehicleIDs, addrs, err := s.resolvePairingScope(ctx, layoutID, userID, Z21RemoteStartPairingInput{
+	vehicleIDs, addrs, err := s.resolvePairingScope(ctx, layoutID, userID, handsetPairingScopeInput{
 		VehicleIDs:       in.VehicleIDs,
 		AllowAllVehicles: allowAll,
 	})
@@ -243,7 +249,7 @@ func (s *Z21Remote) UpdateSession(ctx context.Context, layoutID, csID, userID ui
 
 // Unpair removes the user's active handset session.
 func (s *Z21Remote) Unpair(ctx context.Context, layoutID, csID, userID uint, clientKey string) error {
-	if _, err := s.ensureReady(ctx, layoutID, csID); err != nil {
+	if _, err := s.findCommandStation(ctx, layoutID, csID); err != nil {
 		return err
 	}
 	if s.pairing == nil {
@@ -281,20 +287,8 @@ func (s *Z21Remote) Unpair(ctx context.Context, layoutID, csID, userID uint, cli
 }
 
 func (s *Z21Remote) ensureReady(ctx context.Context, layoutID, csID uint) (domain.CommandStation, error) {
-	if s.stations == nil || s.layoutCS == nil {
-		return domain.CommandStation{}, errors.New("z21 remote not configured")
-	}
-	if _, err := s.layoutCS.Find(ctx, layoutID, csID); err != nil {
-		if errors.Is(err, repo.ErrLayoutCommandStationNotFound) {
-			return domain.CommandStation{}, svcerrors.ErrZ21CommandStationNotOnLayout
-		}
-		return domain.CommandStation{}, err
-	}
-	cs, err := s.stations.FindByID(ctx, csID)
+	cs, err := s.findCommandStation(ctx, layoutID, csID)
 	if err != nil {
-		if errors.Is(err, repo.ErrCommandStationNotFound) {
-			return domain.CommandStation{}, svcerrors.ErrCommandStationNotFound
-		}
 		return domain.CommandStation{}, err
 	}
 	if !cs.Z21ServerEnabled {
@@ -303,82 +297,11 @@ func (s *Z21Remote) ensureReady(ctx context.Context, layoutID, csID uint) (domai
 	return cs, nil
 }
 
-func (s *Z21Remote) resolvePairingScope(ctx context.Context, layoutID, userID uint, in Z21RemoteStartPairingInput) ([]string, []uint16, error) {
-	if in.AllowAllVehicles {
-		if len(in.VehicleIDs) > 0 {
-			return nil, nil, svcerrors.ErrZ21PairingScopeInvalid
-		}
-		return nil, nil, nil
-	}
-	if len(in.VehicleIDs) == 0 {
-		return nil, nil, svcerrors.ErrZ21PairingScopeInvalid
-	}
-	if s.roster == nil || s.snapshot == nil {
-		return nil, nil, errors.New("layout roster not configured")
-	}
-	rows, err := s.roster.ListVehicles(ctx, layoutID)
-	if err != nil {
-		return nil, nil, err
-	}
-	trains, err := s.roster.ListTrains(ctx, layoutID)
-	if err != nil {
-		return nil, nil, err
-	}
-	lessees, err := s.snapshot.LesseesByVehicle(ctx, rows, trains)
-	if err != nil {
-		return nil, nil, err
-	}
-	onRoster := make(map[string]struct{}, len(rows))
-	byID := make(map[string]RosterVehicleEntry, len(rows))
-	for _, e := range rows {
-		id := string(e.Vehicle.ID)
-		onRoster[id] = struct{}{}
-		byID[id] = e
-	}
-	vehicleIDs := make([]string, 0, len(in.VehicleIDs))
-	addrs := make([]uint16, 0, len(in.VehicleIDs))
-	seenAddr := make(map[uint16]struct{}, len(in.VehicleIDs))
-	for _, id := range in.VehicleIDs {
-		if _, ok := onRoster[id]; !ok {
-			return nil, nil, svcerrors.ErrZ21VehicleNotOnRoster
-		}
-		entry := byID[id]
-		driveSec := security.DriveSecurityContext{}
-		if !driveSec.CanDrive(domain.User{ID: userID}, entry.Vehicle.OwnerUserID, domain.VehicleLesseeUserIDs(lessees[entry.Vehicle.ID])).Allowed {
-			return nil, nil, svcerrors.ErrZ21VehicleNotDrivable
-		}
-		if entry.Vehicle.DCCAddress == nil {
-			return nil, nil, svcerrors.ErrZ21VehicleNoDCCAddress
-		}
-		addr := *entry.Vehicle.DCCAddress
-		vehicleIDs = append(vehicleIDs, id)
-		if _, dup := seenAddr[addr]; !dup {
-			seenAddr[addr] = struct{}{}
-			addrs = append(addrs, addr)
-		}
-	}
-	return vehicleIDs, addrs, nil
-}
-
-func (s *Z21Remote) vehiclesFromSession(ctx context.Context, layoutID uint, vehicleIDs []string) []Z21RemoteVehicleRef {
-	if len(vehicleIDs) == 0 || s.roster == nil {
-		return nil
-	}
-	rows, err := s.roster.ListVehicles(ctx, layoutID)
-	if err != nil {
-		return nil
-	}
-	byID := make(map[string]RosterVehicleEntry, len(rows))
-	for _, e := range rows {
-		byID[string(e.Vehicle.ID)] = e
-	}
-	out := make([]Z21RemoteVehicleRef, 0, len(vehicleIDs))
-	for _, id := range vehicleIDs {
-		e, ok := byID[id]
-		if !ok || e.Vehicle.DCCAddress == nil {
-			continue
-		}
-		out = append(out, Z21RemoteVehicleRef{VehicleID: id, Addr: *e.Vehicle.DCCAddress})
+func z21VehiclesFromSession(s *Z21Remote, ctx context.Context, layoutID uint, vehicleIDs []string) []Z21RemoteVehicleRef {
+	refs := s.vehiclesFromSession(ctx, layoutID, vehicleIDs)
+	out := make([]Z21RemoteVehicleRef, 0, len(refs))
+	for _, r := range refs {
+		out = append(out, Z21RemoteVehicleRef{VehicleID: r.VehicleID, Addr: r.Addr})
 	}
 	return out
 }

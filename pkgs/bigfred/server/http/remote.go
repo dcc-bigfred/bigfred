@@ -253,6 +253,7 @@ func toRemoteStatusResponse(in cmd.RemoteStatus) protocol.RemoteStatus {
 			Protocol:         in.Protocol,
 			PairingCV3:       in.PairingCV3,
 			PairingCV4:       in.PairingCV4,
+			PairingCode:      in.PairingCode,
 			DisplayLabel:     in.DisplayLabel,
 			ExpiresAt:        in.ExpiresAt,
 			HandsetBrakeSecs: in.HandsetBrakeSecs,

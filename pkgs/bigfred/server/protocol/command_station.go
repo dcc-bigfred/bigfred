@@ -16,6 +16,7 @@ type CommandStationResponse struct {
 	PollIntervalMs   uint                      `json:"pollIntervalMs"`
 	Z21ServerEnabled bool                      `json:"z21ServerEnabled"`
 	Z21IPStickiness  bool                      `json:"z21IpStickiness"`
+	WithrottleServerEnabled bool               `json:"withrottleServerEnabled"`
 }
 
 func ToCommandStationResponse(cs domain.CommandStation) CommandStationResponse {
@@ -30,6 +31,7 @@ func ToCommandStationResponse(cs domain.CommandStation) CommandStationResponse {
 		PollIntervalMs:   cs.EffectivePollIntervalMs(),
 		Z21ServerEnabled: cs.Z21ServerEnabled,
 		Z21IPStickiness:  cs.Z21IPStickiness,
+		WithrottleServerEnabled: cs.WithrottleServerEnabled,
 	}
 }
 
@@ -43,6 +45,7 @@ type CommandStationCreateRequest struct {
 	PollIntervalMs   uint                      `json:"pollIntervalMs"`
 	Z21ServerEnabled bool                      `json:"z21ServerEnabled"`
 	Z21IPStickiness  bool                      `json:"z21IpStickiness"`
+	WithrottleServerEnabled bool               `json:"withrottleServerEnabled"`
 }
 
 func (r CommandStationCreateRequest) ToCreateInput() cmd.CommandStationCreateInput {
@@ -56,6 +59,7 @@ func (r CommandStationCreateRequest) ToCreateInput() cmd.CommandStationCreateInp
 		PollIntervalMs:   r.PollIntervalMs,
 		Z21ServerEnabled: r.Z21ServerEnabled,
 		Z21IPStickiness:  r.Z21IPStickiness,
+		WithrottleServerEnabled: r.WithrottleServerEnabled,
 	}
 }
 
@@ -69,6 +73,7 @@ type CommandStationUpdateRequest struct {
 	PollIntervalMs   *uint                      `json:"pollIntervalMs"`
 	Z21ServerEnabled *bool                    `json:"z21ServerEnabled"`
 	Z21IPStickiness  *bool                    `json:"z21IpStickiness"`
+	WithrottleServerEnabled *bool               `json:"withrottleServerEnabled"`
 }
 
 func (r CommandStationUpdateRequest) ToUpdateInput() cmd.CommandStationUpdateInput {
@@ -82,5 +87,6 @@ func (r CommandStationUpdateRequest) ToUpdateInput() cmd.CommandStationUpdateInp
 		PollIntervalMs:   r.PollIntervalMs,
 		Z21ServerEnabled: r.Z21ServerEnabled,
 		Z21IPStickiness:  r.Z21IPStickiness,
+		WithrottleServerEnabled: r.WithrottleServerEnabled,
 	}
 }

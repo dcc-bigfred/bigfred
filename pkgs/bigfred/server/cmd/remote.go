@@ -11,12 +11,13 @@ import (
 
 // Remote manages inbound handset pairing across protocols on one command station.
 type Remote struct {
-	z21 *Z21Remote
+	z21        *Z21Remote
+	withrottle *WithrottleRemote
 }
 
 // NewRemote returns a Remote service backed by protocol-specific delegates.
-func NewRemote(z21 *Z21Remote) *Remote {
-	return &Remote{z21: z21}
+func NewRemote(z21 *Z21Remote, withrottle *WithrottleRemote) *Remote {
+	return &Remote{z21: z21, withrottle: withrottle}
 }
 
 // RemoteProtocolInfo describes one available inbound protocol on a CS.
@@ -37,6 +38,7 @@ type RemoteStatus struct {
 	PendingReq         bool
 	PairingCV3         int
 	PairingCV4         int
+	PairingCode        string
 	DisplayLabel       string
 	ExpiresAt          int64
 	HandsetBrakeSecs   uint
@@ -65,14 +67,23 @@ type RemoteUpdateSessionInput struct {
 
 // GetStatus returns pairing state for the current user.
 func (s *Remote) GetStatus(ctx context.Context, layoutID, csID, userID uint) (RemoteStatus, error) {
-	if s == nil || s.z21 == nil {
+	if s == nil || (s.z21 == nil && s.withrottle == nil) {
 		return RemoteStatus{}, errors.New("remote service not configured")
 	}
-	z21, err := s.z21.GetStatus(ctx, layoutID, csID, userID)
-	if err != nil {
-		return RemoteStatus{}, err
+	var z21Status Z21RemoteStatus
+	var wtStatus WithrottleRemoteStatus
+	var z21Err, wtErr error
+	if s.z21 != nil {
+		z21Status, z21Err = s.z21.GetStatus(ctx, layoutID, csID, userID)
 	}
-	return remoteStatusFromZ21(z21), nil
+	if s.withrottle != nil {
+		wtStatus, wtErr = s.withrottle.GetStatus(ctx, layoutID, csID, userID)
+	}
+	if z21Err != nil && wtErr != nil {
+		return RemoteStatus{}, z21Err
+	}
+	out := mergeRemoteStatus(z21Status, wtStatus)
+	return out, nil
 }
 
 // ListClients returns the live handset presence snapshot for one CS.
@@ -91,6 +102,19 @@ func (s *Remote) StartPairing(ctx context.Context, layoutID, csID, userID uint, 
 			return contract.RemotePendingWire{}, errors.New("remote service not configured")
 		}
 		req, err := s.z21.StartPairing(ctx, layoutID, csID, userID, Z21RemoteStartPairingInput{
+			VehicleIDs:       in.VehicleIDs,
+			AllowAllVehicles: in.AllowAllVehicles,
+			HandsetBrakeSecs: in.HandsetBrakeSecs,
+		})
+		if err != nil {
+			return contract.RemotePendingWire{}, err
+		}
+		return req, nil
+	case contract.RemoteProtocolWithrottle:
+		if s == nil || s.withrottle == nil {
+			return contract.RemotePendingWire{}, errors.New("remote service not configured")
+		}
+		req, err := s.withrottle.StartPairing(ctx, layoutID, csID, userID, WithrottleRemoteStartPairingInput{
 			VehicleIDs:       in.VehicleIDs,
 			AllowAllVehicles: in.AllowAllVehicles,
 			HandsetBrakeSecs: in.HandsetBrakeSecs,
@@ -132,34 +156,52 @@ func (s *Remote) Unpair(ctx context.Context, layoutID, csID, userID uint, client
 	return s.z21.Unpair(ctx, layoutID, csID, userID, clientKey)
 }
 
-func remoteStatusFromZ21(in Z21RemoteStatus) RemoteStatus {
+func mergeRemoteStatus(z21 Z21RemoteStatus, wt WithrottleRemoteStatus) RemoteStatus {
 	out := RemoteStatus{
-		Paired:           in.Paired,
-		ClientKey:        in.ClientKey,
-		PairedAt:         in.PairedAt,
-		LastSeenAt:       in.LastSeenAt,
-		AllowAllVehicles: in.AllowAllVehicles,
-		PendingReq:       in.PendingReq,
-		PairingCV3:       in.PairingCV3,
-		PairingCV4:       in.PairingCV4,
-		DisplayLabel:     in.DisplayLabel,
-		ExpiresAt:        in.ExpiresAt,
-		HandsetBrakeSecs: in.HandsetBrakeSecs,
-		AvailableProtocols: []RemoteProtocolInfo{{
-			Protocol: contract.RemoteProtocolZ21,
-			Enabled:  in.Z21ServerEnabled,
-		}},
+		AvailableProtocols: []RemoteProtocolInfo{
+			{Protocol: contract.RemoteProtocolZ21, Enabled: z21.Z21ServerEnabled},
+			{Protocol: contract.RemoteProtocolWithrottle, Enabled: wt.WithrottleServerEnabled},
+		},
 	}
-	if in.Paired {
+	if wt.Paired {
+		out.Protocol = contract.RemoteProtocolWithrottle
+		out.Paired = true
+		out.ClientKey = wt.ClientKey
+		out.PairedAt = wt.PairedAt
+		out.LastSeenAt = wt.LastSeenAt
+		out.AllowAllVehicles = wt.AllowAllVehicles
+		out.HandsetBrakeSecs = wt.HandsetBrakeSecs
+		out.AllowedVehicles = append([]RemoteVehicleRef(nil), wt.AllowedVehicles...)
+	} else if z21.Paired {
 		out.Protocol = contract.RemoteProtocolZ21
-	} else if in.PendingReq {
-		out.Protocol = contract.RemoteProtocolZ21
+		out.Paired = true
+		out.ClientKey = z21.ClientKey
+		out.PairedAt = z21.PairedAt
+		out.LastSeenAt = z21.LastSeenAt
+		out.AllowAllVehicles = z21.AllowAllVehicles
+		out.HandsetBrakeSecs = z21.HandsetBrakeSecs
+		for _, v := range z21.AllowedVehicles {
+			out.AllowedVehicles = append(out.AllowedVehicles, RemoteVehicleRef{
+				VehicleID: v.VehicleID,
+				Addr:      v.Addr,
+			})
+		}
 	}
-	for _, v := range in.AllowedVehicles {
-		out.AllowedVehicles = append(out.AllowedVehicles, RemoteVehicleRef{
-			VehicleID: v.VehicleID,
-			Addr:      v.Addr,
-		})
+	if wt.PendingReq {
+		out.PendingReq = true
+		out.Protocol = contract.RemoteProtocolWithrottle
+		out.PairingCode = wt.PairingCode
+		out.DisplayLabel = wt.DisplayLabel
+		out.ExpiresAt = wt.ExpiresAt
+		out.HandsetBrakeSecs = wt.HandsetBrakeSecs
+	} else if z21.PendingReq {
+		out.PendingReq = true
+		out.Protocol = contract.RemoteProtocolZ21
+		out.PairingCV3 = z21.PairingCV3
+		out.PairingCV4 = z21.PairingCV4
+		out.DisplayLabel = z21.DisplayLabel
+		out.ExpiresAt = z21.ExpiresAt
+		out.HandsetBrakeSecs = z21.HandsetBrakeSecs
 	}
 	return out
 }

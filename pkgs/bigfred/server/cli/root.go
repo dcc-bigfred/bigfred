@@ -22,8 +22,9 @@ import (
 	frontend "github.com/keskad/loco/web"
 
 	dccbuscli "github.com/keskad/loco/pkgs/bigfred/dcc-bus/cli"
-	"github.com/keskad/loco/pkgs/bigfred/z21pairing"
+	"github.com/keskad/loco/pkgs/bigfred/remotepairing"
 	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
+	"github.com/keskad/loco/pkgs/bigfred/server/domain"
 	httpapi "github.com/keskad/loco/pkgs/bigfred/server/http"
 	bfotel "github.com/keskad/loco/pkgs/bigfred/otel"
 	"github.com/keskad/loco/pkgs/bigfred/server/metrics"
@@ -327,6 +328,14 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	sudoSvc := cmd.NewSudo(sudoElevations, layoutSignalmen, layoutSvc, hub, cmd.DefaultSudoConfig)
 	presenceSvc := service.NewPresenceService(hub, authSvc, users, interlockingSessions, interlockings, layoutInterlockings)
 	hub.SetPresenceRefresher(presenceSvc)
+	// Inject the admin-role resolver so the hub can keep each WS
+	// session's cached EffectiveAdmin flag fresh after sudo grants /
+	// revokes, and scope admin-only broadcasts (e.g. handset clients
+	// snapshot) without a per-broadcast Redis lookup.
+	hub.SetRoleResolver(func(ctx context.Context, userID, layoutID uint) bool {
+		eff, err := authSvc.EffectiveForUserID(ctx, userID, layoutID)
+		return err == nil && eff.Has(domain.RoleAdmin)
+	})
 	occupancySvc := service.NewInterlockingOccupancyService(
 		interlockings, layoutInterlockings, interlockingSessions, users,
 		authSvc, hub, presenceSvc,
@@ -338,15 +347,17 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	layoutVehicleSvc.SetRedisRosterPublisher(redisSvc)
 
 	var z21RemoteSvc *cmd.Z21Remote
+	var remoteSvc *cmd.Remote
 	if redisReady {
 		z21RemoteSvc = cmd.NewZ21Remote(
-			z21pairing.NewStore(redisSvc.Client()),
+			remotepairing.NewStore(redisSvc.Client()),
 			commandStations,
 			layoutCommandStations,
 			layoutVehicleSvc.LayoutRoster,
 			layoutVehicleSvc.LayoutRosterSnapshot,
 			users,
 		)
+		remoteSvc = cmd.NewRemote(z21RemoteSvc)
 	}
 
 	go hub.Run(ctx)
@@ -585,7 +596,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		Radio:            radioSvc,
 		Audit:            auditSvc,
 		Leases:           leaseSvc,
-		Z21Remote:        z21RemoteSvc,
+		Remote:           remoteSvc,
 		AllowedOrigins:   f.AllowedOrigins,
 		SecureCookie:     f.SecureCookie,
 		StaticFS:         staticFS,

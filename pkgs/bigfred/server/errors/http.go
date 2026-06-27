@@ -370,3 +370,15 @@ func Z21RemoteHTTPStatus(err error) (status int, code string) {
 		return http.StatusInternalServerError, "internal_error"
 	}
 }
+
+// RemoteHTTPStatus maps remotes API errors to HTTP status codes.
+func RemoteHTTPStatus(err error) (status int, code string) {
+	switch {
+	case stderrors.Is(err, ErrRemoteProtocolUnknown):
+		return http.StatusNotFound, CodeRemoteProtocolUnknown
+	case stderrors.Is(err, ErrRemoteUserAlreadyPaired):
+		return http.StatusConflict, CodeRemoteUserAlreadyPaired
+	default:
+		return Z21RemoteHTTPStatus(err)
+	}
+}

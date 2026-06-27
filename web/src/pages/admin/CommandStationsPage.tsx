@@ -159,11 +159,8 @@ export default function CommandStationsPage() {
         heartbeatSecs: heartbeatSecsInput,
         deadmanSecs: deadmanSecsInput,
         pollIntervalMs: pollIntervalMsInput,
-        z21ServerEnabled: kindInput === "z21" ? z21ServerEnabledInput : false,
-        z21IpStickiness:
-          kindInput === "z21" && z21ServerEnabledInput
-            ? z21IpStickinessInput
-            : false,
+        z21ServerEnabled: z21ServerEnabledInput,
+        z21IpStickiness: z21ServerEnabledInput ? z21IpStickinessInput : false,
         withrottleServerEnabled: withrottleServerEnabledInput,
       };
       if (dialog.kind === "create") {
@@ -265,7 +262,7 @@ export default function CommandStationsPage() {
                         })}
                       </TableCell>
                       <TableCell>
-                        {row.kind === "z21" && row.z21ServerEnabled ? (
+                        {row.z21ServerEnabled ? (
                           <Chip
                             size="small"
                             color="success"
@@ -414,29 +411,25 @@ export default function CommandStationsPage() {
               fullWidth
               required
             />
-            {kindInput === "z21" && (
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={z21ServerEnabledInput}
-                    onChange={(e) => {
-                      const on = e.target.checked;
-                      setZ21ServerEnabledInput(on);
-                      if (!on) {
-                        setZ21IpStickinessInput(false);
-                      }
-                    }}
-                  />
-                }
-                label={t("commandStation:admin.dialogs.fields.z21ServerEnabled")}
-              />
-            )}
-            {kindInput === "z21" && (
-              <Typography variant="body2" color="text.secondary">
-                {t("commandStation:admin.dialogs.fields.z21ServerEnabledHelp")}
-              </Typography>
-            )}
-            {kindInput === "z21" && z21ServerEnabledInput && (
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={z21ServerEnabledInput}
+                  onChange={(e) => {
+                    const on = e.target.checked;
+                    setZ21ServerEnabledInput(on);
+                    if (!on) {
+                      setZ21IpStickinessInput(false);
+                    }
+                  }}
+                />
+              }
+              label={t("commandStation:admin.dialogs.fields.z21ServerEnabled")}
+            />
+            <Typography variant="body2" color="text.secondary">
+              {t("commandStation:admin.dialogs.fields.z21ServerEnabledHelp")}
+            </Typography>
+            {z21ServerEnabledInput && (
               <>
                 <FormControlLabel
                   control={
@@ -459,7 +452,6 @@ export default function CommandStationsPage() {
               </>
             )}
             {dialog?.kind === "edit" &&
-              kindInput === "z21" &&
               dialog.target.z21ServerEnabled &&
               !z21ServerEnabledInput && (
                 <Alert severity="warning">

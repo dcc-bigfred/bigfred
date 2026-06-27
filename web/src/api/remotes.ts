@@ -230,33 +230,3 @@ export function useUnpairRemote(layoutId: number, csId: number) {
     },
   });
 }
-
-// Z21-specific convenience aliases (single-protocol UI).
-export const Z21_HANDSET_BRAKE_SECS_DEFAULT = REMOTE_HANDSET_BRAKE_SECS_DEFAULT;
-export const Z21_HANDSET_BRAKE_SECS_MIN = REMOTE_HANDSET_BRAKE_SECS_MIN;
-export const Z21_HANDSET_BRAKE_SECS_MAX = REMOTE_HANDSET_BRAKE_SECS_MAX;
-
-export type Z21RemoteVehicle = RemoteVehicle;
-export type Z21RemotePendingPairing = RemotePendingPairing;
-export type Z21RemoteStatus = RemoteStatus;
-export type Z21RemotePairingResult = RemotePairingResult;
-export type Z21RemoteClient = RemoteClient;
-export type Z21RemoteClientsSnapshot = RemoteClientsSnapshot;
-
-export const z21RemoteQueryKey = remoteStatusQueryKey;
-export const z21RemoteClientsQueryKey = remoteClientsQueryKey;
-
-export const useZ21RemoteStatus = useRemoteStatus;
-export const useZ21RemoteClients = useRemoteClients;
-export const useStartZ21Pairing = (layoutId: number, csId: number) =>
-  useStartRemotePairing(layoutId, csId, REMOTE_PROTOCOL_Z21);
-export const useUpdateZ21RemoteSession = useUpdateRemoteSession;
-export const useCancelZ21Pairing = useCancelRemotePairing;
-export const useUnpairZ21Remote = useUnpairRemote;
-
-export const useWithrottleRemoteStatus = useRemoteStatus;
-export const useStartWithrottlePairing = (layoutId: number, csId: number) =>
-  useStartRemotePairing(layoutId, csId, REMOTE_PROTOCOL_WITHROTTLE);
-export const useUpdateWithrottleRemoteSession = useUpdateRemoteSession;
-export const useCancelWithrottlePairing = useCancelRemotePairing;
-export const useUnpairWithrottleRemote = useUnpairRemote;

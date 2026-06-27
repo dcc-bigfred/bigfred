@@ -6,6 +6,8 @@ import (
 
 	"github.com/keskad/loco/pkgs/bigfred/contract"
 	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
+	"github.com/keskad/loco/pkgs/bigfred/server/domain"
+	"github.com/keskad/loco/pkgs/bigfred/server/repo"
 	"github.com/keskad/loco/pkgs/bigfred/remotepairing"
 )
 
@@ -13,11 +15,18 @@ import (
 type Remote struct {
 	z21        *Z21Remote
 	withrottle *WithrottleRemote
+	pairing    *remotepairing.Store
+	users      *repo.Users
 }
 
 // NewRemote returns a Remote service backed by protocol-specific delegates.
-func NewRemote(z21 *Z21Remote, withrottle *WithrottleRemote) *Remote {
-	return &Remote{z21: z21, withrottle: withrottle}
+func NewRemote(
+	z21 *Z21Remote,
+	withrottle *WithrottleRemote,
+	pairing *remotepairing.Store,
+	users *repo.Users,
+) *Remote {
+	return &Remote{z21: z21, withrottle: withrottle, pairing: pairing, users: users}
 }
 
 // RemoteProtocolInfo describes one available inbound protocol on a CS.
@@ -88,10 +97,39 @@ func (s *Remote) GetStatus(ctx context.Context, layoutID, csID, userID uint) (Re
 
 // ListClients returns the live handset presence snapshot for one CS.
 func (s *Remote) ListClients(ctx context.Context, layoutID, csID uint) (contract.RemoteClientsSnapshotWire, error) {
-	if s == nil || s.z21 == nil {
+	if s == nil || s.pairing == nil {
 		return contract.RemoteClientsSnapshotWire{}, errors.New("remote service not configured")
 	}
-	return s.z21.ListClients(ctx, layoutID, csID)
+	cs, err := s.findCommandStation(ctx, layoutID, csID)
+	if err != nil {
+		return contract.RemoteClientsSnapshotWire{}, err
+	}
+	if !cs.Z21ServerEnabled && !cs.WithrottleServerEnabled {
+		return contract.RemoteClientsSnapshotWire{}, svcerrors.ErrRemoteServerDisabled
+	}
+	snap, ok, err := s.pairing.GetClientsSnapshot(ctx, layoutID, csID)
+	if err != nil {
+		return contract.RemoteClientsSnapshotWire{}, err
+	}
+	if !ok {
+		snap = contract.RemoteClientsSnapshotWire{
+			LayoutID:         layoutID,
+			CommandStationID: csID,
+			IPStickiness:     cs.Z21IPStickiness,
+			Clients:          nil,
+		}
+	}
+	if s.users != nil {
+		for i := range snap.Clients {
+			if snap.Clients[i].UserID == 0 {
+				continue
+			}
+			if u, err := s.users.FindByID(ctx, snap.Clients[i].UserID); err == nil {
+				snap.Clients[i].UserLogin = u.Login
+			}
+		}
+	}
+	return snap, nil
 }
 
 // StartPairing creates a pending pairing code for the given protocol.
@@ -130,30 +168,102 @@ func (s *Remote) StartPairing(ctx context.Context, layoutID, csID, userID uint, 
 
 // CancelPairing deletes the current user's pending pairing code.
 func (s *Remote) CancelPairing(ctx context.Context, layoutID, csID, userID uint) error {
-	if s == nil || s.z21 == nil {
+	if s == nil || s.pairing == nil {
 		return errors.New("remote service not configured")
 	}
-	return s.z21.CancelPairing(ctx, layoutID, csID, userID)
+	if _, err := s.findCommandStation(ctx, layoutID, csID); err != nil {
+		return err
+	}
+	return s.pairing.CancelPendingPairing(ctx, layoutID, csID, userID)
 }
 
 // UpdateSession changes vehicle scope without re-pairing.
 func (s *Remote) UpdateSession(ctx context.Context, layoutID, csID, userID uint, in RemoteUpdateSessionInput) error {
-	if s == nil || s.z21 == nil {
-		return errors.New("remote service not configured")
+	protocol, err := s.resolveSessionProtocol(ctx, layoutID, csID, userID, in.ClientKey)
+	if err != nil {
+		return err
 	}
-	return s.z21.UpdateSession(ctx, layoutID, csID, userID, Z21RemoteUpdateSessionInput{
-		VehicleIDs:       in.VehicleIDs,
-		AllowAllVehicles: in.AllowAllVehicles,
-		ClientKey:        in.ClientKey,
-	})
+	switch protocol {
+	case contract.RemoteProtocolZ21:
+		if s.z21 == nil {
+			return errors.New("remote service not configured")
+		}
+		return s.z21.UpdateSession(ctx, layoutID, csID, userID, Z21RemoteUpdateSessionInput{
+			VehicleIDs:       in.VehicleIDs,
+			AllowAllVehicles: in.AllowAllVehicles,
+			ClientKey:        in.ClientKey,
+		})
+	case contract.RemoteProtocolWithrottle:
+		if s.withrottle == nil {
+			return errors.New("remote service not configured")
+		}
+		return s.withrottle.UpdateSession(ctx, layoutID, csID, userID, WithrottleRemoteUpdateSessionInput{
+			VehicleIDs:       in.VehicleIDs,
+			AllowAllVehicles: in.AllowAllVehicles,
+			ClientKey:        in.ClientKey,
+		})
+	default:
+		return svcerrors.ErrRemoteProtocolUnknown
+	}
 }
 
 // Unpair removes the user's active handset session.
 func (s *Remote) Unpair(ctx context.Context, layoutID, csID, userID uint, clientKey string) error {
-	if s == nil || s.z21 == nil {
-		return errors.New("remote service not configured")
+	protocol, err := s.resolveSessionProtocol(ctx, layoutID, csID, userID, clientKey)
+	if err != nil {
+		if clientKey == "" && errors.Is(err, svcerrors.ErrRemoteSessionNotFound) {
+			return nil
+		}
+		return err
 	}
-	return s.z21.Unpair(ctx, layoutID, csID, userID, clientKey)
+	switch protocol {
+	case contract.RemoteProtocolZ21:
+		if s.z21 == nil {
+			return errors.New("remote service not configured")
+		}
+		return s.z21.Unpair(ctx, layoutID, csID, userID, clientKey)
+	case contract.RemoteProtocolWithrottle:
+		if s.withrottle == nil {
+			return errors.New("remote service not configured")
+		}
+		return s.withrottle.Unpair(ctx, layoutID, csID, userID, clientKey)
+	default:
+		return svcerrors.ErrRemoteProtocolUnknown
+	}
+}
+
+func (s *Remote) findCommandStation(ctx context.Context, layoutID, csID uint) (domain.CommandStation, error) {
+	if s.z21 != nil {
+		return s.z21.findCommandStation(ctx, layoutID, csID)
+	}
+	if s.withrottle != nil {
+		return s.withrottle.findCommandStation(ctx, layoutID, csID)
+	}
+	return domain.CommandStation{}, errors.New("remote service not configured")
+}
+
+func (s *Remote) resolveSessionProtocol(ctx context.Context, layoutID, csID, userID uint, clientKey string) (string, error) {
+	if s == nil || s.pairing == nil {
+		return "", errors.New("remote service not configured")
+	}
+	if clientKey != "" {
+		active, ok, err := s.pairing.GetActiveByClientKey(ctx, layoutID, csID, clientKey)
+		if err != nil {
+			return "", err
+		}
+		if !ok {
+			return "", svcerrors.ErrRemoteSessionNotFound
+		}
+		return active.Protocol, nil
+	}
+	sessions, err := s.pairing.ListActiveByUser(ctx, layoutID, csID, userID)
+	if err != nil {
+		return "", err
+	}
+	if len(sessions) == 0 {
+		return "", svcerrors.ErrRemoteSessionNotFound
+	}
+	return sessions[0].Protocol, nil
 }
 
 func mergeRemoteStatus(z21 Z21RemoteStatus, wt WithrottleRemoteStatus) RemoteStatus {

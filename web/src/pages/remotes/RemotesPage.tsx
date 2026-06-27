@@ -15,6 +15,8 @@ import {
   Select,
   Stack,
   Switch,
+  Tab,
+  Tabs,
   Table,
   TableBody,
   TableCell,
@@ -24,7 +26,6 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import Z21Icon from "../../components/icons/Z21Icon";
 import { Link as RouterLink } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
@@ -33,17 +34,21 @@ import { useMe } from "../../api/auth";
 import { useLayoutCommandStations } from "../../api/command_stations";
 import { useLayoutVehicles, type RosterVehicle } from "../../api/vehicles";
 import {
-  useCancelZ21Pairing,
-  useStartZ21Pairing,
-  useUnpairZ21Remote,
-  useUpdateZ21RemoteSession,
-  useZ21RemoteClients,
-  useZ21RemoteStatus,
-  Z21_HANDSET_BRAKE_SECS_DEFAULT,
-  Z21_HANDSET_BRAKE_SECS_MAX,
-  Z21_HANDSET_BRAKE_SECS_MIN,
-  type Z21RemoteClient,
+  REMOTE_PROTOCOL_WITHROTTLE,
+  REMOTE_PROTOCOL_Z21,
+  REMOTE_HANDSET_BRAKE_SECS_DEFAULT,
+  REMOTE_HANDSET_BRAKE_SECS_MAX,
+  REMOTE_HANDSET_BRAKE_SECS_MIN,
+  useCancelRemotePairing,
+  useRemoteClients,
+  useRemoteStatus,
+  useStartRemotePairing,
+  useUnpairRemote,
+  useUpdateRemoteSession,
+  type RemoteClient,
 } from "../../api/remotes";
+
+type RemoteProtocol = typeof REMOTE_PROTOCOL_Z21 | typeof REMOTE_PROTOCOL_WITHROTTLE;
 
 function formatTime(ms: number | undefined, locale: string): string {
   if (ms == null || ms <= 0) return "—";
@@ -83,46 +88,101 @@ function usePairingCountdown(expiresAt: number | undefined): number | null {
   return Math.max(0, Math.floor((expiresAt - now) / 1000));
 }
 
-export default function Z21RemotePage() {
-  const { t, i18n } = useTranslation(["z21Remote", "common", "errors"]);
+function protocolLabelKey(protocol: string): "remotes:protocol.z21" | "remotes:protocol.withrottle" {
+  return protocol === REMOTE_PROTOCOL_WITHROTTLE
+    ? "remotes:protocol.withrottle"
+    : "remotes:protocol.z21";
+}
+
+export default function RemotesPage() {
+  const { t, i18n } = useTranslation(["remotes", "common", "errors"]);
   const me = useMe().data;
   const layoutId = me?.layoutId ?? null;
 
   const stations = useLayoutCommandStations(layoutId);
-  const z21Stations = useMemo(
-    () => (stations.data ?? []).filter((s) => s.z21ServerEnabled),
+  const remoteStations = useMemo(
+    () =>
+      (stations.data ?? []).filter(
+        (s) => s.z21ServerEnabled || s.withrottleServerEnabled,
+      ),
     [stations.data],
   );
 
   const [csId, setCsId] = useState<number | "">("");
+  const [protocol, setProtocol] = useState<RemoteProtocol>(REMOTE_PROTOCOL_Z21);
+  const sessionProtocolRef = useRef<string | undefined>(undefined);
+
   useEffect(() => {
-    if (z21Stations.length === 0) {
+    if (remoteStations.length === 0) {
       setCsId("");
       return;
     }
-    if (csId === "" || !z21Stations.some((s) => s.id === csId)) {
-      setCsId(z21Stations[0].id);
+    if (csId === "" || !remoteStations.some((s) => s.id === csId)) {
+      setCsId(remoteStations[0].id);
     }
-  }, [z21Stations, csId]);
+  }, [remoteStations, csId]);
 
   const selectedCsId = typeof csId === "number" ? csId : null;
-  const status = useZ21RemoteStatus(layoutId, selectedCsId);
-  const clients = useZ21RemoteClients(layoutId, selectedCsId);
+
+  useEffect(() => {
+    sessionProtocolRef.current = undefined;
+  }, [selectedCsId]);
+  const status = useRemoteStatus(layoutId, selectedCsId);
+  const clients = useRemoteClients(layoutId, selectedCsId);
   const now = useNowTick((clients.data?.clients.length ?? 0) > 0);
   const roster = useLayoutVehicles(layoutId);
 
-  const startPairing = useStartZ21Pairing(layoutId ?? 0, selectedCsId ?? 0);
-  const cancelPairing = useCancelZ21Pairing(layoutId ?? 0, selectedCsId ?? 0);
-  const updateSession = useUpdateZ21RemoteSession(
+  const enabledProtocols = useMemo(() => {
+    const fromStatus = (status.data?.availableProtocols ?? [])
+      .filter((p) => p.enabled)
+      .map((p) => p.protocol);
+    if (fromStatus.length > 0) return fromStatus;
+    const cs = remoteStations.find((s) => s.id === selectedCsId);
+    if (!cs) return [];
+    const out: string[] = [];
+    if (cs.z21ServerEnabled) out.push(REMOTE_PROTOCOL_Z21);
+    if (cs.withrottleServerEnabled) out.push(REMOTE_PROTOCOL_WITHROTTLE);
+    return out;
+  }, [status.data?.availableProtocols, remoteStations, selectedCsId]);
+
+  useEffect(() => {
+    const hasSession = status.data?.paired || status.data?.pendingPairing;
+    const sessionProtocol = hasSession ? status.data?.protocol : undefined;
+
+    if (sessionProtocol && enabledProtocols.includes(sessionProtocol)) {
+      if (sessionProtocolRef.current !== sessionProtocol) {
+        sessionProtocolRef.current = sessionProtocol;
+        setProtocol(sessionProtocol as RemoteProtocol);
+        return;
+      }
+    } else {
+      sessionProtocolRef.current = undefined;
+    }
+
+    if (enabledProtocols.length > 0 && !enabledProtocols.includes(protocol)) {
+      setProtocol(enabledProtocols[0] as RemoteProtocol);
+    }
+  }, [
+    status.data?.protocol,
+    status.data?.paired,
+    status.data?.pendingPairing,
+    enabledProtocols,
+    protocol,
+  ]);
+
+  const startPairing = useStartRemotePairing(
     layoutId ?? 0,
     selectedCsId ?? 0,
+    protocol,
   );
-  const unpair = useUnpairZ21Remote(layoutId ?? 0, selectedCsId ?? 0);
+  const cancelPairing = useCancelRemotePairing(layoutId ?? 0, selectedCsId ?? 0);
+  const updateSession = useUpdateRemoteSession(layoutId ?? 0, selectedCsId ?? 0);
+  const unpair = useUnpairRemote(layoutId ?? 0, selectedCsId ?? 0);
 
   const [allowAll, setAllowAll] = useState(false);
   const [selectedVehicles, setSelectedVehicles] = useState<RosterVehicle[]>([]);
   const [handsetBrakeSecs, setHandsetBrakeSecs] = useState(
-    Z21_HANDSET_BRAKE_SECS_DEFAULT,
+    REMOTE_HANDSET_BRAKE_SECS_DEFAULT,
   );
   const [actionError, setActionError] = useState<string | null>(null);
   const lastSeededKey = useRef<string | undefined>(undefined);
@@ -137,30 +197,34 @@ export default function Z21RemotePage() {
 
   useEffect(() => {
     if (!status.data) return;
+    const pending = status.data.pendingPairing;
     const seedKey = status.data.paired
-      ? status.data.clientKey ?? "paired"
-      : status.data.pendingPairing
-        ? `pending:${status.data.pendingPairing.pairingCV3}:${status.data.pendingPairing.pairingCV4}`
+      ? `${status.data.protocol}:${status.data.clientKey ?? "paired"}`
+      : pending
+        ? `pending:${pending.protocol}:${pending.pairingCV3 ?? ""}:${pending.pairingCV4 ?? ""}:${pending.pairingCode ?? pending.displayLabel}`
         : "empty";
     if (lastSeededKey.current === seedKey) return;
     lastSeededKey.current = seedKey;
     setAllowAll(status.data.allowAllVehicles);
     if (status.data.allowAllVehicles) {
       setSelectedVehicles([]);
-      return;
+    } else {
+      const ids = new Set(
+        (status.data.allowedVehicles ?? []).map((v) => v.vehicleId),
+      );
+      setSelectedVehicles(drivableVehicles.filter((v) => ids.has(v.id)));
     }
-    const ids = new Set(
-      (status.data.allowedVehicles ?? []).map((v) => v.vehicleId),
-    );
-    setSelectedVehicles(
-      drivableVehicles.filter((v) => ids.has(v.id)),
-    );
     if (status.data.handsetBrakeSecs != null) {
       setHandsetBrakeSecs(status.data.handsetBrakeSecs);
     }
   }, [status.data, drivableVehicles]);
 
-  const pending = status.data?.pendingPairing;
+  const pairedForProtocol =
+    status.data?.paired === true && status.data.protocol === protocol;
+  const pending =
+    status.data?.pendingPairing?.protocol === protocol
+      ? status.data.pendingPairing
+      : undefined;
   const countdown = usePairingCountdown(pending?.expiresAt);
   const brakeSecsHint =
     status.data?.handsetBrakeSecs ??
@@ -193,12 +257,12 @@ export default function Z21RemotePage() {
   };
 
   const handleSaveScope = async () => {
-    if (!selectedCsId || !status.data?.paired) return;
+    if (!selectedCsId || !pairedForProtocol) return;
     setActionError(null);
     try {
       await updateSession.mutateAsync({
         ...scopePayload(),
-        clientKey: status.data.clientKey,
+        clientKey: status.data?.clientKey,
       });
       lastSeededKey.current = undefined;
     } catch (err) {
@@ -231,53 +295,88 @@ export default function Z21RemotePage() {
     cancelPairing.isPending ||
     updateSession.isPending ||
     unpair.isPending;
-  const noZ21OnLayout = !stations.isLoading && z21Stations.length === 0;
+  const noRemoteOnLayout = !stations.isLoading && remoteStations.length === 0;
+  const showProtocolPicker = enabledProtocols.length > 1;
 
   return (
     <Container maxWidth="md" sx={{ py: { xs: 3, sm: 5 } }}>
       <Stack spacing={3}>
-        <Stack direction="row" spacing={2} alignItems="center">
-          <Z21Icon size={40} />
-          <Box>
-            <Typography variant="h4" component="h1" gutterBottom>
-              {t("z21Remote:title")}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {t("z21Remote:subtitle")}
-            </Typography>
-          </Box>
-        </Stack>
+        <Box>
+          <Typography variant="h4" component="h1" gutterBottom>
+            {t("remotes:title")}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            {t("remotes:subtitle")}
+          </Typography>
+        </Box>
 
-        {noZ21OnLayout && (
+        {noRemoteOnLayout && (
           <Alert severity="info">
-            {t("z21Remote:alerts.noServer")}{" "}
+            {t("remotes:alerts.noServer")}{" "}
             <Typography
               component={RouterLink}
               to="/admin/command-stations"
               variant="body2"
               sx={{ color: "inherit", fontWeight: 600 }}
             >
-              {t("z21Remote:alerts.commandStationLink")}
+              {t("remotes:alerts.commandStationLink")}
             </Typography>
           </Alert>
         )}
 
         <Paper variant="outlined" sx={{ p: 3 }}>
           <Stack spacing={2}>
-            <FormControl fullWidth disabled={z21Stations.length === 0}>
-              <InputLabel>{t("z21Remote:fields.commandStation")}</InputLabel>
+            <FormControl fullWidth disabled={remoteStations.length === 0}>
+              <InputLabel>{t("remotes:fields.commandStation")}</InputLabel>
               <Select
                 value={csId}
-                label={t("z21Remote:fields.commandStation")}
+                label={t("remotes:fields.commandStation")}
                 onChange={(e) => setCsId(Number(e.target.value))}
               >
-                {z21Stations.map((s) => (
+                {remoteStations.map((s) => (
                   <MenuItem key={s.id} value={s.id}>
                     {s.name}
                   </MenuItem>
                 ))}
               </Select>
             </FormControl>
+
+            {showProtocolPicker && (
+              <Box>
+                <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+                  {t("remotes:sections.protocol")}
+                </Typography>
+                <Tabs
+                  value={protocol}
+                  onChange={(_e, value: RemoteProtocol) => setProtocol(value)}
+                  variant="fullWidth"
+                >
+                  {enabledProtocols.map((p) => {
+                    const hasPending =
+                      status.data?.pendingPairing?.protocol === p && !status.data?.paired;
+                    return (
+                      <Tab
+                        key={p}
+                        value={p}
+                        label={
+                          <Stack direction="row" alignItems="center" spacing={1}>
+                            <span>{t(protocolLabelKey(p))}</span>
+                            {hasPending && p !== protocol && (
+                              <Chip
+                                size="small"
+                                color="warning"
+                                label={t("remotes:protocol.pendingBadge")}
+                              />
+                            )}
+                          </Stack>
+                        }
+                        disabled={submitting}
+                      />
+                    );
+                  })}
+                </Tabs>
+              </Box>
+            )}
 
             {status.isLoading && selectedCsId != null && (
               <Box sx={{ display: "flex", justifyContent: "center", py: 2 }}>
@@ -293,30 +392,27 @@ export default function Z21RemotePage() {
               <Stack spacing={2}>
                 <Box>
                   <Typography variant="subtitle2" color="text.secondary">
-                    {t("z21Remote:sections.status")}
+                    {t("remotes:sections.status")}
                   </Typography>
-                  {status.data.paired ? (
+                  {pairedForProtocol ? (
                     <Stack spacing={0.5} sx={{ mt: 1 }}>
                       <Chip
                         size="small"
                         color="success"
-                        label={t("z21Remote:status.paired")}
+                        label={t("remotes:status.paired")}
                       />
                       <Typography variant="body2">
-                        {t("z21Remote:status.clientKey", {
+                        {t("remotes:status.clientKey", {
                           key: status.data.clientKey,
                         })}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        {t("z21Remote:status.pairedAt", {
-                          time: formatTime(
-                            status.data.pairedAt,
-                            i18n.language,
-                          ),
+                        {t("remotes:status.pairedAt", {
+                          time: formatTime(status.data.pairedAt, i18n.language),
                         })}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        {t("z21Remote:status.lastSeenAt", {
+                        {t("remotes:status.lastSeenAt", {
                           time: formatTime(
                             status.data.lastSeenAt,
                             i18n.language,
@@ -324,34 +420,42 @@ export default function Z21RemotePage() {
                         })}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
-                        {t("z21Remote:status.keepaliveHint", {
+                        {t("remotes:status.keepaliveHint", {
                           seconds: brakeSecsHint,
                         })}
                       </Typography>
                     </Stack>
                   ) : (
                     <Typography variant="body2" sx={{ mt: 1 }}>
-                      {t("z21Remote:status.notPaired")}
+                      {t("remotes:status.notPaired")}
                     </Typography>
                   )}
                 </Box>
 
-                {pending && !status.data.paired && (
+                {pending && !pairedForProtocol && (
                   <Alert severity="info">
                     <Typography variant="subtitle1" fontWeight={600}>
-                      {t("z21Remote:pending.title")}
+                      {t("remotes:pending.title")}
                     </Typography>
                     <Typography variant="h4" component="p" sx={{ my: 1 }}>
-                      CV3 = {pending.pairingCV3} · CV4 = {pending.pairingCV4}
+                      {protocol === REMOTE_PROTOCOL_Z21 &&
+                      pending.pairingCV3 != null &&
+                      pending.pairingCV4 != null
+                        ? `CV3 = ${pending.pairingCV3} · CV4 = ${pending.pairingCV4}`
+                        : pending.displayLabel}
                     </Typography>
                     <Typography
                       variant="body2"
                       sx={{ whiteSpace: "pre-line", mb: 1 }}
                     >
-                      {t("z21Remote:pending.instructions")}
+                      {t(
+                        protocol === REMOTE_PROTOCOL_Z21
+                          ? "remotes:protocolPending.z21.instructions"
+                          : "remotes:protocolPending.withrottle.instructions",
+                      )}
                     </Typography>
                     <Typography variant="body2">
-                      {t("z21Remote:pending.expires", {
+                      {t("remotes:pending.expires", {
                         seconds: countdown ?? 0,
                       })}
                     </Typography>
@@ -360,7 +464,7 @@ export default function Z21RemotePage() {
 
                 <Box>
                   <Typography variant="subtitle2" color="text.secondary">
-                    {t("z21Remote:sections.scope")}
+                    {t("remotes:sections.scope")}
                   </Typography>
                   <FormControlLabel
                     sx={{ mt: 1 }}
@@ -371,7 +475,7 @@ export default function Z21RemotePage() {
                         disabled={submitting}
                       />
                     }
-                    label={t("z21Remote:fields.allowAllVehicles")}
+                    label={t("remotes:fields.allowAllVehicles")}
                   />
                   {!allowAll && (
                     <Autocomplete
@@ -379,28 +483,26 @@ export default function Z21RemotePage() {
                       options={drivableVehicles}
                       value={selectedVehicles}
                       onChange={(_e, value) => setSelectedVehicles(value)}
-                      getOptionLabel={(v) =>
-                        `${v.name} (${v.dccAddress})`
-                      }
+                      getOptionLabel={(v) => `${v.name} (${v.dccAddress})`}
                       isOptionEqualToValue={(a, b) => a.id === b.id}
                       renderInput={(params) => (
                         <TextField
                           {...params}
-                          label={t("z21Remote:fields.vehicles")}
-                          placeholder={t("z21Remote:fields.vehiclesPlaceholder")}
+                          label={t("remotes:fields.vehicles")}
+                          placeholder={t("remotes:fields.vehiclesPlaceholder")}
                         />
                       )}
                       disabled={submitting}
                       sx={{ mt: 1 }}
                     />
                   )}
-                  {!status.data.paired && !pending && (
+                  {!pairedForProtocol && !pending && (
                     <TextField
                       type="number"
-                      label={t("z21Remote:fields.handsetBrakeSecs")}
-                      helperText={t("z21Remote:fields.handsetBrakeSecsHint", {
-                        min: Z21_HANDSET_BRAKE_SECS_MIN,
-                        max: Z21_HANDSET_BRAKE_SECS_MAX,
+                      label={t("remotes:fields.handsetBrakeSecs")}
+                      helperText={t("remotes:fields.handsetBrakeSecsHint", {
+                        min: REMOTE_HANDSET_BRAKE_SECS_MIN,
+                        max: REMOTE_HANDSET_BRAKE_SECS_MAX,
                       })}
                       value={handsetBrakeSecs}
                       onChange={(e) => {
@@ -408,14 +510,14 @@ export default function Z21RemotePage() {
                         if (!Number.isFinite(n)) return;
                         setHandsetBrakeSecs(
                           Math.min(
-                            Z21_HANDSET_BRAKE_SECS_MAX,
-                            Math.max(Z21_HANDSET_BRAKE_SECS_MIN, n),
+                            REMOTE_HANDSET_BRAKE_SECS_MAX,
+                            Math.max(REMOTE_HANDSET_BRAKE_SECS_MIN, n),
                           ),
                         );
                       }}
                       inputProps={{
-                        min: Z21_HANDSET_BRAKE_SECS_MIN,
-                        max: Z21_HANDSET_BRAKE_SECS_MAX,
+                        min: REMOTE_HANDSET_BRAKE_SECS_MIN,
+                        max: REMOTE_HANDSET_BRAKE_SECS_MAX,
                         step: 1,
                       }}
                       disabled={submitting}
@@ -426,32 +528,33 @@ export default function Z21RemotePage() {
                 </Box>
 
                 <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
-                  {!status.data.paired && !pending && (
+                  {!pairedForProtocol && !pending && (
                     <Button
                       variant="contained"
                       onClick={handleStartPairing}
                       disabled={
                         submitting ||
                         selectedCsId == null ||
+                        !enabledProtocols.includes(protocol) ||
                         (!allowAll && selectedVehicles.length === 0) ||
-                        handsetBrakeSecs < Z21_HANDSET_BRAKE_SECS_MIN ||
-                        handsetBrakeSecs > Z21_HANDSET_BRAKE_SECS_MAX
+                        handsetBrakeSecs < REMOTE_HANDSET_BRAKE_SECS_MIN ||
+                        handsetBrakeSecs > REMOTE_HANDSET_BRAKE_SECS_MAX
                       }
                     >
-                      {t("z21Remote:actions.generatePairing")}
+                      {t("remotes:actions.generatePairing")}
                     </Button>
                   )}
-                  {pending && !status.data.paired && (
+                  {pending && !pairedForProtocol && (
                     <Button
                       variant="outlined"
                       color="error"
                       onClick={handleCancelPairing}
                       disabled={submitting}
                     >
-                      {t("z21Remote:actions.cancelPairing")}
+                      {t("remotes:actions.cancelPairing")}
                     </Button>
                   )}
-                  {status.data.paired && (
+                  {pairedForProtocol && (
                     <>
                       <Button
                         variant="outlined"
@@ -469,7 +572,7 @@ export default function Z21RemotePage() {
                         onClick={() => handleUnpair()}
                         disabled={submitting}
                       >
-                        {t("z21Remote:actions.removePairedHandset")}
+                        {t("remotes:actions.removePairedHandset")}
                       </Button>
                     </>
                   )}
@@ -484,7 +587,7 @@ export default function Z21RemotePage() {
         {selectedCsId != null && (
           <Paper variant="outlined" sx={{ p: 3 }}>
             <Stack spacing={2}>
-              <Typography variant="h6">{t("z21Remote:sections.clients")}</Typography>
+              <Typography variant="h6">{t("remotes:sections.clients")}</Typography>
               {clients.isLoading && (
                 <Box sx={{ display: "flex", justifyContent: "center", py: 2 }}>
                   <CircularProgress size={28} />
@@ -495,7 +598,7 @@ export default function Z21RemotePage() {
               )}
               {clients.data && clients.data.clients.length === 0 && (
                 <Typography variant="body2" color="text.secondary">
-                  {t("z21Remote:clients.empty")}
+                  {t("remotes:clients.empty")}
                 </Typography>
               )}
               {clients.data && clients.data.clients.length > 0 && (
@@ -503,27 +606,45 @@ export default function Z21RemotePage() {
                   <Table size="small">
                     <TableHead>
                       <TableRow>
-                        <TableCell>{t("z21Remote:clients.columns.endpoint")}</TableCell>
-                        <TableCell>{t("z21Remote:clients.columns.paired")}</TableCell>
-                        <TableCell>{t("z21Remote:clients.columns.user")}</TableCell>
-                        <TableCell>{t("z21Remote:clients.columns.lastSeen")}</TableCell>
-                        <TableCell>{t("z21Remote:clients.columns.connected")}</TableCell>
-                        <TableCell>{t("z21Remote:clients.columns.status")}</TableCell>
+                        <TableCell>
+                          {t("remotes:clients.columns.protocol")}
+                        </TableCell>
+                        <TableCell>
+                          {t("remotes:clients.columns.endpoint")}
+                        </TableCell>
+                        <TableCell>
+                          {t("remotes:clients.columns.paired")}
+                        </TableCell>
+                        <TableCell>
+                          {t("remotes:clients.columns.user")}
+                        </TableCell>
+                        <TableCell>
+                          {t("remotes:clients.columns.lastSeen")}
+                        </TableCell>
+                        <TableCell>
+                          {t("remotes:clients.columns.connected")}
+                        </TableCell>
+                        <TableCell>
+                          {t("remotes:clients.columns.status")}
+                        </TableCell>
                         <TableCell align="right">
-                          {t("z21Remote:clients.columns.actions")}
+                          {t("remotes:clients.columns.actions")}
                         </TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {clients.data.clients.map((row: Z21RemoteClient) => (
+                      {clients.data.clients.map((row: RemoteClient) => (
                         <TableRow key={row.clientKey}>
+                          <TableCell>
+                            {t(protocolLabelKey(row.protocol ?? REMOTE_PROTOCOL_Z21))}
+                          </TableCell>
                           <TableCell>
                             {row.ip}:{row.port}
                           </TableCell>
                           <TableCell>
                             {row.paired
-                              ? t("z21Remote:clients.pairedYes")
-                              : t("z21Remote:clients.pairedNo")}
+                              ? t("remotes:clients.pairedYes")
+                              : t("remotes:clients.pairedNo")}
                           </TableCell>
                           <TableCell>
                             {row.userLogin ?? (row.userId ? `#${row.userId}` : "—")}
@@ -539,16 +660,25 @@ export default function Z21RemotePage() {
                               <Chip
                                 size="small"
                                 color="warning"
-                                label={t("z21Remote:clients.idleBraked")}
+                                label={t("remotes:clients.idleBraked")}
                               />
                             )}
-                            {row.paired && clients.data.ipStickiness && row.sessionExpiresAt != null && (
-                              <Typography variant="caption" display="block" color="text.secondary">
-                                {t("z21Remote:clients.sessionExpires", {
-                                  time: formatTime(row.sessionExpiresAt, i18n.language),
-                                })}
-                              </Typography>
-                            )}
+                            {row.paired &&
+                              clients.data.ipStickiness &&
+                              row.sessionExpiresAt != null && (
+                                <Typography
+                                  variant="caption"
+                                  display="block"
+                                  color="text.secondary"
+                                >
+                                  {t("remotes:clients.sessionExpires", {
+                                    time: formatTime(
+                                      row.sessionExpiresAt,
+                                      i18n.language,
+                                    ),
+                                  })}
+                                </Typography>
+                              )}
                           </TableCell>
                           <TableCell align="right">
                             {row.paired && row.userId === me?.id && (
@@ -558,7 +688,7 @@ export default function Z21RemotePage() {
                                 onClick={() => handleUnpair(row.clientKey)}
                                 disabled={submitting}
                               >
-                                {t("z21Remote:actions.removePairedHandset")}
+                                {t("remotes:actions.removePairedHandset")}
                               </Button>
                             )}
                           </TableCell>

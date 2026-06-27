@@ -3,6 +3,7 @@ package withrottle
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	"github.com/keskad/loco/pkgs/bigfred/contract"
 	"github.com/keskad/loco/pkgs/bigfred/remotes"
@@ -26,6 +27,7 @@ func (s *Server) OnLocoStateChanged(ctx context.Context, snap contract.LocoState
 			locoKey = locoKeyForAddr(snap.Address)
 			throttleID = '0'
 		}
+		s.registry.setLastSpeed(key, throttleID, snap.Address, snap.Speed)
 		lines := buildLocoNotify(throttleID, locoKey, snap, s.cfg.SpeedSteps)
 		for _, line := range lines {
 			_ = s.writeLine(key, line)
@@ -44,15 +46,22 @@ func buildLocoNotify(throttleID byte, locoKey string, snap contract.LocoStateWir
 		fmt.Sprintf("M%sA%s%sV%d", id, locoKey, propSep, speed),
 		fmt.Sprintf("M%sA%s%sR%d", id, locoKey, propSep, dir),
 	}
-	for fn, on := range snap.Functions {
-		if fn > 28 {
-			continue
+	if len(snap.Functions) > 0 {
+		fns := make([]int, 0, len(snap.Functions))
+		for fn := range snap.Functions {
+			if fn > maxWiThrottleFunction {
+				continue
+			}
+			fns = append(fns, fn)
 		}
-		state := 0
-		if on {
-			state = 1
+		sort.Ints(fns)
+		for _, fn := range fns {
+			state := 0
+			if snap.Functions[fn] {
+				state = 1
+			}
+			lines = append(lines, fmt.Sprintf("M%sA%s%sF%d%d", id, locoKey, propSep, state, fn))
 		}
-		lines = append(lines, fmt.Sprintf("M%sA%s%sF%d%d", id, locoKey, propSep, state, fn))
 	}
 	return lines
 }

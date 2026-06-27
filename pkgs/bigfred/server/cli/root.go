@@ -366,7 +366,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 			layoutVehicleSvc.LayoutRoster,
 			layoutVehicleSvc.LayoutRosterSnapshot,
 		)
-		remoteSvc = cmd.NewRemote(z21RemoteSvc, withrottleRemoteSvc)
+		remoteSvc = cmd.NewRemote(z21RemoteSvc, withrottleRemoteSvc, pairStore, users)
 	}
 
 	go hub.Run(ctx)

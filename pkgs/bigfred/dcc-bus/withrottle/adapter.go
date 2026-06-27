@@ -137,21 +137,33 @@ func (a *Adapter) HandleAcquire(ctx context.Context, client *Client, cmd MComman
 }
 
 func (a *Adapter) HandleRelease(ctx context.Context, client *Client, cmd MCommand) {
+	var released []uint16
 	a.server.registry.withThrottle(client.Key, cmd.ThrottleID, func(tw *throttleWire) {
 		if cmd.LocoKey == "*" {
+			released = make([]uint16, 0, len(tw.locos))
 			for addr := range tw.locos {
+				released = append(released, addr)
 				delete(tw.locos, addr)
-				_ = addr
+				if tw.lastSpeed != nil {
+					delete(tw.lastSpeed, addr)
+				}
 			}
 			return
 		}
 		if addr, _, ok := parseLocoKey(cmd.LocoKey); ok {
 			delete(tw.locos, addr)
+			if tw.lastSpeed != nil {
+				delete(tw.lastSpeed, addr)
+			}
+			released = []uint16{addr}
 		}
 	})
+	for _, addr := range released {
+		a.server.registry.UnsubscribeLoco(client.Key, addr)
+	}
 	_ = ctx
 	if cmd.LocoKey == "*" {
-		a.server.writeLine(client.Key, "M"+string(cmd.ThrottleID)+"-*"+propSep)
+		a.server.writeLine(client.Key, "M"+string(cmd.ThrottleID)+"-*"+propSep+"r")
 		return
 	}
 	a.server.writeLine(client.Key, buildReleaseLine(cmd.ThrottleID, cmd.LocoKey))
@@ -216,19 +228,39 @@ func (a *Adapter) handleSpeed(ctx context.Context, client *Client, throttleID by
 			Speed:   speed,
 			Forward: forward,
 		})
-		if !result.OK {
+		if result.OK {
+			a.server.registry.setLastSpeed(client.Key, throttleID, addr, speed)
+		} else {
 			a.logDriveFailure(client, addr, "set_speed", result.Code)
 		}
 	}
 }
 
 func (a *Adapter) handleDirection(ctx context.Context, client *Client, throttleID byte, addrs []uint16, prop string) {
-	_ = ctx
 	forward := len(prop) >= 2 && prop[1] != '0'
 	a.server.registry.withThrottle(client.Key, throttleID, func(tw *throttleWire) {
 		tw.forward = forward
 	})
-	_ = addrs
+	resp := NewResponder(a.server, client, throttleID)
+	actor := a.throttleActor(client)
+	for _, addr := range addrs {
+		if !a.authorize(client, addr) {
+			a.logDriveRejected(client, addr, "set_direction")
+			continue
+		}
+		speed, ok := a.server.registry.lastSpeed(client.Key, throttleID, addr)
+		if !ok {
+			speed = 0
+		}
+		result := a.drive.SetSpeed(ctx, actor, resp, contract.LocoSetSpeedWire{
+			Address: addr,
+			Speed:   speed,
+			Forward: forward,
+		})
+		if !result.OK {
+			a.logDriveFailure(client, addr, "set_direction", result.Code)
+		}
+	}
 }
 
 func (a *Adapter) handleFunction(ctx context.Context, client *Client, throttleID byte, addrs []uint16, prop string) {
@@ -281,22 +313,34 @@ func (a *Adapter) handleIdle(ctx context.Context, client *Client, throttleID byt
 			Speed:   0,
 			Forward: forward,
 		})
+		a.server.registry.setLastSpeed(client.Key, throttleID, addr, 0)
 	}
 }
 
 func (a *Adapter) handleQuery(ctx context.Context, client *Client, throttleID byte, locoKey, prop string) {
 	_ = ctx
-	// Re-emit cached direction; speed comes from drive subscribe state via fanout.
-	if prop == "qR" {
-		forward := true
-		a.server.registry.withThrottle(client.Key, throttleID, func(tw *throttleWire) {
-			forward = tw.forward
-		})
+	forward := true
+	a.server.registry.withThrottle(client.Key, throttleID, func(tw *throttleWire) {
+		forward = tw.forward
+	})
+	switch prop {
+	case "qR":
 		dir := 0
 		if forward {
 			dir = 1
 		}
 		_ = a.server.writeLine(client.Key, fmt.Sprintf("M%cA%s%sR%d", throttleID, locoKey, propSep, dir))
+	case "qV":
+		addr, _, ok := parseLocoKey(locoKey)
+		if !ok {
+			return
+		}
+		speed, ok := a.server.registry.lastSpeed(client.Key, throttleID, addr)
+		wireSpeed := 0
+		if ok {
+			wireSpeed = wireSpeedFromDCC(speed, a.server.cfg.SpeedSteps)
+		}
+		_ = a.server.writeLine(client.Key, fmt.Sprintf("M%cA%s%sV%d", throttleID, locoKey, propSep, wireSpeed))
 	}
 }
 

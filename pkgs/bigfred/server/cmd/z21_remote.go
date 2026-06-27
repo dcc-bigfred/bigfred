@@ -186,17 +186,6 @@ func (s *Z21Remote) StartPairing(ctx context.Context, layoutID, csID, userID uin
 	return req, MapUserAlreadyPaired(err)
 }
 
-// CancelPairing deletes the current user's pending pairing code.
-func (s *Z21Remote) CancelPairing(ctx context.Context, layoutID, csID, userID uint) error {
-	if _, err := s.findCommandStation(ctx, layoutID, csID); err != nil {
-		return err
-	}
-	if s.pairing == nil {
-		return errors.New("z21 pairing store not configured")
-	}
-	return s.pairing.CancelPendingPairing(ctx, layoutID, csID, userID)
-}
-
 // UpdateSession changes vehicle scope without re-pairing.
 func (s *Z21Remote) UpdateSession(ctx context.Context, layoutID, csID, userID uint, in Z21RemoteUpdateSessionInput) error {
 	if _, err := s.findCommandStation(ctx, layoutID, csID); err != nil {

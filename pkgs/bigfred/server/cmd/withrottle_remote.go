@@ -59,6 +59,13 @@ type WithrottleRemoteStartPairingInput struct {
 	HandsetBrakeSecs uint
 }
 
+// WithrottleRemoteUpdateSessionInput updates scope on an active session.
+type WithrottleRemoteUpdateSessionInput struct {
+	VehicleIDs       []string
+	AllowAllVehicles *bool
+	ClientKey        string
+}
+
 // GetStatus returns pairing state for the current user.
 func (s *WithrottleRemote) GetStatus(ctx context.Context, layoutID, csID, userID uint) (WithrottleRemoteStatus, error) {
 	cs, err := s.findCommandStation(ctx, layoutID, csID)
@@ -129,6 +136,102 @@ func (s *WithrottleRemote) StartPairing(ctx context.Context, layoutID, csID, use
 		HandsetBrakeSecs: brakeSecs,
 	})
 	return req, MapUserAlreadyPaired(err)
+}
+
+// UpdateSession changes vehicle scope without re-pairing.
+func (s *WithrottleRemote) UpdateSession(ctx context.Context, layoutID, csID, userID uint, in WithrottleRemoteUpdateSessionInput) error {
+	if _, err := s.findCommandStation(ctx, layoutID, csID); err != nil {
+		return err
+	}
+	if s.pairing == nil {
+		return errors.New("withrottle pairing store not configured")
+	}
+	clientKey := in.ClientKey
+	if clientKey == "" {
+		sessions, err := s.pairing.ListActiveByUser(ctx, layoutID, csID, userID)
+		if err != nil {
+			return err
+		}
+		for _, active := range sessions {
+			if active.Protocol == contract.RemoteProtocolWithrottle {
+				clientKey = active.ClientKey
+				break
+			}
+		}
+		if clientKey == "" {
+			return svcerrors.ErrWithrottleSessionNotFound
+		}
+	}
+	active, ok, err := s.pairing.GetActiveByClientKey(ctx, layoutID, csID, clientKey)
+	if err != nil {
+		return err
+	}
+	if !ok || active.UserID != userID || active.Protocol != contract.RemoteProtocolWithrottle {
+		return svcerrors.ErrWithrottleSessionNotFound
+	}
+	allowAll := active.AllowAllVehicles
+	if in.AllowAllVehicles != nil {
+		allowAll = *in.AllowAllVehicles
+	}
+	vehicleIDs, addrs, err := s.resolvePairingScope(ctx, layoutID, userID, handsetPairingScopeInput{
+		VehicleIDs:       in.VehicleIDs,
+		AllowAllVehicles: allowAll,
+	})
+	if err != nil {
+		return err
+	}
+	_, ok, err = s.pairing.UpdateSessionScope(ctx, layoutID, csID, clientKey, vehicleIDs, addrs, allowAll)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return svcerrors.ErrWithrottleSessionNotFound
+	}
+	_ = s.pairing.PublishSessionSync(ctx, layoutID, csID, clientKey, contract.RemoteSessionSyncScope)
+	return nil
+}
+
+// Unpair removes the user's active WiThrottle handset session.
+func (s *WithrottleRemote) Unpair(ctx context.Context, layoutID, csID, userID uint, clientKey string) error {
+	if _, err := s.findCommandStation(ctx, layoutID, csID); err != nil {
+		return err
+	}
+	if s.pairing == nil {
+		return errors.New("withrottle pairing store not configured")
+	}
+	if clientKey != "" {
+		active, ok, err := s.pairing.GetActiveByClientKey(ctx, layoutID, csID, clientKey)
+		if err != nil {
+			return err
+		}
+		if !ok || active.UserID != userID || active.Protocol != contract.RemoteProtocolWithrottle {
+			return svcerrors.ErrWithrottleSessionNotFound
+		}
+		if err := s.pairing.Unpair(ctx, layoutID, csID, clientKey); err != nil {
+			return err
+		}
+		_ = s.pairing.PublishSessionSync(ctx, layoutID, csID, clientKey, contract.RemoteSessionSyncUnpair)
+		return nil
+	}
+	sessions, err := s.pairing.ListActiveByUser(ctx, layoutID, csID, userID)
+	if err != nil {
+		return err
+	}
+	var resolved string
+	for _, active := range sessions {
+		if active.Protocol == contract.RemoteProtocolWithrottle {
+			resolved = active.ClientKey
+			break
+		}
+	}
+	if resolved == "" {
+		return nil
+	}
+	if err := s.pairing.Unpair(ctx, layoutID, csID, resolved); err != nil {
+		return err
+	}
+	_ = s.pairing.PublishSessionSync(ctx, layoutID, csID, resolved, contract.RemoteSessionSyncUnpair)
+	return nil
 }
 
 func (s *WithrottleRemote) ensureReady(ctx context.Context, layoutID, csID uint) (domain.CommandStation, error) {

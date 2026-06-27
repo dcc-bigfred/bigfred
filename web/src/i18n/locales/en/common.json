@@ -53,8 +53,7 @@
       "templates": "Vehicle templates",
       "throttle": "Throttle",
       "rentals": "Rentals",
-      "z21Remote": "Z21 handset",
-      "withrottleRemote": "WiThrottle"
+      "remotes": "Handsets"
     },
     "fleet": {
       "menuLabel": "Fleet",

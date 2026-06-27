@@ -112,7 +112,7 @@ func parseFunctionAction(prop string) (fn int, on bool, force bool, ok bool) {
 	}
 	on = prop[1] == '1'
 	n, err := strconv.Atoi(prop[2:])
-	if err != nil || n < 0 || n > 32 {
+	if err != nil || n < 0 || n > maxWiThrottleFunction {
 		return 0, false, false, false
 	}
 	return n, on, force, true

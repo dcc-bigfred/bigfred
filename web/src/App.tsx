@@ -31,8 +31,7 @@ import CommandStationsAdminPage from "./pages/admin/CommandStationsPage";
 import DiagnosticsAdminPage from "./pages/admin/DiagnosticsPage";
 import AdminRentalsPage from "./pages/admin/AdminRentalsPage";
 import UsersAdminPage from "./pages/admin/UsersPage";
-import Z21RemotePage from "./pages/remotes/Z21RemotePage";
-import WithrottleRemotePage from "./pages/remotes/WithrottleRemotePage";
+import RemotesPage from "./pages/remotes/RemotesPage";
 
 // App is the route-tree root. Layout reads top-down:
 //
@@ -70,8 +69,9 @@ const router = createBrowserRouter(
           <Route path="/my/trains" element={<MyTrainsPage />} />
           <Route path="/rentals" element={<RentalsPage />} />
           <Route path="/throttle" element={<ThrottlePage />} />
-          <Route path="/remotes/z21" element={<Z21RemotePage />} />
-          <Route path="/remotes/withrottle" element={<WithrottleRemotePage />} />
+          <Route path="/remotes" element={<RemotesPage />} />
+          <Route path="/remotes/z21" element={<Navigate to="/remotes" replace />} />
+          <Route path="/remotes/withrottle" element={<Navigate to="/remotes" replace />} />
           <Route path="/interlockings/:id" element={<InterlockingPage />} />
           <Route path="/audit-log" element={<AuditLogPage />} />
           <Route path="/account/profile" element={<ProfilePage />} />

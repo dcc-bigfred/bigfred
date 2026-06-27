@@ -22,7 +22,7 @@ func buildAcquireReply(throttleID byte, addr uint16) []string {
 	lines := []string{
 		fmt.Sprintf("M%s+%s%s", id, key, propSep),
 	}
-	for fn := 0; fn <= 28; fn++ {
+	for fn := 0; fn <= maxWiThrottleFunction; fn++ {
 		lines = append(lines, fmt.Sprintf("M%sA%s%sF0%d", id, key, propSep, fn))
 	}
 	lines = append(lines,
@@ -77,7 +77,7 @@ func dccSpeedFromWire(wireSpeed int, speedSteps uint) uint8 {
 		speedSteps = 128
 	}
 	max := int(speedSteps) - 1
-	step := (wireSpeed - 1) * max / 125
+	step := ((wireSpeed-1)*max + 62) / 125
 	if step > max {
 		step = max
 	}
@@ -99,7 +99,7 @@ func wireSpeedFromDCC(speed uint8, speedSteps uint) int {
 	if max <= 0 {
 		return 2
 	}
-	wire := 1 + int(speed)*125/max
+	wire := 1 + (int(speed)*125+max/2)/max
 	if wire < 2 {
 		wire = 2
 	}

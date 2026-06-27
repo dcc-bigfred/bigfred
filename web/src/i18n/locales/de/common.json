@@ -53,8 +53,7 @@
       "templates": "Fahrzeugvorlagen",
       "throttle": "Regler",
       "rentals": "Ausleihen",
-      "z21Remote": "Z21-Handgerät",
-      "withrottleRemote": "WiThrottle"
+      "remotes": "Handgeräte"
     },
     "fleet": {
       "menuLabel": "Fuhrpark",

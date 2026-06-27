@@ -163,8 +163,44 @@ func xbusPacketName(pkt []byte) string {
 	}
 }
 
+// isDiscoveryHandshakePacket reports LAN/X-BUS probes answered without pairing.
+func isDiscoveryHandshakePacket(pkt []byte) bool {
+	_, header, ok := packetHeader(pkt)
+	if !ok {
+		return false
+	}
+	switch header {
+	case HeaderGetSerialNumber,
+		HeaderGetHWInfo,
+		HeaderSystemStateGetData,
+		HeaderGetBroadcastFlags,
+		HeaderGetCode,
+		HeaderLanKeepalive,
+		HeaderLanSessionProbe:
+		return true
+	case HeaderXBus:
+		if len(pkt) < 6 {
+			return false
+		}
+		switch pkt[4] {
+		case 0x21:
+			return pkt[5] == 0x21 || pkt[5] == 0x24
+		case 0xF1:
+			return pkt[5] == 0x0A
+		}
+	}
+	return false
+}
+
 func (s *Server) logRx(clientKey string, pkt []byte, paired bool, action string) {
-	if s.log == nil || !s.log.IsLevelEnabled(logrus.InfoLevel) {
+	if s.log == nil {
+		return
+	}
+	level := logrus.InfoLevel
+	if isDiscoveryHandshakePacket(pkt) {
+		level = logrus.DebugLevel
+	}
+	if !s.log.IsLevelEnabled(level) {
 		return
 	}
 	s.log.WithFields(logrus.Fields{
@@ -175,11 +211,18 @@ func (s *Server) logRx(clientKey string, pkt []byte, paired bool, action string)
 		"action":  action,
 		"len":     len(pkt),
 		"payload": hex.EncodeToString(pkt),
-	}).Info("z21 udp")
+	}).Log(level, "z21 udp")
 }
 
 func (s *Server) logTx(clientKey string, pkt []byte) {
-	if s.log == nil || !s.log.IsLevelEnabled(logrus.InfoLevel) {
+	if s.log == nil {
+		return
+	}
+	level := logrus.InfoLevel
+	if isDiscoveryHandshakePacket(pkt) {
+		level = logrus.DebugLevel
+	}
+	if !s.log.IsLevelEnabled(level) {
 		return
 	}
 	s.log.WithFields(logrus.Fields{
@@ -188,7 +231,7 @@ func (s *Server) logTx(clientKey string, pkt []byte) {
 		"packet":  PacketName(pkt),
 		"len":     len(pkt),
 		"payload": hex.EncodeToString(pkt),
-	}).Info("z21 udp")
+	}).Log(level, "z21 udp")
 }
 
 func (s *Server) logUnhandled(clientKey string, pkt []byte, paired bool, reason string) {

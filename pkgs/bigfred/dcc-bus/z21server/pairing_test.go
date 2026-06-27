@@ -9,7 +9,7 @@ import (
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
 
-	"github.com/keskad/loco/pkgs/bigfred/z21pairing"
+	"github.com/keskad/loco/pkgs/bigfred/remotepairing"
 )
 
 func TestPairingHandlerCompletesOnCV3CV4(t *testing.T) {
@@ -19,9 +19,9 @@ func TestPairingHandlerCompletesOnCV3CV4(t *testing.T) {
 	}
 	defer mr.Close()
 
-	store := z21pairing.NewStore(redis.NewClient(&redis.Options{Addr: mr.Addr()}))
+	store := remotepairing.NewStore(redis.NewClient(&redis.Options{Addr: mr.Addr()}))
 	ctx := context.Background()
-	req, err := store.CreatePairingRequest(ctx, z21pairing.CreatePairingRequestInput{
+	req, err := store.CreateZ21PairingRequest(ctx, remotepairing.CreateZ21PairingInput{
 		LayoutID:         1,
 		CommandStationID: 2,
 		UserID:           7,
@@ -31,10 +31,10 @@ func TestPairingHandlerCompletesOnCV3CV4(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	reg := NewRegistry()
+	reg := NewRegistry(nil, nil)
 	addr := &net.UDPAddr{IP: net.IPv4(10, 0, 0, 2), Port: 40001}
 	client := reg.Touch(addr, time.Now().UTC(), false)
-	handler := NewPairingHandler(store, 1, 2, reg, nil)
+	handler := NewPairingHandler(store, 1, 2, reg, nil, nil)
 
 	if _, active := handler.Handle(ctx, client, 2, req.PairingCV3); active != nil {
 		t.Fatal("expected incomplete after CV3 only")

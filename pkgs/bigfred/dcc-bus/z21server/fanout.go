@@ -20,16 +20,16 @@ func (s *Server) OnLocoStateChanged(ctx context.Context, snap contract.LocoState
 		return
 	}
 	pkt := buildLocoInfoReply(snap.Address, snap, s.cfg.SpeedSteps)
-	for _, client := range s.registry.Snapshot() {
-		if client.Paired == nil {
+	// Iterate only subscribers of this address instead of deep-copying
+	// every registered client on each loco state change.
+	for _, key := range s.registry.Subscribers(snap.Address) {
+		client, ok := s.registry.Get(key)
+		if !ok || client.Session == nil {
 			continue
 		}
-		if client.BroadcastFlags&broadcastFlagDriving == 0 {
+		if s.registry.BroadcastFlags(key)&broadcastFlagDriving == 0 {
 			continue
 		}
-		if !client.SubscribedTo(snap.Address) {
-			continue
-		}
-		_ = s.writeUDP(&client.Addr, client.Key, pkt)
+		_ = s.writeUDP(&client.Addr, key, pkt)
 	}
 }

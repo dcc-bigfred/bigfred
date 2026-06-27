@@ -48,7 +48,7 @@ func TestBuildBCStoppedReply(t *testing.T) {
 
 func TestRegistryCurrentLoco(t *testing.T) {
 	t.Parallel()
-	reg := NewRegistry()
+	reg := NewRegistry(nil, nil)
 	now := time.Now().UTC()
 	addr := &net.UDPAddr{IP: net.IPv4(192, 168, 0, 1), Port: 21105}
 	c := reg.Touch(addr, now, false)

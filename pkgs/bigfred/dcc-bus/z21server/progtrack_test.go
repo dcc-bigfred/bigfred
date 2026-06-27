@@ -9,7 +9,7 @@ import (
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
 
-	"github.com/keskad/loco/pkgs/bigfred/z21pairing"
+	"github.com/keskad/loco/pkgs/bigfred/remotepairing"
 )
 
 func buildProgTrackCVWrite(cvWire int, value byte) []byte {
@@ -39,9 +39,9 @@ func TestProgTrackCVWritePairsUnpairedClient(t *testing.T) {
 	}
 	defer mr.Close()
 
-	store := z21pairing.NewStore(redis.NewClient(&redis.Options{Addr: mr.Addr()}))
+	store := remotepairing.NewStore(redis.NewClient(&redis.Options{Addr: mr.Addr()}))
 	ctx := context.Background()
-	req, err := store.CreatePairingRequest(ctx, z21pairing.CreatePairingRequestInput{
+	req, err := store.CreateZ21PairingRequest(ctx, remotepairing.CreateZ21PairingInput{
 		LayoutID:         1,
 		CommandStationID: 2,
 		UserID:           3,
@@ -51,10 +51,10 @@ func TestProgTrackCVWritePairsUnpairedClient(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	reg := NewRegistry()
+	reg := NewRegistry(nil, nil)
 	addr := &net.UDPAddr{IP: net.IPv4(10, 0, 0, 9), Port: 40009}
 	client := reg.Touch(addr, time.Now().UTC(), false)
-	handler := NewPairingHandler(store, 1, 2, reg, nil)
+	handler := NewPairingHandler(store, 1, 2, reg, nil, nil)
 
 	writeCV3 := buildProgTrackCVWrite(cvWireCV3, byte(req.PairingCV3))
 	cvWire, value, ok := parseProgTrackCVWrite(writeCV3)
@@ -79,7 +79,7 @@ func TestProgTrackCVWritePairsUnpairedClient(t *testing.T) {
 }
 
 func TestProgTrackCVReadVirtualValue(t *testing.T) {
-	reg := NewRegistry()
+	reg := NewRegistry(nil, nil)
 	addr := &net.UDPAddr{IP: net.IPv4(10, 0, 0, 10), Port: 40010}
 	client := reg.Touch(addr, time.Now().UTC(), false)
 	reg.SetVirtualCV(client.Key, progTrackLoco, cvWireCV4, 145)

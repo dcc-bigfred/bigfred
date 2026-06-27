@@ -9,7 +9,7 @@ import (
 )
 
 func TestRegistryConcurrentMutationsAndSnapshot(t *testing.T) {
-	reg := NewRegistry()
+	reg := NewRegistry(nil, nil)
 	addr := &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 21105}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -27,9 +27,9 @@ func TestRegistryConcurrentMutationsAndSnapshot(t *testing.T) {
 				return
 			case <-ticker.C:
 				for _, c := range reg.Snapshot() {
-					_ = c.Paired
+					_ = c.Session
 					_ = c.SubscribedLocos
-					_ = c.BroadcastFlags
+					_ = reg.BroadcastFlags(c.Key)
 				}
 			}
 		}

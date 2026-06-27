@@ -24,12 +24,12 @@ func buildPOMReadByte(locoAddr uint16, cvWire int) []byte {
 }
 
 func TestVirtualPOMReadWriteUnpaired(t *testing.T) {
-	reg := NewRegistry()
+	reg := NewRegistry(nil, nil)
 	remote := &net.UDPAddr{IP: net.IPv4(10, 0, 0, 1), Port: 40000}
 	client := reg.Touch(remote, time.Now().UTC(), false)
 	s := &Server{
 		registry: reg,
-		pairing:  NewPairingHandler(nil, 1, 1, reg, nil),
+		pairing:  NewPairingHandler(nil, 1, 1, reg, nil, nil),
 	}
 	write := buildPOMWriteByte(3, 5, 42)
 	s.handlePOMWrite(context.Background(), remote, client, write)
@@ -46,13 +46,13 @@ func TestVirtualPOMReadWriteUnpaired(t *testing.T) {
 }
 
 func TestPOMWriteIgnoredWhenPaired(t *testing.T) {
-	reg := NewRegistry()
+	reg := NewRegistry(nil, nil)
 	remote := &net.UDPAddr{IP: net.IPv4(10, 0, 0, 2), Port: 40001}
 	client := reg.Touch(remote, time.Now().UTC(), false)
 	reg.SetPaired(client.Key, &contract.Z21PairingActiveWire{UserID: 1})
 	s := &Server{
 		registry: reg,
-		pairing:  NewPairingHandler(nil, 1, 1, reg, nil),
+		pairing:  NewPairingHandler(nil, 1, 1, reg, nil, nil),
 	}
 	s.handlePOMWrite(context.Background(), remote, client, buildPOMWriteByte(3, 5, 99))
 	if _, found := reg.GetVirtualCV(client.Key, 3, 5); found {
@@ -61,7 +61,7 @@ func TestPOMWriteIgnoredWhenPaired(t *testing.T) {
 }
 
 func TestPOMReadVirtualValue(t *testing.T) {
-	reg := NewRegistry()
+	reg := NewRegistry(nil, nil)
 	remote := &net.UDPAddr{IP: net.IPv4(10, 0, 0, 3), Port: 40002}
 	client := reg.Touch(remote, time.Now().UTC(), false)
 	reg.SetVirtualCV(client.Key, 3, 10, 77)

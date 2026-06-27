@@ -110,7 +110,7 @@ func (r *Redis) PublishClientsSnapshot(ctx context.Context, snap contract.Remote
 		return err
 	}
 	pipe := r.client.TxPipeline()
-	pipe.Set(ctx, contract.Z21ClientsSnapshotKey(r.layoutID, r.commandStationID), raw, contract.Z21StickySessionIdle)
+	pipe.Set(ctx, contract.RemoteClientsSnapshotKey(r.layoutID, r.commandStationID), raw, contract.RemoteStickySessionIdle)
 	env, err := protocol.Frame(contract.RemoteClientsChangedEvent, snap)
 	if err != nil {
 		return err
@@ -122,11 +122,6 @@ func (r *Redis) PublishClientsSnapshot(ctx context.Context, snap contract.Remote
 	pipe.Publish(ctx, r.EventChannel(), frame)
 	_, err = pipe.Exec(ctx)
 	return err
-}
-
-// PublishZ21ClientsSnapshot is deprecated; use PublishClientsSnapshot.
-func (r *Redis) PublishZ21ClientsSnapshot(ctx context.Context, snap contract.Z21ClientsSnapshotWire) error {
-	return r.PublishClientsSnapshot(ctx, snap)
 }
 
 // SubscribeCommands opens a pub/sub subscription on the daemon's

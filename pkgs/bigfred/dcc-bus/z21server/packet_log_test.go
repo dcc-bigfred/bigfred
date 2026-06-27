@@ -32,3 +32,15 @@ func TestPacketNameGetVersion(t *testing.T) {
 		t.Fatalf("PacketName(GET_VERSION) = %q", got)
 	}
 }
+
+func TestIsDiscoveryHandshakePacket(t *testing.T) {
+	serialReq := []byte{0x04, 0x00, 0x10, 0x00}
+	serialReply := SerialReply(0x0f60cc55)
+	if !isDiscoveryHandshakePacket(serialReq) || !isDiscoveryHandshakePacket(serialReply) {
+		t.Fatal("LAN_GET_SERIAL_NUMBER should be discovery handshake")
+	}
+	drive := buildReply(HeaderXBus, []byte{0xE4, 0x12, 0x01, 0x02, 0x03})
+	if isDiscoveryHandshakePacket(drive) {
+		t.Fatal("drive packet should not be discovery handshake")
+	}
+}

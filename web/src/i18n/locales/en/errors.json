@@ -107,5 +107,7 @@
   "z21_session_not_found": "No active Z21 handset session was found.",
   "z21_pairing_scope_invalid": "Pick at least one vehicle or enable “all vehicles I can drive”.",
   "z21_handset_brake_secs_invalid": "Brake timeout must be between 6 and 60 seconds.",
-  "z21_remote_not_configured": "Z21 remote pairing is not available (Redis offline)."
+  "remote_protocol_unknown": "Unknown remote control protocol.",
+  "remote_user_already_paired": "You already have an active handset session. Unpair first or wait for it to time out.",
+  "remote_not_configured": "Remote handset pairing is not available (Redis offline)."
 }

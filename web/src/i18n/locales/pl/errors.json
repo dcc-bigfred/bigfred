@@ -107,5 +107,7 @@
   "z21_session_not_found": "Nie znaleziono aktywnej sesji pilota Z21.",
   "z21_pairing_scope_invalid": "Wybierz co najmniej jeden pojazd lub włącz „wszystkie pojazdy, którymi mogę sterować”.",
   "z21_handset_brake_secs_invalid": "Czas do zahamowania musi być między 6 a 60 sekundami.",
-  "z21_remote_not_configured": "Parowanie Z21 jest niedostępne (Redis offline)."
+  "remote_protocol_unknown": "Nieznany protokół pilota.",
+  "remote_user_already_paired": "Masz już aktywną sesję pilota. Najpierw rozłącz lub poczekaj na wygaśnięcie.",
+  "remote_not_configured": "Parowanie pilota jest niedostępne (Redis offline)."
 }

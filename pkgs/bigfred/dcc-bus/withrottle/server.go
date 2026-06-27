@@ -393,7 +393,7 @@ func (s *Server) handleAcquire(ctx context.Context, client *Client, cmd MCommand
 			tw.lastLoco = addr
 		})
 		s.registry.setSentinelAcquired(client.Key, true)
-		for _, reply := range buildAcquireReply(cmd.ThrottleID, addr) {
+		for _, reply := range buildSentinelAcquireReply(cmd.ThrottleID, addr) {
 			_ = s.writeLine(client.Key, reply)
 		}
 		return
@@ -429,8 +429,9 @@ func (s *Server) handleThrottleAction(ctx context.Context, client *Client, cmd M
 	prop := cmd.Properties[0]
 	if !paired {
 		if s.registry.sentinelAcquired(client.Key) {
-			if fn, on, _, ok := parseFunctionAction(prop); ok {
-				if s.registry.PairingFnRisingEdge(client.Key, fn, on) {
+			if fn, on, force, ok := parseFunctionAction(prop); ok {
+				rising := s.registry.PairingFnRisingEdge(client.Key, fn, on)
+				if pairingFnAccept(on, force, rising) {
 					if consumed, active := s.pairing.HandleFn(ctx, client, fn); consumed && active != nil {
 						fields := pairingLogFields(active)
 						fields["client"] = client.Key

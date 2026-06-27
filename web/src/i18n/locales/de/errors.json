@@ -100,6 +100,7 @@
   "lease_invalid_duration": "Ausleihdauer muss zwischen 1 Minute und 24 Stunden liegen.",
   "lease_target_not_drivable": "Dieses Fahrzeug oder dieser Zug kann nicht verliehen werden.",
   "z21_server_disabled": "Der Z21-Handgeräte-Server ist für diese Zentrale deaktiviert.",
+  "withrottle_server_disabled": "Der WiThrottle-Server ist für diese Zentrale deaktiviert.",
   "command_station_not_on_layout": "Diese Zentrale ist Ihrer Anlage nicht zugewiesen.",
   "z21_vehicle_not_on_roster": "Eines der gewählten Fahrzeuge steht nicht auf dem Anlagen-Roster.",
   "z21_vehicle_not_drivable": "Sie dürfen eines der gewählten Fahrzeuge nicht fahren.",

@@ -191,6 +191,11 @@ function AppShellContent() {
         onClick: () => navigate("/remotes/z21"),
       },
       {
+        id: "withrottle-remote",
+        label: t("nav.my.withrottleRemote"),
+        onClick: () => navigate("/remotes/withrottle"),
+      },
+      {
         id: "templates",
         label: t("nav.my.templates"),
         icon: <TuneIcon fontSize="small" />,

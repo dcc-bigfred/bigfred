@@ -5,6 +5,7 @@ import { apiFetch } from "./client";
 import { useSocket } from "../context/SocketContext";
 
 export const REMOTE_PROTOCOL_Z21 = "z21" as const;
+export const REMOTE_PROTOCOL_WITHROTTLE = "withrottle" as const;
 
 export interface RemoteVehicle {
   vehicleId: string;
@@ -15,6 +16,7 @@ export interface RemotePendingPairing {
   protocol: string;
   pairingCV3?: number;
   pairingCV4?: number;
+  pairingCode?: string;
   displayLabel: string;
   expiresAt: number;
   handsetBrakeSecs?: number;
@@ -43,6 +45,7 @@ export interface RemotePairingResult {
   protocol: string;
   pairingCV3?: number;
   pairingCV4?: number;
+  pairingCode?: string;
   displayLabel: string;
   expiresAt: number;
   handsetBrakeSecs: number;
@@ -250,3 +253,10 @@ export const useStartZ21Pairing = (layoutId: number, csId: number) =>
 export const useUpdateZ21RemoteSession = useUpdateRemoteSession;
 export const useCancelZ21Pairing = useCancelRemotePairing;
 export const useUnpairZ21Remote = useUnpairRemote;
+
+export const useWithrottleRemoteStatus = useRemoteStatus;
+export const useStartWithrottlePairing = (layoutId: number, csId: number) =>
+  useStartRemotePairing(layoutId, csId, REMOTE_PROTOCOL_WITHROTTLE);
+export const useUpdateWithrottleRemoteSession = useUpdateRemoteSession;
+export const useCancelWithrottlePairing = useCancelRemotePairing;
+export const useUnpairWithrottleRemote = useUnpairRemote;

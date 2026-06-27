@@ -38,6 +38,7 @@ import type plTrainAnnouncements from "./locales/pl/trainAnnouncements.json";
 import type plAudit from "./locales/pl/audit.json";
 import type plRentals from "./locales/pl/rentals.json";
 import type plZ21Remote from "./locales/pl/z21Remote.json";
+import type plWithrottleRemote from "./locales/pl/withrottleRemote.json";
 
 declare module "i18next" {
   interface CustomTypeOptions {
@@ -62,6 +63,7 @@ declare module "i18next" {
       audit: typeof plAudit;
       rentals: typeof plRentals;
       z21Remote: typeof plZ21Remote;
+      withrottleRemote: typeof plWithrottleRemote;
     };
     // returnNull is false in index.ts; mirror that here so the t()
     // return type is `string` (not `string | null`).

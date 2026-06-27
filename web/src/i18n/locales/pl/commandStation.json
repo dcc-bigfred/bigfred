@@ -51,7 +51,10 @@
         "z21ServerEnabledHelp": "Aplikacje Z21 łączą się z hostem dcc-bus na porcie UDP 21105. Parowanie odbywa się przez CV3 i CV4 w aplikacji Z21.",
         "z21IpStickiness": "Przypisanie sesji do IP (IP stickiness)",
         "z21IpStickinessHelp": "Gdy włączone, sesja pilota jest powiązana z adresem IP, a nie z portem UDP. Po reconnect z nowym portem (typowe przy DHCP) parowanie pozostaje aktywne.",
-        "z21ServerDisableWarn": "Wyłączenie serwera blokuje nowe parowania. Aktywne sesje pilota przestaną działać po restarcie daemona dcc-bus."
+        "z21ServerDisableWarn": "Wyłączenie serwera blokuje nowe parowania. Aktywne sesje pilota przestaną działać po restarcie daemona dcc-bus.",
+        "withrottleServerEnabled": "Serwer WiThrottle",
+        "withrottleServerEnabledHelp": "Engine Driver i WiThrottle łączą się z hostem dcc-bus na porcie TCP 12090. Parowanie odbywa się 6-cyfrowym kodem przez lokomotywę sentinel lub nazwę urządzenia (N).",
+        "withrottleServerDisableWarn": "Wyłączenie serwera blokuje nowe parowania. Aktywne sesje WiThrottle przestaną działać po restarcie daemona dcc-bus."
       }
     },
     "empty": "Brak centralki do wyświetlenia."

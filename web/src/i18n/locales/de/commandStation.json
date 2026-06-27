@@ -51,7 +51,10 @@
         "z21ServerEnabledHelp": "Z21-Apps verbinden sich mit dem dcc-bus-Host über UDP-Port 21105. Die Kopplung erfolgt über CV3 und CV4 in der Z21-App.",
         "z21IpStickiness": "IP-Stickiness",
         "z21IpStickinessHelp": "Wenn aktiv, wird die Handgeräte-Sitzung an die Client-IP gebunden, nicht an den UDP-Port. Nach einem Reconnect mit neuem Port bleibt die Kopplung erhalten.",
-        "z21ServerDisableWarn": "Das Deaktivieren stoppt neue Kopplungen. Aktive Handgeräte-Sitzungen funktionieren nach einem dcc-bus-Neustart nicht mehr."
+        "z21ServerDisableWarn": "Das Deaktivieren stoppt neue Kopplungen. Aktive Handgeräte-Sitzungen funktionieren nach einem dcc-bus-Neustart nicht mehr.",
+        "withrottleServerEnabled": "WiThrottle-Server",
+        "withrottleServerEnabledHelp": "Engine Driver und WiThrottle verbinden sich mit dem dcc-bus-Host über TCP-Port 12090. Die Kopplung erfolgt per 6-stelligem Code über die Sentinel-Lok oder den Gerätenamen (N).",
+        "withrottleServerDisableWarn": "Das Deaktivieren stoppt neue Kopplungen. Aktive WiThrottle-Sitzungen funktionieren nach einem dcc-bus-Neustart nicht mehr."
       }
     },
     "empty": "Keine Zentralen anzuzeigen."

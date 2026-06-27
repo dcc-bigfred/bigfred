@@ -25,6 +25,7 @@ import (
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/state"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/ws"
 	bfotel "github.com/keskad/loco/pkgs/bigfred/otel"
+	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/withrottle"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/z21server"
 	"github.com/keskad/loco/pkgs/bigfred/remotes"
 	"github.com/keskad/loco/pkgs/bigfred/remotepairing"
@@ -70,6 +71,13 @@ type Config struct {
 	Z21Port   uint16
 	// Z21IPStickiness keys handset sessions by client IP only.
 	Z21IPStickiness bool
+
+	// EnableWithrottle starts the inbound WiThrottle TCP server.
+	EnableWithrottle bool
+	WithrottleBind   string
+	WithrottlePort   uint16
+	WithrottlePairingAddr uint16
+	WithrottleHeartbeatSecs float64
 }
 
 // Daemon is the assembled dcc-bus instance.
@@ -84,6 +92,7 @@ type Daemon struct {
 	metricsShutdown func(context.Context) error
 	lnMetricsReg    metric.Registration
 	z21MetricsReg   metric.Registration
+	withrottleSrv     *withrottle.Server
 }
 
 // New validates cfg, opens Redis + the command station driver and
@@ -351,54 +360,8 @@ func (d *Daemon) Run(ctx context.Context) error {
 	go d.runDefinedTrainsConsumer(ctx, trainSub)
 	go d.runRadioStopConsumer(ctx, radioStopSub)
 
-	if d.cfg.EnableZ21 {
-		remotes.RegisterGatewayFactory(z21server.GatewayName, z21server.NewGateway)
-		pairStore := remotepairing.NewStore(d.rds)
-		coordinator := remotes.NewCoordinator(remotes.CoordinatorConfig{
-			LayoutID:         d.cfg.LayoutID,
-			CommandStationID: d.cfg.CommandStationID,
-			Store:            pairStore,
-			Drive:            d.router,
-			Publisher:        d.redis,
-			Log:              d.log,
-		})
-		coordinator.RegisterPolicy(contract.RemoteProtocolZ21, remotes.ProtocolPolicy{
-			IdleEvict:       z21server.IdleEvictAfter * time.Second,
-			StickyIdleEvict: z21server.StickySessionIdleEvictAfter * time.Second,
-			IPStickiness:    d.cfg.Z21IPStickiness,
-		})
-		go coordinator.Run(ctx)
-
-		gw, err := remotes.NewGateway(ctx, z21server.GatewayName, remotes.GatewayConfig{
-			LayoutID:         d.cfg.LayoutID,
-			CommandStationID: d.cfg.CommandStationID,
-			Coordinator:      coordinator,
-			Store:            pairStore,
-			Drive:            d.router,
-			Log:              d.log,
-			Extra: map[string]any{
-				"bind":         d.cfg.Z21Bind,
-				"port":         d.cfg.Z21Port,
-				"ipStickiness": d.cfg.Z21IPStickiness,
-				"speedSteps":   d.cfg.CommandStation.EffectiveSpeedSteps(),
-			},
-		})
-		if err != nil {
-			return fmt.Errorf("z21 gateway: %w", err)
-		}
-		d.router.RegisterLocoObserver(gw)
-		go func() {
-			if err := gw.Run(ctx); err != nil && ctx.Err() == nil {
-				d.log.WithError(err).Error("z21 inbound server stopped")
-				_ = d.redis.Publish(ctx, "daemon.degraded", map[string]any{
-					"layoutId":         d.cfg.LayoutID,
-					"commandStationId": d.cfg.CommandStationID,
-					"reason":           "z21_bind_failed",
-					"error":            err.Error(),
-					"at":               time.Now().UTC().UnixMilli(),
-				})
-			}
-		}()
+	if err := d.startRemoteGateways(ctx); err != nil {
+		return err
 	}
 
 	go d.router.RunStateFeed(ctx)
@@ -471,8 +434,114 @@ func (d *Daemon) runAllowedVehiclesConsumer(ctx context.Context, sub *redis.PubS
 				continue
 			}
 			d.router.ApplyAllowedVehicles(ctx, snap)
+			if d.withrottleSrv != nil {
+				d.withrottleSrv.UpdateAllowedVehicles(snap)
+			}
 		}
 	}
+}
+
+func (d *Daemon) startRemoteGateways(ctx context.Context) error {
+	if !d.cfg.EnableZ21 && !d.cfg.EnableWithrottle {
+		return nil
+	}
+	pairStore := remotepairing.NewStore(d.rds)
+	coordinator := remotes.NewCoordinator(remotes.CoordinatorConfig{
+		LayoutID:         d.cfg.LayoutID,
+		CommandStationID: d.cfg.CommandStationID,
+		Store:            pairStore,
+		Drive:            d.router,
+		Publisher:        d.redis,
+		Log:              d.log,
+	})
+	type gatewayRunner struct {
+		name   string
+		reason string
+		gw     remotes.RemoteProtocol
+	}
+	var runners []gatewayRunner
+
+	if d.cfg.EnableZ21 {
+		remotes.RegisterGatewayFactory(z21server.GatewayName, z21server.NewGateway)
+		coordinator.RegisterPolicy(contract.RemoteProtocolZ21, remotes.ProtocolPolicy{
+			IdleEvict:       z21server.IdleEvictAfter * time.Second,
+			StickyIdleEvict: z21server.StickySessionIdleEvictAfter * time.Second,
+			IPStickiness:    d.cfg.Z21IPStickiness,
+		})
+		gw, err := remotes.NewGateway(ctx, z21server.GatewayName, remotes.GatewayConfig{
+			LayoutID:         d.cfg.LayoutID,
+			CommandStationID: d.cfg.CommandStationID,
+			Coordinator:      coordinator,
+			Store:            pairStore,
+			Drive:            d.router,
+			Log:              d.log,
+			Extra: map[string]any{
+				"bind":         d.cfg.Z21Bind,
+				"port":         d.cfg.Z21Port,
+				"ipStickiness": d.cfg.Z21IPStickiness,
+				"speedSteps":   d.cfg.CommandStation.EffectiveSpeedSteps(),
+			},
+		})
+		if err != nil {
+			return fmt.Errorf("z21 gateway: %w", err)
+		}
+		d.router.RegisterLocoObserver(gw)
+		runners = append(runners, gatewayRunner{name: "z21", reason: "z21_bind_failed", gw: gw})
+	}
+
+	if d.cfg.EnableWithrottle {
+		heartbeatSecs := d.cfg.WithrottleHeartbeatSecs
+		if heartbeatSecs <= 0 {
+			heartbeatSecs = contract.DefaultWithrottleHeartbeatSecs
+		}
+		remotes.RegisterGatewayFactory(withrottle.GatewayName, withrottle.NewGateway)
+		coordinator.RegisterPolicy(contract.RemoteProtocolWithrottle, remotes.ProtocolPolicy{
+			IdleEvict:        withrottle.IdleEvictAfter * time.Second,
+			HeartbeatTimeout: withrottle.HeartbeatTimeout(heartbeatSecs),
+		})
+		gw, err := remotes.NewGateway(ctx, withrottle.GatewayName, remotes.GatewayConfig{
+			LayoutID:         d.cfg.LayoutID,
+			CommandStationID: d.cfg.CommandStationID,
+			Coordinator:      coordinator,
+			Store:            pairStore,
+			Drive:            d.router,
+			Log:              d.log,
+			Extra: map[string]any{
+				"bind":            d.cfg.WithrottleBind,
+				"port":            d.cfg.WithrottlePort,
+				"pairingAddr":     d.cfg.WithrottlePairingAddr,
+				"heartbeatSecs":   heartbeatSecs,
+				"speedSteps":      d.cfg.CommandStation.EffectiveSpeedSteps(),
+				"allowedVehicles": d.router.AllowedVehiclesSnapshot(),
+			},
+		})
+		if err != nil {
+			return fmt.Errorf("withrottle gateway: %w", err)
+		}
+		if srv, ok := gw.(*withrottle.Server); ok {
+			d.withrottleSrv = srv
+		}
+		d.router.RegisterLocoObserver(gw)
+		runners = append(runners, gatewayRunner{name: "withrottle", reason: "withrottle_bind_failed", gw: gw})
+	}
+
+	go coordinator.Run(ctx)
+	for _, r := range runners {
+		run := r
+		go func() {
+			if err := run.gw.Run(ctx); err != nil && ctx.Err() == nil {
+				d.log.WithError(err).Errorf("%s inbound server stopped", run.name)
+				_ = d.redis.Publish(ctx, "daemon.degraded", map[string]any{
+					"layoutId":         d.cfg.LayoutID,
+					"commandStationId": d.cfg.CommandStationID,
+					"reason":           run.reason,
+					"error":            err.Error(),
+					"at":               time.Now().UTC().UnixMilli(),
+				})
+			}
+		}()
+	}
+	return nil
 }
 
 func (d *Daemon) runDefinedTrainsConsumer(ctx context.Context, sub *redis.PubSub) {

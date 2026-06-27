@@ -197,6 +197,15 @@ func (r *Router) RegisterLocoObserver(obs remotes.LocoStateObserver) {
 	r.locoObservers.Register(obs)
 }
 
+// AllowedVehiclesSnapshot returns the in-memory drivable roster for inbound
+// protocol roster emission (e.g. WiThrottle RL lines).
+func (r *Router) AllowedVehiclesSnapshot() contract.AllowedVehicles {
+	if r == nil {
+		return contract.AllowedVehicles{}
+	}
+	return r.roster.Snapshot()
+}
+
 // broadcastLocoState fans a snapshot to WS sessions and registered remotes.
 func (r *Router) broadcastLocoState(ctx context.Context, snap contract.LocoStateWire) {
 	service.BroadcastLocoState(ctx, r.hub, snap)

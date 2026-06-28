@@ -41,6 +41,7 @@ type Router struct {
 	pollInterval time.Duration
 
 	roster      *service.RosterCache
+	functions   *service.FunctionCatalogueCache
 	drive       security.DrivePolicy
 	trainPolicy security.TrainPolicy
 
@@ -69,6 +70,7 @@ type Config struct {
 	Log              *logrus.Logger
 	AllowedVehicles  contract.AllowedVehicles
 	DefinedTrains    contract.DefinedTrains
+	VehicleFunctions contract.VehicleFunctions
 	LayoutID         uint
 	CommandStationID uint
 	StationName      string
@@ -97,19 +99,21 @@ func NewRouter(_ context.Context, cfg Config) (*Router, error) {
 		speedSteps:       cfg.SpeedSteps,
 		pollInterval:     time.Duration(cfg.PollIntervalMs) * time.Millisecond,
 		roster:           service.NewRosterCache(cfg.LayoutID),
+		functions:        service.NewFunctionCatalogueCache(cfg.LayoutID),
 		dcc: &service.DCCWriter{
 			Station:    cfg.Station,
 			SpeedSteps: cfg.SpeedSteps,
 			Log:        log,
 		},
-		cache:       service.NewFunctionsCache(),
-		trainSpeed:  service.NewTrainSpeedScheduler(),
-		pulseActive: make(map[service.FnKey]bool, 8),
+		cache:         service.NewFunctionsCache(),
+		trainSpeed:    service.NewTrainSpeedScheduler(),
+		pulseActive:   make(map[service.FnKey]bool, 8),
 		locoObservers: remotes.NewLocoStateNotifier(),
 	}
 	r.dcc.LogFields = r.stationLogFields
 	r.ApplyAllowedVehicles(context.Background(), cfg.AllowedVehicles)
 	r.ApplyDefinedTrains(cfg.DefinedTrains)
+	r.ApplyVehicleFunctions(cfg.VehicleFunctions)
 	r.log.WithFields(logrus.Fields{
 		"layoutId":         r.layoutID,
 		"commandStationId": r.commandStationID,
@@ -178,6 +182,28 @@ func (r *Router) ApplyDefinedTrains(snap contract.DefinedTrains) {
 	}).Info("dcc-bus defined trains updated")
 }
 
+// ApplyVehicleFunctions replaces the layout function catalogue cache.
+func (r *Router) ApplyVehicleFunctions(snap contract.VehicleFunctions) {
+	if snap.LayoutID != 0 && snap.LayoutID != r.layoutID {
+		return
+	}
+	if !r.functions.ApplySnapshot(snap) {
+		return
+	}
+	r.log.WithFields(logrus.Fields{
+		"layoutId": r.layoutID,
+		"count":    len(snap.Vehicles),
+	}).Info("dcc-bus vehicle functions updated")
+}
+
+// FunctionsForAddr returns resolved function metadata for one roster address.
+func (r *Router) FunctionsForAddr(addr uint16) []contract.FunctionDefinition {
+	if r == nil || r.functions == nil {
+		return nil
+	}
+	return r.functions.FunctionsForAddr(addr)
+}
+
 func (r *Router) findDefinedTrain(trainID string) (contract.DefinedTrain, bool) {
 	r.trainsMu.RLock()
 	defer r.trainsMu.RUnlock()
@@ -206,6 +232,15 @@ func (r *Router) AllowedVehiclesSnapshot() contract.AllowedVehicles {
 	return r.roster.Snapshot()
 }
 
+// FunctionsSnapshot returns the in-memory function catalogue for inbound
+// protocol acquire replies.
+func (r *Router) FunctionsSnapshot() contract.VehicleFunctions {
+	if r == nil || r.functions == nil {
+		return contract.VehicleFunctions{}
+	}
+	return r.functions.Snapshot()
+}
+
 // broadcastLocoState fans a snapshot to WS sessions and registered remotes.
 func (r *Router) broadcastLocoState(ctx context.Context, snap contract.LocoStateWire) {
 	service.BroadcastLocoState(ctx, r.hub, snap)
@@ -225,16 +260,16 @@ func (r *Router) locoSnapOrDefault(ctx context.Context, addr uint16) contract.Lo
 // RunStateFeed mirrors external throttle changes into Redis and WS clients.
 func (r *Router) RunStateFeed(ctx context.Context) {
 	service.RunStateFeed(ctx, service.FeedDeps{
-		Station:      r.station,
-		Roster:       r.roster,
-		Redis:        r.redis,
-		Hub:          r.hub,
-		HubSubs:      r.hub,
+		Station:       r.station,
+		Roster:        r.roster,
+		Redis:         r.redis,
+		Hub:           r.hub,
+		HubSubs:       r.hub,
 		FnCache:       r.cache,
 		LocoObservers: r.locoObservers,
 		Log:           r.log,
-		PollInterval: r.pollInterval,
-		StateTTL:     StateTTL,
+		PollInterval:  r.pollInterval,
+		StateTTL:      StateTTL,
 	})
 }
 

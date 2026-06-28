@@ -53,12 +53,8 @@ func rosterEntries(session *contract.RemoteSessionWire, allowed contract.Allowed
 				continue
 			}
 			seen[v.Addr] = struct{}{}
-			name := v.VehicleID
-			if name == "" {
-				name = fmt.Sprintf("Loco %d", v.Addr)
-			}
 			out = append(out, rosterEntry{
-				name:   name,
+				name:   rosterDisplayName(v),
 				addr:   v.Addr,
 				isLong: v.Addr >= 128,
 			})
@@ -91,12 +87,8 @@ func rosterEntries(session *contract.RemoteSessionWire, allowed contract.Allowed
 			continue
 		}
 		seen[v.Addr] = struct{}{}
-		name := v.VehicleID
-		if name == "" {
-			name = fmt.Sprintf("Loco %d", v.Addr)
-		}
 		out = append(out, rosterEntry{
-			name:   name,
+			name:   rosterDisplayName(v),
 			addr:   v.Addr,
 			isLong: v.Addr >= 128,
 		})
@@ -115,4 +107,14 @@ func rosterEntries(session *contract.RemoteSessionWire, allowed contract.Allowed
 		}
 	}
 	return out
+}
+
+func rosterDisplayName(v contract.AllowedVehicle) string {
+	if v.DisplayName != "" {
+		return v.DisplayName
+	}
+	if v.VehicleID != "" {
+		return v.VehicleID
+	}
+	return fmt.Sprintf("Loco %d", v.Addr)
 }

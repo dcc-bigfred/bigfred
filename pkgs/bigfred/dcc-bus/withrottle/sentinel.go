@@ -16,24 +16,6 @@ func allowUnpairedAcquire(addr, sentinel uint16, paired bool) bool {
 	return !paired && isSentinelAddr(addr, sentinel)
 }
 
-// buildAcquireReply returns the verbose state dump after a successful acquire.
-func buildAcquireReply(throttleID byte, addr uint16) []string {
-	id := string(throttleID)
-	key := locoKeyForAddr(addr)
-	lines := []string{
-		fmt.Sprintf("M%s+%s%s", id, key, propSep),
-	}
-	for fn := 0; fn <= maxWiThrottleFunction; fn++ {
-		lines = append(lines, fmt.Sprintf("M%sA%s%sF0%d", id, key, propSep, fn))
-	}
-	lines = append(lines,
-		fmt.Sprintf("M%sA%s%sV0", id, key, propSep),
-		fmt.Sprintf("M%sA%s%sR1", id, key, propSep),
-		fmt.Sprintf("M%sA%s%ss1", id, key, propSep),
-	)
-	return lines
-}
-
 // buildSentinelAcquireReply is the acquire reply for the pairing sentinel.
 // It advertises F0–F9 labels so Engine Driver shows named function buttons
 // the user taps to enter the pairing code digits.

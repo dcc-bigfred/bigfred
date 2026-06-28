@@ -8,6 +8,13 @@ const (
 	// station rejects a SetSpeed or SendFn call.
 	CodeCommandStationError = "command_station_error"
 
+	// CodeSlotBusUnavailable is returned when the LocoNet slot-acquire circuit
+	// breaker is open (repeated command-station timeouts / dead bus).
+	CodeSlotBusUnavailable = "slot_bus_unavailable"
+
+	// CodeNoFreeSlot is returned when the command station's slot table is full.
+	CodeNoFreeSlot = "no_free_slot"
+
 	// CodeTrainNotOnLayout is returned when train.setSpeed references an
 	// unknown train on this layout.
 	CodeTrainNotOnLayout = "train_not_on_layout"

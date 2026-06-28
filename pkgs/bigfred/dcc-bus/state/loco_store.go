@@ -11,7 +11,10 @@ import (
 	"github.com/keskad/loco/pkgs/loco/commandstation"
 )
 
-const obsFnRange = 28
+const (
+	obsFnRange              = 28
+	commandSuppressWindow   = 750 * time.Millisecond
+)
 
 type locoStateRedis interface {
 	GetLocoCurrentState(ctx context.Context, addr uint16) (contract.LocoStateWire, bool, error)
@@ -32,8 +35,11 @@ type LocoStateStore struct {
 }
 
 type locoEntry struct {
-	mu   sync.Mutex
-	snap contract.LocoStateWire
+	mu             sync.Mutex
+	snap           contract.LocoStateWire
+	commandedSpeed uint8
+	commandedFwd   bool
+	commandedAt    time.Time
 }
 
 // NewLocoStateStore returns an empty authoritative store.
@@ -91,6 +97,9 @@ func (s *LocoStateStore) SetSpeed(addr uint16, speed uint8, forward bool, userID
 	e.snap.ControlledByUserID = userID
 	e.snap.Source = source
 	e.snap.At = time.Now().UTC().UnixMilli()
+	e.commandedSpeed = speed
+	e.commandedFwd = forward
+	e.commandedAt = time.Now()
 	out := e.snap
 	e.mu.Unlock()
 	s.markDirty(addr)
@@ -125,14 +134,29 @@ func (s *LocoStateStore) ApplyObservation(o commandstation.LocoObservation, sour
 	e := s.entry(addr)
 	e.mu.Lock()
 	changed := false
-	if o.HasSpeed {
+
+	suppressMotion := false
+	if !e.commandedAt.IsZero() && (o.HasSpeed || o.HasForward) {
+		switch {
+		case time.Since(e.commandedAt) >= commandSuppressWindow:
+			e.commandedAt = time.Time{}
+		case (o.HasSpeed && contract.UISpeedFromWire(o.Speed) != e.commandedSpeed) ||
+			(o.HasForward && o.Forward != e.commandedFwd):
+			suppressMotion = true
+		case (!o.HasSpeed || contract.UISpeedFromWire(o.Speed) == e.commandedSpeed) &&
+			(!o.HasForward || o.Forward == e.commandedFwd):
+			e.commandedAt = time.Time{}
+		}
+	}
+
+	if !suppressMotion && o.HasSpeed {
 		obs := contract.UISpeedFromWire(o.Speed)
 		if e.snap.Speed != obs {
 			e.snap.Speed = obs
 			changed = true
 		}
 	}
-	if o.HasForward && e.snap.Forward != o.Forward {
+	if !suppressMotion && o.HasForward && e.snap.Forward != o.Forward {
 		e.snap.Forward = o.Forward
 		changed = true
 	}
@@ -178,6 +202,7 @@ func (s *LocoStateStore) SetFromBus(addr uint16, speed uint8, forward bool, fns 
 	e.snap.Functions = append([]bool(nil), fns...)
 	e.snap.Source = "bus-sync"
 	e.snap.At = time.Now().UTC().UnixMilli()
+	e.commandedAt = time.Time{}
 	out := e.snap
 	e.mu.Unlock()
 	s.markDirty(addr)

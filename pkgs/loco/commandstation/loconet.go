@@ -138,6 +138,11 @@ const (
 	// window (spec §4.3 recommends ~100 s).
 	lnKeepaliveInterval = 90 * time.Second
 
+	// lnMaxOwnedSlots is a soft cap on how many locomotive slots BigFred may
+	// hold IN_USE at once, leaving headroom on the master's 120-slot table for
+	// physical throttles.
+	lnMaxOwnedSlots = 100
+
 	// csSlotStaUnknown is the initial csSlotStaLast sentinel (not a valid SL_STA).
 	csSlotStaUnknown = 0xFF
 )
@@ -946,6 +951,14 @@ func (l *LocoNet) ensureSlotLocked(addr LocoAddr) (byte, error) {
 // IN_USE, so an active physical throttle (FRED) currently owning the slot is
 // never stolen. Caller holds reqMu and has called beginSync.
 func (l *LocoNet) acquireSlotFreshLocked(addr LocoAddr) (byte, error) {
+	if _, owned := l.getSlot(addr); !owned {
+		l.slotMu.Lock()
+		n := len(l.slotByAd)
+		l.slotMu.Unlock()
+		if n >= lnMaxOwnedSlots {
+			return 0, fmt.Errorf("loconet: owned-slot cap reached (%d); release a slot first", n)
+		}
+	}
 	// Request slot allocation/lookup.
 	if err := l.sendLocked(lnBuildLocoAdr(addr)); err != nil {
 		return 0, err

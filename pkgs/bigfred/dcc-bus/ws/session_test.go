@@ -1,0 +1,78 @@
+package ws
+
+import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/coder/websocket"
+
+	"github.com/keskad/loco/pkgs/bigfred/contract"
+	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/auth"
+)
+
+func TestSessionSendNonBlockingDropOldest(t *testing.T) {
+	hold := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
+		if err != nil {
+			return
+		}
+		defer conn.Close(websocket.StatusGoingAway, "test")
+		<-hold
+	}))
+	t.Cleanup(srv.Close)
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http")
+	conn, _, err := websocket.Dial(context.Background(), wsURL, nil)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	t.Cleanup(func() { _ = conn.Close(websocket.StatusNormalClosure, "test") })
+
+	s := NewSession(auth.Identity{UserID: 1}, conn)
+	t.Cleanup(func() { s.Close("test") })
+
+	for i := 0; i < wsSendQueueCap+50; i++ {
+		if err := s.Send(context.Background(), contract.EnvelopeWire{Type: "loco.state"}); err != nil {
+			t.Fatalf("Send %d: %v", i, err)
+		}
+	}
+	time.Sleep(20 * time.Millisecond)
+	if s.SendDrop() == 0 {
+		t.Fatal("expected drops on saturated send queue")
+	}
+	close(hold)
+}
+
+func TestSessionCloseTerminatesWriteLoop(t *testing.T) {
+	hold := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
+		if err != nil {
+			return
+		}
+		defer conn.Close(websocket.StatusGoingAway, "test")
+		<-hold
+	}))
+	t.Cleanup(srv.Close)
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http")
+	conn, _, err := websocket.Dial(context.Background(), wsURL, nil)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+
+	s := NewSession(auth.Identity{UserID: 1}, conn)
+	s.Close("done")
+	close(hold)
+
+	time.Sleep(20 * time.Millisecond)
+	err = s.Send(context.Background(), contract.EnvelopeWire{})
+	if err == nil {
+		t.Fatal("Send after Close should fail")
+	}
+}

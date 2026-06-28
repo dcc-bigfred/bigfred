@@ -324,7 +324,7 @@ func (l *LocoNet) dispatch() {
 				l.metrics.countRx(pkt[0])
 			}
 			l.observe(pkt)
-			if l.syncActive.Load() {
+			if l.syncActive.Load() && lnIsSyncReply(pkt) {
 				select {
 				case l.syncCh <- pkt:
 				default:
@@ -661,6 +661,20 @@ func (l *LocoNet) awaitProgReplyLocked(deadline time.Time, allowBlind bool) (lnP
 		}
 	}
 	return lnProgReply{}, errors.New("timeout waiting for programming reply")
+}
+
+// lnIsSyncReply reports whether pkt may answer a request/response sequence
+// (slot read or long-acknowledge). Speed/function traffic is never a reply.
+func lnIsSyncReply(pkt []byte) bool {
+	if len(pkt) < 1 {
+		return false
+	}
+	switch pkt[0] {
+	case lnOPC_SL_RD_DATA, lnOPC_LONG_ACK:
+		return true
+	default:
+		return false
+	}
 }
 
 // lnProgStatusError maps a programming-slot PSTAT byte to an error.

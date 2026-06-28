@@ -28,7 +28,6 @@ type LocoStateStore struct {
 	entries map[uint16]*locoEntry
 	redis   locoStateRedis
 	ttl     time.Duration
-	flushCh chan uint16
 	dirty   map[uint16]struct{}
 	dirtyMu sync.Mutex
 	log     *logrus.Logger
@@ -48,7 +47,6 @@ func NewLocoStateStore(redis locoStateRedis, ttl time.Duration, log *logrus.Logg
 		entries: make(map[uint16]*locoEntry, 64),
 		redis:   redis,
 		ttl:     ttl,
-		flushCh: make(chan uint16, 32),
 		dirty:   make(map[uint16]struct{}, 64),
 		log:     log,
 	}
@@ -135,6 +133,7 @@ func (s *LocoStateStore) SetSpeedPreservingUser(addr uint16, speed uint8, forwar
 }
 
 // SetFunction toggles one function bit and returns the new snapshot.
+// Pass userID == 0 to preserve the current controlling user.
 func (s *LocoStateStore) SetFunction(addr uint16, userID uint, fn uint8, on bool, source string) contract.LocoStateWire {
 	e := s.entry(addr)
 	e.mu.Lock()
@@ -156,12 +155,25 @@ func (s *LocoStateStore) SetFunction(addr uint16, userID uint, fn uint8, on bool
 	return out
 }
 
+// SetFunctionPreservingUser toggles one function bit without changing the
+// controlling user. Use for server-originated function commands so a
+// concurrent observation cannot race the userID read/write.
+func (s *LocoStateStore) SetFunctionPreservingUser(addr uint16, fn uint8, on bool, source string) contract.LocoStateWire {
+	return s.SetFunction(addr, 0, fn, on, source)
+}
+
 // ApplyObservation merges a passive bus observation; returns (snapshot, changed).
 func (s *LocoStateStore) ApplyObservation(o commandstation.LocoObservation, source string) (contract.LocoStateWire, bool) {
 	addr := uint16(o.Addr)
 	e := s.entry(addr)
 	e.mu.Lock()
 	changed := false
+
+	// Capture whether BigFred's command window is active before any
+	// suppression logic clears it. While the window is active, bus
+	// echoes (motion or function) are not an external takeover and
+	// must not drop throttle ownership.
+	windowActive := !e.commandedAt.IsZero()
 
 	suppressMotion := false
 	if !e.commandedAt.IsZero() && (o.HasSpeed || o.HasForward) {
@@ -171,8 +183,14 @@ func (s *LocoStateStore) ApplyObservation(o commandstation.LocoObservation, sour
 		case (o.HasSpeed && contract.UISpeedFromWire(o.Speed) != e.commandedSpeed) ||
 			(o.HasForward && o.Forward != e.commandedFwd):
 			suppressMotion = true
-		case (!o.HasSpeed || contract.UISpeedFromWire(o.Speed) == e.commandedSpeed) &&
-			(!o.HasForward || o.Forward == e.commandedFwd):
+		// Only release the window when the bus confirms BOTH commanded
+		// dimensions. LocoNet emits speed and direction in separate frames
+		// (OPC_LOCO_SPD / OPC_LOCO_DIRF); a partial echo that matches one
+		// field must not clear suppression before the other arrives, or a
+		// stale second frame could still snap the lever back.
+		case o.HasSpeed && o.HasForward &&
+			contract.UISpeedFromWire(o.Speed) == e.commandedSpeed &&
+			o.Forward == e.commandedFwd:
 			e.commandedAt = time.Time{}
 		}
 	}
@@ -207,8 +225,13 @@ func (s *LocoStateStore) ApplyObservation(o commandstation.LocoObservation, sour
 		}
 	}
 	if changed {
-		e.snap.ControlledByUserID = 0
-		e.snap.Source = source
+		// Drop ownership only when no BigFred command window is active.
+		// Inside the window a bus echo (including a function echo) is
+		// not a takeover; BigFred still owns the speed/dir it commanded.
+		if !windowActive {
+			e.snap.ControlledByUserID = 0
+			e.snap.Source = source
+		}
 		e.snap.At = time.Now().UTC().UnixMilli()
 	}
 	out := e.snap
@@ -237,7 +260,8 @@ func (s *LocoStateStore) SetFromBus(addr uint16, speed uint8, forward bool, fns 
 	return out
 }
 
-// FlushLoop runs batched Redis writes every tick; estop addrs flush immediately.
+// FlushLoop runs batched Redis writes every tick. Blocks until ctx cancel,
+// then performs a final flush so shutdown does not lose recent state.
 func (s *LocoStateStore) FlushLoop(ctx context.Context, tick time.Duration) {
 	if s == nil {
 		return
@@ -249,8 +273,6 @@ func (s *LocoStateStore) FlushLoop(ctx context.Context, tick time.Duration) {
 		case <-ctx.Done():
 			s.flushAll(context.Background())
 			return
-		case addr := <-s.flushCh:
-			s.flushOne(ctx, addr)
 		case <-t.C:
 			s.flushAll(ctx)
 		}
@@ -263,8 +285,9 @@ func (s *LocoStateStore) flushAll(ctx context.Context) {
 	for a := range s.dirty {
 		addrs = append(addrs, a)
 	}
-	s.dirty = make(map[uint16]struct{}, len(addrs))
 	s.dirtyMu.Unlock()
+	// flushOne removes an addr from dirty only on success, so a Redis
+	// outage leaves the addr dirty for the next tick (retry).
 	for _, addr := range addrs {
 		s.flushOne(ctx, addr)
 	}
@@ -279,15 +302,25 @@ func (s *LocoStateStore) flushOne(ctx context.Context, addr uint16) {
 	}
 	e.mu.Lock()
 	snap := e.snap
+	atMs := snap.At
 	e.mu.Unlock()
 	if s.redis != nil {
-		if err := s.redis.StoreLocoCurrentState(ctx, snap, s.ttl); err != nil && s.log != nil {
-			s.log.WithError(err).WithField("addr", addr).Debug("loco store: redis flush")
+		if err := s.redis.StoreLocoCurrentState(ctx, snap, s.ttl); err != nil {
+			if s.log != nil {
+				s.log.WithError(err).WithField("addr", addr).Debug("loco store: redis flush")
+			}
 			return
 		}
 	}
+	// Only clear dirty if no newer write landed while the Redis SET was
+	// in flight; otherwise a concurrent command would be lost.
 	s.dirtyMu.Lock()
-	delete(s.dirty, addr)
+	e.mu.Lock()
+	currentAt := e.snap.At
+	e.mu.Unlock()
+	if currentAt == atMs {
+		delete(s.dirty, addr)
+	}
 	s.dirtyMu.Unlock()
 }
 

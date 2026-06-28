@@ -70,6 +70,8 @@ func (r *Router) applyControlSetFunction(ctx context.Context, p contract.LocoSet
 	if !r.roster.IsOnLayout(p.Address) {
 		return
 	}
-	userID := r.store.Snapshot(p.Address).ControlledByUserID
-	_ = r.setLocoFunction(ctx, p.Address, userID, p.Function, p.On, "server")
+	// userID 0 preserves the current controller and avoids a Snapshot→
+	// SetFunction TOCTOU where a concurrent observation could reset
+	// ownership between the read and the write.
+	_ = r.setLocoFunction(ctx, p.Address, 0, p.Function, p.On, "server")
 }

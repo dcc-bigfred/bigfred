@@ -16,28 +16,57 @@ type lnTxJob struct {
 	done chan error
 }
 
-// txLoop is the sole owner of bus pacing and transport writes. It always
-// drains normal-priority traffic (speed, functions, slot ops) before
-// keepalive frames so a periodic refresh burst cannot delay throttle commands.
+// txLoop is the sole owner of bus pacing and transport writes. Normal-priority
+// traffic (speed, functions, slot ops) always runs before a deferred keepalive
+// frame; a low frame taken from txLowCh is held back when normal traffic arrives
+// in the same scheduling window.
 func (l *LocoNet) txLoop() {
+	var pendingLow *lnTxJob
 	for {
-		var job lnTxJob
+		if pendingLow != nil {
+			select {
+			case <-l.stop:
+				return
+			case nj := <-l.txCh:
+				l.txRun(nj)
+				continue
+			default:
+			}
+			job := *pendingLow
+			pendingLow = nil
+			l.txRun(job)
+			continue
+		}
+
 		select {
 		case <-l.stop:
 			return
-		case job = <-l.txCh:
+		case job := <-l.txCh:
+			l.txRun(job)
 		default:
 			select {
 			case <-l.stop:
 				return
-			case job = <-l.txCh:
-			case job = <-l.txLowCh:
+			case job := <-l.txCh:
+				l.txRun(job)
+			case job := <-l.txLowCh:
+				select {
+				case nj := <-l.txCh:
+					deferred := job
+					pendingLow = &deferred
+					l.txRun(nj)
+				default:
+					l.txRun(job)
+				}
 			}
 		}
-		err := l.txWriteOne(job.pkt)
-		if job.done != nil {
-			job.done <- err
-		}
+	}
+}
+
+func (l *LocoNet) txRun(job lnTxJob) {
+	err := l.txWriteOne(job.pkt)
+	if job.done != nil {
+		job.done <- err
 	}
 }
 

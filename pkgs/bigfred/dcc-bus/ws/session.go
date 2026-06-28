@@ -60,7 +60,10 @@ func NewSession(id auth.Identity, conn *websocket.Conn) *Session {
 }
 
 func (s *Session) writeLoop() {
-	for env := range s.sendCh {
+	s.mu.Lock()
+	ch := s.sendCh
+	s.mu.Unlock()
+	for env := range ch {
 		raw, err := json.Marshal(env)
 		if err != nil {
 			continue
@@ -70,7 +73,7 @@ func (s *Session) writeLoop() {
 		cancel()
 		if err != nil {
 			s.Close("write failed: " + err.Error())
-			for range s.sendCh {
+			for range ch {
 			}
 			return
 		}
@@ -139,22 +142,19 @@ func (s *Session) IdleFor() time.Duration {
 // when the queue is full the oldest frame is dropped.
 func (s *Session) Send(ctx context.Context, env contract.EnvelopeWire) error {
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	if s.closed || s.sendCh == nil {
-		s.mu.Unlock()
 		return websocket.CloseError{Code: websocket.StatusGoingAway}
 	}
-	ch := s.sendCh
-	s.mu.Unlock()
-
 	select {
-	case ch <- env:
+	case s.sendCh <- env:
 	default:
 		select {
-		case <-ch:
+		case <-s.sendCh:
 		default:
 		}
 		s.sendDrop.Add(1)
-		ch <- env
+		s.sendCh <- env
 	}
 	return nil
 }

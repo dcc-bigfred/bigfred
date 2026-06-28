@@ -306,6 +306,8 @@ func CommandStationHTTPStatus(err error) (status int, code string) {
 		return http.StatusUnprocessableEntity, CodeCommandStationDeadmanTooShort
 	case stderrors.Is(err, ErrCommandStationPollIntervalInvalid):
 		return http.StatusUnprocessableEntity, CodeCommandStationPollIntervalInvalid
+	case stderrors.Is(err, ErrCommandStationInboundPortConflict):
+		return http.StatusConflict, CodeCommandStationInboundPortConflict
 	case stderrors.Is(err, ErrLayoutNeedsAtLeastOneCommandStation):
 		return http.StatusConflict, CodeLayoutNeedsAtLeastOneCommandStation
 	default:
@@ -342,5 +344,51 @@ func LeaseHTTPStatus(err error) (status int, code string) {
 		return http.StatusForbidden, CodeAccountDeactivated
 	default:
 		return http.StatusInternalServerError, "internal_error"
+	}
+}
+
+// Z21RemoteHTTPStatus maps z21-remote errors to HTTP status codes.
+func Z21RemoteHTTPStatus(err error) (status int, code string) {
+	switch {
+	case stderrors.Is(err, ErrZ21ServerDisabled):
+		return http.StatusConflict, CodeZ21ServerDisabled
+	case stderrors.Is(err, ErrZ21CommandStationNotOnLayout):
+		return http.StatusNotFound, CodeZ21CommandStationNotOnLayout
+	case stderrors.Is(err, ErrCommandStationNotFound):
+		return http.StatusNotFound, CodeCommandStationNotFound
+	case stderrors.Is(err, ErrZ21VehicleNotOnRoster):
+		return http.StatusUnprocessableEntity, CodeZ21VehicleNotOnRoster
+	case stderrors.Is(err, ErrZ21VehicleNotDrivable):
+		return http.StatusForbidden, CodeZ21VehicleNotDrivable
+	case stderrors.Is(err, ErrZ21VehicleNoDCCAddress):
+		return http.StatusUnprocessableEntity, CodeZ21VehicleNoDCCAddress
+	case stderrors.Is(err, ErrZ21SessionNotFound):
+		return http.StatusNotFound, CodeZ21SessionNotFound
+	case stderrors.Is(err, ErrZ21PairingScopeInvalid):
+		return http.StatusUnprocessableEntity, CodeZ21PairingScopeInvalid
+	case stderrors.Is(err, ErrZ21HandsetBrakeSecsInvalid):
+		return http.StatusUnprocessableEntity, CodeZ21HandsetBrakeSecsInvalid
+	case stderrors.Is(err, ErrWithrottleServerDisabled):
+		return http.StatusConflict, CodeWithrottleServerDisabled
+	case stderrors.Is(err, ErrWithrottleSessionNotFound):
+		return http.StatusNotFound, CodeWithrottleSessionNotFound
+	default:
+		return http.StatusInternalServerError, "internal_error"
+	}
+}
+
+// RemoteHTTPStatus maps remotes API errors to HTTP status codes.
+func RemoteHTTPStatus(err error) (status int, code string) {
+	switch {
+	case stderrors.Is(err, ErrRemoteProtocolUnknown):
+		return http.StatusNotFound, CodeRemoteProtocolUnknown
+	case stderrors.Is(err, ErrRemoteUserAlreadyPaired):
+		return http.StatusConflict, CodeRemoteUserAlreadyPaired
+	case stderrors.Is(err, ErrRemoteServerDisabled):
+		return http.StatusConflict, CodeRemoteServerDisabled
+	case stderrors.Is(err, ErrRemoteSessionNotFound):
+		return http.StatusNotFound, CodeRemoteSessionNotFound
+	default:
+		return Z21RemoteHTTPStatus(err)
 	}
 }

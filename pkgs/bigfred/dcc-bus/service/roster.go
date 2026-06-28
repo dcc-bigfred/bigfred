@@ -85,6 +85,20 @@ func (c *RosterCache) AllowedVehicle(addr uint16) (contract.AllowedVehicle, bool
 	return v, ok
 }
 
+// Snapshot returns the current allowed-vehicles view for roster emission.
+func (c *RosterCache) Snapshot() contract.AllowedVehicles {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	vehicles := make([]contract.AllowedVehicle, 0, len(c.byAddr))
+	for _, v := range c.byAddr {
+		vehicles = append(vehicles, v)
+	}
+	return contract.AllowedVehicles{
+		LayoutID: c.layoutID,
+		Vehicles: vehicles,
+	}
+}
+
 // IsOnLayout reports whether addr is on the layout roster.
 func (c *RosterCache) IsOnLayout(addr uint16) bool {
 	c.mu.RLock()

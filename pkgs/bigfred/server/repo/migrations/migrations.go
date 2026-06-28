@@ -107,6 +107,10 @@ func register(m *migrator.Migrator) {
 	m.Register(migrationVersion(20260622, 2), addLeaseSpeedLimitColumnUp, addLeaseSpeedLimitColumnDown)
 	m.Register(migrationVersion(20260623, 1), addCommandStationTimingColumnsUp, addCommandStationTimingColumnsDown)
 	m.Register(migrationVersion(20260623, 2), addCommandStationPollIntervalColumnUp, addCommandStationPollIntervalColumnDown)
+	m.Register(migrationVersion(20260625, 1), addCommandStationZ21ServerEnabledColumnUp, addCommandStationZ21ServerEnabledColumnDown)
+	m.Register(migrationVersion(20260625, 2), addCommandStationZ21IPStickinessColumnUp, addCommandStationZ21IPStickinessColumnDown)
+	m.Register(migrationVersion(20260626, 1), addCommandStationZ21InboundPortColumnUp, addCommandStationZ21InboundPortColumnDown)
+	m.Register(migrationVersion(20260627, 1), addCommandStationWithrottleColumnsUp, addCommandStationWithrottleColumnsDown)
 }
 
 // createCommandStationsUp installs the `command_stations` catalogue
@@ -728,5 +732,46 @@ func addCommandStationPollIntervalColumnUp(s *rel.Schema) {
 }
 
 func addCommandStationPollIntervalColumnDown(s *rel.Schema) {
+	// SQLite cannot DROP COLUMN in older schemas; leave columns in place.
+}
+
+// addCommandStationZ21ServerEnabledColumnUp enables per-station inbound Z21
+// handset UDP in dcc-bus via --enable-z21.
+func addCommandStationZ21ServerEnabledColumnUp(s *rel.Schema) {
+	s.Exec(rel.Raw(`ALTER TABLE command_stations ADD COLUMN z21_server_enabled INTEGER NOT NULL DEFAULT 0`))
+}
+
+func addCommandStationZ21ServerEnabledColumnDown(s *rel.Schema) {
+	// SQLite cannot DROP COLUMN in older schemas; leave columns in place.
+}
+
+// addCommandStationZ21IPStickinessColumnUp enables per-station Z21 handset
+// session keys based on client IP only (survives UDP port changes on reconnect).
+func addCommandStationZ21IPStickinessColumnUp(s *rel.Schema) {
+	s.Exec(rel.Raw(`ALTER TABLE command_stations ADD COLUMN z21_ip_stickiness INTEGER NOT NULL DEFAULT 0`))
+}
+
+func addCommandStationZ21IPStickinessColumnDown(s *rel.Schema) {
+	// SQLite cannot DROP COLUMN in older schemas; leave columns in place.
+}
+
+// addCommandStationZ21InboundPortColumnUp sets the per-station inbound Z21 UDP port.
+func addCommandStationZ21InboundPortColumnUp(s *rel.Schema) {
+	s.Exec(rel.Raw(`ALTER TABLE command_stations ADD COLUMN z21_inbound_port INTEGER NOT NULL DEFAULT 21105`))
+}
+
+func addCommandStationZ21InboundPortColumnDown(s *rel.Schema) {
+	// SQLite cannot DROP COLUMN in older schemas; leave columns in place.
+}
+
+// addCommandStationWithrottleColumnsUp enables per-station inbound WiThrottle TCP in dcc-bus.
+func addCommandStationWithrottleColumnsUp(s *rel.Schema) {
+	s.Exec(rel.Raw(`ALTER TABLE command_stations ADD COLUMN withrottle_server_enabled INTEGER NOT NULL DEFAULT 0`))
+	s.Exec(rel.Raw(`ALTER TABLE command_stations ADD COLUMN withrottle_inbound_port INTEGER NOT NULL DEFAULT 12090`))
+	s.Exec(rel.Raw(`ALTER TABLE command_stations ADD COLUMN withrottle_pairing_addr INTEGER NOT NULL DEFAULT 10239`))
+	s.Exec(rel.Raw(`ALTER TABLE command_stations ADD COLUMN withrottle_heartbeat_secs REAL NOT NULL DEFAULT 10`))
+}
+
+func addCommandStationWithrottleColumnsDown(s *rel.Schema) {
 	// SQLite cannot DROP COLUMN in older schemas; leave columns in place.
 }

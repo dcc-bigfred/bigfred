@@ -52,7 +52,8 @@
       "trains": "Züge",
       "templates": "Fahrzeugvorlagen",
       "throttle": "Regler",
-      "rentals": "Ausleihen"
+      "rentals": "Ausleihen",
+      "remotes": "Handgeräte"
     },
     "fleet": {
       "menuLabel": "Fuhrpark",

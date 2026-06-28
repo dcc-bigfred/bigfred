@@ -49,10 +49,21 @@ type Hub struct {
 	register   chan *Client
 	unregister chan *Client
 
-	presence PresenceRefresher
-	control  ControlHandler
-	metrics  *metrics.Metrics
+	presence     PresenceRefresher
+	control      ControlHandler
+	metrics      *metrics.Metrics
+	roleResolver AdminResolver
 }
+
+// AdminResolver reports whether (userID, layoutID) currently holds the
+// admin role (permanent or sudo-elevated). Injected by the composition
+// root so the hub can scope admin-only broadcasts without importing the
+// auth service. The hub calls it on elevation changes (infrequent).
+type AdminResolver func(ctx context.Context, userID, layoutID uint) bool
+
+// SetRoleResolver wires the admin-role resolver used to keep each
+// DriveSession's cached EffectiveAdmin flag fresh after elevation changes.
+func (h *Hub) SetRoleResolver(r AdminResolver) { h.roleResolver = r }
 
 // NewHub constructs a Hub. Call Run before accepting connections.
 func NewHub() *Hub {
@@ -285,6 +296,13 @@ type DriveSession struct {
 	OpenedAt     time.Time
 
 	currentCS uint
+
+	// effectiveAdmin caches whether the user currently holds the admin
+	// role (permanent or sudo-elevated) on this layout. Seeded at WS
+	// handshake and refreshed by the hub on elevation changes so that
+	// admin-only broadcasts can be filtered without a per-broadcast
+	// role lookup.
+	effectiveAdmin bool
 }
 
 // CurrentCommandStation returns the cs ID the user has selected for
@@ -303,6 +321,21 @@ func (s *DriveSession) SetCommandStation(csID uint) uint {
 	prev := s.currentCS
 	s.currentCS = csID
 	return prev
+}
+
+// EffectiveAdmin reports the cached admin-role state for this session.
+func (s *DriveSession) EffectiveAdmin() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.effectiveAdmin
+}
+
+// SetEffectiveAdmin updates the cached admin-role state. Called at WS
+// handshake and by the hub on elevation changes.
+func (s *DriveSession) SetEffectiveAdmin(v bool) {
+	s.mu.Lock()
+	s.effectiveAdmin = v
+	s.mu.Unlock()
 }
 
 // Envelope is the common wire format for every WS frame (§4.2).
@@ -345,6 +378,36 @@ type ElevationChangedPayload struct {
 	UserID   uint `json:"userId"`
 }
 
+// BroadcastToLayoutAdmins sends an envelope to every admin (permanent or
+// sudo-elevated) WS client pinned to layoutID. Used for admin-only
+// payloads such as the handset clients snapshot, which carries IPs and
+// user logins that must not leak to non-admin operators.
+func (h *Hub) BroadcastToLayoutAdmins(layoutID uint, eventType string, payload any) {
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return
+	}
+	env := Envelope{Type: eventType, Payload: data}
+
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	for c := range h.clients {
+		if c.session.LayoutID != layoutID {
+			continue
+		}
+		if !c.session.EffectiveAdmin() {
+			continue
+		}
+		select {
+		case c.send <- env:
+		default:
+			if h.metrics != nil {
+				h.metrics.RecordWSBroadcastDropped(layoutID, eventType)
+			}
+		}
+	}
+}
+
 // BroadcastElevationChanged implements cmd.SudoHubPort.
 func (h *Hub) BroadcastElevationChanged(layoutID, userID uint) {
 	h.BroadcastToUserInLayout(layoutID, userID, "auth.elevationChanged",
@@ -352,4 +415,23 @@ func (h *Hub) BroadcastElevationChanged(layoutID, userID uint) {
 			LayoutID: layoutID,
 			UserID:   userID,
 		})
+	h.refreshEffectiveAdmin(layoutID, userID)
+}
+
+// refreshEffectiveAdmin recomputes the admin flag for every session of
+// (layoutID, userID) so admin-only broadcasts stay accurate after a
+// sudo grant/revoke. Runs only on elevation changes (infrequent); the
+// resolver is injected via SetRoleResolver and may be nil in tests.
+func (h *Hub) refreshEffectiveAdmin(layoutID, userID uint) {
+	if h.roleResolver == nil {
+		return
+	}
+	isAdmin := h.roleResolver(context.Background(), userID, layoutID)
+	h.mu.RLock()
+	for c := range h.clients {
+		if c.session.LayoutID == layoutID && c.session.UserID == userID {
+			c.session.SetEffectiveAdmin(isAdmin)
+		}
+	}
+	h.mu.RUnlock()
 }

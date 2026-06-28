@@ -168,6 +168,24 @@ func (r *RedisService) PublishLayoutDefinedTrains(ctx context.Context, snap cont
 	return err
 }
 
+// PublishLayoutVehicleFunctions stores the snapshot and notifies
+// subscribers on bigfred:layout:<id>:vehicle_functions.
+func (r *RedisService) PublishLayoutVehicleFunctions(ctx context.Context, snap contract.VehicleFunctions) error {
+	if r == nil || snap.LayoutID == 0 {
+		return nil
+	}
+	raw, err := contract.Marshal(snap)
+	if err != nil {
+		return err
+	}
+	key := contract.VehicleFunctionsKey(snap.LayoutID)
+	pipe := r.client.TxPipeline()
+	pipe.Set(ctx, key, raw, 0)
+	pipe.Publish(ctx, key, raw)
+	_, err = pipe.Exec(ctx)
+	return err
+}
+
 // Close drains the underlying connection pool.
 func (r *RedisService) Close() error { return r.client.Close() }
 

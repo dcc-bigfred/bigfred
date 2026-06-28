@@ -22,7 +22,9 @@ import (
 	frontend "github.com/keskad/loco/web"
 
 	dccbuscli "github.com/keskad/loco/pkgs/bigfred/dcc-bus/cli"
+	"github.com/keskad/loco/pkgs/bigfred/remotepairing"
 	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
+	"github.com/keskad/loco/pkgs/bigfred/server/domain"
 	httpapi "github.com/keskad/loco/pkgs/bigfred/server/http"
 	bfotel "github.com/keskad/loco/pkgs/bigfred/otel"
 	"github.com/keskad/loco/pkgs/bigfred/server/metrics"
@@ -326,6 +328,14 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	sudoSvc := cmd.NewSudo(sudoElevations, layoutSignalmen, layoutSvc, hub, cmd.DefaultSudoConfig)
 	presenceSvc := service.NewPresenceService(hub, authSvc, users, interlockingSessions, interlockings, layoutInterlockings)
 	hub.SetPresenceRefresher(presenceSvc)
+	// Inject the admin-role resolver so the hub can keep each WS
+	// session's cached EffectiveAdmin flag fresh after sudo grants /
+	// revokes, and scope admin-only broadcasts (e.g. handset clients
+	// snapshot) without a per-broadcast Redis lookup.
+	hub.SetRoleResolver(func(ctx context.Context, userID, layoutID uint) bool {
+		eff, err := authSvc.EffectiveForUserID(ctx, userID, layoutID)
+		return err == nil && eff.Has(domain.RoleAdmin)
+	})
 	occupancySvc := service.NewInterlockingOccupancyService(
 		interlockings, layoutInterlockings, interlockingSessions, users,
 		authSvc, hub, presenceSvc,
@@ -335,6 +345,30 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		vehicleLeases, trainLeases, users, hub,
 	)
 	layoutVehicleSvc.SetRedisRosterPublisher(redisSvc)
+	layoutVehicleSvc.SetFunctionLister(functionSvc)
+
+	var z21RemoteSvc *cmd.Z21Remote
+	var withrottleRemoteSvc *cmd.WithrottleRemote
+	var remoteSvc *cmd.Remote
+	if redisReady {
+		pairStore := remotepairing.NewStore(redisSvc.Client())
+		z21RemoteSvc = cmd.NewZ21Remote(
+			pairStore,
+			commandStations,
+			layoutCommandStations,
+			layoutVehicleSvc.LayoutRoster,
+			layoutVehicleSvc.LayoutRosterSnapshot,
+			users,
+		)
+		withrottleRemoteSvc = cmd.NewWithrottleRemote(
+			pairStore,
+			commandStations,
+			layoutCommandStations,
+			layoutVehicleSvc.LayoutRoster,
+			layoutVehicleSvc.LayoutRosterSnapshot,
+		)
+		remoteSvc = cmd.NewRemote(z21RemoteSvc, withrottleRemoteSvc, pairStore, users)
+	}
 
 	go hub.Run(ctx)
 	if sudoElevations.RequiresJanitor() {
@@ -572,6 +606,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		Radio:            radioSvc,
 		Audit:            auditSvc,
 		Leases:           leaseSvc,
+		Remote:           remoteSvc,
 		AllowedOrigins:   f.AllowedOrigins,
 		SecureCookie:     f.SecureCookie,
 		StaticFS:         staticFS,

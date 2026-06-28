@@ -61,7 +61,7 @@ func NewLayoutVehicleService(
 		layoutRosterHub{hub: hub},
 	)
 	snapshots := cmd.NewLayoutRosterSnapshot(
-		inner, layoutTrains, vehicles, members, vehicleLeases, trainLeases, nil,
+		inner, layoutTrains, layoutVehicles, vehicles, members, vehicleLeases, trainLeases, nil, nil,
 	)
 	return &LayoutVehicleService{
 		LayoutRoster:         inner,
@@ -74,6 +74,25 @@ func (s *LayoutVehicleService) SetRedisRosterPublisher(r layoutRosterRedisSync) 
 	s.redis = r
 	s.LayoutRosterSnapshot.SetPublisher(r)
 	s.LayoutRoster.SetSyncPort(layoutRosterSyncAdapter{s: s})
+}
+
+// SetFunctionLister wires resolved function catalogue lookup for Redis snapshots.
+func (s *LayoutVehicleService) SetFunctionLister(l interface {
+	ListForVehicles(ctx context.Context, vehicles []domain.Vehicle) (map[domain.VehicleID][]cmd.ResolvedFunction, error)
+}) {
+	s.LayoutRosterSnapshot.SetFunctionLister(l)
+}
+
+// SyncVehicleFunctionsForVehicle republishes function catalogues for layouts
+// that roster the given vehicle.
+func (s *LayoutVehicleService) SyncVehicleFunctionsForVehicle(ctx context.Context, vehicleID domain.VehicleID) error {
+	return s.LayoutRosterSnapshot.SyncVehicleFunctionsForVehicle(ctx, vehicleID)
+}
+
+// SyncVehicleFunctionsForTemplate republishes function catalogues for layouts
+// rostering vehicles that still inherit from templateID.
+func (s *LayoutVehicleService) SyncVehicleFunctionsForTemplate(ctx context.Context, templateID uint) error {
+	return s.LayoutRosterSnapshot.SyncVehicleFunctionsForTemplate(ctx, templateID)
 }
 
 type layoutRosterHub struct {

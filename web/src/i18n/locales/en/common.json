@@ -52,7 +52,8 @@
       "trains": "Trains",
       "templates": "Vehicle templates",
       "throttle": "Throttle",
-      "rentals": "Rentals"
+      "rentals": "Rentals",
+      "remotes": "Handsets"
     },
     "fleet": {
       "menuLabel": "Fleet",

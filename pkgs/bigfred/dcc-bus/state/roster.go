@@ -20,6 +20,11 @@ func (r *Redis) LoadDefinedTrains(ctx context.Context) (contract.DefinedTrains, 
 	return loadRosterSnapshot(ctx, r.client, contract.DefinedTrainsKey(r.layoutID), contract.UnmarshalDefinedTrains)
 }
 
+// LoadVehicleFunctions reads the latest function catalogue snapshot.
+func (r *Redis) LoadVehicleFunctions(ctx context.Context) (contract.VehicleFunctions, bool, error) {
+	return loadRosterSnapshot(ctx, r.client, contract.VehicleFunctionsKey(r.layoutID), contract.UnmarshalVehicleFunctions)
+}
+
 // SubscribeAllowedVehicles listens for full snapshot updates.
 func (r *Redis) SubscribeAllowedVehicles(ctx context.Context) (*redis.PubSub, error) {
 	return subscribeRoster(ctx, r.client, contract.AllowedVehiclesKey(r.layoutID))
@@ -28,6 +33,11 @@ func (r *Redis) SubscribeAllowedVehicles(ctx context.Context) (*redis.PubSub, er
 // SubscribeDefinedTrains listens for train roster updates.
 func (r *Redis) SubscribeDefinedTrains(ctx context.Context) (*redis.PubSub, error) {
 	return subscribeRoster(ctx, r.client, contract.DefinedTrainsKey(r.layoutID))
+}
+
+// SubscribeVehicleFunctions listens for function catalogue updates.
+func (r *Redis) SubscribeVehicleFunctions(ctx context.Context) (*redis.PubSub, error) {
+	return subscribeRoster(ctx, r.client, contract.VehicleFunctionsKey(r.layoutID))
 }
 
 func loadRosterSnapshot[T any](ctx context.Context, client *redis.Client, key string, decode func([]byte) (T, error)) (T, bool, error) {

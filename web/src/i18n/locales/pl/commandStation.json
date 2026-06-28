@@ -8,9 +8,11 @@
       "connection": "Połączenie",
       "speedSteps": "Kroki prędkości",
       "timing": "Czasy",
+      "z21Server": "Serwer Z21",
       "actions": "Akcje"
     },
     "timingSummary": "{{heartbeat}} s ping / {{deadman}} s dead-man / poll {{poll}} ms (0 = domyślny)",
+    "z21ServerOn": "Serwer Z21 włączony",
     "actions": {
       "create": "Nowa centralka",
       "edit": "Edytuj",
@@ -44,7 +46,15 @@
         "heartbeatSecs": "Interwał heartbeat (s)",
         "heartbeatSecsHelp": "Interwał pingów WebSocket. Domyślnie 2 s. Jeśli ping nie zdąży przed dead-man, to pojazd zostanie awaryjnie zatrzymany.",
         "deadmanSecs": "Czas dead-man (s)",
-        "deadmanSecsHelp": "Czas bezczynności, po którym daemon wykonuje zatrzymanie awaryjne. Musi być dłuższy niż heartbeat. Domyślnie 6 s."
+        "deadmanSecsHelp": "Czas bezczynności, po którym daemon wykonuje zatrzymanie awaryjne. Musi być dłuższy niż heartbeat. Domyślnie 6 s.",
+        "z21ServerEnabled": "Serwer pilota Z21",
+        "z21ServerEnabledHelp": "Niezależnie od typu połączenia wychodzącego. Aplikacje Z21 łączą się z hostem dcc-bus na porcie UDP 21105. Parowanie odbywa się przez CV3 i CV4 w aplikacji Z21.",
+        "z21IpStickiness": "Przypisanie sesji do IP (IP stickiness)",
+        "z21IpStickinessHelp": "Gdy włączone, sesja pilota jest powiązana z adresem IP, a nie z portem UDP. Po reconnect z nowym portem (typowe przy DHCP) parowanie pozostaje aktywne.",
+        "z21ServerDisableWarn": "Wyłączenie serwera blokuje nowe parowania. Aktywne sesje pilota przestaną działać po restarcie daemona dcc-bus.",
+        "withrottleServerEnabled": "Serwer WiThrottle",
+        "withrottleServerEnabledHelp": "Engine Driver i WiThrottle łączą się z hostem dcc-bus na porcie TCP 12090. Parowanie odbywa się 6-cyfrowym kodem przez lokomotywę sentinel lub nazwę urządzenia (N).",
+        "withrottleServerDisableWarn": "Wyłączenie serwera blokuje nowe parowania. Aktywne sesje WiThrottle przestaną działać po restarcie daemona dcc-bus."
       }
     },
     "empty": "Brak centralki do wyświetlenia."

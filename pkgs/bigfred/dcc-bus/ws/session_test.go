@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -75,4 +76,36 @@ func TestSessionCloseTerminatesWriteLoop(t *testing.T) {
 	if err == nil {
 		t.Fatal("Send after Close should fail")
 	}
+}
+
+func TestSessionSendCloseNoRace(t *testing.T) {
+	hold := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
+		if err != nil {
+			return
+		}
+		defer conn.Close(websocket.StatusGoingAway, "test")
+		<-hold
+	}))
+	t.Cleanup(srv.Close)
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http")
+	conn, _, err := websocket.Dial(context.Background(), wsURL, nil)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+
+	s := NewSession(auth.Identity{UserID: 1}, conn)
+	var wg sync.WaitGroup
+	for i := 0; i < 200; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_ = s.Send(context.Background(), contract.EnvelopeWire{Type: "loco.state"})
+		}()
+	}
+	s.Close("done")
+	close(hold)
+	wg.Wait()
 }

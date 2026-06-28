@@ -66,6 +66,16 @@ func (h *Hub) UnsubscribeAll(addrs ...uint16) {
 	}
 }
 
+// IsSubscribed reports whether any live session watches addr.
+func (h *Hub) IsSubscribed(addr uint16) bool {
+	for _, s := range h.Snapshot() {
+		if s.IsSubscribed(addr) {
+			return true
+		}
+	}
+	return false
+}
+
 // SendDropsTotal sums per-session send-queue drops across live sessions.
 func (h *Hub) SendDropsTotal() uint64 {
 	var n uint64

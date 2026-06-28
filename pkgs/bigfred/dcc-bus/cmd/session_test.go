@@ -42,6 +42,7 @@ type stubHub struct {
 
 func (h *stubHub) Broadcast(context.Context, uint16, contract.EnvelopeWire) {}
 func (h *stubHub) SubscribedAddrs() []uint16                               { return nil }
+func (h *stubHub) IsSubscribed(uint16) bool                                { return false }
 func (h *stubHub) UnsubscribeAll(...uint16)                                {}
 func (h *stubHub) Snapshot() []SessionView                                 { return append([]SessionView(nil), h.sessions...) }
 func (h *stubHub) SessionsForUser(userID uint) []SessionView {

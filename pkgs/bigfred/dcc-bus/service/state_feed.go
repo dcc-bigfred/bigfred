@@ -37,6 +37,7 @@ type FeedDeps struct {
 // SubscriptionSource exposes the union of subscribed locomotive addresses.
 type SubscriptionSource interface {
 	SubscribedAddrs() []uint16
+	IsSubscribed(addr uint16) bool
 }
 
 // RunStateFeed keeps Redis and connected WS clients in sync with state
@@ -164,6 +165,21 @@ func pollOne(ctx context.Context, deps FeedDeps, addr uint16) {
 func applyObservation(ctx context.Context, deps FeedDeps, o commandstation.LocoObservation, source string) {
 	addr := uint16(o.Addr)
 	if deps.Roster != nil && !deps.Roster.IsOnLayout(addr) {
+		return
+	}
+
+	noWS := deps.HubSubs != nil && !deps.HubSubs.IsSubscribed(addr)
+	noHandset := deps.LocoObservers == nil
+	if noWS && noHandset {
+		if o.FunctionMask != 0 && deps.FnCache != nil {
+			for fn := 0; fn <= pollFnRange; fn++ {
+				bit := uint32(1) << uint(fn)
+				if o.FunctionMask&bit == 0 {
+					continue
+				}
+				deps.FnCache.Set(addr, uint8(fn), o.FunctionBits&bit != 0)
+			}
+		}
 		return
 	}
 

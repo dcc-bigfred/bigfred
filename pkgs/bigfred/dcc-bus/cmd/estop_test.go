@@ -24,10 +24,7 @@ func testRedis(t *testing.T) (*state.Redis, func()) {
 
 func TestIsLocoPlacedForward_defaultsForwardWhenNoCache(t *testing.T) {
 	t.Parallel()
-	rs, cleanup := testRedis(t)
-	defer cleanup()
-
-	r := &Router{redis: rs}
+	r := &Router{store: state.NewLocoStateStore(nil, StateTTL, nil)}
 	if !r.isLocoPlacedForward(context.Background(), 3) {
 		t.Fatal("expected forward when no cached state")
 	}
@@ -46,7 +43,9 @@ func TestIsLocoPlacedForward_returnsCachedDirection(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r := &Router{redis: rs}
+	store := state.NewLocoStateStore(rs, StateTTL, nil)
+	store.LoadFromRedis(ctx, []uint16{3})
+	r := &Router{store: store}
 	if r.isLocoPlacedForward(ctx, 3) {
 		t.Fatal("expected reverse from cache")
 	}

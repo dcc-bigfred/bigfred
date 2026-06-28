@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	stderrors "errors"
-	"time"
 
 	"github.com/sirupsen/logrus"
 
@@ -65,23 +64,7 @@ func (r *Router) applyMemberSetSpeed(
 		"forward": forward,
 	}).Debug("dcc-bus command station SetSpeed ok")
 
-	unlock := r.locoLocks.Acquire(addr)
-	defer unlock()
-
-	snap := contract.LocoStateWire{
-		Address:            addr,
-		Speed:              speed,
-		Forward:            forward,
-		ControlledByUserID: actor.UserID,
-		Source:             source,
-		At:                 time.Now().UTC().UnixMilli(),
-	}
-	if env, ok, err := r.redis.GetLocoCurrentState(ctx, addr); err == nil && ok {
-		snap.Functions = env.Functions
-	}
-	if err := r.redis.StoreLocoCurrentState(ctx, snap, StateTTL); err != nil {
-		r.log.WithError(err).Debug("dcc-bus redis store")
-	}
+	snap := r.store.SetSpeed(addr, speed, forward, actor.UserID, source)
 	r.broadcastLocoState(ctx, snap)
 	return nil
 }

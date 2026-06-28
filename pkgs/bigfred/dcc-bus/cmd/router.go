@@ -57,7 +57,7 @@ type Router struct {
 
 	locoObservers *remotes.LocoStateNotifier
 
-	locoLocks *state.LocoLocks
+	store *state.LocoStateStore
 
 	shutdownOnce sync.Once
 	bootStopMu   sync.Mutex
@@ -111,9 +111,14 @@ func NewRouter(_ context.Context, cfg Config) (*Router, error) {
 		trainSpeed:    service.NewTrainSpeedScheduler(),
 		pulseActive:   make(map[service.FnKey]bool, 8),
 		locoObservers: remotes.NewLocoStateNotifier(),
-		locoLocks:     state.NewLocoLocks(),
+		store:         state.NewLocoStateStore(cfg.Redis, StateTTL, log),
 	}
 	r.dcc.LogFields = r.stationLogFields
+	if cfg.AllowedVehicles.LayoutID == 0 || cfg.AllowedVehicles.LayoutID == cfg.LayoutID {
+		if r.roster.ApplySnapshot(cfg.AllowedVehicles) {
+			r.store.LoadFromRedis(context.Background(), r.roster.AllowedAddrs())
+		}
+	}
 	r.ApplyAllowedVehicles(context.Background(), cfg.AllowedVehicles)
 	r.ApplyDefinedTrains(cfg.DefinedTrains)
 	r.ApplyVehicleFunctions(cfg.VehicleFunctions)
@@ -250,27 +255,31 @@ func (r *Router) broadcastLocoState(ctx context.Context, snap contract.LocoState
 	r.locoObservers.Notify(ctx, snap)
 }
 
-// locoSnapOrDefault returns the cached Redis snapshot or a stopped default.
-func (r *Router) locoSnapOrDefault(ctx context.Context, addr uint16) contract.LocoStateWire {
-	if r.redis != nil {
-		if snap, ok, err := r.redis.GetLocoCurrentState(ctx, addr); err == nil && ok {
-			return snap
-		}
+// locoSnapOrDefault returns the in-memory snapshot or a stopped default.
+func (r *Router) locoSnapOrDefault(_ context.Context, addr uint16) contract.LocoStateWire {
+	if r.store != nil {
+		return r.store.Snapshot(addr)
 	}
 	return contract.LocoStateWire{Address: addr, Forward: true}
 }
 
-// RunStateFeed mirrors external throttle changes into Redis and WS clients.
+// RunStoreFlush mirrors dirty loco state to Redis on a fixed tick.
+func (r *Router) RunStoreFlush(ctx context.Context) {
+	if r.store != nil {
+		r.store.FlushLoop(ctx, 100*time.Millisecond)
+	}
+}
+
+// RunStateFeed mirrors external throttle changes into WS clients.
 func (r *Router) RunStateFeed(ctx context.Context) {
 	service.RunStateFeed(ctx, service.FeedDeps{
 		Station:       r.station,
 		Roster:        r.roster,
-		Redis:         r.redis,
+		Store:         r.store,
 		Hub:           r.hub,
 		HubSubs:       r.hub,
 		FnCache:       r.cache,
 		LocoObservers: r.locoObservers,
-		LocoLocks:     r.locoLocks,
 		Log:           r.log,
 		PollInterval:  r.pollInterval,
 		StateTTL:      StateTTL,

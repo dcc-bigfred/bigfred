@@ -123,8 +123,8 @@ func (r *Router) collectDriveTargetsForUser(ctx context.Context, userID uint, ex
 		}
 	}
 	for _, addr := range r.roster.AllowedAddrs() {
-		snap, ok, err := r.redis.GetLocoCurrentState(ctx, addr)
-		if err != nil || !ok || snap.ControlledByUserID != userID {
+		snap := r.store.Snapshot(addr)
+		if snap.ControlledByUserID != userID {
 			continue
 		}
 		add(&addrs, addr)

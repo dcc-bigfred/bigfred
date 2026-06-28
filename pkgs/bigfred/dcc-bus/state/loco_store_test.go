@@ -2,6 +2,7 @@ package state
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -32,6 +33,18 @@ func (m *memRedis) StoreLocoCurrentState(_ context.Context, snap contract.LocoSt
 	m.snaps[snap.Address] = snap
 	m.puts++
 	return nil
+}
+
+type failRedis struct {
+	err error
+}
+
+func (f *failRedis) GetLocoCurrentState(_ context.Context, _ uint16) (contract.LocoStateWire, bool, error) {
+	return contract.LocoStateWire{}, false, nil
+}
+
+func (f *failRedis) StoreLocoCurrentState(_ context.Context, _ contract.LocoStateWire, _ time.Duration) error {
+	return f.err
 }
 
 func expireCommandSuppress(s *LocoStateStore, addr uint16) {
@@ -68,6 +81,103 @@ func TestStoreSuppressesStaleEchoAfterCommand(t *testing.T) {
 	}, "external")
 	if !changed || snap.Speed != 30 {
 		t.Fatalf("after window expired, observation must apply: %+v changed=%v", snap, changed)
+	}
+}
+
+// TestStoreSplitSpeedForwardEcho verifies that a partial (speed-only)
+// confirming echo does NOT release the suppression window, so a later
+// stale direction frame cannot snap the lever back. LocoNet emits speed
+// and direction in separate OPC_LOCO_SPD / OPC_LOCO_DIRF frames.
+func TestStoreSplitSpeedForwardEcho(t *testing.T) {
+	s := NewLocoStateStore(nil, time.Minute, nil)
+	s.SetSpeed(10, 80, true, 1, "throttle")
+
+	// Good speed echo (matches) but no direction field: must NOT clear window.
+	_, changed := s.ApplyObservation(commandstation.LocoObservation{
+		Addr: 10, HasSpeed: true, Speed: 80,
+	}, "external")
+	if changed {
+		t.Fatal("matching speed-only echo should be no-op")
+	}
+
+	// Stale direction echo arriving after the partial speed confirm:
+	// window still active → must be suppressed.
+	snap, changed := s.ApplyObservation(commandstation.LocoObservation{
+		Addr: 10, HasForward: true, Forward: false,
+	}, "external")
+	if changed {
+		t.Fatalf("stale direction echo must be suppressed: %+v", snap)
+	}
+	if !snap.Forward || snap.ControlledByUserID != 1 {
+		t.Fatalf("snap=%+v, want forward=true user=1", snap)
+	}
+
+	// Full confirming echo (both dims present and matching) releases window.
+	_, changed = s.ApplyObservation(commandstation.LocoObservation{
+		Addr: 10, HasSpeed: true, Speed: 80, HasForward: true, Forward: true,
+	}, "external")
+	if changed {
+		t.Fatal("full confirming echo should be no-op")
+	}
+
+	// Window now released: external change applies.
+	snap, changed = s.ApplyObservation(commandstation.LocoObservation{
+		Addr: 10, HasSpeed: true, Speed: 20,
+	}, "external")
+	if !changed || snap.Speed != 20 {
+		t.Fatalf("after full confirm, observation must apply: %+v changed=%v", snap, changed)
+	}
+}
+
+// TestStoreFunctionEchoDuringSuppressionKeepsUser verifies that a bus
+// function echo arriving inside the motion suppression window applies
+// the function change but does not drop throttle ownership.
+func TestStoreFunctionEchoDuringSuppressionKeepsUser(t *testing.T) {
+	s := NewLocoStateStore(nil, time.Minute, nil)
+	s.SetSpeed(10, 80, true, 1, "throttle")
+
+	snap, changed := s.ApplyObservation(commandstation.LocoObservation{
+		Addr:         10,
+		FunctionMask: 1 << 0,
+		FunctionBits: 1 << 0,
+	}, "external")
+	if !changed {
+		t.Fatal("function change should apply")
+	}
+	if !snap.Functions[0] {
+		t.Fatal("F0 should be on")
+	}
+	if snap.ControlledByUserID != 1 {
+		t.Fatalf("userID = %d, want 1 (function echo must not drop ownership)", snap.ControlledByUserID)
+	}
+	if snap.Speed != 80 {
+		t.Fatalf("speed = %d, want 80 (commanded speed protected)", snap.Speed)
+	}
+}
+
+// TestStoreSetSpeedPreservingUser verifies the server-commanded path
+// does not touch ControlledByUserID while still recording the command.
+func TestStoreSetSpeedPreservingUser(t *testing.T) {
+	s := NewLocoStateStore(nil, time.Minute, nil)
+	s.SetSpeed(10, 50, true, 7, "throttle")
+
+	out := s.SetSpeedPreservingUser(10, 0, true, "estop")
+	if out.Speed != 0 {
+		t.Fatalf("speed = %d, want 0", out.Speed)
+	}
+	if out.ControlledByUserID != 7 {
+		t.Fatalf("userID = %d, want 7 (preserved)", out.ControlledByUserID)
+	}
+
+	// Stale speed echo after the estop command must be suppressed.
+	snap, changed := s.ApplyObservation(commandstation.LocoObservation{
+		Addr: 10, HasSpeed: true, Speed: 50,
+	}, "external")
+	if changed {
+		t.Fatalf("stale echo after SetSpeedPreservingUser must be suppressed: %+v", snap)
+	}
+	if snap.Speed != 0 || snap.ControlledByUserID != 7 {
+		t.Fatalf("snap=%+v, want speed=0 user=7", snap)
 	}
 }
 
@@ -186,5 +296,31 @@ func TestStoreLoadMissingFromRedisSkipsExisting(t *testing.T) {
 	got := s.Snapshot(10)
 	if got.Speed != 80 {
 		t.Fatalf("speed = %d, want 80 (live state preserved)", got.Speed)
+	}
+}
+
+// TestStoreFlushAllRetriesOnRedisFailure verifies that a failed Redis
+// write leaves the addr dirty so the next tick retries it.
+func TestStoreFlushAllRetriesOnRedisFailure(t *testing.T) {
+	redis := &memRedis{}
+	s := NewLocoStateStore(redis, time.Minute, nil)
+	s.SetSpeed(10, 3, true, 0, "throttle")
+
+	s.flushAll(context.Background()) // success → dirty cleared
+	s.dirtyMu.Lock()
+	dirtyCount := len(s.dirty)
+	s.dirtyMu.Unlock()
+	if dirtyCount != 0 {
+		t.Fatalf("dirty = %d after successful flush, want 0", dirtyCount)
+	}
+
+	failStore := NewLocoStateStore(&failRedis{err: errors.New("redis down")}, time.Minute, nil)
+	failStore.SetSpeed(20, 9, true, 0, "throttle")
+	failStore.flushAll(context.Background()) // failure → dirty retained
+	failStore.dirtyMu.Lock()
+	dirtyCount = len(failStore.dirty)
+	failStore.dirtyMu.Unlock()
+	if dirtyCount != 1 {
+		t.Fatalf("dirty = %d after failed flush, want 1 (retry)", dirtyCount)
 	}
 }

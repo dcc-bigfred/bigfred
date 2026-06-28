@@ -110,8 +110,7 @@ func (r *Router) applyEStopTarget(ctx context.Context, addrs []uint16) {
 			continue
 		}
 		affected = append(affected, addr)
-		prev := r.store.Snapshot(addr)
-		snap := r.store.SetSpeed(addr, 0, forward, prev.ControlledByUserID, "estop")
+		snap := r.store.SetSpeedPreservingUser(addr, 0, forward, "estop")
 		r.store.FlushNow(ctx, addr)
 		service.BroadcastLocoState(ctx, r.hub, snap)
 	}
@@ -135,8 +134,7 @@ func (r *Router) applyEStopAll(ctx context.Context, reason string) []uint16 {
 				continue
 			}
 		}
-		prev := r.store.Snapshot(addr)
-		snap := r.store.SetSpeed(addr, 0, forward, prev.ControlledByUserID, "estop")
+		snap := r.store.SetSpeedPreservingUser(addr, 0, forward, "estop")
 		r.store.FlushNow(ctx, addr)
 		service.BroadcastLocoState(ctx, r.hub, snap)
 	}

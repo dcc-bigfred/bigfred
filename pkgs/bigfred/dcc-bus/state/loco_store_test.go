@@ -34,6 +34,43 @@ func (m *memRedis) StoreLocoCurrentState(_ context.Context, snap contract.LocoSt
 	return nil
 }
 
+func expireCommandSuppress(s *LocoStateStore, addr uint16) {
+	e := s.entry(addr)
+	e.mu.Lock()
+	e.commandedAt = time.Time{}
+	e.mu.Unlock()
+}
+
+func TestStoreSuppressesStaleEchoAfterCommand(t *testing.T) {
+	s := NewLocoStateStore(nil, time.Minute, nil)
+	s.SetSpeed(10, 80, true, 1, "throttle")
+
+	snap, changed := s.ApplyObservation(commandstation.LocoObservation{
+		Addr: 10, HasSpeed: true, Speed: 50,
+	}, "external")
+	if changed {
+		t.Fatal("stale echo must not change snap")
+	}
+	if snap.Speed != 80 || snap.ControlledByUserID != 1 {
+		t.Fatalf("snap=%+v, want speed=80 user=1", snap)
+	}
+
+	_, changed = s.ApplyObservation(commandstation.LocoObservation{
+		Addr: 10, HasSpeed: true, Speed: 80,
+	}, "external")
+	if changed {
+		t.Fatal("confirming echo should be no-op")
+	}
+
+	expireCommandSuppress(s, 10)
+	snap, changed = s.ApplyObservation(commandstation.LocoObservation{
+		Addr: 10, HasSpeed: true, Speed: 30,
+	}, "external")
+	if !changed || snap.Speed != 30 {
+		t.Fatalf("after window expired, observation must apply: %+v changed=%v", snap, changed)
+	}
+}
+
 func TestStoreSetSpeedAndSnapshot(t *testing.T) {
 	s := NewLocoStateStore(nil, time.Minute, nil)
 	out := s.SetSpeed(10, 5, true, 7, "throttle")
@@ -49,6 +86,7 @@ func TestStoreSetSpeedAndSnapshot(t *testing.T) {
 func TestStoreApplyObservationMerge(t *testing.T) {
 	s := NewLocoStateStore(nil, time.Minute, nil)
 	s.SetSpeed(10, 5, true, 1, "throttle")
+	expireCommandSuppress(s, 10)
 	snap, changed := s.ApplyObservation(commandstation.LocoObservation{
 		Addr:       10,
 		HasSpeed:   true,

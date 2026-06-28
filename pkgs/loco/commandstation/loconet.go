@@ -268,13 +268,6 @@ func NewLocoNetTCPBinary(host string, port uint16) (*LocoNet, error) {
 	return ln, nil
 }
 
-// startWorkers launches background goroutines for tests that wire a transport
-// without going through NewLocoNet*.
-func (l *LocoNet) startWorkers() {
-	go l.txLoop()
-	go l.dispatch()
-}
-
 // SetTimeout adjusts the request/response deadline for LocoNet operations.
 func (l *LocoNet) SetTimeout(d time.Duration) {
 	if d > 0 {
@@ -1483,32 +1476,6 @@ func (l *LocoNet) refreshOneKeepaliveSlot() {
 		return
 	}
 	l.metrics.incr(&l.metrics.keepaliveRefresh)
-}
-
-// refreshSlots re-sends every cached slot's speed (used in tests).
-func (l *LocoNet) refreshSlots() {
-	type pair struct {
-		addr LocoAddr
-		slot byte
-	}
-	l.slotMu.Lock()
-	pairs := make([]pair, 0, len(l.slotByAd))
-	for addr, slot := range l.slotByAd {
-		pairs = append(pairs, pair{addr, slot})
-	}
-	l.slotMu.Unlock()
-
-	for _, p := range pairs {
-		spd, ok := l.getSpd(p.addr)
-		if !ok {
-			continue
-		}
-		if err := l.sendLocked(lnBuildSetSpeed(p.slot, spd)); err != nil {
-			logrus.WithError(err).Debugf("loconet keepalive: slot %d addr %d", p.slot, p.addr)
-			continue
-		}
-		l.metrics.incr(&l.metrics.keepaliveRefresh)
-	}
 }
 
 func (l *LocoNet) getExtFn(addr LocoAddr) uint32 {

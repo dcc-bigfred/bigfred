@@ -295,3 +295,11 @@ func TestKeepaliveRoundRobinTouchesEachSlot(t *testing.T) {
 		t.Fatalf("round-robin: SPD frames = %d, want 2", got)
 	}
 }
+
+func TestMetricsReportsTxQueueGauge(t *testing.T) {
+	l, _ := newTestLoconet()
+	s := l.MetricsSnapshot()
+	if s.TxQueueCap != 64 {
+		t.Fatalf("TxQueueCap = %d, want 64", s.TxQueueCap)
+	}
+}

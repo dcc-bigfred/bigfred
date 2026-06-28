@@ -221,6 +221,7 @@ func (l *LocoNet) MetricsSnapshot() LnMetricsSnapshot {
 	s.RxQueueLen, s.RxQueueCap = int64(len(l.rxCh)), int64(cap(l.rxCh))
 	s.ObsQueueLen, s.ObsQueueCap = int64(len(l.obsCh)), int64(cap(l.obsCh))
 	s.SyncQueueLen, s.SyncQueueCap = int64(len(l.syncCh)), int64(cap(l.syncCh))
+	s.TxQueueLen, s.TxQueueCap = int64(len(l.txCh)), int64(cap(l.txCh))
 	return s
 }
 

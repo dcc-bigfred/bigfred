@@ -2,7 +2,6 @@ package commandstation
 
 import (
 	"errors"
-	"fmt"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -133,7 +132,9 @@ func (h *lnTCPConnHolder) doReconnect() {
 }
 
 // writeWithDeadline runs fn against the current connection under writeMu with
-// a bounded write deadline. On failure it triggers reconnect.
+// a bounded write deadline. The deadline makes conn.Write return within
+// lnTCPWriteTimeout even on a wedged peer, so the single txLoop is never
+// blocked longer than that. On failure it triggers reconnect.
 func (h *lnTCPConnHolder) writeWithDeadline(fn func(net.Conn) error) error {
 	h.writeMu.Lock()
 	defer h.writeMu.Unlock()
@@ -145,29 +146,17 @@ func (h *lnTCPConnHolder) writeWithDeadline(fn func(net.Conn) error) error {
 		return errTCPNotConnected
 	}
 
-	done := make(chan error, 1)
-	go func() {
-		_ = conn.SetWriteDeadline(time.Now().Add(lnTCPWriteTimeout))
-		done <- fn(conn)
-	}()
-
-	select {
-	case err := <-done:
-		if err != nil {
-			h.writeErrors.Add(1)
-			h.signalReconnect()
-		}
-		return err
-	case <-time.After(lnTCPWriteTimeout):
-		h.writeTimeouts.Add(1)
+	_ = conn.SetWriteDeadline(time.Now().Add(lnTCPWriteTimeout))
+	err := fn(conn)
+	_ = conn.SetWriteDeadline(time.Time{})
+	if err != nil {
 		h.writeErrors.Add(1)
-		h.signalReconnect()
-		select {
-		case <-done:
-		case <-time.After(lnTCPWriteTimeout):
+		if t, ok := err.(interface{ Timeout() bool }); ok && t.Timeout() {
+			h.writeTimeouts.Add(1)
 		}
-		return fmt.Errorf("loconet tcp: write timed out after %s", lnTCPWriteTimeout)
+		h.signalReconnect()
 	}
+	return err
 }
 
 func (h *lnTCPConnHolder) transportStats() lnTransportStatsSnapshot {

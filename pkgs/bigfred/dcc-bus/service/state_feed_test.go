@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/keskad/loco/pkgs/bigfred/contract"
+	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/state"
 	"github.com/keskad/loco/pkgs/loco/commandstation"
 )
 
@@ -49,6 +51,7 @@ func TestApplyObservationSkipsRedisWhenNoSubscribers(t *testing.T) {
 		Hub:     hub,
 		HubSubs: &stubSubs{subscribed: map[uint16]bool{}},
 		FnCache: fnCache,
+		Store:   state.NewLocoStateStore(nil, time.Minute, nil),
 	}
 
 	applyObservation(context.Background(), deps, commandstation.LocoObservation{
@@ -85,6 +88,7 @@ func TestApplyObservationBroadcastsWhenSubscribed(t *testing.T) {
 		Roster:  roster,
 		Hub:     hub,
 		HubSubs: &stubSubs{subscribed: map[uint16]bool{10: true}},
+		Store:   state.NewLocoStateStore(nil, time.Minute, nil),
 	}
 
 	applyObservation(context.Background(), deps, commandstation.LocoObservation{

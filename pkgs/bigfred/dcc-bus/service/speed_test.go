@@ -3,6 +3,7 @@ package service
 import (
 	"testing"
 
+	"github.com/keskad/loco/pkgs/bigfred/contract"
 	"github.com/keskad/loco/pkgs/loco/commandstation"
 )
 
@@ -74,7 +75,7 @@ func TestUISpeedFromWire(t *testing.T) {
 		{127, 127},
 	}
 	for _, tc := range tests {
-		got := UISpeedFromWire(tc.wire)
+		got := contract.UISpeedFromWire(tc.wire)
 		if got != tc.want {
 			t.Fatalf("UISpeedFromWire(%d) = %d, want %d", tc.wire, got, tc.want)
 		}

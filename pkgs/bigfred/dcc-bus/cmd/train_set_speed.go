@@ -8,12 +8,12 @@ import (
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/service"
 )
 
-func (r *Router) leadingWasAtStartSpeed(ctx context.Context, leading contract.DefinedTrainMember) bool {
+func (r *Router) leadingWasAtStartSpeed(_ context.Context, leading contract.DefinedTrainMember) bool {
 	if leading.Addr == nil {
 		return true
 	}
-	env, ok, err := r.redis.GetLocoCurrentState(ctx, *leading.Addr)
-	if err != nil || !ok {
+	env := r.store.Snapshot(*leading.Addr)
+	if env.Source == "" && env.At == 0 && env.Speed == 0 {
 		return true
 	}
 	return service.IsStartDelayPreviousSpeed(env.Speed)
@@ -53,10 +53,7 @@ func (r *Router) HandleTrainSetSpeed(ctx context.Context, actor Actor, _ Respond
 		if m.Reversed {
 			forward = !forward
 		}
-		currentSpeed := uint8(0)
-		if env, ok, err := r.redis.GetLocoCurrentState(ctx, *m.Addr); err == nil && ok {
-			currentSpeed = env.Speed
-		}
+		currentSpeed := r.store.Snapshot(*m.Addr).Speed
 		maxSteps := m.AccelRampMaxSteps
 		if maxSteps <= 0 {
 			maxSteps = 1

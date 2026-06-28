@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"time"
 
 	"github.com/sirupsen/logrus"
 
@@ -29,7 +28,7 @@ func (r *Router) forceRevalidateSlot(addr uint16) {
 }
 
 // syncLocoStateFromBus reads speed and functions from the command station and
-// publishes them to Redis/WS so the UI matches the track after slot reclaim.
+// publishes them to WS so the UI matches the track after slot reclaim.
 func (r *Router) syncLocoStateFromBus(ctx context.Context, addr uint16) {
 	speed, forward, err := r.station.GetSpeed(commandstation.LocoAddr(addr))
 	if err != nil {
@@ -38,38 +37,26 @@ func (r *Router) syncLocoStateFromBus(ctx context.Context, addr uint16) {
 		return
 	}
 
-	snap := contract.LocoStateWire{
-		Address: addr,
-		Speed:   service.UISpeedFromWire(speed),
-		Forward: forward,
-		Source:  "bus-sync",
-		At:      time.Now().UTC().UnixMilli(),
-	}
-	if cached, ok, err := r.redis.GetLocoCurrentState(ctx, addr); err == nil && ok {
-		snap.ControlledByUserID = cached.ControlledByUserID
-		snap.Functions = append([]bool(nil), cached.Functions...)
-	}
-
+	prev := r.store.Snapshot(addr)
+	fns := append([]bool(nil), prev.Functions...)
 	active := map[int]bool{}
-	if fns, err := r.station.ListFunctions(commandstation.LocoAddr(addr)); err == nil {
-		for _, fn := range fns {
+	if listed, err := r.station.ListFunctions(commandstation.LocoAddr(addr)); err == nil {
+		for _, fn := range listed {
 			active[fn] = true
 		}
 	}
-	if len(snap.Functions) < syncFnRange+1 {
+	if len(fns) < syncFnRange+1 {
 		grown := make([]bool, syncFnRange+1)
-		copy(grown, snap.Functions)
-		snap.Functions = grown
+		copy(grown, fns)
+		fns = grown
 	}
 	for fn := 0; fn <= syncFnRange; fn++ {
 		on := active[fn]
-		snap.Functions[fn] = on
+		fns[fn] = on
 		r.cache.Set(addr, uint8(fn), on)
 	}
 
-	if err := r.redis.StoreLocoCurrentState(ctx, snap, StateTTL); err != nil {
-		r.log.WithError(err).WithField("addr", addr).Debug("dcc-bus sync from bus: redis store")
-	}
+	snap := r.store.SetFromBus(addr, contract.UISpeedFromWire(speed), forward, fns, prev.ControlledByUserID)
 	service.BroadcastLocoState(ctx, r.hub, snap)
 	r.log.WithFields(logrus.Fields{
 		"addr":    addr,

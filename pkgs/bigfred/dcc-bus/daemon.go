@@ -381,6 +381,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 		return err
 	}
 
+	go d.router.RunStoreFlush(ctx)
 	go d.router.RunStateFeed(ctx)
 
 	serveErr := make(chan error, 1)

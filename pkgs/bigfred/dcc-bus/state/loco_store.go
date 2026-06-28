@@ -54,20 +54,28 @@ func NewLocoStateStore(redis locoStateRedis, ttl time.Duration, log *logrus.Logg
 	}
 }
 
-// LoadFromRedis seeds the store from Redis for the given addresses.
-func (s *LocoStateStore) LoadFromRedis(ctx context.Context, addrs []uint16) {
+// LoadMissingFromRedis seeds store entries for addresses that have no
+// in-memory entry yet. Existing authoritative entries are left untouched.
+func (s *LocoStateStore) LoadMissingFromRedis(ctx context.Context, addrs []uint16) {
 	if s == nil || s.redis == nil {
 		return
 	}
 	for _, addr := range addrs {
+		s.mu.Lock()
+		_, exists := s.entries[addr]
+		s.mu.Unlock()
+		if exists {
+			continue
+		}
 		snap, ok, err := s.redis.GetLocoCurrentState(ctx, addr)
 		if err != nil || !ok {
 			continue
 		}
-		e := s.entry(addr)
-		e.mu.Lock()
-		e.snap = snap
-		e.mu.Unlock()
+		s.mu.Lock()
+		if _, dup := s.entries[addr]; !dup {
+			s.entries[addr] = &locoEntry{snap: snap}
+		}
+		s.mu.Unlock()
 	}
 }
 

@@ -44,7 +44,7 @@ func TestIsLocoPlacedForward_returnsCachedDirection(t *testing.T) {
 	}
 
 	store := state.NewLocoStateStore(rs, StateTTL, nil)
-	store.LoadFromRedis(ctx, []uint16{3})
+	store.LoadMissingFromRedis(ctx, []uint16{3})
 	r := &Router{store: store}
 	if r.isLocoPlacedForward(ctx, 3) {
 		t.Fatal("expected reverse from cache")

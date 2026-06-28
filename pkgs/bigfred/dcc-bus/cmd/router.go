@@ -116,7 +116,7 @@ func NewRouter(_ context.Context, cfg Config) (*Router, error) {
 	r.dcc.LogFields = r.stationLogFields
 	if cfg.AllowedVehicles.LayoutID == 0 || cfg.AllowedVehicles.LayoutID == cfg.LayoutID {
 		if r.roster.ApplySnapshot(cfg.AllowedVehicles) {
-			r.store.LoadFromRedis(context.Background(), r.roster.AllowedAddrs())
+			r.store.LoadMissingFromRedis(context.Background(), r.roster.AllowedAddrs())
 		}
 	}
 	r.ApplyAllowedVehicles(context.Background(), cfg.AllowedVehicles)
@@ -163,6 +163,7 @@ func (r *Router) ApplyAllowedVehicles(ctx context.Context, snap contract.Allowed
 	if !r.roster.ApplySnapshot(snap) {
 		return
 	}
+	r.store.LoadMissingFromRedis(ctx, r.roster.AllowedAddrs())
 	addrs := make([]uint16, 0, len(snap.Vehicles))
 	for _, v := range snap.Vehicles {
 		addrs = append(addrs, v.Addr)

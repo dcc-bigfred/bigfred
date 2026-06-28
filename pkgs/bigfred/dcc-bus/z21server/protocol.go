@@ -55,10 +55,16 @@ func splitZ21Datagram(b []byte) [][]byte {
 		out = append(out, b[:l])
 		b = b[l:]
 	}
-	if len(out) == 0 && len(b) > 0 {
-		out = append(out, b)
-	}
 	return out
+}
+
+// validFrame reports whether pkt is a well-formed single Z21 dataset.
+func validFrame(pkt []byte) bool {
+	if len(pkt) < 4 {
+		return false
+	}
+	dataLen, _, ok := packetHeader(pkt)
+	return ok && int(dataLen) == len(pkt)
 }
 
 func buildReply(header uint16, data []byte) []byte {
@@ -94,6 +100,9 @@ func isDriveHeader(header uint16, pkt []byte) bool {
 	}
 	switch pkt[4] {
 	case 0xE4: // LAN_X_SET_LOCO_DRIVE, LAN_X_SET_LOCO_FUNCTION, …
+		if (pkt[5] & 0xF0) == 0x10 {
+			return true
+		}
 		return pkt[5] == 0xF8 || pkt[5] == 0x13
 	case 0xE3: // LAN_X_GET_LOCO_INFO
 		return pkt[5] == 0xF0

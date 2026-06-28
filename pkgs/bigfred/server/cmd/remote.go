@@ -120,12 +120,24 @@ func (s *Remote) ListClients(ctx context.Context, layoutID, csID uint) (contract
 		}
 	}
 	if s.users != nil {
-		for i := range snap.Clients {
-			if snap.Clients[i].UserID == 0 {
+		ids := make([]uint, 0, len(snap.Clients))
+		seen := make(map[uint]struct{}, len(snap.Clients))
+		for _, cl := range snap.Clients {
+			if cl.UserID == 0 {
 				continue
 			}
-			if u, err := s.users.FindByID(ctx, snap.Clients[i].UserID); err == nil {
-				snap.Clients[i].UserLogin = u.Login
+			if _, ok := seen[cl.UserID]; ok {
+				continue
+			}
+			seen[cl.UserID] = struct{}{}
+			ids = append(ids, cl.UserID)
+		}
+		byID, err := s.users.FindByIDs(ctx, ids)
+		if err == nil {
+			for i := range snap.Clients {
+				if u, ok := byID[snap.Clients[i].UserID]; ok {
+					snap.Clients[i].UserLogin = u.Login
+				}
 			}
 		}
 	}

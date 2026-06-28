@@ -182,8 +182,12 @@ func (r *Registry) sentinelAcquired(key string) bool {
 	return r.wire.SentinelAcquired(key)
 }
 
-func (r *Registry) setSentinelAcquired(key string, acquired bool) {
-	r.wire.SetSentinelAcquired(key, acquired)
+func (r *Registry) setSentinelAcquired(key string, acquired bool, throttleID byte) {
+	r.wire.SetSentinelAcquired(key, acquired, throttleID)
+}
+
+func (r *Registry) sentinelThrottleID(key string) byte {
+	return r.wire.SentinelThrottleID(key)
 }
 
 func (r *Registry) withThrottle(key string, id byte, fn func(*throttleWire)) {
@@ -192,6 +196,10 @@ func (r *Registry) withThrottle(key string, id byte, fn func(*throttleWire)) {
 
 func (r *Registry) findThrottleForAddr(key string, addr uint16) (byte, string, bool) {
 	return r.wire.FindThrottleForAddr(key, addr)
+}
+
+func (r *Registry) touchLastSeen(key string, now time.Time) {
+	r.inbound.TouchLastSeen(key, now)
 }
 
 // Wire returns the WiThrottle wire-state table for cleanup hooks.

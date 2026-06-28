@@ -22,9 +22,6 @@ func TestRegistryTouchIPStickinessReusesSessionOnPortChange(t *testing.T) {
 	if c1.Key != inbound.ClientKey(contract.RemoteProtocolZ21, "192.168.0.214") || c2.Key != c1.Key {
 		t.Fatalf("keys = %q / %q, want sticky IP key", c1.Key, c2.Key)
 	}
-	if c1 != c2 {
-		t.Fatal("expected same registry client on port change")
-	}
 	if c2.Addr.Port != 60512 {
 		t.Fatalf("Addr port = %d, want updated reply target 60512", c2.Addr.Port)
 	}

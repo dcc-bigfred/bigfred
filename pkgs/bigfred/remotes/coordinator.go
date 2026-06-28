@@ -66,6 +66,8 @@ type Coordinator struct {
 	pubMu        sync.Mutex
 	lastPub      time.Time
 	dirty        bool
+	runOnce      sync.Once
+	bgWg         sync.WaitGroup
 }
 
 // NewCoordinator returns a coordinator that is not yet running.
@@ -143,15 +145,25 @@ func (c *Coordinator) RegisterSessionSyncHandler(protocol string, h SessionSyncH
 // loco-server so REST mutations (unpair / scope update) reach the daemon's
 // in-process registry without per-packet Redis reads.
 func (c *Coordinator) Run(ctx context.Context) {
-	if c.cfg.Store != nil {
-		go c.runSessionSyncSubscriber(ctx)
-		go c.runSeenFlusher(ctx)
-	}
+	c.runOnce.Do(func() {
+		if c.cfg.Store != nil {
+			c.bgWg.Add(2)
+			go func() {
+				defer c.bgWg.Done()
+				c.runSessionSyncSubscriber(ctx)
+			}()
+			go func() {
+				defer c.bgWg.Done()
+				c.runSeenFlusher(ctx)
+			}()
+		}
+	})
 	ticker := time.NewTicker(c.cfg.SweeperInterval)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
+			c.bgWg.Wait()
 			return
 		case <-ticker.C:
 			c.sweep(ctx)
@@ -180,7 +192,7 @@ func (c *Coordinator) flushSeen(ctx context.Context) {
 	if c.cfg.Store == nil {
 		return
 	}
-	dirty := c.registry.DrainSeenDirty()
+	dirty := c.registry.PeekSeenDirty()
 	if len(dirty) == 0 {
 		return
 	}
@@ -206,11 +218,32 @@ func (c *Coordinator) flushSeen(ctx context.Context) {
 		b.keys = append(b.keys, key)
 		b.ts = append(b.ts, ts)
 	}
+	var failed []string
 	for _, b := range buckets {
 		if err := c.cfg.Store.TouchSeenBatch(ctx, c.cfg.LayoutID, c.cfg.CommandStationID, b.keys, b.ts, b.ttl); err != nil {
 			c.cfg.Log.WithError(err).Debug("remote seen batch flush failed")
+			failed = append(failed, b.keys...)
 		}
 	}
+	if len(failed) == 0 {
+		keys := make([]string, 0, len(dirty))
+		for key := range dirty {
+			keys = append(keys, key)
+		}
+		c.registry.ClearSeenDirty(keys)
+		return
+	}
+	okKeys := make([]string, 0, len(dirty)-len(failed))
+	failSet := make(map[string]struct{}, len(failed))
+	for _, key := range failed {
+		failSet[key] = struct{}{}
+	}
+	for key := range dirty {
+		if _, bad := failSet[key]; !bad {
+			okKeys = append(okKeys, key)
+		}
+	}
+	c.registry.ClearSeenDirty(okKeys)
 }
 
 // runSessionSyncSubscriber drains the per-CS sync channel until ctx cancels.
@@ -245,7 +278,14 @@ func (c *Coordinator) consumeSync(ctx context.Context, sub *redis.PubSub) {
 			if !ok {
 				return
 			}
-			c.handleSyncMessage(ctx, msg)
+			go func(m *redis.Message) {
+				defer func() {
+					if r := recover(); r != nil {
+						c.cfg.Log.WithField("panic", r).Error("remote sync handler panic")
+					}
+				}()
+				c.handleSyncMessage(ctx, m)
+			}(msg)
 		}
 	}
 }
@@ -265,9 +305,13 @@ func (c *Coordinator) handleSyncMessage(ctx context.Context, msg *redis.Message)
 	c.policiesMu.RUnlock()
 	if handler != nil {
 		handler(ctx, ev.ClientKey)
+	} else {
+		c.syncPairedClientGeneric(ctx, ev.ClientKey)
 		return
 	}
-	c.syncPairedClientGeneric(ctx, ev.ClientKey)
+	c.registry.MarkSynced(ev.ClientKey)
+	c.markDirty()
+	c.PublishSnapshotThrottled(ctx)
 }
 
 // syncPairedClientGeneric is the fallback re-sync for protocols without a
@@ -297,6 +341,7 @@ func (c *Coordinator) syncPairedClientGeneric(ctx context.Context, clientKey str
 func (c *Coordinator) NoteActivity(ctx context.Context, clientKey string) {
 	if c.registry.IsPaired(clientKey) && c.registry.IdleBraked(clientKey) {
 		c.registry.ClearIdleBraked(clientKey)
+		c.markDirty()
 	}
 	c.PublishSnapshotThrottled(ctx)
 }
@@ -315,13 +360,15 @@ func (c *Coordinator) PublishSnapshotThrottled(ctx context.Context) {
 		return
 	}
 	c.pubMu.Lock()
-	defer c.pubMu.Unlock()
 	if !c.lastPub.IsZero() && time.Since(c.lastPub) < c.cfg.PublishMin {
+		c.pubMu.Unlock()
 		return
 	}
 	c.lastPub = time.Now().UTC()
-	_ = c.publishSnapshotLocked(ctx)
+	snap := c.BuildSnapshot()
 	c.dirty = false
+	c.pubMu.Unlock()
+	_ = c.cfg.Publisher.PublishClientsSnapshot(ctx, snap)
 }
 
 // PublishSnapshot stores and fans out a clients snapshot immediately.
@@ -330,10 +377,10 @@ func (c *Coordinator) PublishSnapshot(ctx context.Context) error {
 		return nil
 	}
 	c.pubMu.Lock()
-	defer c.pubMu.Unlock()
-	err := c.publishSnapshotLocked(ctx)
+	snap := c.BuildSnapshot()
 	c.dirty = false
-	return err
+	c.pubMu.Unlock()
+	return c.cfg.Publisher.PublishClientsSnapshot(ctx, snap)
 }
 
 // publishIfDirty publishes the snapshot only when something changed since
@@ -344,18 +391,15 @@ func (c *Coordinator) publishIfDirty(ctx context.Context) {
 		return
 	}
 	c.pubMu.Lock()
-	defer c.pubMu.Unlock()
 	if !c.dirty {
+		c.pubMu.Unlock()
 		return
 	}
 	c.lastPub = time.Now().UTC()
-	_ = c.publishSnapshotLocked(ctx)
+	snap := c.BuildSnapshot()
 	c.dirty = false
-}
-
-// publishSnapshotLocked does the actual Redis write; caller holds pubMu.
-func (c *Coordinator) publishSnapshotLocked(ctx context.Context) error {
-	return c.cfg.Publisher.PublishClientsSnapshot(ctx, c.BuildSnapshot())
+	c.pubMu.Unlock()
+	_ = c.cfg.Publisher.PublishClientsSnapshot(ctx, snap)
 }
 
 // BuildSnapshot returns the current handset presence view.
@@ -497,17 +541,23 @@ func (c *Coordinator) estopHandsetLocos(ctx context.Context, client *inbound.Cli
 }
 
 func (c *Coordinator) evictClient(ctx context.Context, key string) {
+	storeCtx := ctx
+	var cancel context.CancelFunc
+	if ctx.Err() != nil {
+		storeCtx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+	}
+	if c.cfg.Store != nil {
+		if err := c.cfg.Store.Unpair(storeCtx, c.cfg.LayoutID, c.cfg.CommandStationID, key); err != nil {
+			c.cfg.Log.WithError(err).WithField("client", key).Debug("unpair on evict")
+		}
+	}
 	c.registry.Remove(key)
 	c.evictMu.RLock()
-	hooks := c.onEvict
+	hooks := append([]func(string){}, c.onEvict...)
 	c.evictMu.RUnlock()
 	for _, fn := range hooks {
 		fn(key)
-	}
-	if c.cfg.Store != nil {
-		if err := c.cfg.Store.Unpair(ctx, c.cfg.LayoutID, c.cfg.CommandStationID, key); err != nil {
-			c.cfg.Log.WithError(err).WithField("client", key).Debug("unpair on evict")
-		}
 	}
 	c.markDirty()
 	c.PublishSnapshotThrottled(ctx)

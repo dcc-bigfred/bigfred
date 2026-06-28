@@ -20,9 +20,10 @@ type task func()
 // temporarily serialising that shard's clients. Inline fallbacks are
 // counted so overload is observable.
 type dispatcher struct {
-	shards  []chan task
-	wg      sync.WaitGroup
-	inline  atomic.Int64
+	shards []chan task
+	wg     sync.WaitGroup
+	inline atomic.Int64
+	closed atomic.Bool
 }
 
 // newDispatcher starts shards worker goroutines, each with a buffered
@@ -39,13 +40,23 @@ func newDispatcher(shards, buf int) *dispatcher {
 		go func() {
 			defer d.wg.Done()
 			for t := range ch {
-				if t != nil {
-					t()
-				}
+				d.runTask(t)
 			}
 		}()
 	}
 	return d
+}
+
+func (d *dispatcher) runTask(t task) {
+	if t == nil {
+		return
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			_ = r
+		}
+	}()
+	t()
 }
 
 // shardIndex maps key to a shard using an allocation-free FNV-1a hash.
@@ -64,12 +75,23 @@ func shardIndex(key string, shards int) int {
 // that worker's queue is full (backpressure without stalling the read
 // loop). Inline fallbacks are counted via InlineFallbacks.
 func (d *dispatcher) dispatch(key string, t task) {
+	if d == nil {
+		if t != nil {
+			t()
+		}
+		return
+	}
+	if d.closed.Load() {
+		d.inline.Add(1)
+		d.runTask(t)
+		return
+	}
 	ch := d.shards[shardIndex(key, len(d.shards))]
 	select {
 	case ch <- t:
 	default:
 		d.inline.Add(1)
-		t()
+		d.runTask(t)
 	}
 }
 
@@ -80,6 +102,10 @@ func (d *dispatcher) InlineFallbacks() int64 { return d.inline.Load() }
 
 // close drains every shard and waits for the workers to exit.
 func (d *dispatcher) close() {
+	if d == nil {
+		return
+	}
+	d.closed.Store(true)
 	for _, ch := range d.shards {
 		close(ch)
 	}

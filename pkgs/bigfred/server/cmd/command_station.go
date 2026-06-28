@@ -108,6 +108,9 @@ func (s *CommandStation) Create(ctx context.Context, eff domain.EffectiveRoles, 
 		CreatedAt:        now,
 		UpdatedAt:        now,
 	}
+	if err := s.validateInboundPorts(ctx, row, 0); err != nil {
+		return domain.CommandStation{}, err
+	}
 	if err := s.stations.Insert(ctx, &row); err != nil {
 		return domain.CommandStation{}, err
 	}
@@ -202,6 +205,9 @@ func (s *CommandStation) Update(ctx context.Context, eff domain.EffectiveRoles, 
 	}
 	row.UpdatedAt = time.Now().UTC()
 
+	if err := s.validateInboundPorts(ctx, row, row.ID); err != nil {
+		return domain.CommandStation{}, err
+	}
 	if err := s.stations.Update(ctx, &row); err != nil {
 		return domain.CommandStation{}, err
 	}
@@ -250,4 +256,34 @@ func (s *CommandStation) checkCatalogManage(eff domain.EffectiveRoles) error {
 	default:
 		return errors.New(decision.Reason)
 	}
+}
+
+func (s *CommandStation) validateInboundPorts(ctx context.Context, row domain.CommandStation, excludeID uint) error {
+	all, err := s.stations.ListAll(ctx)
+	if err != nil {
+		return err
+	}
+	if row.Z21ServerEnabled {
+		port := row.EffectiveZ21InboundPort()
+		for _, other := range all {
+			if other.ID == excludeID || !other.Z21ServerEnabled {
+				continue
+			}
+			if other.EffectiveZ21InboundPort() == port {
+				return svcerrors.ErrCommandStationInboundPortConflict
+			}
+		}
+	}
+	if row.WithrottleServerEnabled {
+		port := row.EffectiveWithrottleInboundPort()
+		for _, other := range all {
+			if other.ID == excludeID || !other.WithrottleServerEnabled {
+				continue
+			}
+			if other.EffectiveWithrottleInboundPort() == port {
+				return svcerrors.ErrCommandStationInboundPortConflict
+			}
+		}
+	}
+	return nil
 }

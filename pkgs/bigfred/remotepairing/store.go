@@ -40,6 +40,7 @@ local activePrefix = ARGV[1]
 local pairLabel = ARGV[2]
 local clientKey = ARGV[3]
 local activePayload = ARGV[4]
+local sessionTTL = ARGV[5]
 
 if redis.call('GET', reqKey) == false then
   return {0, ''}
@@ -52,14 +53,35 @@ if priorClientKey ~= false and priorClientKey ~= clientKey then
   evicted = priorClientKey
 end
 
-redis.call('SET', activeKey, activePayload)
-redis.call('SET', activeByUserKey, clientKey)
+if sessionTTL ~= '' then
+  redis.call('SET', activeKey, activePayload, 'PX', sessionTTL)
+  redis.call('SET', activeByUserKey, clientKey, 'PX', sessionTTL)
+else
+  redis.call('SET', activeKey, activePayload)
+  redis.call('SET', activeByUserKey, clientKey)
+end
 redis.call('DEL', reqKey)
 redis.call('DEL', pendingByUserKey)
 if dedupKey ~= '' and pairLabel ~= '' then
   redis.call('SREM', dedupKey, pairLabel)
 end
 return {1, evicted}
+`)
+
+var unpairScript = redis.NewScript(`
+local activeKey = KEYS[1]
+local byUserKey = KEYS[2]
+local clientKey = ARGV[1]
+
+if redis.call('GET', activeKey) == false then
+  return 0
+end
+redis.call('DEL', activeKey)
+local cur = redis.call('GET', byUserKey)
+if cur == clientKey then
+  redis.call('DEL', byUserKey)
+end
+return 1
 `)
 
 // touchSeenScript atomically updates lastSeenAt on an active session and
@@ -81,6 +103,10 @@ if ttl and ttl > 0 then
 else
   redis.call('SET', KEYS[1], cjson.encode(s))
 end
+if ARGV[2] ~= '' and s['userId'] and s['clientKey'] then
+  local byUser = string.format('bigfred:remote:byuser:%s:%s:%s', ARGV[3], ARGV[4], tostring(s['userId']))
+  redis.call('SET', byUser, s['clientKey'], 'PX', tonumber(ARGV[2]))
+end
 return 1
 `)
 
@@ -91,13 +117,19 @@ return 1
 // concurrently). Used by the coordinator's batched seen-flusher (WS-1b).
 var touchSeenBatchScript = redis.NewScript(`
 local ttl = ARGV[1]
+local layoutId = ARGV[2]
+local csId = ARGV[3]
 for i = 1, #KEYS do
   local v = redis.call('GET', KEYS[i])
   if v then
     local s = cjson.decode(v)
-    s['lastSeenAt'] = tonumber(ARGV[i+1])
+    s['lastSeenAt'] = tonumber(ARGV[i+3])
     if ttl ~= '' then
       redis.call('SET', KEYS[i], cjson.encode(s), 'PX', ttl)
+      if s['userId'] and s['clientKey'] then
+        local byUser = string.format('bigfred:remote:byuser:%s:%s:%s', layoutId, csId, tostring(s['userId']))
+        redis.call('SET', byUser, s['clientKey'], 'PX', ttl)
+      end
     else
       local pttl = redis.call('PTTL', KEYS[i])
       if pttl and pttl > 0 then
@@ -168,10 +200,7 @@ func (s *Store) CreatePending(ctx context.Context, in CreatePendingInput) (contr
 		return contract.RemotePendingWire{}, errors.New("remotepairing: req id is required")
 	}
 
-	activeByUser := contract.RemotePairingByUserKey(in.LayoutID, in.CommandStationID, in.UserID)
-	if prior, err := s.client.Get(ctx, activeByUser).Result(); err == nil && prior != "" {
-		return contract.RemotePendingWire{}, ErrUserAlreadyPaired
-	} else if err != nil && err != redis.Nil {
+	if err := s.rejectIfUserPaired(ctx, in.LayoutID, in.CommandStationID, in.UserID); err != nil {
 		return contract.RemotePendingWire{}, err
 	}
 
@@ -365,13 +394,21 @@ func (s *Store) CreateWithrottlePairingRequest(ctx context.Context, in CreateWit
 }
 
 func (s *Store) rejectIfUserPaired(ctx context.Context, layoutID, commandStationID, userID uint) error {
-	activeByUser := contract.RemotePairingByUserKey(layoutID, commandStationID, userID)
-	if prior, err := s.client.Get(ctx, activeByUser).Result(); err == nil && prior != "" {
-		return ErrUserAlreadyPaired
-	} else if err != nil && err != redis.Nil {
+	byUser := contract.RemotePairingByUserKey(layoutID, commandStationID, userID)
+	clientKey, err := s.client.Get(ctx, byUser).Result()
+	if err == redis.Nil || clientKey == "" {
+		return nil
+	}
+	if err != nil {
 		return err
 	}
-	return nil
+	if _, ok, err := s.GetActiveByClientKey(ctx, layoutID, commandStationID, clientKey); err != nil {
+		return err
+	} else if !ok {
+		_, _ = s.client.Del(ctx, byUser).Result()
+		return nil
+	}
+	return ErrUserAlreadyPaired
 }
 
 // GetPendingByUser returns the user's current pending pairing request, if any.
@@ -471,7 +508,8 @@ func (s *Store) CompletePairing(ctx context.Context, layoutID, commandStationID 
 		return contract.RemoteSessionWire{}, false, "", err
 	}
 
-	activePrefix := fmt.Sprintf("bigfred:remote:active:%d:%d:", layoutID, commandStationID)
+	activePrefix := contract.RemotePairingActiveKeyPrefix(layoutID, commandStationID)
+	sessionTTL := strconv.FormatInt(contract.RemoteStickySessionIdle.Milliseconds(), 10)
 
 	dedupKey := ""
 	if req.Protocol != "" && dedupLabel != "" {
@@ -492,6 +530,7 @@ func (s *Store) CompletePairing(ctx context.Context, layoutID, commandStationID 
 		dedupLabel,
 		clientKey,
 		string(payload),
+		sessionTTL,
 	).Slice()
 	if err != nil {
 		return contract.RemoteSessionWire{}, false, "", err
@@ -542,7 +581,15 @@ func (s *Store) TouchSeen(ctx context.Context, layoutID, commandStationID uint, 
 	if sessionTTL > 0 {
 		ttlArg = strconv.FormatInt(sessionTTL.Milliseconds(), 10)
 	}
-	res, err := touchSeenScript.Run(ctx, s.client, []string{key}, lastSeenAt, ttlArg).Int()
+	res, err := touchSeenScript.Run(
+		ctx,
+		s.client,
+		[]string{key},
+		lastSeenAt,
+		ttlArg,
+		strconv.FormatUint(uint64(layoutID), 10),
+		strconv.FormatUint(uint64(commandStationID), 10),
+	).Int()
 	if err != nil {
 		if err == redis.Nil {
 			return nil
@@ -562,6 +609,9 @@ func (s *Store) TouchSeenBatch(ctx context.Context, layoutID, commandStationID u
 	if len(clientKeys) == 0 {
 		return nil
 	}
+	if len(clientKeys) != len(lastSeenAt) {
+		return fmt.Errorf("remotepairing: clientKeys and lastSeenAt length mismatch: %d vs %d", len(clientKeys), len(lastSeenAt))
+	}
 	keys := make([]string, len(clientKeys))
 	for i, ck := range clientKeys {
 		keys[i] = contract.RemotePairingActiveKey(layoutID, commandStationID, ck)
@@ -570,8 +620,10 @@ func (s *Store) TouchSeenBatch(ctx context.Context, layoutID, commandStationID u
 	if ttl > 0 {
 		ttlArg = strconv.FormatInt(ttl.Milliseconds(), 10)
 	}
-	args := make([]any, 0, 1+len(lastSeenAt))
+	args := make([]any, 0, 3+len(lastSeenAt))
 	args = append(args, ttlArg)
+	args = append(args, strconv.FormatUint(uint64(layoutID), 10))
+	args = append(args, strconv.FormatUint(uint64(commandStationID), 10))
 	for _, ts := range lastSeenAt {
 		args = append(args, ts)
 	}
@@ -624,7 +676,8 @@ func (s *Store) UpdateSessionScope(ctx context.Context, layoutID, commandStation
 	return active, true, nil
 }
 
-// Unpair removes one active session and drops it from the user index.
+// Unpair removes one active session and drops it from the user index when it
+// still points at clientKey.
 func (s *Store) Unpair(ctx context.Context, layoutID, commandStationID uint, clientKey string) error {
 	key := contract.RemotePairingActiveKey(layoutID, commandStationID, clientKey)
 	raw, err := s.client.Get(ctx, key).Result()
@@ -638,11 +691,12 @@ func (s *Store) Unpair(ctx context.Context, layoutID, commandStationID uint, cli
 	if err != nil {
 		return err
 	}
-	pipe := s.client.TxPipeline()
-	pipe.Del(ctx, key)
-	byUser := contract.RemotePairingByUserKey(layoutID, commandStationID, active.UserID)
-	pipe.Del(ctx, byUser)
-	_, err = pipe.Exec(ctx)
+	_, err = unpairScript.Run(
+		ctx,
+		s.client,
+		[]string{key, contract.RemotePairingByUserKey(layoutID, commandStationID, active.UserID)},
+		clientKey,
+	).Int()
 	return err
 }
 

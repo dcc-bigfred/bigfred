@@ -435,7 +435,7 @@ func (d *DccBusService) buildProgramSpec(ctx context.Context, name string, layou
 		Autostart:    true,
 		Autorestart:  true,
 		StartSecs:    1,
-		StopWaitSecs: 5,
+		StopWaitSecs: 35,
 	}, nil
 }
 

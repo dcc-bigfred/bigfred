@@ -1,6 +1,10 @@
 package withrottle
 
 import (
+	"bufio"
+	"bytes"
+	"errors"
+	"io"
 	"strconv"
 	"strings"
 )
@@ -10,6 +14,29 @@ const (
 	entrySep   = "]\\["
 	segmentSep = "}|{"
 )
+
+var errLineTooLong = errors.New("withrottle: line too long")
+
+// readLineLimited reads one LF-terminated line up to maxLen bytes.
+func readLineLimited(r *bufio.Reader, maxLen int) (string, error) {
+	var buf bytes.Buffer
+	for {
+		b, err := r.ReadByte()
+		if err != nil {
+			if err == io.EOF && buf.Len() > 0 {
+				return buf.String(), nil
+			}
+			return "", err
+		}
+		if b == '\n' {
+			return buf.String(), nil
+		}
+		if buf.Len() >= maxLen {
+			return "", errLineTooLong
+		}
+		buf.WriteByte(b)
+	}
+}
 
 // splitProperty splits line on sep into non-empty parts.
 func splitProperty(line, sep string) []string {

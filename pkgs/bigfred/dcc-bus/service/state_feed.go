@@ -28,6 +28,7 @@ type FeedDeps struct {
 	HubSubs      SubscriptionSource
 	FnCache       *FunctionsCache
 	LocoObservers *remotes.LocoStateNotifier
+	LocoLocks     *state.LocoLocks
 	Log           *logrus.Logger
 	PollInterval time.Duration
 	StateTTL     time.Duration
@@ -164,6 +165,11 @@ func applyObservation(ctx context.Context, deps FeedDeps, o commandstation.LocoO
 	addr := uint16(o.Addr)
 	if deps.Roster != nil && !deps.Roster.IsOnLayout(addr) {
 		return
+	}
+
+	if deps.LocoLocks != nil {
+		unlock := deps.LocoLocks.Acquire(addr)
+		defer unlock()
 	}
 
 	snap := contract.LocoStateWire{Address: addr}

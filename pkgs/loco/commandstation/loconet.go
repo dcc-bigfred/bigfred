@@ -1116,8 +1116,7 @@ func (l *LocoNet) markAcquired(addr LocoAddr) {
 // nullMoveLocked sends OPC_MOVE_SLOTS with src==dst (NULL MOVE), which
 // promotes the slot from COMMON or IDLE to IN_USE on the command station.
 // Caller must hold reqMu and have called beginSync.
-// Returns an error only when the command station explicitly rejects the move;
-// a timeout is treated as success (some non-Digitrax masters are silent).
+// When the master is silent, the slot is verified with OPC_RQ_SL_DATA.
 func (l *LocoNet) nullMoveLocked(slot byte) error {
 	if err := l.sendLocked(lnBuildMoveSlots(slot, slot)); err != nil {
 		return err
@@ -1126,12 +1125,13 @@ func (l *LocoNet) nullMoveLocked(slot byte) error {
 	for time.Now().Before(deadline) {
 		pkt, err := l.readPacketUntil(deadline)
 		if err != nil {
-			// Timeout treated as silent acceptance (non-Digitrax masters).
-			return nil
+			break
 		}
 		if sd, ok := parseLnSlotData(pkt); ok && sd.Slot == slot {
-			l.trackCsSlotStatus(slot, lnSLOT_IN_USE)
-			return nil
+			if sd.Stat1&lnSLOT_STA_MASK == lnSLOT_IN_USE {
+				l.trackCsSlotStatus(slot, lnSLOT_IN_USE)
+				return nil
+			}
 		}
 		// OPC_LONG_ACK for OPC_MOVE_SLOTS: B4 <BA&0x7F=0x3A> <code> <chk>
 		if len(pkt) >= 4 && pkt[0] == lnOPC_LONG_ACK && pkt[1] == (lnOPC_MOVE_SLOTS&0x7F) {
@@ -1143,8 +1143,20 @@ func (l *LocoNet) nullMoveLocked(slot byte) error {
 			return nil // any non-zero code means accepted
 		}
 	}
+	return l.confirmSlotInUseLocked(slot)
+}
+
+// confirmSlotInUseLocked queries the slot and insists STAT1 shows IN_USE.
+func (l *LocoNet) confirmSlotInUseLocked(slot byte) error {
+	sd, err := l.querySlotLocked(slot, 0)
+	if err != nil {
+		return fmt.Errorf("loconet: null move unconfirmed for slot %d: %w", slot, err)
+	}
+	if sd.Stat1&lnSLOT_STA_MASK != lnSLOT_IN_USE {
+		return fmt.Errorf("loconet: null move left slot %d in state %#x, want IN_USE", slot, sd.Stat1&lnSLOT_STA_MASK)
+	}
 	l.trackCsSlotStatus(slot, lnSLOT_IN_USE)
-	return nil // timeout → silent acceptance
+	return nil
 }
 
 func (l *LocoNet) querySlotLocked(slot byte, addr LocoAddr) (lnSlotData, error) {

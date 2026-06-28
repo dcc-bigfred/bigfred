@@ -40,6 +40,7 @@ type SessionView struct {
 type HubPort interface {
 	Broadcast(ctx context.Context, addr uint16, env contract.EnvelopeWire)
 	SubscribedAddrs() []uint16
+	IsSubscribed(addr uint16) bool
 	SessionsForUser(userID uint) []SessionView
 	UnsubscribeAll(addrs ...uint16)
 	Snapshot() []SessionView

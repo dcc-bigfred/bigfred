@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -120,6 +121,9 @@ type LocoNet struct {
 	// slotBreakerUntil is a unix-nano deadline; while in the future, validateSlot
 	// fails fast after repeated acquire timeouts (circuit breaker).
 	slotBreakerUntil atomic.Int64
+
+	// keepaliveIdx rotates round-robin across cached slots for spread refreshes.
+	keepaliveIdx int
 }
 
 // LocoNet TX/timeout tuning. These trade a touch of latency for the ability to
@@ -150,6 +154,10 @@ const (
 	// lnSlotBreakerCooldown pauses slot acquisitions after repeated failures so
 	// a dead bus does not queue the whole fleet behind reqMu timeouts.
 	lnSlotBreakerCooldown = 5 * time.Second
+
+	// lnKeepaliveTickInterval spreads slot refreshes round-robin instead of
+	// bursting every cached locomotive at once.
+	lnKeepaliveTickInterval = 2 * time.Second
 
 	// csSlotStaUnknown is the initial csSlotStaLast sentinel (not a valid SL_STA).
 	csSlotStaUnknown = 0xFF
@@ -1424,27 +1432,58 @@ func (l *LocoNet) currentSpeedGen(addr LocoAddr) uint64 {
 	return l.speedGenByA[addr]
 }
 
-// keepaliveLoop periodically re-touches every cached slot so the master does
-// not purge it to COMMON after ~200 s of inactivity (spec §4.3). Without this a
-// parked locomotive silently loses BigFred's IN_USE ownership.
+// keepaliveLoop re-touches cached slots round-robin so the master does not
+// purge them to COMMON after ~200 s of inactivity (spec §4.3).
 func (l *LocoNet) keepaliveLoop() {
 	if l.keepaliveInterval <= 0 {
 		return
 	}
-	ticker := time.NewTicker(l.keepaliveInterval)
+	ticker := time.NewTicker(lnKeepaliveTickInterval)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-l.stop:
 			return
 		case <-ticker.C:
-			l.refreshSlots()
+			l.refreshOneKeepaliveSlot()
 		}
 	}
 }
 
-// refreshSlots re-sends each cached slot's last known speed, a harmless no-op
-// move that resets the master's purge timer.
+// refreshOneKeepaliveSlot re-sends one cached locomotive's last speed per tick,
+// spreading the purge timer reset across the fleet instead of bursting all slots.
+func (l *LocoNet) refreshOneKeepaliveSlot() {
+	l.slotMu.Lock()
+	addrs := make([]LocoAddr, 0, len(l.slotByAd))
+	for addr := range l.slotByAd {
+		addrs = append(addrs, addr)
+	}
+	idx := l.keepaliveIdx
+	if len(addrs) > 0 {
+		l.keepaliveIdx = idx + 1
+	}
+	l.slotMu.Unlock()
+	if len(addrs) == 0 {
+		return
+	}
+	sort.Slice(addrs, func(i, j int) bool { return addrs[i] < addrs[j] })
+	addr := addrs[idx%len(addrs)]
+	slot, ok := l.getSlot(addr)
+	if !ok {
+		return
+	}
+	spd, ok := l.getSpd(addr)
+	if !ok {
+		return
+	}
+	if err := l.sendLocked(lnBuildSetSpeed(slot, spd)); err != nil {
+		logrus.WithError(err).Debugf("loconet keepalive: slot %d addr %d", slot, addr)
+		return
+	}
+	l.metrics.incr(&l.metrics.keepaliveRefresh)
+}
+
+// refreshSlots re-sends each cached slot's last known speed (used in tests).
 func (l *LocoNet) refreshSlots() {
 	type pair struct {
 		addr LocoAddr

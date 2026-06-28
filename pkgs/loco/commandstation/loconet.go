@@ -1007,7 +1007,7 @@ func (l *LocoNet) acquireSlotFreshLocked(addr LocoAddr) (byte, error) {
 		if len(pkt) >= 4 && pkt[0] == lnOPC_LONG_ACK && pkt[1] == (lnOPC_LOCO_ADR&0x7F) {
 			if pkt[2] == 0x00 {
 				l.metrics.incr(&l.metrics.lackRejections)
-				return 0, fmt.Errorf("loconet: command station has no free slot for loco %d", addr)
+				return 0, ErrNoFreeSlot
 			}
 		}
 		if sd, ok := parseLnSlotData(pkt); ok {
@@ -1078,7 +1078,7 @@ func (l *LocoNet) ForceAcquireSlot(addr LocoAddr) error {
 // reqMu.
 func (l *LocoNet) validateSlot(addr LocoAddr) (byte, error) {
 	if until := l.slotBreakerUntil.Load(); until > 0 && time.Now().UnixNano() < until {
-		return 0, fmt.Errorf("loconet: slot bus temporarily unavailable (recent acquire failures)")
+		return 0, ErrSlotBusUnavailable
 	}
 
 	l.reqMu.Lock()

@@ -7,7 +7,6 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/keskad/loco/pkgs/bigfred/contract"
-	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/errors"
 )
 
 // HandleSetSpeed forwards a throttle move to the command station, updates
@@ -15,6 +14,7 @@ import (
 func (r *Router) HandleSetSpeed(ctx context.Context, actor Actor, resp Responder, p contract.LocoSetSpeedWire, _ string) Result {
 	vehicle, onLayout := r.roster.AllowedVehicle(p.Address)
 	if d := r.drive.CanDrive(actor.UserID, vehicle, onLayout); !d.Allowed {
+		_ = resp.SendLocoError(ctx, p.Address, d.Reason, "")
 		return FailResult(d.Reason)
 	}
 	maxSpeed := contract.MaxSpeedForSpeedSteps(r.speedSteps)
@@ -22,8 +22,9 @@ func (r *Router) HandleSetSpeed(ctx context.Context, actor Actor, resp Responder
 		p.Speed = contract.ClampSpeedForControllerLimit(p.Speed, maxSpeed, limit)
 	}
 	if err := r.applyMemberSetSpeed(ctx, actor, p.Address, p.Speed, p.Forward, p.Emergency, "throttle"); err != nil {
-		_ = resp.SendLocoError(ctx, p.Address, errors.CodeCommandStationError, err.Error())
-		return FailResult(errors.CodeCommandStationError)
+		code := locoCommandErrorCode(err)
+		_ = resp.SendLocoError(ctx, p.Address, code, err.Error())
+		return FailResult(code)
 	}
 	return OKResult()
 }

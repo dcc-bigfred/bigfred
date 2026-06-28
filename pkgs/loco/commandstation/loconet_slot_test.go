@@ -211,3 +211,62 @@ func TestAcquireSlotTimesOut(t *testing.T) {
 		t.Fatalf("AcquireSlot took %s, expected to fail fast", elapsed)
 	}
 }
+
+// slotServerWithForeign injects an OPC_SL_RD_DATA for another loco before
+// answering the requested address, mimicking traffic from an external throttle
+// on a shared bus during slot acquisition.
+type slotServerWithForeign struct {
+	slotServerTransport
+	foreignAddr LocoAddr
+	foreignSlot byte
+}
+
+func (s *slotServerWithForeign) WritePacket(pkt []byte) error {
+	if len(pkt) > 0 && pkt[0] == lnOPC_LOCO_ADR {
+		addr := LocoAddr(pkt[2]&0x7F) | (LocoAddr(pkt[1]&0x7F) << 7)
+		s.rxCh <- buildSlotRead(s.foreignSlot, lnSLOT_COMMON, s.foreignAddr, 40, 0x20|0x08, 0x04)
+		s.rxCh <- buildSlotRead(s.slot, s.stat1, addr, s.speed, s.dirf, s.snd)
+		s.mu.Lock()
+		s.tx = append(s.tx, append([]byte(nil), pkt...))
+		s.mu.Unlock()
+		return nil
+	}
+	return s.slotServerTransport.WritePacket(pkt)
+}
+
+// AcquireSlot must ignore foreign E7 traffic during its wait window so a
+// released slot is not re-adopted and foreign DIRF/SND never seed our cache.
+func TestAcquireSlotIgnoresForeignSlotRead(t *testing.T) {
+	l := newLocoNetBase()
+	l.minTxGap = 0
+	const foreign LocoAddr = 99
+	const want LocoAddr = 31
+	srv := &slotServerWithForeign{
+		slotServerTransport: slotServerTransport{rxCh: l.rxCh, slot: 5, stat1: lnSLOT_COMMON, dirf: 0x20},
+		foreignAddr:         foreign,
+		foreignSlot:         20,
+	}
+	l.t = srv
+	go l.dispatch()
+	t.Cleanup(func() { close(l.stop) })
+
+	// BigFred previously owned foreign and released it.
+	l.setSlot(foreign, 20)
+	l.clearSlot(foreign, 20)
+	if _, ok := l.getSlot(foreign); ok {
+		t.Fatal("precondition: foreign slot must not be cached")
+	}
+
+	if err := l.AcquireSlot(want); err != nil {
+		t.Fatalf("AcquireSlot: %v", err)
+	}
+	if _, ok := l.getSlot(foreign); ok {
+		t.Fatal("foreign E7 during acquire must not re-adopt released slot")
+	}
+	if dirf := l.getDirf(foreign); dirf != 0 {
+		t.Fatalf("foreign dirf cache = %#x, want 0", dirf)
+	}
+	if slot, ok := l.getSlot(want); !ok || slot != 5 {
+		t.Fatalf("wanted slot for %d = %d (ok=%v), want 5", want, slot, ok)
+	}
+}

@@ -956,6 +956,12 @@ func (l *LocoNet) acquireSlotFreshLocked(addr LocoAddr) (byte, error) {
 		if err != nil {
 			return 0, err
 		}
+		if len(pkt) >= 4 && pkt[0] == lnOPC_LONG_ACK && pkt[1] == (lnOPC_LOCO_ADR&0x7F) {
+			if pkt[2] == 0x00 {
+				l.metrics.incr(&l.metrics.lackRejections)
+				return 0, fmt.Errorf("loconet: command station has no free slot for loco %d", addr)
+			}
+		}
 		if sd, ok := parseLnSlotData(pkt); ok {
 			// Only seed our cache from the E7 that answers THIS address
 			// request. Foreign slot reads on a shared bus must not re-adopt

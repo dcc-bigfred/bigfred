@@ -292,6 +292,10 @@ func (s *Server) handleAnonymous(ctx context.Context, conn net.Conn, line string
 		if s.cfg.Store != nil && s.registry.IsPaired(client.Key) {
 			_ = s.cfg.Store.TouchSeen(ctx, s.cfg.LayoutID, s.cfg.CommandStationID, client.Key, contract.NowMS(), 0)
 		}
+		if !s.registry.initialBurstSent(client.Key) {
+			s.sendInitialBurst(ctx, client.Key)
+			s.registry.markInitialBurstSent(client.Key)
+		}
 		return true, client.Key
 	case strings.HasPrefix(line, "N"):
 		// N before HU is ignored.

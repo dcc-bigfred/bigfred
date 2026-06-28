@@ -172,6 +172,7 @@ func StartLocoNetMetrics(src commandstation.MetricsSource, cfg LocoNetMetricsCon
 		o.ObserveInt64(queueDepth, s.RxQueueLen, withBase(attribute.String("queue", "rx")))
 		o.ObserveInt64(queueDepth, s.ObsQueueLen, withBase(attribute.String("queue", "obs")))
 		o.ObserveInt64(queueDepth, s.SyncQueueLen, withBase(attribute.String("queue", "sync")))
+		o.ObserveInt64(queueDepth, s.TxQueueLen, withBase(attribute.String("queue", "tx")))
 		return nil
 	}
 

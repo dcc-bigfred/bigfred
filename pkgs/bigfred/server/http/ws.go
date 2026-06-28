@@ -6,6 +6,7 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
+	"github.com/keskad/loco/pkgs/bigfred/server/domain"
 	"github.com/keskad/loco/pkgs/bigfred/server/metrics"
 
 	"github.com/keskad/loco/pkgs/bigfred/server/ws"
@@ -41,6 +42,12 @@ func ServeWS(hub *ws.Hub, auth *cmd.Auth, m *metrics.Metrics, w http.ResponseWri
 	}
 
 	session := ws.NewDriveSession(id.User.ID, id.User.Login, id.User.Organization, id.Layout.ID)
+	// Seed the cached admin flag so admin-only WS broadcasts are scoped
+	// correctly from the first frame; the hub refreshes it on elevation
+	// changes. Permanent admin plus a sudo elevation both count.
+	if eff, err := auth.Effective(r.Context(), id.User, id.Layout.ID); err == nil {
+		session.SetEffectiveAdmin(eff.Has(domain.RoleAdmin))
+	}
 	client := ws.NewClient(conn, hub, session)
 	hub.Register(client)
 	client.Serve(r.Context())

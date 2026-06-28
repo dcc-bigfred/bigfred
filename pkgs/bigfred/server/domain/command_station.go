@@ -70,6 +70,27 @@ type CommandStation struct {
 	// PollIntervalMs is the state-feed polling cadence for drivers without
 	// push notifications. Zero selects the dcc-bus daemon default (750 ms).
 	PollIntervalMs uint `db:"poll_interval_ms"`
+	// Z21ServerEnabled turns on the inbound Z21 handset UDP server in
+	// dcc-bus for layouts attached to this command station.
+	Z21ServerEnabled bool `db:"z21_server_enabled"`
+	// Z21IPStickiness keys handset sessions by client IP only so a UDP
+	// port change on reconnect does not drop the paired session.
+	Z21IPStickiness bool `db:"z21_ip_stickiness"`
+	// Z21InboundPort is the UDP port for inbound Z21 handset connections
+	// when Z21ServerEnabled is set. Zero selects the default (21105).
+	Z21InboundPort uint `db:"z21_inbound_port"`
+	// WithrottleServerEnabled turns on the inbound WiThrottle TCP server in
+	// dcc-bus for layouts attached to this command station.
+	WithrottleServerEnabled bool `db:"withrottle_server_enabled"`
+	// WithrottleInboundPort is the TCP port for inbound WiThrottle connections.
+	// Zero selects the default (12090).
+	WithrottleInboundPort uint `db:"withrottle_inbound_port"`
+	// WithrottlePairingAddr is the DCC address of the pairing sentinel loco.
+	// Zero selects the default (10239).
+	WithrottlePairingAddr uint `db:"withrottle_pairing_addr"`
+	// WithrottleHeartbeatSecs is the dead-man heartbeat window advertised to
+	// WiThrottle clients. Zero selects the default (10).
+	WithrottleHeartbeatSecs float64 `db:"withrottle_heartbeat_secs"`
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
 }
@@ -82,6 +103,10 @@ const (
 	DefaultCommandStationHeartbeatSecs = 2
 	DefaultCommandStationDeadmanSecs   = 6
 	DefaultCommandStationPollIntervalMs = 0
+	DefaultZ21InboundPort             = 21105
+	DefaultWithrottleInboundPort      = 12090
+	DefaultWithrottlePairingAddr      = 10239
+	DefaultWithrottleHeartbeatSecs    = 10
 )
 
 // EffectiveSpeedSteps returns the catalogue DCC speed-step count, applying
@@ -115,6 +140,47 @@ func (cs CommandStation) EffectiveDeadmanSecs() float64 {
 // Zero means the dcc-bus daemon applies its built-in default.
 func (cs CommandStation) EffectivePollIntervalMs() uint {
 	return cs.PollIntervalMs
+}
+
+// EffectiveZ21InboundPort returns the inbound Z21 handset UDP port.
+func (cs CommandStation) EffectiveZ21InboundPort() uint16 {
+	if cs.Z21InboundPort == 0 {
+		return DefaultZ21InboundPort
+	}
+	if cs.Z21InboundPort > 65535 {
+		return DefaultZ21InboundPort
+	}
+	return uint16(cs.Z21InboundPort)
+}
+
+// EffectiveWithrottleInboundPort returns the inbound WiThrottle TCP port.
+func (cs CommandStation) EffectiveWithrottleInboundPort() uint16 {
+	if cs.WithrottleInboundPort == 0 {
+		return DefaultWithrottleInboundPort
+	}
+	if cs.WithrottleInboundPort > 65535 {
+		return DefaultWithrottleInboundPort
+	}
+	return uint16(cs.WithrottleInboundPort)
+}
+
+// EffectiveWithrottlePairingAddr returns the pairing sentinel DCC address.
+func (cs CommandStation) EffectiveWithrottlePairingAddr() uint16 {
+	if cs.WithrottlePairingAddr == 0 {
+		return DefaultWithrottlePairingAddr
+	}
+	if cs.WithrottlePairingAddr > 65535 {
+		return DefaultWithrottlePairingAddr
+	}
+	return uint16(cs.WithrottlePairingAddr)
+}
+
+// EffectiveWithrottleHeartbeatSecs returns the WiThrottle heartbeat window.
+func (cs CommandStation) EffectiveWithrottleHeartbeatSecs() float64 {
+	if cs.WithrottleHeartbeatSecs <= 0 {
+		return DefaultWithrottleHeartbeatSecs
+	}
+	return cs.WithrottleHeartbeatSecs
 }
 
 // LayoutCommandStation is the join row binding a CommandStation to a

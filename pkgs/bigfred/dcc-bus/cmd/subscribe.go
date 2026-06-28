@@ -39,10 +39,11 @@ func (r *Router) HandleSubscribe(ctx context.Context, actor Actor, resp Responde
 	r.reclaimSlotOwnership(accepted)
 
 	for _, addr := range accepted {
-		if snap, ok, err := r.redis.GetLocoCurrentState(ctx, addr); err == nil && ok {
+		snap := r.locoSnapOrDefault(ctx, addr)
+		if len(snap.Functions) > 0 {
 			r.cache.Seed(addr, snap.Functions)
-			_ = resp.SendLocoState(ctx, snap)
 		}
+		_ = resp.SendLocoState(ctx, snap)
 	}
 	return OKResult()
 }

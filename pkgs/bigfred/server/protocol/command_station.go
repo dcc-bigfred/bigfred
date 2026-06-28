@@ -14,6 +14,9 @@ type CommandStationResponse struct {
 	HeartbeatSecs    float64                   `json:"heartbeatSecs"`
 	DeadmanSecs      float64                   `json:"deadmanSecs"`
 	PollIntervalMs   uint                      `json:"pollIntervalMs"`
+	Z21ServerEnabled bool                      `json:"z21ServerEnabled"`
+	Z21IPStickiness  bool                      `json:"z21IpStickiness"`
+	WithrottleServerEnabled bool               `json:"withrottleServerEnabled"`
 }
 
 func ToCommandStationResponse(cs domain.CommandStation) CommandStationResponse {
@@ -25,7 +28,10 @@ func ToCommandStationResponse(cs domain.CommandStation) CommandStationResponse {
 		SpeedSteps:     cs.EffectiveSpeedSteps(),
 		HeartbeatSecs:  cs.EffectiveHeartbeatSecs(),
 		DeadmanSecs:    cs.EffectiveDeadmanSecs(),
-		PollIntervalMs: cs.EffectivePollIntervalMs(),
+		PollIntervalMs:   cs.EffectivePollIntervalMs(),
+		Z21ServerEnabled: cs.Z21ServerEnabled,
+		Z21IPStickiness:  cs.Z21IPStickiness,
+		WithrottleServerEnabled: cs.WithrottleServerEnabled,
 	}
 }
 
@@ -36,18 +42,24 @@ type CommandStationCreateRequest struct {
 	SpeedSteps     uint                      `json:"speedSteps"`
 	HeartbeatSecs  float64                   `json:"heartbeatSecs"`
 	DeadmanSecs    float64                   `json:"deadmanSecs"`
-	PollIntervalMs uint                      `json:"pollIntervalMs"`
+	PollIntervalMs   uint                      `json:"pollIntervalMs"`
+	Z21ServerEnabled bool                      `json:"z21ServerEnabled"`
+	Z21IPStickiness  bool                      `json:"z21IpStickiness"`
+	WithrottleServerEnabled bool               `json:"withrottleServerEnabled"`
 }
 
 func (r CommandStationCreateRequest) ToCreateInput() cmd.CommandStationCreateInput {
 	return cmd.CommandStationCreateInput{
-		Name:           r.Name,
-		Kind:           r.Kind,
-		ConnectionURI:  r.ConnectionURI,
-		SpeedSteps:     r.SpeedSteps,
-		HeartbeatSecs:  r.HeartbeatSecs,
-		DeadmanSecs:    r.DeadmanSecs,
-		PollIntervalMs: r.PollIntervalMs,
+		Name:             r.Name,
+		Kind:             r.Kind,
+		ConnectionURI:    r.ConnectionURI,
+		SpeedSteps:       r.SpeedSteps,
+		HeartbeatSecs:    r.HeartbeatSecs,
+		DeadmanSecs:      r.DeadmanSecs,
+		PollIntervalMs:   r.PollIntervalMs,
+		Z21ServerEnabled: r.Z21ServerEnabled,
+		Z21IPStickiness:  r.Z21IPStickiness,
+		WithrottleServerEnabled: r.WithrottleServerEnabled,
 	}
 }
 
@@ -58,17 +70,23 @@ type CommandStationUpdateRequest struct {
 	SpeedSteps     *uint                      `json:"speedSteps"`
 	HeartbeatSecs  *float64                   `json:"heartbeatSecs"`
 	DeadmanSecs    *float64                   `json:"deadmanSecs"`
-	PollIntervalMs *uint                      `json:"pollIntervalMs"`
+	PollIntervalMs   *uint                      `json:"pollIntervalMs"`
+	Z21ServerEnabled *bool                    `json:"z21ServerEnabled"`
+	Z21IPStickiness  *bool                    `json:"z21IpStickiness"`
+	WithrottleServerEnabled *bool               `json:"withrottleServerEnabled"`
 }
 
 func (r CommandStationUpdateRequest) ToUpdateInput() cmd.CommandStationUpdateInput {
 	return cmd.CommandStationUpdateInput{
-		Name:           r.Name,
-		Kind:           r.Kind,
-		ConnectionURI:  r.ConnectionURI,
-		SpeedSteps:     r.SpeedSteps,
-		HeartbeatSecs:  r.HeartbeatSecs,
-		DeadmanSecs:    r.DeadmanSecs,
-		PollIntervalMs: r.PollIntervalMs,
+		Name:             r.Name,
+		Kind:             r.Kind,
+		ConnectionURI:    r.ConnectionURI,
+		SpeedSteps:       r.SpeedSteps,
+		HeartbeatSecs:    r.HeartbeatSecs,
+		DeadmanSecs:      r.DeadmanSecs,
+		PollIntervalMs:   r.PollIntervalMs,
+		Z21ServerEnabled: r.Z21ServerEnabled,
+		Z21IPStickiness:  r.Z21IPStickiness,
+		WithrottleServerEnabled: r.WithrottleServerEnabled,
 	}
 }

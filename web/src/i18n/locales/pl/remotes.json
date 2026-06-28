@@ -1,0 +1,70 @@
+{
+  "title": "Piloty",
+  "subtitle": "Sparuj pilot z BigFredem i wybierz lokomotywy, którymi możesz sterować.",
+  "alerts": {
+    "noServer": "Żadna centralka na tej makiecie nie ma włączonego serwera pilota. Poproś administratora o włączenie w",
+    "commandStationLink": "Centralkach"
+  },
+  "sections": {
+    "status": "Status",
+    "scope": "Zakres pojazdów",
+    "clients": "Podłączone piloty",
+    "protocol": "Typ pilota"
+  },
+  "fields": {
+    "commandStation": "Centralka",
+    "allowAllVehicles": "Wszystkie pojazdy, którymi mam uprawnienia sterować na makiecie",
+    "vehicles": "Dozwolone pojazdy",
+    "vehiclesPlaceholder": "Wybierz lokomotywy…",
+    "handsetBrakeSecs": "Czuwak (s)",
+    "handsetBrakeSecsHint": "Po jakim czasie braku łączności pilota z BigFred włącza się hamowanie awaryjne? ({{min}}s - {{max}}s)"
+  },
+  "protocol": {
+    "z21": "Aplikacja Z21",
+    "withrottle": "WiThrottle / Engine Driver",
+    "pendingBadge": "Oczekuje"
+  },
+  "status": {
+    "paired": "Sparowany",
+    "notPaired": "Niesparowany",
+    "clientKey": "Pilot: {{key}}",
+    "pairedAt": "Sparowano {{time}}",
+    "lastSeenAt": "Ostatnia aktywność {{time}}",
+    "keepaliveHint": "Po {{seconds}} sekundach pilota nie komunikującego się z BigFred składy zostają zahamowane"
+  },
+  "clients": {
+    "empty": "Brak aktywnych połączeń z pilotami.",
+    "pairedYes": "Sparowany",
+    "pairedNo": "Niesparowany",
+    "idleBraked": "Zahamowano (bezczynność)",
+    "sessionExpires": "Sesja wygasa {{time}}",
+    "columns": {
+      "protocol": "Typ",
+      "endpoint": "Adres IP:port",
+      "paired": "Parowanie",
+      "user": "Użytkownik",
+      "lastSeen": "Ostatnia aktywność",
+      "connected": "Czas połączenia",
+      "status": "Stan",
+      "actions": "Akcje"
+    }
+  },
+  "pending": {
+    "title": "Kod parowania",
+    "expires": "Kod parowania wygasa za {{seconds}} s"
+  },
+  "protocolPending": {
+    "z21": {
+      "instructions": "Wpisz CV3 i CV4 w aplikacji Z21 na dowolnej lokomotywie:\n• POM — programowanie w trakcie jazdy\n• Tor programujący — tryb serwisowy CV\n• Funkcje F0–F32 — cyfra po cyfrze (F0–F9: jedna cyfra, F10–F32: dwie cyfry; np. kod 122-145: F1 F2 F2 F1 F4 F5)"
+    },
+    "withrottle": {
+      "instructions": "W Engine Driver lub WiThrottle:\n• Wybierz lokomotywę „Pair with BigFred” z rosteru i naciśnij klawisze funkcyjne F0–F9 dla każdej cyfry (np. 1 2 2 1 4 5), lub\n• Ustaw nazwę urządzenia (N) na sześciocyfrowy kod bez spacji."
+    }
+  },
+  "actions": {
+    "generatePairing": "Wygeneruj kod parowania",
+    "cancelPairing": "Anuluj parowanie",
+    "removePairedHandset": "Usuń sparowanego pilota",
+    "unpair": "Rozłącz pilot"
+  }
+}

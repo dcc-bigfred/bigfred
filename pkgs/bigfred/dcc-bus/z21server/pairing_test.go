@@ -1,0 +1,57 @@
+package z21server
+
+import (
+	"context"
+	"net"
+	"testing"
+	"time"
+
+	"github.com/alicebob/miniredis/v2"
+	"github.com/redis/go-redis/v9"
+
+	"github.com/keskad/loco/pkgs/bigfred/remotepairing"
+)
+
+func TestPairingHandlerCompletesOnCV3CV4(t *testing.T) {
+	mr, err := miniredis.Run()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer mr.Close()
+
+	store := remotepairing.NewStore(redis.NewClient(&redis.Options{Addr: mr.Addr()}))
+	ctx := context.Background()
+	req, err := store.CreateZ21PairingRequest(ctx, remotepairing.CreateZ21PairingInput{
+		LayoutID:         1,
+		CommandStationID: 2,
+		UserID:           7,
+		AllowedAddrs:     []uint16{3},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	reg := NewRegistry(nil, nil)
+	addr := &net.UDPAddr{IP: net.IPv4(10, 0, 0, 2), Port: 40001}
+	client := reg.Touch(addr, time.Now().UTC(), false)
+	handler := NewPairingHandler(store, 1, 2, reg, nil, nil)
+
+	if _, active := handler.Handle(ctx, client, 2, req.PairingCV3); active != nil {
+		t.Fatal("expected incomplete after CV3 only")
+	}
+	_, active := handler.Handle(ctx, client, 3, req.PairingCV4)
+	if active == nil || active.UserID != 7 {
+		t.Fatalf("expected paired session, got %+v", active)
+	}
+	if p, ok := reg.Paired(client.Key); !ok || p.ClientKey != client.Key {
+		t.Fatalf("client mirror: %+v", p)
+	}
+}
+
+func TestPOMWriteByteParse(t *testing.T) {
+	pkt := buildPOMWriteByte(99, 3, 145)
+	loco, cvWire, value, ok := parsePOMWriteByte(pkt)
+	if !ok || loco != 99 || cvWire != 3 || value != 145 {
+		t.Fatalf("parse pom: ok=%v loco=%d cv=%d val=%d", ok, loco, cvWire, value)
+	}
+}

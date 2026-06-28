@@ -9,6 +9,7 @@ import (
 	"github.com/keskad/loco/pkgs/bigfred/contract"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/service/station"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/state"
+	"github.com/keskad/loco/pkgs/bigfred/remotes"
 	"github.com/keskad/loco/pkgs/loco/commandstation"
 )
 
@@ -25,8 +26,9 @@ type FeedDeps struct {
 	Redis        *state.Redis
 	Hub          StateBroadcaster
 	HubSubs      SubscriptionSource
-	FnCache      *FunctionsCache
-	Log          *logrus.Logger
+	FnCache       *FunctionsCache
+	LocoObservers *remotes.LocoStateNotifier
+	Log           *logrus.Logger
 	PollInterval time.Duration
 	StateTTL     time.Duration
 }
@@ -212,6 +214,9 @@ func applyObservation(ctx context.Context, deps FeedDeps, o commandstation.LocoO
 		}
 	}
 	BroadcastLocoState(ctx, deps.Hub, snap)
+	if deps.LocoObservers != nil {
+		deps.LocoObservers.Notify(ctx, snap)
+	}
 	if deps.Log != nil {
 		deps.Log.WithFields(logrus.Fields{
 			"addr":    addr,

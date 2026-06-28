@@ -10,4 +10,5 @@ import (
 type layoutRosterPublisher interface {
 	PublishLayoutAllowedVehicles(ctx context.Context, snap contract.AllowedVehicles) error
 	PublishLayoutDefinedTrains(ctx context.Context, snap contract.DefinedTrains) error
+	PublishLayoutVehicleFunctions(ctx context.Context, snap contract.VehicleFunctions) error
 }

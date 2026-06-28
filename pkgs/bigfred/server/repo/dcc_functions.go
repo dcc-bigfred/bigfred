@@ -36,6 +36,29 @@ func (f *DccFunctions) ListByVehicleID(ctx context.Context, vehicleID domain.Veh
 	return rows, nil
 }
 
+// ListByVehicleIDs returns rows owned by any of the vehicles, sorted by vehicle
+// then display position.
+func (f *DccFunctions) ListByVehicleIDs(ctx context.Context, vehicleIDs []domain.VehicleID) ([]domain.DccFunction, error) {
+	if len(vehicleIDs) == 0 {
+		return nil, nil
+	}
+	vals := make([]interface{}, len(vehicleIDs))
+	for i, id := range vehicleIDs {
+		vals[i] = id
+	}
+	var rows []domain.DccFunction
+	err := f.repo.FindAll(ctx, &rows,
+		where.In("vehicle_id", vals...),
+		sort.Asc("vehicle_id"),
+		sort.Asc("position"),
+		sort.Asc("num"),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
 // ListByTemplateID returns rows owned by a template, sorted by position.
 func (f *DccFunctions) ListByTemplateID(ctx context.Context, templateID uint) ([]domain.DccFunction, error) {
 	var rows []domain.DccFunction

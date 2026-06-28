@@ -1,0 +1,70 @@
+{
+  "title": "Handsets",
+  "subtitle": "Pair a remote handset with BigFred and choose which locomotives you may drive.",
+  "alerts": {
+    "noServer": "No command station on this layout has a handset server enabled. Ask an admin to turn one on under",
+    "commandStationLink": "Command stations"
+  },
+  "sections": {
+    "status": "Status",
+    "scope": "Vehicle scope",
+    "clients": "Connected handsets",
+    "protocol": "Handset type"
+  },
+  "fields": {
+    "commandStation": "Command station",
+    "allowAllVehicles": "All vehicles I have permission to drive on this layout",
+    "vehicles": "Allowed vehicles",
+    "vehiclesPlaceholder": "Pick locomotives…",
+    "handsetBrakeSecs": "Time until trains are braked (s)",
+    "handsetBrakeSecsHint": "{{min}}–{{max}} seconds without handset communication with BigFred"
+  },
+  "protocol": {
+    "z21": "Z21 app",
+    "withrottle": "WiThrottle / Engine Driver",
+    "pendingBadge": "Pending"
+  },
+  "status": {
+    "paired": "Paired",
+    "notPaired": "Not paired",
+    "clientKey": "Handset: {{key}}",
+    "pairedAt": "Paired at {{time}}",
+    "lastSeenAt": "Last seen {{time}}",
+    "keepaliveHint": "After {{seconds}} seconds without communication with BigFred, trains controlled by the handset are emergency-stopped"
+  },
+  "clients": {
+    "empty": "No active handset connections.",
+    "pairedYes": "Paired",
+    "pairedNo": "Unpaired",
+    "idleBraked": "Braked (idle)",
+    "sessionExpires": "Session expires {{time}}",
+    "columns": {
+      "protocol": "Type",
+      "endpoint": "IP:port",
+      "paired": "Pairing",
+      "user": "User",
+      "lastSeen": "Last seen",
+      "connected": "Connected for",
+      "status": "Status",
+      "actions": "Actions"
+    }
+  },
+  "pending": {
+    "title": "Pairing code",
+    "expires": "Pairing code expires in {{seconds}} s"
+  },
+  "protocolPending": {
+    "z21": {
+      "instructions": "Enter CV3 and CV4 in the Z21 app on any locomotive:\n• POM — programming on the main track\n• Programming track — service-mode CV access\n• Functions F0–F32 — digit by digit (F0–F9: one digit, F10–F32: two digits; e.g. code 122-145: F1 F2 F2 F1 F4 F5)"
+    },
+    "withrottle": {
+      "instructions": "In Engine Driver or WiThrottle:\n• Acquire the “Pair with BigFred” sentinel loco from the roster and press function keys F0–F9 for each digit (e.g. 1 2 2 1 4 5), or\n• Set Device Name (N) to the six-digit code without spaces."
+    }
+  },
+  "actions": {
+    "generatePairing": "Generate pairing code",
+    "cancelPairing": "Cancel pairing",
+    "removePairedHandset": "Remove paired handset",
+    "unpair": "Disconnect handset"
+  }
+}

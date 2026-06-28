@@ -3,6 +3,7 @@ import {
   Alert,
   Box,
   Button,
+  Chip,
   CircularProgress,
   Container,
   Dialog,
@@ -11,12 +12,14 @@ import {
   DialogContentText,
   DialogTitle,
   FormControl,
+  FormControlLabel,
   IconButton,
   InputLabel,
   MenuItem,
   Paper,
   Select,
   Stack,
+  Switch,
   Table,
   TableBody,
   TableCell,
@@ -77,6 +80,10 @@ export default function CommandStationsPage() {
   const [pollIntervalMsInput, setPollIntervalMsInput] = useState<number>(
     DEFAULT_COMMAND_STATION_POLL_INTERVAL_MS,
   );
+  const [z21ServerEnabledInput, setZ21ServerEnabledInput] = useState(false);
+  const [z21IpStickinessInput, setZ21IpStickinessInput] = useState(false);
+  const [withrottleServerEnabledInput, setWithrottleServerEnabledInput] =
+    useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const closeDialog = () => {
@@ -88,6 +95,9 @@ export default function CommandStationsPage() {
     setHeartbeatSecsInput(DEFAULT_COMMAND_STATION_HEARTBEAT_SECS);
     setDeadmanSecsInput(DEFAULT_COMMAND_STATION_DEADMAN_SECS);
     setPollIntervalMsInput(DEFAULT_COMMAND_STATION_POLL_INTERVAL_MS);
+    setZ21ServerEnabledInput(false);
+    setZ21IpStickinessInput(false);
+    setWithrottleServerEnabledInput(false);
     setActionError(null);
     create.reset();
     update.reset();
@@ -112,6 +122,9 @@ export default function CommandStationsPage() {
     setHeartbeatSecsInput(DEFAULT_COMMAND_STATION_HEARTBEAT_SECS);
     setDeadmanSecsInput(DEFAULT_COMMAND_STATION_DEADMAN_SECS);
     setPollIntervalMsInput(DEFAULT_COMMAND_STATION_POLL_INTERVAL_MS);
+    setZ21ServerEnabledInput(false);
+    setZ21IpStickinessInput(false);
+    setWithrottleServerEnabledInput(false);
     setActionError(null);
   };
 
@@ -124,6 +137,9 @@ export default function CommandStationsPage() {
     setHeartbeatSecsInput(target.heartbeatSecs);
     setDeadmanSecsInput(target.deadmanSecs);
     setPollIntervalMsInput(target.pollIntervalMs);
+    setZ21ServerEnabledInput(target.z21ServerEnabled);
+    setZ21IpStickinessInput(target.z21IpStickiness);
+    setWithrottleServerEnabledInput(target.withrottleServerEnabled);
     setActionError(null);
   };
 
@@ -143,6 +159,9 @@ export default function CommandStationsPage() {
         heartbeatSecs: heartbeatSecsInput,
         deadmanSecs: deadmanSecsInput,
         pollIntervalMs: pollIntervalMsInput,
+        z21ServerEnabled: z21ServerEnabledInput,
+        z21IpStickiness: z21ServerEnabledInput ? z21IpStickinessInput : false,
+        withrottleServerEnabled: withrottleServerEnabledInput,
       };
       if (dialog.kind === "create") {
         await create.mutateAsync(body);
@@ -212,6 +231,7 @@ export default function CommandStationsPage() {
                     <TableCell>{t("commandStation:admin.columns.connection")}</TableCell>
                     <TableCell>{t("commandStation:admin.columns.speedSteps")}</TableCell>
                     <TableCell>{t("commandStation:admin.columns.timing")}</TableCell>
+                    <TableCell>{t("commandStation:admin.columns.z21Server")}</TableCell>
                     <TableCell align="right">
                       {t("commandStation:admin.columns.actions")}
                     </TableCell>
@@ -240,6 +260,17 @@ export default function CommandStationsPage() {
                           deadman: row.deadmanSecs,
                           poll: row.pollIntervalMs,
                         })}
+                      </TableCell>
+                      <TableCell>
+                        {row.z21ServerEnabled ? (
+                          <Chip
+                            size="small"
+                            color="success"
+                            label={t("commandStation:admin.z21ServerOn")}
+                          />
+                        ) : (
+                          "—"
+                        )}
                       </TableCell>
                       <TableCell align="right">
                         <Stack
@@ -380,6 +411,80 @@ export default function CommandStationsPage() {
               fullWidth
               required
             />
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={z21ServerEnabledInput}
+                  onChange={(e) => {
+                    const on = e.target.checked;
+                    setZ21ServerEnabledInput(on);
+                    if (!on) {
+                      setZ21IpStickinessInput(false);
+                    }
+                  }}
+                />
+              }
+              label={t("commandStation:admin.dialogs.fields.z21ServerEnabled")}
+            />
+            <Typography variant="body2" color="text.secondary">
+              {t("commandStation:admin.dialogs.fields.z21ServerEnabledHelp")}
+            </Typography>
+            {z21ServerEnabledInput && (
+              <>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={z21IpStickinessInput}
+                      onChange={(e) =>
+                        setZ21IpStickinessInput(e.target.checked)
+                      }
+                    />
+                  }
+                  label={t(
+                    "commandStation:admin.dialogs.fields.z21IpStickiness",
+                  )}
+                />
+                <Typography variant="body2" color="text.secondary">
+                  {t(
+                    "commandStation:admin.dialogs.fields.z21IpStickinessHelp",
+                  )}
+                </Typography>
+              </>
+            )}
+            {dialog?.kind === "edit" &&
+              dialog.target.z21ServerEnabled &&
+              !z21ServerEnabledInput && (
+                <Alert severity="warning">
+                  {t("commandStation:admin.dialogs.fields.z21ServerDisableWarn")}
+                </Alert>
+              )}
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={withrottleServerEnabledInput}
+                  onChange={(e) =>
+                    setWithrottleServerEnabledInput(e.target.checked)
+                  }
+                />
+              }
+              label={t(
+                "commandStation:admin.dialogs.fields.withrottleServerEnabled",
+              )}
+            />
+            <Typography variant="body2" color="text.secondary">
+              {t(
+                "commandStation:admin.dialogs.fields.withrottleServerEnabledHelp",
+              )}
+            </Typography>
+            {dialog?.kind === "edit" &&
+              dialog.target.withrottleServerEnabled &&
+              !withrottleServerEnabledInput && (
+                <Alert severity="warning">
+                  {t(
+                    "commandStation:admin.dialogs.fields.withrottleServerDisableWarn",
+                  )}
+                </Alert>
+              )}
             {actionError && <Alert severity="error">{actionError}</Alert>}
           </Stack>
         </DialogContent>

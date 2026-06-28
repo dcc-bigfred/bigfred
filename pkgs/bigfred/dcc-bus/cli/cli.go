@@ -42,6 +42,17 @@ type Flags struct {
 	EnableTelemetry bool
 	OTLPEndpoint    string
 
+	EnableZ21 bool
+	Z21Bind   string
+	Z21Port   uint16
+	Z21IPStickiness bool
+
+	EnableWithrottle bool
+	WithrottleBind   string
+	WithrottlePort   uint16
+	WithrottlePairingAddr uint16
+	WithrottleHeartbeatSecs float64
+
 	AllowedOrigins []string
 }
 
@@ -86,6 +97,15 @@ should rarely be invoked manually.`,
 				PollIntervalMs:   f.PollIntervalMs,
 				EnableTelemetry:  f.EnableTelemetry,
 				OTLPEndpoint:     resolveOTLPEndpoint(f),
+				EnableZ21:        f.EnableZ21,
+				Z21Bind:          f.Z21Bind,
+				Z21Port:          f.Z21Port,
+				Z21IPStickiness:  f.Z21IPStickiness,
+				EnableWithrottle: f.EnableWithrottle,
+				WithrottleBind:   f.WithrottleBind,
+				WithrottlePort:   f.WithrottlePort,
+				WithrottlePairingAddr: f.WithrottlePairingAddr,
+				WithrottleHeartbeatSecs: f.WithrottleHeartbeatSecs,
 			}
 			d, err := dccbus.New(c.Context(), log, cfg)
 			if err != nil {
@@ -113,6 +133,15 @@ should rarely be invoked manually.`,
 	cmd.Flags().BoolVar(&f.EnableTelemetry, "enable-telemetry", false, "record command-station latency histograms (requires --otel-endpoint or OTEL_EXPORTER_OTLP_ENDPOINT)")
 	cmd.Flags().StringVar(&f.OTLPEndpoint, "otel-endpoint", "", "OTLP/gRPC metrics endpoint for Alloy (required for --enable-telemetry; defaults to OTEL_EXPORTER_OTLP_ENDPOINT)")
 	cmd.Flags().StringSliceVar(&f.AllowedOrigins, "allowed-origin", nil, "explicit WS Origin allow-list (empty == accept any; the reverse proxy on loco-server gates Origin in production)")
+	cmd.Flags().BoolVar(&f.EnableZ21, "enable-z21", false, "listen for inbound Z21 handset UDP connections")
+	cmd.Flags().BoolVar(&f.Z21IPStickiness, "z21-ip-stickiness", false, "key Z21 handset sessions by client IP only (survives UDP port changes on reconnect)")
+	cmd.Flags().StringVar(&f.Z21Bind, "z21-bind", "0.0.0.0", "interface to bind the inbound Z21 UDP listener on")
+	cmd.Flags().Uint16Var(&f.Z21Port, "z21-port", 21105, "UDP port for inbound Z21 handset connections")
+	cmd.Flags().BoolVar(&f.EnableWithrottle, "enable-withrottle", false, "listen for inbound WiThrottle TCP connections")
+	cmd.Flags().StringVar(&f.WithrottleBind, "withrottle-bind", "0.0.0.0", "interface to bind the inbound WiThrottle TCP listener on")
+	cmd.Flags().Uint16Var(&f.WithrottlePort, "withrottle-port", 12090, "TCP port for inbound WiThrottle connections")
+	cmd.Flags().Uint16Var(&f.WithrottlePairingAddr, "withrottle-pairing-addr", 10239, "DCC address of the WiThrottle pairing sentinel loco")
+	cmd.Flags().Float64Var(&f.WithrottleHeartbeatSecs, "withrottle-heartbeat-secs", 10, "WiThrottle dead-man heartbeat window advertised to clients")
 
 	return cmd
 }

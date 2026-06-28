@@ -59,13 +59,16 @@ func (s *CommandStation) Get(ctx context.Context, id uint) (domain.CommandStatio
 }
 
 type CommandStationCreateInput struct {
-	Name          string
-	Kind          domain.CommandStationKind
-	ConnectionURI string
-	SpeedSteps     uint
-	HeartbeatSecs  float64
-	DeadmanSecs    float64
-	PollIntervalMs uint
+	Name             string
+	Kind             domain.CommandStationKind
+	ConnectionURI    string
+	SpeedSteps       uint
+	HeartbeatSecs    float64
+	DeadmanSecs      float64
+	PollIntervalMs   uint
+	Z21ServerEnabled bool
+	Z21IPStickiness  bool
+	WithrottleServerEnabled bool
 }
 
 func (s *CommandStation) Create(ctx context.Context, eff domain.EffectiveRoles, in CommandStationCreateInput) (domain.CommandStation, error) {
@@ -92,15 +95,21 @@ func (s *CommandStation) Create(ctx context.Context, eff domain.EffectiveRoles, 
 
 	now := time.Now().UTC()
 	row := domain.CommandStation{
-		Name:          name,
-		Kind:          kind,
-		ConnectionURI: uri,
-		SpeedSteps:     steps,
-		HeartbeatSecs:  heartbeat,
-		DeadmanSecs:    deadman,
-		PollIntervalMs: pollInterval,
-		CreatedAt:      now,
-		UpdatedAt:     now,
+		Name:             name,
+		Kind:             kind,
+		ConnectionURI:    uri,
+		SpeedSteps:       steps,
+		HeartbeatSecs:    heartbeat,
+		DeadmanSecs:      deadman,
+		PollIntervalMs:   pollInterval,
+		Z21ServerEnabled: in.Z21ServerEnabled,
+		Z21IPStickiness:  in.Z21IPStickiness,
+		WithrottleServerEnabled: in.WithrottleServerEnabled,
+		CreatedAt:        now,
+		UpdatedAt:        now,
+	}
+	if err := s.validateInboundPorts(ctx, row, 0); err != nil {
+		return domain.CommandStation{}, err
 	}
 	if err := s.stations.Insert(ctx, &row); err != nil {
 		return domain.CommandStation{}, err
@@ -109,13 +118,16 @@ func (s *CommandStation) Create(ctx context.Context, eff domain.EffectiveRoles, 
 }
 
 type CommandStationUpdateInput struct {
-	Name          *string
-	Kind          *domain.CommandStationKind
-	ConnectionURI *string
-	SpeedSteps     *uint
-	HeartbeatSecs  *float64
-	DeadmanSecs    *float64
-	PollIntervalMs *uint
+	Name             *string
+	Kind             *domain.CommandStationKind
+	ConnectionURI    *string
+	SpeedSteps       *uint
+	HeartbeatSecs    *float64
+	DeadmanSecs      *float64
+	PollIntervalMs   *uint
+	Z21ServerEnabled *bool
+	Z21IPStickiness  *bool
+	WithrottleServerEnabled *bool
 }
 
 func (s *CommandStation) Update(ctx context.Context, eff domain.EffectiveRoles, id uint, in CommandStationUpdateInput) (domain.CommandStation, error) {
@@ -182,8 +194,20 @@ func (s *CommandStation) Update(ctx context.Context, eff domain.EffectiveRoles, 
 		}
 		row.PollIntervalMs = pollInterval
 	}
+	if in.Z21ServerEnabled != nil {
+		row.Z21ServerEnabled = *in.Z21ServerEnabled
+	}
+	if in.Z21IPStickiness != nil {
+		row.Z21IPStickiness = *in.Z21IPStickiness
+	}
+	if in.WithrottleServerEnabled != nil {
+		row.WithrottleServerEnabled = *in.WithrottleServerEnabled
+	}
 	row.UpdatedAt = time.Now().UTC()
 
+	if err := s.validateInboundPorts(ctx, row, row.ID); err != nil {
+		return domain.CommandStation{}, err
+	}
 	if err := s.stations.Update(ctx, &row); err != nil {
 		return domain.CommandStation{}, err
 	}
@@ -232,4 +256,34 @@ func (s *CommandStation) checkCatalogManage(eff domain.EffectiveRoles) error {
 	default:
 		return errors.New(decision.Reason)
 	}
+}
+
+func (s *CommandStation) validateInboundPorts(ctx context.Context, row domain.CommandStation, excludeID uint) error {
+	all, err := s.stations.ListAll(ctx)
+	if err != nil {
+		return err
+	}
+	if row.Z21ServerEnabled {
+		port := row.EffectiveZ21InboundPort()
+		for _, other := range all {
+			if other.ID == excludeID || !other.Z21ServerEnabled {
+				continue
+			}
+			if other.EffectiveZ21InboundPort() == port {
+				return svcerrors.ErrCommandStationInboundPortConflict
+			}
+		}
+	}
+	if row.WithrottleServerEnabled {
+		port := row.EffectiveWithrottleInboundPort()
+		for _, other := range all {
+			if other.ID == excludeID || !other.WithrottleServerEnabled {
+				continue
+			}
+			if other.EffectiveWithrottleInboundPort() == port {
+				return svcerrors.ErrCommandStationInboundPortConflict
+			}
+		}
+	}
+	return nil
 }

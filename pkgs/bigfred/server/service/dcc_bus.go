@@ -412,6 +412,19 @@ func (d *DccBusService) buildProgramSpec(ctx context.Context, name string, layou
 		"--jwt-secret", string(d.cfg.JWTSecret),
 	}
 	args = dccbuscli.AppendStationFlags(args, cs)
+	if cs.Z21ServerEnabled {
+		args = append(args, "--enable-z21")
+		args = append(args, "--z21-port", strconv.FormatUint(uint64(cs.EffectiveZ21InboundPort()), 10))
+	}
+	if cs.Z21IPStickiness {
+		args = append(args, "--z21-ip-stickiness")
+	}
+	if cs.WithrottleServerEnabled {
+		args = append(args, "--enable-withrottle")
+		args = append(args, "--withrottle-port", strconv.FormatUint(uint64(cs.EffectiveWithrottleInboundPort()), 10))
+		args = append(args, "--withrottle-pairing-addr", strconv.FormatUint(uint64(cs.EffectiveWithrottlePairingAddr()), 10))
+		args = append(args, "--withrottle-heartbeat-secs", strconv.FormatFloat(cs.EffectiveWithrottleHeartbeatSecs(), 'f', -1, 64))
+	}
 	for _, origin := range d.cfg.AllowedOrigins {
 		args = append(args, "--allowed-origin", origin)
 	}
@@ -422,7 +435,7 @@ func (d *DccBusService) buildProgramSpec(ctx context.Context, name string, layou
 		Autostart:    true,
 		Autorestart:  true,
 		StartSecs:    1,
-		StopWaitSecs: 5,
+		StopWaitSecs: 35,
 	}, nil
 }
 

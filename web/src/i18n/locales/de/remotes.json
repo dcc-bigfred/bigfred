@@ -1,0 +1,70 @@
+{
+  "title": "Handgeräte",
+  "subtitle": "Koppeln Sie ein Handgerät mit BigFred und wählen Sie die Lokomotiven, die Sie fahren dürfen.",
+  "alerts": {
+    "noServer": "Keine Zentrale auf dieser Anlage hat einen Handgeräte-Server aktiviert. Bitte einen Administrator bitten, ihn unter",
+    "commandStationLink": "Zentralen"
+  },
+  "sections": {
+    "status": "Status",
+    "scope": "Fahrzeugumfang",
+    "clients": "Verbundene Handgeräte",
+    "protocol": "Handgerätetyp"
+  },
+  "fields": {
+    "commandStation": "Zentrale",
+    "allowAllVehicles": "Alle Fahrzeuge, die ich auf dieser Anlage fahren darf",
+    "vehicles": "Erlaubte Fahrzeuge",
+    "vehiclesPlaceholder": "Lokomotiven wählen…",
+    "handsetBrakeSecs": "Zeit bis zum Bremsen der Züge (s)",
+    "handsetBrakeSecsHint": "{{min}}–{{max}} Sekunden ohne Kommunikation des Handgeräts mit BigFred"
+  },
+  "protocol": {
+    "z21": "Z21-App",
+    "withrottle": "WiThrottle / Engine Driver",
+    "pendingBadge": "Ausstehend"
+  },
+  "status": {
+    "paired": "Gekoppelt",
+    "notPaired": "Nicht gekoppelt",
+    "clientKey": "Handgerät: {{key}}",
+    "pairedAt": "Gekoppelt am {{time}}",
+    "lastSeenAt": "Zuletzt gesehen {{time}}",
+    "keepaliveHint": "Nach {{seconds}} Sekunden ohne Kommunikation mit BigFred werden die vom Handgerät gesteuerten Züge notgebremst"
+  },
+  "clients": {
+    "empty": "Keine aktiven Handgeräte-Verbindungen.",
+    "pairedYes": "Gekoppelt",
+    "pairedNo": "Nicht gekoppelt",
+    "idleBraked": "Gebremst (Leerlauf)",
+    "sessionExpires": "Sitzung läuft ab {{time}}",
+    "columns": {
+      "protocol": "Typ",
+      "endpoint": "IP:Port",
+      "paired": "Kopplung",
+      "user": "Benutzer",
+      "lastSeen": "Zuletzt gesehen",
+      "connected": "Verbunden seit",
+      "status": "Status",
+      "actions": "Aktionen"
+    }
+  },
+  "pending": {
+    "title": "Kopplungscode",
+    "expires": "Kopplungscode läuft ab in {{seconds}} s"
+  },
+  "protocolPending": {
+    "z21": {
+      "instructions": "CV3 und CV4 in der Z21-App auf einer beliebigen Lokomotive eingeben:\n• POM — Programmierung auf dem Hauptgleis\n• Programmiergleis — Service-Modus CV\n• Funktionen F0–F32 — Ziffer für Ziffer (F0–F9: eine Ziffer, F10–F32: zwei Ziffern; z. B. Code 122-145: F1 F2 F2 F1 F4 F5)"
+    },
+    "withrottle": {
+      "instructions": "In Engine Driver oder WiThrottle:\n• Sentinel-Lok „Pair with BigFred” aus dem Roster übernehmen und Funktionstasten F0–F9 für jede Ziffer drücken (z. B. 1 2 2 1 4 5), oder\n• Gerätename (N) auf den sechsstelligen Code ohne Leerzeichen setzen."
+    }
+  },
+  "actions": {
+    "generatePairing": "Kopplungscode erzeugen",
+    "cancelPairing": "Kopplung abbrechen",
+    "removePairedHandset": "Gekoppeltes Handgerät entfernen",
+    "unpair": "Handgerät trennen"
+  }
+}

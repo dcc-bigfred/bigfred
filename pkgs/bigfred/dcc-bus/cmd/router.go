@@ -14,6 +14,7 @@ import (
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/service"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/service/station"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/state"
+	"github.com/keskad/loco/pkgs/bigfred/remotes"
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
 	"github.com/keskad/loco/pkgs/loco/commandstation"
 )
@@ -40,18 +41,21 @@ type Router struct {
 	pollInterval time.Duration
 
 	roster      *service.RosterCache
+	functions   *service.FunctionCatalogueCache
 	drive       security.DrivePolicy
 	trainPolicy security.TrainPolicy
 
 	trainsMu sync.RWMutex
 	trains   []contract.DefinedTrain
 
-	dcc   *service.DCCWriter
-	cache *service.FunctionsCache
+	dcc        *service.DCCWriter
+	cache      *service.FunctionsCache
 	trainSpeed *service.TrainSpeedScheduler
 
 	pulseMu     sync.Mutex
 	pulseActive map[service.FnKey]bool
+
+	locoObservers *remotes.LocoStateNotifier
 
 	shutdownOnce sync.Once
 	bootStopMu   sync.Mutex
@@ -66,6 +70,7 @@ type Config struct {
 	Log              *logrus.Logger
 	AllowedVehicles  contract.AllowedVehicles
 	DefinedTrains    contract.DefinedTrains
+	VehicleFunctions contract.VehicleFunctions
 	LayoutID         uint
 	CommandStationID uint
 	StationName      string
@@ -94,18 +99,21 @@ func NewRouter(_ context.Context, cfg Config) (*Router, error) {
 		speedSteps:       cfg.SpeedSteps,
 		pollInterval:     time.Duration(cfg.PollIntervalMs) * time.Millisecond,
 		roster:           service.NewRosterCache(cfg.LayoutID),
+		functions:        service.NewFunctionCatalogueCache(cfg.LayoutID),
 		dcc: &service.DCCWriter{
 			Station:    cfg.Station,
 			SpeedSteps: cfg.SpeedSteps,
 			Log:        log,
 		},
-		cache:       service.NewFunctionsCache(),
-		trainSpeed:  service.NewTrainSpeedScheduler(),
-		pulseActive: make(map[service.FnKey]bool, 8),
+		cache:         service.NewFunctionsCache(),
+		trainSpeed:    service.NewTrainSpeedScheduler(),
+		pulseActive:   make(map[service.FnKey]bool, 8),
+		locoObservers: remotes.NewLocoStateNotifier(),
 	}
 	r.dcc.LogFields = r.stationLogFields
 	r.ApplyAllowedVehicles(context.Background(), cfg.AllowedVehicles)
 	r.ApplyDefinedTrains(cfg.DefinedTrains)
+	r.ApplyVehicleFunctions(cfg.VehicleFunctions)
 	r.log.WithFields(logrus.Fields{
 		"layoutId":         r.layoutID,
 		"commandStationId": r.commandStationID,
@@ -174,6 +182,28 @@ func (r *Router) ApplyDefinedTrains(snap contract.DefinedTrains) {
 	}).Info("dcc-bus defined trains updated")
 }
 
+// ApplyVehicleFunctions replaces the layout function catalogue cache.
+func (r *Router) ApplyVehicleFunctions(snap contract.VehicleFunctions) {
+	if snap.LayoutID != 0 && snap.LayoutID != r.layoutID {
+		return
+	}
+	if !r.functions.ApplySnapshot(snap) {
+		return
+	}
+	r.log.WithFields(logrus.Fields{
+		"layoutId": r.layoutID,
+		"count":    len(snap.Vehicles),
+	}).Info("dcc-bus vehicle functions updated")
+}
+
+// FunctionsForAddr returns resolved function metadata for one roster address.
+func (r *Router) FunctionsForAddr(addr uint16) []contract.FunctionDefinition {
+	if r == nil || r.functions == nil {
+		return nil
+	}
+	return r.functions.FunctionsForAddr(addr)
+}
+
 func (r *Router) findDefinedTrain(trainID string) (contract.DefinedTrain, bool) {
 	r.trainsMu.RLock()
 	defer r.trainsMu.RUnlock()
@@ -185,18 +215,61 @@ func (r *Router) findDefinedTrain(trainID string) (contract.DefinedTrain, bool) 
 	return contract.DefinedTrain{}, false
 }
 
+// RegisterLocoObserver subscribes an inbound remote for locomotive state push.
+func (r *Router) RegisterLocoObserver(obs remotes.LocoStateObserver) {
+	if r == nil {
+		return
+	}
+	r.locoObservers.Register(obs)
+}
+
+// AllowedVehiclesSnapshot returns the in-memory drivable roster for inbound
+// protocol roster emission (e.g. WiThrottle RL lines).
+func (r *Router) AllowedVehiclesSnapshot() contract.AllowedVehicles {
+	if r == nil {
+		return contract.AllowedVehicles{}
+	}
+	return r.roster.Snapshot()
+}
+
+// FunctionsSnapshot returns the in-memory function catalogue for inbound
+// protocol acquire replies.
+func (r *Router) FunctionsSnapshot() contract.VehicleFunctions {
+	if r == nil || r.functions == nil {
+		return contract.VehicleFunctions{}
+	}
+	return r.functions.Snapshot()
+}
+
+// broadcastLocoState fans a snapshot to WS sessions and registered remotes.
+func (r *Router) broadcastLocoState(ctx context.Context, snap contract.LocoStateWire) {
+	service.BroadcastLocoState(ctx, r.hub, snap)
+	r.locoObservers.Notify(ctx, snap)
+}
+
+// locoSnapOrDefault returns the cached Redis snapshot or a stopped default.
+func (r *Router) locoSnapOrDefault(ctx context.Context, addr uint16) contract.LocoStateWire {
+	if r.redis != nil {
+		if snap, ok, err := r.redis.GetLocoCurrentState(ctx, addr); err == nil && ok {
+			return snap
+		}
+	}
+	return contract.LocoStateWire{Address: addr, Forward: true}
+}
+
 // RunStateFeed mirrors external throttle changes into Redis and WS clients.
 func (r *Router) RunStateFeed(ctx context.Context) {
 	service.RunStateFeed(ctx, service.FeedDeps{
-		Station:      r.station,
-		Roster:       r.roster,
-		Redis:        r.redis,
-		Hub:          r.hub,
-		HubSubs:      r.hub,
-		FnCache:      r.cache,
-		Log:          r.log,
-		PollInterval: r.pollInterval,
-		StateTTL:     StateTTL,
+		Station:       r.station,
+		Roster:        r.roster,
+		Redis:         r.redis,
+		Hub:           r.hub,
+		HubSubs:       r.hub,
+		FnCache:       r.cache,
+		LocoObservers: r.locoObservers,
+		Log:           r.log,
+		PollInterval:  r.pollInterval,
+		StateTTL:      StateTTL,
 	})
 }
 

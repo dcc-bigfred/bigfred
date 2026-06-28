@@ -947,22 +947,23 @@ func (l *LocoNet) acquireSlotFreshLocked(addr LocoAddr) (byte, error) {
 			return 0, err
 		}
 		if sd, ok := parseLnSlotData(pkt); ok {
-			// Refresh BigFred's cache from the bus reply (slot, direction,
-			// F0..F8 and speed) so a subscription reflects the command
-			// station's current view of the loco.
-			l.applySlotData(sd)
-			if sd.Addr == addr {
-				// Promote slot to IN_USE via NULL MOVE so BigFred is the
-				// authoritative throttle. Without this, the slot stays
-				// COMMON and the command station may allow another throttle
-				// to steal it. Failure is non-fatal: log and continue.
-				if sd.Stat1&lnSLOT_STA_MASK != lnSLOT_IN_USE {
-					if err := l.nullMoveLocked(sd.Slot); err != nil {
-						logrus.WithError(err).Debugf("loconet: null move for slot %d addr %d skipped", sd.Slot, addr)
-					}
-				}
-				return sd.Slot, nil
+			// Only seed our cache from the E7 that answers THIS address
+			// request. Foreign slot reads on a shared bus must not re-adopt
+			// released slots or overwrite authoritative DIRF/SND bytes.
+			if sd.Addr != addr {
+				continue
 			}
+			l.applySlotData(sd)
+			// Promote slot to IN_USE via NULL MOVE so BigFred is the
+			// authoritative throttle. Without this, the slot stays
+			// COMMON and the command station may allow another throttle
+			// to steal it. Failure is non-fatal: log and continue.
+			if sd.Stat1&lnSLOT_STA_MASK != lnSLOT_IN_USE {
+				if err := l.nullMoveLocked(sd.Slot); err != nil {
+					logrus.WithError(err).Debugf("loconet: null move for slot %d addr %d skipped", sd.Slot, addr)
+				}
+			}
+			return sd.Slot, nil
 		}
 	}
 	return 0, fmt.Errorf("timeout waiting for slot data for loco %d", addr)

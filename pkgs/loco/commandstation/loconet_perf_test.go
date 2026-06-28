@@ -49,6 +49,7 @@ func newTestLoconet() (*LocoNet, *recTransport) {
 	l.minTxGap = 0
 	rec := &recTransport{}
 	l.t = rec
+	go l.txLoop()
 	return l, rec
 }
 
@@ -272,9 +273,25 @@ func TestKeepaliveRefreshesCachedSlots(t *testing.T) {
 	}
 	rec.reset()
 
-	l.refreshSlots()
+	l.refreshOneKeepaliveSlot()
 	pkts := rec.packets()
 	if got := countOpcode(pkts, lnOPC_LOCO_SPD); got != 1 {
 		t.Fatalf("keepalive: SPD frames = %d, want 1", got)
+	}
+}
+
+func TestKeepaliveRoundRobinTouchesEachSlot(t *testing.T) {
+	l, rec := newTestLoconet()
+	seedCachedSlot(l, 10, 1)
+	seedCachedSlot(l, 20, 2)
+	l.setSpd(10, 5)
+	l.setSpd(20, 6)
+	rec.reset()
+
+	l.refreshOneKeepaliveSlot()
+	l.refreshOneKeepaliveSlot()
+	pkts := rec.packets()
+	if got := countOpcode(pkts, lnOPC_LOCO_SPD); got != 2 {
+		t.Fatalf("round-robin: SPD frames = %d, want 2", got)
 	}
 }

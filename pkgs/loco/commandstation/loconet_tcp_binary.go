@@ -1,7 +1,6 @@
 package commandstation
 
 import (
-	"bufio"
 	"fmt"
 	"net"
 	"sync/atomic"
@@ -24,11 +23,9 @@ import (
 // rather than LbServer, in which case the ASCII transport connects but
 // every request times out because no `RECEIVE` line ever arrives.
 type lnTCPBinaryTransport struct {
-	conn net.Conn
-	stop chan struct{}
-	// rxBytes counts every byte read off the socket since connect, so the
-	// LNCV diagnostics can tell "dead bus" apart from "module did not
-	// answer" (same role as in the serial transport).
+	core  *lnTCPConnHolder
+	rxCh  chan<- lnPacket
+	stop  chan struct{}
 	rxBytes atomic.Uint64
 }
 
@@ -37,22 +34,32 @@ func newLnTCPBinaryTransport(host string, port uint16, rxCh chan<- lnPacket) (*l
 		return nil, fmt.Errorf("loconet tcp (binary): host is empty")
 	}
 	addr := net.JoinHostPort(host, fmt.Sprintf("%d", port))
-	conn, err := net.DialTimeout("tcp", addr, 5*time.Second)
+	dial := func() (net.Conn, error) {
+		return net.DialTimeout("tcp", addr, lnTCPDialTimeout)
+	}
+	conn, err := dial()
 	if err != nil {
 		return nil, fmt.Errorf("loconet tcp (binary): dial %s: %w", addr, err)
 	}
-	// Disable Nagle so a single short LocoNet message is not delayed
-	// waiting to be batched (RocRail's lbtcp does SocketOp.setNodelay too).
 	if tcp, ok := conn.(*net.TCPConn); ok {
 		_ = tcp.SetNoDelay(true)
 	}
 	t := &lnTCPBinaryTransport{
-		conn: conn,
+		core: newLnTCPConnHolder(addr, dial),
+		rxCh: rxCh,
 		stop: make(chan struct{}),
 	}
+	t.core.start(conn)
 	logrus.WithField("addr", addr).Info("loconet command station: TCP (binary) connected")
-	go t.readLoop(rxCh)
+	go t.readLoop()
 	return t, nil
+}
+
+// lnTransportStats implements lnStatsTransport.
+func (t *lnTCPBinaryTransport) lnTransportStats() lnTransportStatsSnapshot {
+	s := t.core.transportStats()
+	s.RxBytes = t.rxBytes.Load()
+	return s
 }
 
 // RxByteCount reports how many bytes have been read off the socket since
@@ -62,8 +69,10 @@ func (t *lnTCPBinaryTransport) RxByteCount() uint64 {
 }
 
 func (t *lnTCPBinaryTransport) WritePacket(pkt []byte) error {
-	_, err := t.conn.Write(pkt)
-	return err
+	return t.core.writeWithDeadline(func(conn net.Conn) error {
+		_, err := conn.Write(pkt)
+		return err
+	})
 }
 
 func (t *lnTCPBinaryTransport) Close() error {
@@ -72,18 +81,30 @@ func (t *lnTCPBinaryTransport) Close() error {
 	default:
 		close(t.stop)
 	}
-	return t.conn.Close()
+	return t.core.close()
 }
 
-func (t *lnTCPBinaryTransport) readLoop(rxCh chan<- lnPacket) {
-	// Blocking reads, reassembling frames with the shared stream parser
-	// (the same one the serial transport uses). Close() unblocks the read
-	// by closing the connection.
+func (t *lnTCPBinaryTransport) readLoop() {
 	var p lnStreamParser
-	r := bufio.NewReader(t.conn)
 	buf := make([]byte, 256)
 	for {
-		n, err := r.Read(buf)
+		select {
+		case <-t.stop:
+			return
+		default:
+		}
+
+		conn := t.core.connOrNil()
+		if conn == nil {
+			select {
+			case <-t.stop:
+				return
+			case <-time.After(50 * time.Millisecond):
+			}
+			continue
+		}
+
+		n, err := conn.Read(buf)
 		if n > 0 {
 			t.rxBytes.Add(uint64(n))
 			for i := 0; i < n; i++ {
@@ -91,22 +112,24 @@ func (t *lnTCPBinaryTransport) readLoop(rxCh chan<- lnPacket) {
 				if !ok {
 					continue
 				}
-				if lnChecksumOK(pkt) {
-					rxCh <- lnPacket(pkt)
-				} else {
+				if !lnChecksumOK(pkt) {
 					logrus.Debugf("loconet tcp (binary): dropping packet (bad checksum): % X", pkt)
+					continue
+				}
+				if !pushRxPacket(t.rxCh, t.stop, lnPacket(pkt)) {
+					return
 				}
 			}
 		}
 		if err != nil {
 			select {
 			case <-t.stop:
-				// Intentional shutdown.
 				return
 			default:
 			}
-			logrus.Debugf("loconet tcp (binary): read loop terminated: %v", err)
-			return
+			p = lnStreamParser{}
+			t.core.signalReconnect()
+			logrus.Debugf("loconet tcp (binary): read error, reconnecting: %v", err)
 		}
 	}
 }

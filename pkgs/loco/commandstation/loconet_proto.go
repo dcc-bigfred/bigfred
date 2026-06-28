@@ -64,6 +64,9 @@ type lnStreamParser struct {
 	cur []byte
 }
 
+// lnMaxFrameLen is the largest legal LocoNet frame (variable-length count byte).
+const lnMaxFrameLen = 127
+
 func (p *lnStreamParser) PushByte(b byte) (pkt []byte, ok bool) {
 	// Message starts at byte with opcode bit7 = 1.
 	if len(p.cur) == 0 {
@@ -74,31 +77,29 @@ func (p *lnStreamParser) PushByte(b byte) (pkt []byte, ok bool) {
 		return nil, false
 	}
 
+	// Mid-frame resync: a new opcode byte abandons the partial frame.
+	if (b & 0x80) != 0 {
+		p.cur = []byte{b}
+		return nil, false
+	}
+
 	p.cur = append(p.cur, b)
 
 	want, known := lnMsgLen(p.cur[0], p.cur)
-	if !known || want == 0 {
+	if !known || want == 0 || want > lnMaxFrameLen {
+		p.cur = p.cur[:0]
 		return nil, false
 	}
 	if len(p.cur) < want {
+		// Guard against garbage that never completes a declared-length frame.
+		if len(p.cur) > lnMaxFrameLen {
+			p.cur = p.cur[:0]
+		}
 		return nil, false
 	}
 
-	// If we have more than want (should not happen), resync on next opcode.
 	if len(p.cur) > want {
-		// find next opcode byte within p.cur[1:]
-		next := -1
-		for i := 1; i < len(p.cur); i++ {
-			if (p.cur[i] & 0x80) != 0 {
-				next = i
-				break
-			}
-		}
-		if next == -1 {
-			p.cur = p.cur[:0]
-			return nil, false
-		}
-		p.cur = append([]byte{}, p.cur[next:]...)
+		p.cur = p.cur[:0]
 		return nil, false
 	}
 

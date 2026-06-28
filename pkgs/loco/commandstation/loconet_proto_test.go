@@ -62,6 +62,44 @@ func TestParseSlotData(t *testing.T) {
 	}
 }
 
+func TestLnStreamParserMidFrameResync(t *testing.T) {
+	var p lnStreamParser
+	if _, ok := p.PushByte(0xA0); ok {
+		t.Fatal("expected incomplete 4-byte frame")
+	}
+	if _, ok := p.PushByte(0xBF); ok {
+		t.Fatal("expected incomplete after resync")
+	}
+	if len(p.cur) != 1 || p.cur[0] != 0xBF {
+		t.Fatalf("expected resync on opcode byte, cur=% X", p.cur)
+	}
+}
+
+func TestLnStreamParserCompletesGpon(t *testing.T) {
+	var p lnStreamParser
+	if _, ok := p.PushByte(0x83); ok {
+		t.Fatal("expected incomplete 2-byte frame")
+	}
+	pkt, ok := p.PushByte(0x7C)
+	if !ok || len(pkt) != 2 || pkt[0] != 0x83 {
+		t.Fatalf("got % X ok=%v", pkt, ok)
+	}
+}
+
+func TestLnStreamParserRejectsOversizeLength(t *testing.T) {
+	var p lnStreamParser
+	// Variable opcode with illegal length byte 0x00.
+	if _, ok := p.PushByte(0xE7); ok {
+		t.Fatal("incomplete")
+	}
+	if _, ok := p.PushByte(0x00); ok {
+		t.Fatal("expected reject for zero length")
+	}
+	if len(p.cur) != 0 {
+		t.Fatalf("parser should reset on bad length, cur=% X", p.cur)
+	}
+}
+
 func TestLnBuildLocoAdr(t *testing.T) {
 	// OPC_LOCO_ADR must be a 4-byte message: BF <ADR_HI> <ADR_LO> <CHK>.
 	// A malformed 5-byte frame is silently rejected by the command station

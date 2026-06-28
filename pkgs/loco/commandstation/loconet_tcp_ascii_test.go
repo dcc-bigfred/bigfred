@@ -10,8 +10,8 @@ import (
 func recvLine(t *testing.T, line string) (lnPacket, bool) {
 	t.Helper()
 	rxCh := make(chan lnPacket, 1)
-	tr := &lnTCPASCIITransport{}
-	tr.handleLine(line, rxCh)
+	tr := &lnTCPASCIITransport{rxCh: rxCh, stop: make(chan struct{})}
+	tr.handleLine(line)
 	select {
 	case pkt := <-rxCh:
 		return pkt, true

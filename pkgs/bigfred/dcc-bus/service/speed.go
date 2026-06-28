@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -31,6 +32,9 @@ func (w *DCCWriter) SetSpeed(addr uint16, payloadSpeed uint8, forward bool, emer
 	err := w.Station.SetSpeed(commandstation.LocoAddr(addr), wireSpeed, forward, uint8(w.SpeedSteps))
 	if err == nil {
 		return nil
+	}
+	if errors.Is(err, commandstation.ErrSpeedSuperseded) {
+		return err
 	}
 	if payloadSpeed <= 1 || emergency {
 		go w.retrySetSpeed(addr, wireSpeed, forward, brakeRetryCount)

@@ -1,6 +1,7 @@
 package commandstation
 
 import (
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -122,8 +123,8 @@ func TestWriteSpeedCoalescesStale(t *testing.T) {
 	g2 := l.nextSpeedGen(addr) // g2 supersedes g1
 
 	// The stale generation must be dropped.
-	if err := l.writeSpeed(addr, 7, 20, true, g1); err != nil {
-		t.Fatalf("writeSpeed(stale): %v", err)
+	if err := l.writeSpeed(addr, 7, 20, true, g1); !errors.Is(err, ErrSpeedSuperseded) {
+		t.Fatalf("writeSpeed(stale): %v, want ErrSpeedSuperseded", err)
 	}
 	if rec.count() != 0 {
 		t.Fatalf("stale frame was written (% X), expected coalesced/dropped", rec.packets())
@@ -230,8 +231,8 @@ func TestMetricsSnapshotCountsTraffic(t *testing.T) {
 	// A superseded speed frame must be counted as coalesced, not transmitted.
 	g1 := l.nextSpeedGen(addr)
 	_ = l.nextSpeedGen(addr) // supersede g1
-	if err := l.writeSpeed(addr, 5, 99, true, g1); err != nil {
-		t.Fatalf("writeSpeed(stale): %v", err)
+	if err := l.writeSpeed(addr, 5, 99, true, g1); !errors.Is(err, ErrSpeedSuperseded) {
+		t.Fatalf("writeSpeed(stale): %v, want ErrSpeedSuperseded", err)
 	}
 	if s2 := l.MetricsSnapshot(); s2.TxCoalesced != 1 {
 		t.Fatalf("TxCoalesced = %d, want 1", s2.TxCoalesced)
@@ -301,5 +302,18 @@ func TestMetricsReportsTxQueueGauge(t *testing.T) {
 	s := l.MetricsSnapshot()
 	if s.TxQueueCap != 64 {
 		t.Fatalf("TxQueueCap = %d, want 64", s.TxQueueCap)
+	}
+}
+
+// TestWriteSpeedSuperseded returns ErrSpeedSuperseded when a newer generation
+// overtakes the frame before it is transmitted.
+func TestWriteSpeedSuperseded(t *testing.T) {
+	l, _ := newTestLoconet()
+	seedCachedSlot(l, 10, 1)
+	gen := l.nextSpeedGen(10)
+	l.nextSpeedGen(10) // bump generation so gen is stale
+	err := l.writeSpeed(10, 1, 5, true, gen)
+	if !errors.Is(err, ErrSpeedSuperseded) {
+		t.Fatalf("writeSpeed err = %v, want ErrSpeedSuperseded", err)
 	}
 }

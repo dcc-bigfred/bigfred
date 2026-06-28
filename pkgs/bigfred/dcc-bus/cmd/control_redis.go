@@ -3,10 +3,12 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	stderrors "errors"
 
 	"github.com/keskad/loco/pkgs/bigfred/contract"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/protocol"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/service"
+	"github.com/keskad/loco/pkgs/loco/commandstation"
 )
 
 // HandleControlCommand decodes a server-initiated command frame from the
@@ -54,6 +56,9 @@ func (r *Router) applyControlSetSpeed(ctx context.Context, p contract.LocoSetSpe
 		return
 	}
 	if err := r.dcc.SetSpeed(p.Address, p.Speed, p.Forward, p.Emergency); err != nil {
+		if stderrors.Is(err, commandstation.ErrSpeedSuperseded) {
+			return
+		}
 		r.log.WithError(err).WithField("addr", p.Address).Warn("dcc-bus control setSpeed failed")
 		return
 	}

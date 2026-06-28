@@ -863,7 +863,7 @@ func (l *LocoNet) writeSpeed(addr LocoAddr, slot, lnSpeed byte, forward bool, ge
 
 	if l.currentSpeedGen(addr) != gen {
 		l.metrics.incr(&l.metrics.txCoalesced)
-		return nil // superseded by a newer SetSpeed; drop this stale frame
+		return ErrSpeedSuperseded
 	}
 	spdPkt := lnBuildSetSpeed(slot, lnSpeed)
 	if err := l.txEnqueue(spdPkt, lnTxPriorityNormal); err != nil {

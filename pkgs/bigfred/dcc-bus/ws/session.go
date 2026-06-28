@@ -36,6 +36,7 @@ type Session struct {
 	mu          sync.Mutex
 	sendCh      chan contract.EnvelopeWire
 	sendDrop    atomic.Uint64
+	metrics     *Metrics
 	subscribed  map[uint16]struct{}
 	lastBeat    time.Time
 	closed      bool
@@ -57,6 +58,11 @@ func NewSession(id auth.Identity, conn *websocket.Conn) *Session {
 	}
 	go s.writeLoop()
 	return s
+}
+
+// SetMetrics wires OTel counters for this session (optional).
+func (s *Session) SetMetrics(m *Metrics) {
+	s.metrics = m
 }
 
 func (s *Session) writeLoop() {
@@ -154,6 +160,9 @@ func (s *Session) Send(ctx context.Context, env contract.EnvelopeWire) error {
 		default:
 		}
 		s.sendDrop.Add(1)
+		if s.metrics != nil {
+			s.metrics.RecordSendDrop()
+		}
 		s.sendCh <- env
 	}
 	return nil

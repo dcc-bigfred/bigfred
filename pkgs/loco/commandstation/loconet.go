@@ -176,7 +176,7 @@ func newLocoNetBase() *LocoNet {
 		keepaliveInterval: lnKeepaliveInterval,
 		txCh:              make(chan lnTxJob, 64),
 		txLowCh:           make(chan lnTxJob, 32),
-		txEstopCh:         make(chan lnTxJob, 1),
+		txEstopCh:         make(chan lnTxJob, 8),
 		rxCh:              make(chan lnPacket, 64),
 		syncCh:            make(chan lnPacket, 64),
 		obsCh:             make(chan LocoObservation, 64),

@@ -247,6 +247,7 @@ func (s *LocoStateStore) FlushLoop(ctx context.Context, tick time.Duration) {
 	for {
 		select {
 		case <-ctx.Done():
+			s.flushAll(context.Background())
 			return
 		case addr := <-s.flushCh:
 			s.flushOne(ctx, addr)
@@ -282,8 +283,12 @@ func (s *LocoStateStore) flushOne(ctx context.Context, addr uint16) {
 	if s.redis != nil {
 		if err := s.redis.StoreLocoCurrentState(ctx, snap, s.ttl); err != nil && s.log != nil {
 			s.log.WithError(err).WithField("addr", addr).Debug("loco store: redis flush")
+			return
 		}
 	}
+	s.dirtyMu.Lock()
+	delete(s.dirty, addr)
+	s.dirtyMu.Unlock()
 }
 
 func (s *LocoStateStore) markDirty(addr uint16) {
@@ -294,11 +299,6 @@ func (s *LocoStateStore) markDirty(addr uint16) {
 
 // FlushNow forces an immediate flush of addr (estop).
 func (s *LocoStateStore) FlushNow(ctx context.Context, addr uint16) {
-	s.markDirty(addr)
-	select {
-	case s.flushCh <- addr:
-	default:
-	}
 	s.flushOne(ctx, addr)
 }
 

@@ -231,7 +231,8 @@ func TestSlotBreakerTripsAfterRepeatedFailures(t *testing.T) {
 		t.Fatal("expected acquire failure")
 	}
 	start := time.Now()
-	if err := l.AcquireSlot(32); err == nil {
+	err := l.AcquireSlot(32)
+	if err == nil {
 		t.Fatal("expected breaker to block second acquire")
 	}
 	if !errors.Is(err, ErrSlotBusUnavailable) {

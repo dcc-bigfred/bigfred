@@ -156,6 +156,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sess := NewSession(id, conn)
+	sess.SetMetrics(s.metrics)
 	s.hub.Register(sess)
 
 	openPayload := protocol.DccBusOpenedPayload{

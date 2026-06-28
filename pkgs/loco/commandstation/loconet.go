@@ -1455,7 +1455,7 @@ func (l *LocoNet) refreshOneKeepaliveSlot() {
 	}
 	idx := l.keepaliveIdx
 	if len(addrs) > 0 {
-		l.keepaliveIdx = idx + 1
+		l.keepaliveIdx = (idx + 1) % len(addrs)
 	}
 	l.slotMu.Unlock()
 	if len(addrs) == 0 {

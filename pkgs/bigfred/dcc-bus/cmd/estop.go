@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	stderrors "errors"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -40,6 +41,9 @@ func (r *Router) applyEmergencyStop(ctx context.Context, userID uint, sessionID 
 		}
 		forward := r.isLocoPlacedForward(ctx, addr)
 		if err := r.station.SetSpeed(commandstation.LocoAddr(addr), 1, forward, uint8(r.speedSteps)); err != nil {
+			if stderrors.Is(err, commandstation.ErrSpeedSuperseded) {
+				continue
+			}
 			r.log.WithError(err).WithField("addr", addr).Warn("dcc-bus estop failed")
 			continue
 		}
@@ -115,6 +119,9 @@ func (r *Router) applyEStopTarget(ctx context.Context, addrs []uint16) {
 		}
 		forward := r.isLocoPlacedForward(ctx, addr)
 		if err := r.station.SetSpeed(commandstation.LocoAddr(addr), 1, forward, uint8(r.speedSteps)); err != nil {
+			if stderrors.Is(err, commandstation.ErrSpeedSuperseded) {
+				continue
+			}
 			r.log.WithError(err).WithField("addr", addr).Warn("dcc-bus estop target failed")
 			continue
 		}
@@ -148,7 +155,11 @@ func (r *Router) applyEStopAll(ctx context.Context, reason string) []uint16 {
 	addrs := r.roster.AllowedAddrs()
 	for _, addr := range addrs {
 		forward := r.isLocoPlacedForward(ctx, addr)
-		_ = r.station.SetSpeed(commandstation.LocoAddr(addr), 1, forward, uint8(r.speedSteps))
+		if err := r.station.SetSpeed(commandstation.LocoAddr(addr), 1, forward, uint8(r.speedSteps)); err != nil {
+			if stderrors.Is(err, commandstation.ErrSpeedSuperseded) {
+				continue
+			}
+		}
 		snap := contract.LocoStateWire{
 			Address: addr,
 			Speed:   0,

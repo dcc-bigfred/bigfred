@@ -2,11 +2,13 @@ package cmd
 
 import (
 	"context"
+	stderrors "errors"
 	"time"
 
 	"github.com/sirupsen/logrus"
 
 	"github.com/keskad/loco/pkgs/bigfred/contract"
+	"github.com/keskad/loco/pkgs/loco/commandstation"
 )
 
 // HandleSetSpeed forwards a throttle move to the command station, updates
@@ -39,8 +41,14 @@ func (r *Router) applyMemberSetSpeed(
 	source string,
 ) error {
 	if err := r.dcc.SetSpeed(addr, speed, forward, emergency); err != nil {
+		if stderrors.Is(err, commandstation.ErrSpeedSuperseded) {
+			return nil
+		}
 		r.forceRevalidateSlot(addr)
 		if retryErr := r.dcc.SetSpeed(addr, speed, forward, emergency); retryErr != nil {
+			if stderrors.Is(retryErr, commandstation.ErrSpeedSuperseded) {
+				return nil
+			}
 			fields := r.stationLogFields()
 			fields["addr"] = addr
 			fields["speed"] = speed

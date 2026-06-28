@@ -841,7 +841,7 @@ func (l *LocoNet) writeSpeed(addr LocoAddr, slot, lnSpeed byte, forward bool, ge
 	l.txMu.Lock()
 	defer l.txMu.Unlock()
 
-	l.pace()
+	l.pace(lnBuildSetSpeed(slot, lnSpeed))
 	if l.currentSpeedGen(addr) != gen {
 		l.metrics.incr(&l.metrics.txCoalesced)
 		return nil // superseded by a newer SetSpeed; drop this stale frame
@@ -860,8 +860,9 @@ func (l *LocoNet) writeSpeed(addr LocoAddr, slot, lnSpeed byte, forward bool, ge
 		want &^= 0x20
 	}
 	if want != dirf {
-		l.pace()
-		if err := l.writeRaw(lnBuildSetDirF(slot, want)); err != nil {
+		dirfPkt := lnBuildSetDirF(slot, want)
+		l.pace(dirfPkt)
+		if err := l.writeRaw(dirfPkt); err != nil {
 			return err
 		}
 		l.setDirf(addr, want)
@@ -905,20 +906,37 @@ func (l *LocoNet) GetSpeed(addr LocoAddr) (speed uint8, forward bool, err error)
 func (l *LocoNet) sendLocked(pkt []byte) error {
 	l.txMu.Lock()
 	defer l.txMu.Unlock()
-	l.pace()
+	l.pace(pkt)
 	return l.writeRaw(pkt)
 }
 
-// pace blocks until the minimum inter-frame gap has elapsed since the last
-// transmission, throttling the driver to the bus drain rate. Caller holds txMu.
-func (l *LocoNet) pace() {
-	if l.minTxGap <= 0 {
+// pace blocks until the minimum inter-frame gap for pkt has elapsed since the
+// last transmission. Caller holds txMu.
+func (l *LocoNet) pace(pkt []byte) {
+	gap := l.frameGap(pkt)
+	if gap <= 0 {
 		return
 	}
-	if wait := l.minTxGap - time.Since(l.lastTxAt); wait > 0 {
+	if wait := gap - time.Since(l.lastTxAt); wait > 0 {
 		l.metrics.addPaceWait(int64(wait))
 		time.Sleep(wait)
 	}
+}
+
+// frameGap returns how long the bus needs to drain pkt before the next frame.
+func (l *LocoNet) frameGap(pkt []byte) time.Duration {
+	if l.minTxGap <= 0 {
+		return 0
+	}
+	// 10 bit-times per byte at 60µs, plus mandatory CD backoff ~1.2 ms.
+	var drain time.Duration
+	if len(pkt) > 0 {
+		drain = time.Duration(10*len(pkt))*60*time.Microsecond + 1200*time.Microsecond
+	}
+	if drain < l.minTxGap {
+		return l.minTxGap
+	}
+	return drain
 }
 
 // writeRaw validates and writes one frame to the transport, advancing the
@@ -927,7 +945,9 @@ func (l *LocoNet) writeRaw(pkt []byte) error {
 	if !lnChecksumOK(pkt) {
 		return fmt.Errorf("refusing to send packet with invalid checksum: % X", pkt)
 	}
-	logrus.Debugf("loconet TX: % X", pkt)
+	if logrus.IsLevelEnabled(logrus.DebugLevel) {
+		logrus.Debugf("loconet TX: % X", pkt)
+	}
 	err := l.t.WritePacket(pkt)
 	l.lastTxAt = time.Now()
 	if err != nil {

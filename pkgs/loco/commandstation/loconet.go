@@ -843,6 +843,7 @@ func (l *LocoNet) writeSpeed(addr LocoAddr, slot, lnSpeed byte, forward bool, ge
 		return err
 	}
 	l.setSpd(addr, lnSpeed)
+	l.markAcquired(addr)
 
 	dirf := l.getDirf(addr)
 	want := dirf

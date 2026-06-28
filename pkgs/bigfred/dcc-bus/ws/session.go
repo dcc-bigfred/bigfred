@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/coder/websocket"
@@ -15,8 +16,13 @@ import (
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/protocol"
 )
 
+const (
+	wsSendQueueCap = 64
+	wsWriteTimeout = 2 * time.Second
+)
+
 // Session is one connected user (one browser tab). Multiple sessions
-// per (userID, layoutID, commandStationID) are allowed — the daemon
+// per (userID, layoutID, commandStationId) are allowed — the daemon
 // fans state events out to every matching tab.
 type Session struct {
 	ID       string
@@ -28,6 +34,8 @@ type Session struct {
 	conn *websocket.Conn
 
 	mu          sync.Mutex
+	sendCh      chan contract.EnvelopeWire
+	sendDrop    atomic.Uint64
 	subscribed  map[uint16]struct{}
 	lastBeat    time.Time
 	closed      bool
@@ -36,16 +44,43 @@ type Session struct {
 
 // NewSession allocates a new client handle from a verified Identity.
 func NewSession(id auth.Identity, conn *websocket.Conn) *Session {
-	return &Session{
+	s := &Session{
 		ID:         uuid.NewString(),
 		UserID:     id.UserID,
 		LayoutID:   id.LayoutID,
 		Login:      id.Login,
 		OpenedAt:   time.Now().UTC(),
 		conn:       conn,
+		sendCh:     make(chan contract.EnvelopeWire, wsSendQueueCap),
 		subscribed: make(map[uint16]struct{}, 8),
 		lastBeat:   time.Now().UTC(),
 	}
+	go s.writeLoop()
+	return s
+}
+
+func (s *Session) writeLoop() {
+	for env := range s.sendCh {
+		raw, err := json.Marshal(env)
+		if err != nil {
+			continue
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), wsWriteTimeout)
+		err = s.conn.Write(ctx, websocket.MessageText, raw)
+		cancel()
+		if err != nil {
+			s.Close("write failed: " + err.Error())
+			for range s.sendCh {
+			}
+			return
+		}
+	}
+}
+
+// SendDrop returns how many outbound frames were dropped (oldest-first)
+// because the per-client send queue was saturated.
+func (s *Session) SendDrop() uint64 {
+	return s.sendDrop.Load()
 }
 
 // Subscribe records interest in additional locomotive addresses.
@@ -100,19 +135,28 @@ func (s *Session) IdleFor() time.Duration {
 	return time.Since(s.lastBeat)
 }
 
-// Send marshals the envelope and writes it to the underlying WS.
-// Safe to call from multiple goroutines.
+// Send enqueues env for the session write loop. It is non-blocking:
+// when the queue is full the oldest frame is dropped.
 func (s *Session) Send(ctx context.Context, env contract.EnvelopeWire) error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.closed {
+	if s.closed || s.sendCh == nil {
+		s.mu.Unlock()
 		return websocket.CloseError{Code: websocket.StatusGoingAway}
 	}
-	raw, err := json.Marshal(env)
-	if err != nil {
-		return err
+	ch := s.sendCh
+	s.mu.Unlock()
+
+	select {
+	case ch <- env:
+	default:
+		select {
+		case <-ch:
+		default:
+		}
+		s.sendDrop.Add(1)
+		ch <- env
 	}
-	return s.conn.Write(ctx, websocket.MessageText, raw)
+	return nil
 }
 
 // SendTyped is the typed convenience wrapper around Send. It is the
@@ -152,9 +196,14 @@ func (s *Session) Close(reason string) {
 		s.closeReason = reason
 	}
 	conn := s.conn
+	ch := s.sendCh
+	s.sendCh = nil
 	s.mu.Unlock()
 	if conn != nil {
 		_ = conn.Close(websocket.StatusNormalClosure, reason)
+	}
+	if ch != nil {
+		close(ch)
 	}
 }
 

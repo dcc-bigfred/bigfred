@@ -1200,6 +1200,9 @@ func (l *LocoNet) clearLocoState(addr LocoAddr) {
 	delete(l.speedGenByA, addr)
 	delete(l.extFnByA, addr)
 	l.stateMu.Unlock()
+	l.fnTxMu.Lock()
+	delete(l.fnTxLocks, addr)
+	l.fnTxMu.Unlock()
 }
 
 // slotToAddr resolves a slot number back to a loco address using the

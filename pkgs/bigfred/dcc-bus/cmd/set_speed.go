@@ -64,6 +64,10 @@ func (r *Router) applyMemberSetSpeed(
 		"speed":   speed,
 		"forward": forward,
 	}).Debug("dcc-bus command station SetSpeed ok")
+
+	unlock := r.locoLocks.Acquire(addr)
+	defer unlock()
+
 	snap := contract.LocoStateWire{
 		Address:            addr,
 		Speed:              speed,

@@ -48,6 +48,7 @@ func (r *Router) applyEmergencyStop(ctx context.Context, userID uint, sessionID 
 			continue
 		}
 		affected = append(affected, addr)
+		unlock := r.locoLocks.Acquire(addr)
 		snap := contract.LocoStateWire{
 			Address:            addr,
 			Speed:              0,
@@ -63,6 +64,7 @@ func (r *Router) applyEmergencyStop(ctx context.Context, userID uint, sessionID 
 			r.log.WithError(err).Debug("dcc-bus estop redis store")
 		}
 		service.BroadcastLocoState(ctx, r.hub, snap)
+		unlock()
 		if v, ok := r.roster.AllowedVehicle(addr); ok {
 			r.applyDeadManSwitchForLoco(context.Background(), addr, userID, v)
 		}
@@ -126,6 +128,7 @@ func (r *Router) applyEStopTarget(ctx context.Context, addrs []uint16) {
 			continue
 		}
 		affected = append(affected, addr)
+		unlock := r.locoLocks.Acquire(addr)
 		snap := contract.LocoStateWire{
 			Address: addr,
 			Speed:   0,
@@ -139,6 +142,7 @@ func (r *Router) applyEStopTarget(ctx context.Context, addrs []uint16) {
 		}
 		_ = r.redis.StoreLocoCurrentState(ctx, snap, StateTTL)
 		service.BroadcastLocoState(ctx, r.hub, snap)
+		unlock()
 	}
 	if len(affected) == 0 {
 		return
@@ -160,6 +164,7 @@ func (r *Router) applyEStopAll(ctx context.Context, reason string) []uint16 {
 				continue
 			}
 		}
+		unlock := r.locoLocks.Acquire(addr)
 		snap := contract.LocoStateWire{
 			Address: addr,
 			Speed:   0,
@@ -173,6 +178,7 @@ func (r *Router) applyEStopAll(ctx context.Context, reason string) []uint16 {
 		}
 		_ = r.redis.StoreLocoCurrentState(ctx, snap, StateTTL)
 		service.BroadcastLocoState(ctx, r.hub, snap)
+		unlock()
 	}
 	_ = r.redis.Publish(ctx, "system.estop.audit", map[string]any{
 		"reason": reason,

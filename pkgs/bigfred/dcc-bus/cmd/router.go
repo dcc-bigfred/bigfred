@@ -57,6 +57,8 @@ type Router struct {
 
 	locoObservers *remotes.LocoStateNotifier
 
+	locoLocks *state.LocoLocks
+
 	shutdownOnce sync.Once
 	bootStopMu   sync.Mutex
 	bootStopDone bool
@@ -109,6 +111,7 @@ func NewRouter(_ context.Context, cfg Config) (*Router, error) {
 		trainSpeed:    service.NewTrainSpeedScheduler(),
 		pulseActive:   make(map[service.FnKey]bool, 8),
 		locoObservers: remotes.NewLocoStateNotifier(),
+		locoLocks:     state.NewLocoLocks(),
 	}
 	r.dcc.LogFields = r.stationLogFields
 	r.ApplyAllowedVehicles(context.Background(), cfg.AllowedVehicles)
@@ -267,6 +270,7 @@ func (r *Router) RunStateFeed(ctx context.Context) {
 		HubSubs:       r.hub,
 		FnCache:       r.cache,
 		LocoObservers: r.locoObservers,
+		LocoLocks:     r.locoLocks,
 		Log:           r.log,
 		PollInterval:  r.pollInterval,
 		StateTTL:      StateTTL,

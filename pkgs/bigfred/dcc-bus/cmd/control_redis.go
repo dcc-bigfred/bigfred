@@ -62,6 +62,8 @@ func (r *Router) applyControlSetSpeed(ctx context.Context, p contract.LocoSetSpe
 		r.log.WithError(err).WithField("addr", p.Address).Warn("dcc-bus control setSpeed failed")
 		return
 	}
+	unlock := r.locoLocks.Acquire(p.Address)
+	defer unlock()
 	snap := contract.LocoStateWire{
 		Address: p.Address,
 		Speed:   p.Speed,

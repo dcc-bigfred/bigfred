@@ -17,6 +17,7 @@ const (
 	histogramWSClientPingRTT     = "bigfred.dcc_bus.ws.client_ping_rtt"
 	counterWSSessionsClosed      = "bigfred.dcc_bus.ws.sessions.closed"
 	counterWSDeadmanTriggered    = "bigfred.dcc_bus.ws.deadman.triggered"
+	counterWSSendDropped         = "bigfred.dcc_bus.ws.send.dropped"
 	upDownWSSessionsActive       = "bigfred.dcc_bus.ws.sessions.active"
 	commandInvalidEnvelope       = "envelope.invalid"
 	maxClientPingRTTMs           = 30_000
@@ -53,6 +54,7 @@ type Metrics struct {
 	sessionsActive   metric.Int64UpDownCounter
 	sessionsClosed   metric.Int64Counter
 	deadmanTriggered metric.Int64Counter
+	sendDropped      metric.Int64Counter
 	base             []attribute.KeyValue
 }
 
@@ -113,12 +115,20 @@ func NewMetrics(cfg MetricsConfig) (*Metrics, error) {
 	if err != nil {
 		return nil, fmt.Errorf("ws deadman counter: %w", err)
 	}
+	sendDropped, err := meter.Int64Counter(counterWSSendDropped,
+		metric.WithDescription("WS frames dropped (oldest-first) on saturated per-client send queue"),
+		metric.WithUnit("{frame}"),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("ws send dropped counter: %w", err)
+	}
 	return &Metrics{
 		hist:             hist,
 		clientPingRTT:    clientPingRTT,
 		sessionsActive:   sessionsActive,
 		sessionsClosed:   sessionsClosed,
 		deadmanTriggered: deadmanTriggered,
+		sendDropped:      sendDropped,
 		base: []attribute.KeyValue{
 			attribute.Int("layout.id", int(cfg.LayoutID)),
 			attribute.Int("command_station.id", int(cfg.CommandStationID)),
@@ -205,4 +215,12 @@ func (m *Metrics) RecordDeadmanTriggered() {
 		return
 	}
 	m.deadmanTriggered.Add(context.Background(), 1, metric.WithAttributes(m.base...))
+}
+
+// RecordSendDrop counts one outbound frame dropped from a saturated send queue.
+func (m *Metrics) RecordSendDrop() {
+	if m == nil {
+		return
+	}
+	m.sendDropped.Add(context.Background(), 1, metric.WithAttributes(m.base...))
 }

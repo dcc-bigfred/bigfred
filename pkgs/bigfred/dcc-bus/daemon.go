@@ -200,6 +200,7 @@ func New(ctx context.Context, log *logrus.Logger, cfg Config) (*Daemon, error) {
 			LayoutID:         cfg.LayoutID,
 			CommandStationID: cfg.CommandStationID,
 			Kind:             cs.Kind,
+			SpeedSteps:       cs.SpeedSteps,
 		})
 		if err != nil {
 			if metricsShutdown != nil {

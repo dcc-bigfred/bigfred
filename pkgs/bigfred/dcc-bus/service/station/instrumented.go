@@ -102,6 +102,16 @@ func (w *instrumented) SetSpeed(addr commandstation.LocoAddr, speed uint8, forwa
 	})
 }
 
+func (w *instrumented) EmergencyStop(addr commandstation.LocoAddr, forward bool) error {
+	a := uint16(addr)
+	return w.observe("emergency_stop", &a, func() error {
+		if estopper, ok := w.inner.(commandstation.EmergencyStopper); ok {
+			return estopper.EmergencyStop(addr, forward)
+		}
+		return w.inner.SetSpeed(addr, 1, forward, 0)
+	})
+}
+
 func (w *instrumented) GetSpeed(addr commandstation.LocoAddr) (uint8, bool, error) {
 	a := uint16(addr)
 	return w.observeSpeed("get_speed", &a, func() (uint8, bool, error) {

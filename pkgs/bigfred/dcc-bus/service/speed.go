@@ -29,7 +29,7 @@ func (w *DCCWriter) SetSpeed(addr uint16, payloadSpeed uint8, forward bool, emer
 	} else if wireSpeed == 1 {
 		wireSpeed = 0 // wire speed 1 is DCC e-stop; skip for normal throttle
 	}
-	err := w.Station.SetSpeed(commandstation.LocoAddr(addr), wireSpeed, forward, uint8(w.SpeedSteps))
+	err := w.setSpeedOnStation(addr, wireSpeed, forward, emergency)
 	if err == nil {
 		return nil
 	}
@@ -55,7 +55,7 @@ func (w *DCCWriter) retrySetSpeed(addr uint16, wireSpeed uint8, forward bool, re
 	}
 	for i := 0; i < retries; i++ {
 		time.Sleep(100 * time.Millisecond)
-		if err := w.Station.SetSpeed(commandstation.LocoAddr(addr), wireSpeed, forward, uint8(w.SpeedSteps)); err != nil {
+		if err := w.setSpeedOnStation(addr, wireSpeed, forward, false); err != nil {
 			if w.Log != nil {
 				w.Log.WithError(err).WithFields(fields).WithField("attempt", i+1).Warn("dcc-bus SetSpeed retry failed")
 			}
@@ -75,4 +75,14 @@ func UISpeedFromWire(wire uint8) uint8 {
 		return 0
 	}
 	return wire
+}
+
+func (w *DCCWriter) setSpeedOnStation(addr uint16, wireSpeed uint8, forward bool, emergency bool) error {
+	la := commandstation.LocoAddr(addr)
+	if emergency {
+		if estopper, ok := w.Station.(commandstation.EmergencyStopper); ok {
+			return estopper.EmergencyStop(la, forward)
+		}
+	}
+	return w.Station.SetSpeed(la, wireSpeed, forward, uint8(w.SpeedSteps))
 }

@@ -413,20 +413,15 @@ func (l *LocoNet) observe(pkt []byte) {
 				l.setSlot(sd.Addr, sd.Slot)
 			}
 		}
-		fns := make(map[int]bool, 9)
-		for fn := 0; fn <= 4; fn++ {
-			fns[fn] = getFnFromDirf(sd.DirF, fn)
-		}
-		for fn := 5; fn <= 8; fn++ {
-			fns[fn] = getFnFromSnd(sd.Snd, fn)
-		}
+		fm, fb := lnSlotFnObservation(sd.DirF, sd.Snd)
 		l.emit(LocoObservation{
-			Addr:       sd.Addr,
-			HasSpeed:   true,
-			Speed:      sd.Speed,
-			HasForward: true,
-			Forward:    (sd.DirF & 0x20) != 0,
-			Functions:  fns,
+			Addr:         sd.Addr,
+			HasSpeed:     true,
+			Speed:        sd.Speed,
+			HasForward:   true,
+			Forward:      (sd.DirF & 0x20) != 0,
+			FunctionMask: fm,
+			FunctionBits: fb,
 		})
 	case lnOPC_LOCO_SPD:
 		if len(pkt) < 4 {
@@ -450,11 +445,14 @@ func (l *LocoNet) observe(pkt []byte) {
 		// Authoritative-send model: surface the observation for the UI feed
 		// but do not overwrite the DIRF byte we command from passive bus
 		// traffic (echo / external throttle / stale broadcast).
-		fns := make(map[int]bool, 5)
-		for fn := 0; fn <= 4; fn++ {
-			fns[fn] = getFnFromDirf(dirf, fn)
-		}
-		l.emit(LocoObservation{Addr: addr, HasForward: true, Forward: (dirf & 0x20) != 0, Functions: fns})
+		fm, fb := lnDirfFnObservation(dirf)
+		l.emit(LocoObservation{
+			Addr:         addr,
+			HasForward:   true,
+			Forward:      (dirf & 0x20) != 0,
+			FunctionMask: fm,
+			FunctionBits: fb,
+		})
 	case lnOPC_LOCO_SND:
 		if len(pkt) < 4 {
 			return
@@ -466,11 +464,8 @@ func (l *LocoNet) observe(pkt []byte) {
 		snd := pkt[2]
 		// Authoritative-send model: surface the observation but do not adopt
 		// the SND byte we command from passive bus traffic.
-		fns := make(map[int]bool, 4)
-		for fn := 5; fn <= 8; fn++ {
-			fns[fn] = getFnFromSnd(snd, fn)
-		}
-		l.emit(LocoObservation{Addr: addr, Functions: fns})
+		fm, fb := lnSndFnObservation(snd)
+		l.emit(LocoObservation{Addr: addr, FunctionMask: fm, FunctionBits: fb})
 	case lnOPC_IMM_PACKET:
 		// Extended functions (F9..F28) ride immediate DCC packets,
 		// addressed by loco number rather than slot. Decode them so an
@@ -484,7 +479,8 @@ func (l *LocoNet) observe(pkt []byte) {
 			return
 		}
 		l.mergeExtFn(addr, fns)
-		l.emit(LocoObservation{Addr: addr, Functions: fns})
+		fm, fb := fnMapToObservation(fns)
+		l.emit(LocoObservation{Addr: addr, FunctionMask: fm, FunctionBits: fb})
 	case lnOPC_SLOT_STAT1:
 		if len(pkt) < 3 {
 			return

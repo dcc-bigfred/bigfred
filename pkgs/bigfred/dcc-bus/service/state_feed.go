@@ -144,7 +144,6 @@ func pollOne(ctx context.Context, deps FeedDeps, addr uint16) {
 		Speed:      speed,
 		HasForward: true,
 		Forward:    forward,
-		Functions:  make(map[int]bool, pollFnRange+1),
 	}
 	if fns, err := deps.Station.ListFunctions(commandstation.LocoAddr(addr)); err == nil {
 		active := make(map[int]bool, len(fns))
@@ -152,7 +151,10 @@ func pollOne(ctx context.Context, deps FeedDeps, addr uint16) {
 			active[f] = true
 		}
 		for f := 0; f <= pollFnRange; f++ {
-			o.Functions[f] = active[f]
+			o.FunctionMask |= 1 << uint(f)
+			if active[f] {
+				o.FunctionBits |= 1 << uint(f)
+			}
 		}
 	}
 	applyObservation(ctx, deps, o, "poller")
@@ -183,20 +185,24 @@ func applyObservation(ctx context.Context, deps FeedDeps, o commandstation.LocoO
 		snap.Forward = o.Forward
 		changed = true
 	}
-	for fn, on := range o.Functions {
-		if fn < 0 {
-			continue
-		}
-		if len(snap.Functions) <= fn {
-			grown := make([]bool, fn+1)
-			copy(grown, snap.Functions)
-			snap.Functions = grown
-		}
-		if snap.Functions[fn] != on {
-			snap.Functions[fn] = on
-			changed = true
-			if deps.FnCache != nil {
-				deps.FnCache.Set(addr, uint8(fn), on)
+	if o.FunctionMask != 0 {
+		for fn := 0; fn <= pollFnRange; fn++ {
+			bit := uint32(1) << uint(fn)
+			if o.FunctionMask&bit == 0 {
+				continue
+			}
+			on := o.FunctionBits&bit != 0
+			if len(snap.Functions) <= fn {
+				grown := make([]bool, fn+1)
+				copy(grown, snap.Functions)
+				snap.Functions = grown
+			}
+			if snap.Functions[fn] != on {
+				snap.Functions[fn] = on
+				changed = true
+				if deps.FnCache != nil {
+					deps.FnCache.Set(addr, uint8(fn), on)
+				}
 			}
 		}
 	}

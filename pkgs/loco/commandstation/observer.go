@@ -22,12 +22,71 @@ type LocoObservation struct {
 	HasForward bool
 	Forward    bool
 
-	// Functions maps function number -> on for the function bits this
-	// observation carries. Empty/nil when the update has no function
-	// info. A driver SHOULD report the full bit it knows about (both
+	// FunctionMask selects which function bits in FunctionBits are
+	// meaningful for this observation (zero means no function info).
+	// A driver SHOULD set every bit in the group it knows about (both
 	// on and off) so the consumer can detect a function being turned
 	// off, not only on.
-	Functions map[int]bool
+	FunctionMask uint32
+	FunctionBits uint32
+}
+
+// FnOn reports whether function fn is on in this observation. ok is false
+// when fn is outside FunctionMask.
+func (o LocoObservation) FnOn(fn int) (on bool, ok bool) {
+	if fn < 0 || fn > 31 {
+		return false, false
+	}
+	bit := uint32(1) << uint(fn)
+	if o.FunctionMask&bit == 0 {
+		return false, false
+	}
+	return o.FunctionBits&bit != 0, true
+}
+
+// lnDirfFnObservation builds function mask/bits for F0..F4 from a DIRF byte.
+func lnDirfFnObservation(dirf byte) (mask, bits uint32) {
+	mask = 0x1F
+	for fn := 0; fn <= 4; fn++ {
+		if getFnFromDirf(dirf, fn) {
+			bits |= 1 << uint(fn)
+		}
+	}
+	return mask, bits
+}
+
+// lnSndFnObservation builds function mask/bits for F5..F8 from an SND byte.
+func lnSndFnObservation(snd byte) (mask, bits uint32) {
+	mask = 0x1E0
+	for fn := 5; fn <= 8; fn++ {
+		if getFnFromSnd(snd, fn) {
+			bits |= 1 << uint(fn)
+		}
+	}
+	return mask, bits
+}
+
+// lnSlotFnObservation builds function mask/bits for F0..F8 from slot data.
+func lnSlotFnObservation(dirf, snd byte) (mask, bits uint32) {
+	dm, db := lnDirfFnObservation(dirf)
+	sm, sb := lnSndFnObservation(snd)
+	return dm | sm, db | sb
+}
+
+// fnMapToObservation converts a sparse function map (as returned by
+// dccPacketFunctions) into mask/bits without retaining the map.
+func fnMapToObservation(fns map[int]bool) (mask, bits uint32) {
+	for fn, on := range fns {
+		if fn < 0 || fn > 31 {
+			continue
+		}
+		bit := uint32(1) << uint(fn)
+		mask |= bit
+		if on {
+			bits |= bit
+		}
+	}
+	return mask, bits
 }
 
 // StateObserver is an OPTIONAL capability implemented by command-station

@@ -164,14 +164,27 @@ func TestStoreFlushNowPriority(t *testing.T) {
 	}
 }
 
-func TestStoreLoadFromRedis(t *testing.T) {
+func TestStoreLoadMissingFromRedis(t *testing.T) {
 	redis := &memRedis{snaps: map[uint16]contract.LocoStateWire{
 		10: {Address: 10, Speed: 4, Forward: true},
 	}}
 	s := NewLocoStateStore(redis, time.Minute, nil)
-	s.LoadFromRedis(context.Background(), []uint16{10})
+	s.LoadMissingFromRedis(context.Background(), []uint16{10})
 	got := s.Snapshot(10)
 	if got.Speed != 4 {
 		t.Fatalf("speed = %d, want 4", got.Speed)
+	}
+}
+
+func TestStoreLoadMissingFromRedisSkipsExisting(t *testing.T) {
+	redis := &memRedis{snaps: map[uint16]contract.LocoStateWire{
+		10: {Address: 10, Speed: 4, Forward: true},
+	}}
+	s := NewLocoStateStore(redis, time.Minute, nil)
+	s.SetSpeed(10, 80, true, 1, "throttle")
+	s.LoadMissingFromRedis(context.Background(), []uint16{10})
+	got := s.Snapshot(10)
+	if got.Speed != 80 {
+		t.Fatalf("speed = %d, want 80 (live state preserved)", got.Speed)
 	}
 }

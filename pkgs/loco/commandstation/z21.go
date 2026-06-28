@@ -271,17 +271,22 @@ func (z *Z21Roco) observe(pkt []byte) {
 	z.fnStateCache[addr] = state
 	z.fnStateMu.Unlock()
 
-	fns := make(map[int]bool, 32)
+	var fnMask, fnBits uint32
 	for fn := 0; fn <= 31; fn++ {
-		fns[fn] = z.extractFunctionBit(&state, fn)
+		bit := uint32(1) << uint(fn)
+		fnMask |= bit
+		if z.extractFunctionBit(&state, fn) {
+			fnBits |= bit
+		}
 	}
 	z.emit(LocoObservation{
-		Addr:       addr,
-		HasSpeed:   true,
-		Speed:      speed,
-		HasForward: true,
-		Forward:    forward,
-		Functions:  fns,
+		Addr:         addr,
+		HasSpeed:     true,
+		Speed:        speed,
+		HasForward:   true,
+		Forward:      forward,
+		FunctionMask: fnMask,
+		FunctionBits: fnBits,
 	})
 }
 

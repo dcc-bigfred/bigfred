@@ -116,6 +116,10 @@ type LocoNet struct {
 	// csSlotStaLast holds the last observed SL_STA per locomotive slot (0..119)
 	// for CS-wide occupy/release counters. csSlotStaUnknown means never seen.
 	csSlotStaLast [120]atomic.Uint32
+
+	// slotBreakerUntil is a unix-nano deadline; while in the future, validateSlot
+	// fails fast after repeated acquire timeouts (circuit breaker).
+	slotBreakerUntil atomic.Int64
 }
 
 // LocoNet TX/timeout tuning. These trade a touch of latency for the ability to
@@ -142,6 +146,10 @@ const (
 	// hold IN_USE at once, leaving headroom on the master's 120-slot table for
 	// physical throttles.
 	lnMaxOwnedSlots = 100
+
+	// lnSlotBreakerCooldown pauses slot acquisitions after repeated failures so
+	// a dead bus does not queue the whole fleet behind reqMu timeouts.
+	lnSlotBreakerCooldown = 5 * time.Second
 
 	// csSlotStaUnknown is the initial csSlotStaLast sentinel (not a valid SL_STA).
 	csSlotStaUnknown = 0xFF
@@ -1065,6 +1073,10 @@ func (l *LocoNet) ForceAcquireSlot(addr LocoAddr) error {
 // cache from the reply, and asserts IN_USE when needed. Caller must not hold
 // reqMu.
 func (l *LocoNet) validateSlot(addr LocoAddr) (byte, error) {
+	if until := l.slotBreakerUntil.Load(); until > 0 && time.Now().UnixNano() < until {
+		return 0, fmt.Errorf("loconet: slot bus temporarily unavailable (recent acquire failures)")
+	}
+
 	l.reqMu.Lock()
 	defer l.reqMu.Unlock()
 	l.beginSync()
@@ -1077,6 +1089,7 @@ func (l *LocoNet) validateSlot(addr LocoAddr) (byte, error) {
 		}
 		slot, err := l.acquireSlotFreshLocked(addr)
 		if err == nil {
+			l.slotBreakerUntil.Store(0)
 			l.markAcquired(addr)
 			l.metrics.incr(&l.metrics.slotAcquires)
 			return slot, nil
@@ -1086,6 +1099,7 @@ func (l *LocoNet) validateSlot(addr LocoAddr) (byte, error) {
 			i+1, lnSlotAcquireRetries+1, addr, err)
 	}
 	l.metrics.incr(&l.metrics.slotAcquireFails)
+	l.slotBreakerUntil.Store(time.Now().Add(lnSlotBreakerCooldown).UnixNano())
 	return 0, lastErr
 }
 

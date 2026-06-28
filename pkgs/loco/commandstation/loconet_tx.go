@@ -4,22 +4,23 @@ import (
 	"errors"
 )
 
-type lnTxPriority bool
+type lnTxPriority uint8
 
 const (
-	lnTxPriorityNormal lnTxPriority = false
-	lnTxPriorityLow    lnTxPriority = true
+	lnTxPriorityNormal lnTxPriority = iota
+	lnTxPriorityLow
+	lnTxPriorityEstop
 )
+
+func (p lnTxPriority) isEstop() bool { return p == lnTxPriorityEstop }
 
 type lnTxJob struct {
 	pkt  []byte
 	done chan error
 }
 
-// txLoop is the sole owner of bus pacing and transport writes. Normal-priority
-// traffic (speed, functions, slot ops) always runs before a deferred keepalive
-// frame; a low frame taken from txLowCh is held back when normal traffic arrives
-// in the same scheduling window.
+// txLoop is the sole owner of bus pacing and transport writes. Estop frames
+// are always drained before normal or keepalive traffic.
 func (l *LocoNet) txLoop() {
 	var pendingLow *lnTxJob
 	for {
@@ -27,37 +28,39 @@ func (l *LocoNet) txLoop() {
 			select {
 			case <-l.stop:
 				return
-			case nj := <-l.txCh:
-				l.txRun(nj)
+			case job := <-l.txEstopCh:
+				l.txRun(job)
+				continue
+			case job := <-l.txCh:
+				l.txRun(job)
 				continue
 			default:
+				job := *pendingLow
+				pendingLow = nil
+				l.txRun(job)
+				continue
 			}
-			job := *pendingLow
-			pendingLow = nil
-			l.txRun(job)
-			continue
 		}
 
 		select {
 		case <-l.stop:
 			return
+		case job := <-l.txEstopCh:
+			l.txRun(job)
 		case job := <-l.txCh:
 			l.txRun(job)
-		default:
+		case job := <-l.txLowCh:
 			select {
-			case <-l.stop:
-				return
-			case job := <-l.txCh:
+			case ej := <-l.txEstopCh:
+				deferred := job
+				pendingLow = &deferred
+				l.txRun(ej)
+			case nj := <-l.txCh:
+				deferred := job
+				pendingLow = &deferred
+				l.txRun(nj)
+			default:
 				l.txRun(job)
-			case job := <-l.txLowCh:
-				select {
-				case nj := <-l.txCh:
-					deferred := job
-					pendingLow = &deferred
-					l.txRun(nj)
-				default:
-					l.txRun(job)
-				}
 			}
 		}
 	}
@@ -72,17 +75,30 @@ func (l *LocoNet) txRun(job lnTxJob) {
 
 // txEnqueue submits one frame to the writer goroutine and blocks until it has
 // been paced and written (or the driver is stopping).
-func (l *LocoNet) txEnqueue(pkt []byte, low lnTxPriority) error {
+func (l *LocoNet) txEnqueue(pkt []byte, p lnTxPriority) error {
 	done := make(chan error, 1)
 	job := lnTxJob{pkt: pkt, done: done}
 	dest := l.txCh
-	if low {
+	switch p {
+	case lnTxPriorityLow:
 		dest = l.txLowCh
+	case lnTxPriorityEstop:
+		dest = l.txEstopCh
 	}
-	select {
-	case dest <- job:
-	case <-l.stop:
-		return errors.New("loconet: stopped")
+	if p.isEstop() {
+		select {
+		case dest <- job:
+		case <-l.stop:
+			return errors.New("loconet: stopped")
+		default:
+			return nil
+		}
+	} else {
+		select {
+		case dest <- job:
+		case <-l.stop:
+			return errors.New("loconet: stopped")
+		}
 	}
 	select {
 	case err := <-done:

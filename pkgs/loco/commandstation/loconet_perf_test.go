@@ -317,3 +317,71 @@ func TestWriteSpeedSuperseded(t *testing.T) {
 		t.Fatalf("writeSpeed err = %v, want ErrSpeedSuperseded", err)
 	}
 }
+
+func TestEstopEnqueueWhenTxChFull(t *testing.T) {
+	l := newLocoNetBase()
+	l.t = &recTransport{}
+	for i := 0; i < cap(l.txCh); i++ {
+		l.txCh <- lnTxJob{}
+	}
+	go func() {
+		job := <-l.txEstopCh
+		if job.done != nil {
+			job.done <- nil
+		}
+	}()
+	err := l.txEnqueue(lnBuildSetSpeed(1, 1), lnTxPriorityEstop)
+	if err != nil {
+		t.Fatalf("estop should not block on full txCh: %v", err)
+	}
+	if len(l.txEstopCh) != 0 {
+		t.Fatalf("txEstopCh should be drained, len = %d", len(l.txEstopCh))
+	}
+}
+
+func TestEstopBypassesFullTxQueue(t *testing.T) {
+	l := newLocoNetBase()
+	l.minTxGap = 0
+	rec := &recTransport{}
+	l.t = rec
+	go l.txLoop()
+
+	const addr LocoAddr = 42
+	seedCachedSlot(l, addr, 7)
+
+	for i := 0; i < cap(l.txCh); i++ {
+		select {
+		case l.txCh <- lnTxJob{pkt: lnBuildSetSpeed(7, byte(i+2))}:
+		default:
+		}
+	}
+
+	start := time.Now()
+	if err := l.EmergencyStop(addr, true); err != nil {
+		t.Fatalf("EmergencyStop: %v", err)
+	}
+	if d := time.Since(start); d > time.Second {
+		t.Fatalf("EmergencyStop took %v, want fast bypass of saturated txCh", d)
+	}
+
+	deadline := time.After(2 * time.Second)
+	for rec.count() == 0 {
+		select {
+		case <-deadline:
+			t.Fatal("estop frame not transmitted")
+		default:
+			time.Sleep(5 * time.Millisecond)
+		}
+	}
+	pkts := rec.packets()
+	found := false
+	for _, p := range pkts {
+		if len(p) >= 3 && p[0] == lnOPC_LOCO_SPD && p[2] == 1 {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("no wire-estop SPD frame in %d packets", len(pkts))
+	}
+}

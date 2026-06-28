@@ -40,7 +40,7 @@ func (r *Router) applyEmergencyStop(ctx context.Context, userID uint, sessionID 
 			continue
 		}
 		forward := r.isLocoPlacedForward(ctx, addr)
-		if err := r.station.SetSpeed(commandstation.LocoAddr(addr), 1, forward, uint8(r.speedSteps)); err != nil {
+		if err := emergencyStopLoco(r.station, addr, forward, uint8(r.speedSteps)); err != nil {
 			if stderrors.Is(err, commandstation.ErrSpeedSuperseded) {
 				continue
 			}
@@ -120,7 +120,7 @@ func (r *Router) applyEStopTarget(ctx context.Context, addrs []uint16) {
 			continue
 		}
 		forward := r.isLocoPlacedForward(ctx, addr)
-		if err := r.station.SetSpeed(commandstation.LocoAddr(addr), 1, forward, uint8(r.speedSteps)); err != nil {
+		if err := emergencyStopLoco(r.station, addr, forward, uint8(r.speedSteps)); err != nil {
 			if stderrors.Is(err, commandstation.ErrSpeedSuperseded) {
 				continue
 			}
@@ -159,7 +159,7 @@ func (r *Router) applyEStopAll(ctx context.Context, reason string) []uint16 {
 	addrs := r.roster.AllowedAddrs()
 	for _, addr := range addrs {
 		forward := r.isLocoPlacedForward(ctx, addr)
-		if err := r.station.SetSpeed(commandstation.LocoAddr(addr), 1, forward, uint8(r.speedSteps)); err != nil {
+		if err := emergencyStopLoco(r.station, addr, forward, uint8(r.speedSteps)); err != nil {
 			if stderrors.Is(err, commandstation.ErrSpeedSuperseded) {
 				continue
 			}
@@ -187,4 +187,12 @@ func (r *Router) applyEStopAll(ctx context.Context, reason string) []uint16 {
 		"at":     time.Now().UTC().UnixMilli(),
 	})
 	return addrs
+}
+
+func emergencyStopLoco(station commandstation.Station, addr uint16, forward bool, speedSteps uint8) error {
+	la := commandstation.LocoAddr(addr)
+	if estopper, ok := station.(commandstation.EmergencyStopper); ok {
+		return estopper.EmergencyStop(la, forward)
+	}
+	return station.SetSpeed(la, 1, forward, speedSteps)
 }

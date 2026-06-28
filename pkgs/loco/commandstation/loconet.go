@@ -53,9 +53,11 @@ type LocoNet struct {
 	lastTxAt time.Time
 	minTxGap time.Duration
 
-	// txCh carries normal-priority frames; txLowCh carries keepalive refreshes.
-	txCh    chan lnTxJob
-	txLowCh chan lnTxJob
+	// txCh carries normal-priority frames; txLowCh carries keepalive refreshes;
+	// txEstopCh carries emergency stops ahead of both.
+	txCh      chan lnTxJob
+	txLowCh   chan lnTxJob
+	txEstopCh chan lnTxJob
 
 	// keepaliveInterval is how often active slots are re-touched so the master
 	// does not purge them to COMMON after ~200 s of inactivity (spec §4.3).
@@ -174,6 +176,7 @@ func newLocoNetBase() *LocoNet {
 		keepaliveInterval: lnKeepaliveInterval,
 		txCh:              make(chan lnTxJob, 64),
 		txLowCh:           make(chan lnTxJob, 32),
+		txEstopCh:         make(chan lnTxJob, 1),
 		rxCh:              make(chan lnPacket, 64),
 		syncCh:            make(chan lnPacket, 64),
 		obsCh:             make(chan LocoObservation, 64),

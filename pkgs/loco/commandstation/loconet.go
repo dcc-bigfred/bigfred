@@ -76,6 +76,8 @@ type LocoNet struct {
 
 	// obsCh streams observed state changes to StateObserver consumers.
 	obsCh chan LocoObservation
+	// obsCoalesce batches observations per address before obsCh.
+	obsCoalesce *obsCoalescer
 
 	stop chan struct{}
 
@@ -165,7 +167,7 @@ const (
 )
 
 func newLocoNetBase() *LocoNet {
-	return &LocoNet{
+	ln := &LocoNet{
 		timeout:           4 * time.Second,
 		slotTimeout:       lnDefaultSlotTimeout,
 		minTxGap:          lnDefaultMinTxGap,
@@ -187,6 +189,8 @@ func newLocoNetBase() *LocoNet {
 		extFnByA:          make(map[LocoAddr]uint32),
 		metrics:           newLnMetrics(),
 	}
+	ln.obsCoalesce = newObsCoalescer(ln.obsCh, lnObsCoalesceTick, ln.stop, &ln.metrics.obsDropped)
+	return ln
 }
 
 // MetricsSnapshot implements the MetricsSource interface: it returns the
@@ -520,6 +524,10 @@ func (l *LocoNet) observe(pkt []byte) {
 }
 
 func (l *LocoNet) emit(obs LocoObservation) {
+	if l.obsCoalesce != nil {
+		l.obsCoalesce.submit(obs)
+		return
+	}
 	select {
 	case l.obsCh <- obs:
 	default:

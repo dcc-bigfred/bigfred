@@ -324,7 +324,9 @@ func (l *LocoNet) dispatch() {
 			if !ok {
 				return
 			}
-			logrus.Debugf("loconet RX: % X", []byte(pkt))
+			if logrus.IsLevelEnabled(logrus.DebugLevel) {
+				logrus.Debugf("loconet RX: % X", []byte(pkt))
+			}
 			if len(pkt) > 0 {
 				l.metrics.countRx(pkt[0])
 			}

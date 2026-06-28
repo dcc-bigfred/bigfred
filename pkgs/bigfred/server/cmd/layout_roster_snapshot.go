@@ -14,41 +14,57 @@ import (
 type LayoutRosterSnapshotPublisher interface {
 	PublishLayoutAllowedVehicles(ctx context.Context, snap contract.AllowedVehicles) error
 	PublishLayoutDefinedTrains(ctx context.Context, snap contract.DefinedTrains) error
+	PublishLayoutVehicleFunctions(ctx context.Context, snap contract.VehicleFunctions) error
+}
+
+// vehicleFunctionLister resolves the effective function catalogue for roster vehicles.
+type vehicleFunctionLister interface {
+	ListForVehicles(ctx context.Context, vehicles []domain.Vehicle) (map[domain.VehicleID][]ResolvedFunction, error)
 }
 
 // LayoutRosterSnapshot builds dcc-bus roster snapshots from layout roster data.
 type LayoutRosterSnapshot struct {
-	roster        *LayoutRoster
-	layoutTrains  *repo.LayoutTrains
-	vehicles      *repo.Vehicles
-	members       *repo.TrainMembers
-	vehicleLeases repo.VehicleLeaseStore
-	trainLeases   repo.TrainLeaseStore
-	publisher     LayoutRosterSnapshotPublisher
+	roster         *LayoutRoster
+	layoutTrains   *repo.LayoutTrains
+	layoutVehicles *repo.LayoutVehicles
+	vehicles       *repo.Vehicles
+	members        *repo.TrainMembers
+	vehicleLeases  repo.VehicleLeaseStore
+	trainLeases    repo.TrainLeaseStore
+	functionLister vehicleFunctionLister
+	publisher      LayoutRosterSnapshotPublisher
 }
 
 func NewLayoutRosterSnapshot(
 	roster *LayoutRoster,
 	layoutTrains *repo.LayoutTrains,
+	layoutVehicles *repo.LayoutVehicles,
 	vehicles *repo.Vehicles,
 	members *repo.TrainMembers,
 	vehicleLeases repo.VehicleLeaseStore,
 	trainLeases repo.TrainLeaseStore,
+	functionLister vehicleFunctionLister,
 	publisher LayoutRosterSnapshotPublisher,
 ) *LayoutRosterSnapshot {
 	return &LayoutRosterSnapshot{
-		roster:        roster,
-		layoutTrains:  layoutTrains,
-		vehicles:      vehicles,
-		members:       members,
-		vehicleLeases: vehicleLeases,
-		trainLeases:   trainLeases,
-		publisher:     publisher,
+		roster:         roster,
+		layoutTrains:   layoutTrains,
+		layoutVehicles: layoutVehicles,
+		vehicles:       vehicles,
+		members:        members,
+		vehicleLeases:  vehicleLeases,
+		trainLeases:    trainLeases,
+		functionLister: functionLister,
+		publisher:      publisher,
 	}
 }
 
 func (s *LayoutRosterSnapshot) SetPublisher(p LayoutRosterSnapshotPublisher) {
 	s.publisher = p
+}
+
+func (s *LayoutRosterSnapshot) SetFunctionLister(l vehicleFunctionLister) {
+	s.functionLister = l
 }
 
 // SyncLayoutRosterForTrain republishes roster snapshots on every layout
@@ -102,18 +118,101 @@ func (s *LayoutRosterSnapshot) SyncLayoutRosterToRedis(ctx context.Context, layo
 	if s == nil || s.publisher == nil || layoutID == 0 {
 		return nil
 	}
-	vehicles, err := s.BuildAllowedVehiclesSnapshot(ctx, layoutID)
+	vehicleEntries, err := s.roster.ListVehicles(ctx, layoutID)
 	if err != nil {
 		return err
 	}
-	trains, err := s.BuildDefinedTrainsSnapshot(ctx, layoutID)
+	trainEntries, err := s.roster.ListTrains(ctx, layoutID)
+	if err != nil {
+		return err
+	}
+	vehicles, err := s.buildAllowedVehiclesSnapshot(ctx, layoutID, vehicleEntries, trainEntries)
+	if err != nil {
+		return err
+	}
+	trains, err := s.buildDefinedTrainsSnapshot(ctx, layoutID, trainEntries)
 	if err != nil {
 		return err
 	}
 	if err := s.publisher.PublishLayoutAllowedVehicles(ctx, vehicles); err != nil {
 		return err
 	}
-	return s.publisher.PublishLayoutDefinedTrains(ctx, trains)
+	if err := s.publisher.PublishLayoutDefinedTrains(ctx, trains); err != nil {
+		return err
+	}
+	return s.publishVehicleFunctions(ctx, layoutID, vehicleEntries)
+}
+
+// SyncVehicleFunctionsForVehicle republishes function catalogues on every
+// layout roster that includes vehicleID.
+func (s *LayoutRosterSnapshot) SyncVehicleFunctionsForVehicle(ctx context.Context, vehicleID domain.VehicleID) error {
+	if s == nil || s.publisher == nil || s.layoutVehicles == nil || vehicleID.IsZero() {
+		return nil
+	}
+	rows, err := s.layoutVehicles.ListByVehicle(ctx, vehicleID)
+	if err != nil {
+		return err
+	}
+	seen := make(map[uint]struct{}, len(rows))
+	for _, r := range rows {
+		if _, ok := seen[r.LayoutID]; ok {
+			continue
+		}
+		seen[r.LayoutID] = struct{}{}
+		if err := s.publishVehicleFunctions(ctx, r.LayoutID, nil); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// SyncVehicleFunctionsForTemplate republishes function catalogues on every
+// layout roster that includes a vehicle still inheriting from templateID.
+func (s *LayoutRosterSnapshot) SyncVehicleFunctionsForTemplate(ctx context.Context, templateID uint) error {
+	if s == nil || s.publisher == nil || s.vehicles == nil || s.layoutVehicles == nil || templateID == 0 {
+		return nil
+	}
+	vehicles, err := s.vehicles.ListByTemplateID(ctx, templateID)
+	if err != nil {
+		return err
+	}
+	layouts := make(map[uint]struct{})
+	for _, v := range vehicles {
+		if v.FunctionsDetachedAt != nil {
+			continue
+		}
+		rows, err := s.layoutVehicles.ListByVehicle(ctx, v.ID)
+		if err != nil {
+			return err
+		}
+		for _, r := range rows {
+			layouts[r.LayoutID] = struct{}{}
+		}
+	}
+	for layoutID := range layouts {
+		if err := s.publishVehicleFunctions(ctx, layoutID, nil); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *LayoutRosterSnapshot) publishVehicleFunctions(ctx context.Context, layoutID uint, vehicleEntries []RosterVehicleEntry) error {
+	if s == nil || s.publisher == nil || s.functionLister == nil {
+		return nil
+	}
+	if vehicleEntries == nil {
+		var err error
+		vehicleEntries, err = s.roster.ListVehicles(ctx, layoutID)
+		if err != nil {
+			return err
+		}
+	}
+	snap, err := s.buildVehicleFunctionsSnapshot(ctx, layoutID, vehicleEntries)
+	if err != nil {
+		return err
+	}
+	return s.publisher.PublishLayoutVehicleFunctions(ctx, snap)
 }
 
 // BuildAllowedVehiclesSnapshot lists drivable vehicles on the layout
@@ -127,7 +226,15 @@ func (s *LayoutRosterSnapshot) BuildAllowedVehiclesSnapshot(ctx context.Context,
 	if err != nil {
 		return contract.AllowedVehicles{}, err
 	}
+	return s.buildAllowedVehiclesSnapshot(ctx, layoutID, entries, trainEntries)
+}
 
+func (s *LayoutRosterSnapshot) buildAllowedVehiclesSnapshot(
+	ctx context.Context,
+	layoutID uint,
+	entries []RosterVehicleEntry,
+	trainEntries []RosterTrainEntry,
+) (contract.AllowedVehicles, error) {
 	lesseesByVehicle, err := s.LesseesByVehicle(ctx, entries, trainEntries)
 	if err != nil {
 		return contract.AllowedVehicles{}, err
@@ -144,6 +251,8 @@ func (s *LayoutRosterSnapshot) BuildAllowedVehiclesSnapshot(ctx context.Context,
 		}
 		out.Vehicles = append(out.Vehicles, contract.AllowedVehicle{
 			VehicleID:               e.Vehicle.ID.String(),
+			DisplayName:             contract.FormatVehicleDisplayName(e.Vehicle.Name, e.Vehicle.Number, *e.Vehicle.DCCAddress),
+			Number:                  e.Vehicle.Number,
 			Addr:                    *e.Vehicle.DCCAddress,
 			OwnerUserID:             e.Vehicle.OwnerUserID,
 			ControllerUserIDs:       foldDriveControllers(e.Vehicle.OwnerUserID, domain.VehicleLesseeUserIDs(lesseesByVehicle[e.Vehicle.ID])),
@@ -266,7 +375,10 @@ func (s *LayoutRosterSnapshot) BuildDefinedTrainsSnapshot(ctx context.Context, l
 	if err != nil {
 		return contract.DefinedTrains{}, err
 	}
-	vehicleIDs := make([]domain.VehicleID, 0)
+	return s.buildDefinedTrainsSnapshot(ctx, layoutID, entries)
+}
+
+func (s *LayoutRosterSnapshot) buildDefinedTrainsSnapshot(ctx context.Context, layoutID uint, entries []RosterTrainEntry) (contract.DefinedTrains, error) {	vehicleIDs := make([]domain.VehicleID, 0)
 	for _, e := range entries {
 		for _, m := range e.Members {
 			vehicleIDs = append(vehicleIDs, m.VehicleID)
@@ -307,16 +419,16 @@ func (s *LayoutRosterSnapshot) BuildDefinedTrainsSnapshot(ctx context.Context, l
 				mult = 1.0
 			}
 			member := contract.DefinedTrainMember{
-				VehicleID:        m.VehicleID.String(),
-				Position:         m.Position,
-				Reversed:         m.Reversed,
-				SpeedMultiplier:  mult,
-				ExcludeFromSpeed: m.ExcludeFromSpeed,
-				StartDelayMs:          m.StartDelayMs,
-				AccelRampMs:           m.AccelRampMs,
-				AccelRampMaxSteps:     m.AccelRampMaxSteps,
-				BrakeRampMs:           m.BrakeRampMs,
-				BrakeRampMaxSteps:     m.BrakeRampMaxSteps,
+				VehicleID:         m.VehicleID.String(),
+				Position:          m.Position,
+				Reversed:          m.Reversed,
+				SpeedMultiplier:   mult,
+				ExcludeFromSpeed:  m.ExcludeFromSpeed,
+				StartDelayMs:      m.StartDelayMs,
+				AccelRampMs:       m.AccelRampMs,
+				AccelRampMaxSteps: m.AccelRampMaxSteps,
+				BrakeRampMs:       m.BrakeRampMs,
+				BrakeRampMaxSteps: m.BrakeRampMaxSteps,
 			}
 			if v, ok := byVehicle[m.VehicleID]; ok && v.DCCAddress != nil {
 				addr := *v.DCCAddress
@@ -325,6 +437,68 @@ func (s *LayoutRosterSnapshot) BuildDefinedTrainsSnapshot(ctx context.Context, l
 			dt.Members = append(dt.Members, member)
 		}
 		out.Trains = append(out.Trains, dt)
+	}
+	return out, nil
+}
+
+// BuildVehicleFunctionsSnapshot lists resolved function catalogues for every
+// drivable vehicle on the layout roster.
+func (s *LayoutRosterSnapshot) BuildVehicleFunctionsSnapshot(ctx context.Context, layoutID uint) (contract.VehicleFunctions, error) {
+	entries, err := s.roster.ListVehicles(ctx, layoutID)
+	if err != nil {
+		return contract.VehicleFunctions{}, err
+	}
+	return s.buildVehicleFunctionsSnapshot(ctx, layoutID, entries)
+}
+
+func (s *LayoutRosterSnapshot) buildVehicleFunctionsSnapshot(
+	ctx context.Context,
+	layoutID uint,
+	entries []RosterVehicleEntry,
+) (contract.VehicleFunctions, error) {
+	out := contract.VehicleFunctions{
+		LayoutID:  layoutID,
+		UpdatedAt: contract.NowMS(),
+	}
+	if s == nil || s.functionLister == nil {
+		return out, nil
+	}
+	drivable := make([]domain.Vehicle, 0, len(entries))
+	for _, e := range entries {
+		if e.Vehicle.DCCAddress != nil {
+			drivable = append(drivable, e.Vehicle)
+		}
+	}
+	if len(drivable) == 0 {
+		return out, nil
+	}
+	byID, err := s.functionLister.ListForVehicles(ctx, drivable)
+	if err != nil {
+		return contract.VehicleFunctions{}, err
+	}
+	for _, e := range entries {
+		if e.Vehicle.DCCAddress == nil {
+			continue
+		}
+		rows := byID[e.Vehicle.ID]
+		if len(rows) == 0 {
+			continue
+		}
+		fns := make([]contract.FunctionDefinition, 0, len(rows))
+		for _, row := range rows {
+			fns = append(fns, contract.FunctionDefinition{
+				Num:      row.Num,
+				Name:     row.Name,
+				Icon:     string(row.Icon),
+				Position: row.Position,
+			})
+		}
+		contract.SortFunctionDefinitions(fns)
+		out.Vehicles = append(out.Vehicles, contract.VehicleFunctionCatalogue{
+			VehicleID: e.Vehicle.ID.String(),
+			Addr:      *e.Vehicle.DCCAddress,
+			Functions: fns,
+		})
 	}
 	return out, nil
 }

@@ -87,6 +87,47 @@ func (f *Function) ListForVehicle(ctx context.Context, vehicleID domain.VehicleI
 	return toResolved(rows, "vehicle"), nil
 }
 
+// ListForVehicles resolves function catalogues for many vehicles in batch.
+// Template-inheriting vehicles share one ListByTemplateID per distinct template;
+// detached vehicles are loaded with a single ListByVehicleIDs query.
+func (f *Function) ListForVehicles(ctx context.Context, vehicles []domain.Vehicle) (map[domain.VehicleID][]ResolvedFunction, error) {
+	out := make(map[domain.VehicleID][]ResolvedFunction, len(vehicles))
+	if len(vehicles) == 0 {
+		return out, nil
+	}
+	var detachedIDs []domain.VehicleID
+	templateToVehicles := make(map[uint][]domain.VehicleID)
+	for _, v := range vehicles {
+		if v.TemplateID != nil && v.FunctionsDetachedAt == nil {
+			tid := *v.TemplateID
+			templateToVehicles[tid] = append(templateToVehicles[tid], v.ID)
+		} else {
+			detachedIDs = append(detachedIDs, v.ID)
+		}
+	}
+	if len(detachedIDs) > 0 {
+		rows, err := f.functions.ListByVehicleIDs(ctx, detachedIDs)
+		if err != nil {
+			return nil, err
+		}
+		byVehicle := groupFunctionsByVehicleID(rows)
+		for _, id := range detachedIDs {
+			out[id] = toResolved(byVehicle[id], "vehicle")
+		}
+	}
+	for tid, ids := range templateToVehicles {
+		rows, err := f.functions.ListByTemplateID(ctx, tid)
+		if err != nil {
+			return nil, err
+		}
+		resolved := toResolved(rows, "template")
+		for _, id := range ids {
+			out[id] = resolved
+		}
+	}
+	return out, nil
+}
+
 // ListFunctionCatalogue returns every vehicle with at least one function.
 func (f *Function) ListFunctionCatalogue(ctx context.Context) ([]VehicleFunctionCatalogueEntry, error) {
 	vehicles, err := f.vehicles.ListAll(ctx)
@@ -572,4 +613,15 @@ func toResolved(rows []domain.DccFunction, source string) []ResolvedFunction {
 		})
 	}
 	return out
+}
+
+func groupFunctionsByVehicleID(rows []domain.DccFunction) map[domain.VehicleID][]domain.DccFunction {
+	m := make(map[domain.VehicleID][]domain.DccFunction)
+	for _, r := range rows {
+		if r.VehicleID == nil {
+			continue
+		}
+		m[*r.VehicleID] = append(m[*r.VehicleID], r)
+	}
+	return m
 }

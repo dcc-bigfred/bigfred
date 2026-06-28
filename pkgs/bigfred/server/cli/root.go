@@ -345,6 +345,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		vehicleLeases, trainLeases, users, hub,
 	)
 	layoutVehicleSvc.SetRedisRosterPublisher(redisSvc)
+	layoutVehicleSvc.SetFunctionLister(functionSvc)
 
 	var z21RemoteSvc *cmd.Z21Remote
 	var withrottleRemoteSvc *cmd.WithrottleRemote

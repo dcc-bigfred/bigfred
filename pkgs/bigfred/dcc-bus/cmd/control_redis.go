@@ -62,7 +62,7 @@ func (r *Router) applyControlSetSpeed(ctx context.Context, p contract.LocoSetSpe
 		r.log.WithError(err).WithField("addr", p.Address).Warn("dcc-bus control setSpeed failed")
 		return
 	}
-	snap := r.store.SetSpeed(p.Address, p.Speed, p.Forward, r.store.Snapshot(p.Address).ControlledByUserID, "server")
+	snap := r.store.SetSpeedPreservingUser(p.Address, p.Speed, p.Forward, "server")
 	service.BroadcastLocoState(ctx, r.hub, snap)
 }
 

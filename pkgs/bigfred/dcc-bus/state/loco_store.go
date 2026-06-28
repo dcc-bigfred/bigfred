@@ -106,6 +106,26 @@ func (s *LocoStateStore) SetSpeed(addr uint16, speed uint8, forward bool, userID
 	return out
 }
 
+// SetSpeedPreservingUser writes a command-authored speed without changing
+// the controlling user. Use for server-originated commands that must not
+// race a concurrent observation's userID reset.
+func (s *LocoStateStore) SetSpeedPreservingUser(addr uint16, speed uint8, forward bool, source string) contract.LocoStateWire {
+	e := s.entry(addr)
+	e.mu.Lock()
+	e.snap.Address = addr
+	e.snap.Speed = speed
+	e.snap.Forward = forward
+	e.snap.Source = source
+	e.snap.At = time.Now().UTC().UnixMilli()
+	e.commandedSpeed = speed
+	e.commandedFwd = forward
+	e.commandedAt = time.Now()
+	out := e.snap
+	e.mu.Unlock()
+	s.markDirty(addr)
+	return out
+}
+
 // SetFunction toggles one function bit and returns the new snapshot.
 func (s *LocoStateStore) SetFunction(addr uint16, userID uint, fn uint8, on bool, source string) contract.LocoStateWire {
 	e := s.entry(addr)

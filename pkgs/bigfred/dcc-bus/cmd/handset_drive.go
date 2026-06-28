@@ -59,7 +59,11 @@ func (r *Router) isHandsetControlledLoco(ctx context.Context, userID uint, addr 
 		return true
 	}
 	snap, ok, err := r.redis.GetLocoCurrentState(ctx, addr)
-	if err != nil || !ok {
+	if err != nil {
+		// Prefer braking on Redis outage so idle handsets cannot leave locos moving.
+		return true
+	}
+	if !ok {
 		return false
 	}
 	return snap.ControlledByUserID == userID && snap.Speed > 0

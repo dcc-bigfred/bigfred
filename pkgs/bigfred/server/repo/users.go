@@ -61,6 +61,37 @@ func (u *Users) FindByID(ctx context.Context, id uint) (domain.User, error) {
 	return user, nil
 }
 
+// FindByIDs loads users for the given primary keys. Missing ids are omitted.
+func (u *Users) FindByIDs(ctx context.Context, ids []uint) (map[uint]domain.User, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	seen := make(map[uint]struct{}, len(ids))
+	vals := make([]interface{}, 0, len(ids))
+	for _, id := range ids {
+		if id == 0 {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		vals = append(vals, id)
+	}
+	if len(vals) == 0 {
+		return nil, nil
+	}
+	var rows []domain.User
+	if err := u.repo.FindAll(ctx, &rows, where.In("id", vals...)); err != nil {
+		return nil, err
+	}
+	out := make(map[uint]domain.User, len(rows))
+	for _, row := range rows {
+		out[row.ID] = row
+	}
+	return out, nil
+}
+
 // ListAll returns every user, ordered by login. Used by the admin
 // user-management screen — sorted ASCII so the UI never reshuffles
 // rows between renders.

@@ -29,6 +29,7 @@ const (
 	sessionSyncStale      = 30 * time.Second
 	dispatchShards        = 32
 	dispatchShardBuf      = 128
+	maxLineLen            = 8192
 )
 
 // IdleEvictAfter is the idle window before evicting an unpaired WiThrottle client.
@@ -66,6 +67,7 @@ type Server struct {
 	dispatch    *dispatcher
 	allowedMu   sync.RWMutex
 	catalogueMu sync.RWMutex
+	connWg      sync.WaitGroup
 }
 
 // HeartbeatTimeout returns coordinator policy timeout with grace slack.
@@ -203,7 +205,7 @@ func (s *Server) Run(ctx context.Context) error {
 
 	for {
 		if ctx.Err() != nil {
-			s.registry.wire.CloseAll()
+			s.shutdownConnections()
 			return nil
 		}
 		if tcpLn, ok := ln.(*net.TCPListener); ok {
@@ -212,6 +214,7 @@ func (s *Server) Run(ctx context.Context) error {
 		conn, err := ln.Accept()
 		if err != nil {
 			if ctx.Err() != nil {
+				s.shutdownConnections()
 				return nil
 			}
 			var netErr net.Error
@@ -224,7 +227,14 @@ func (s *Server) Run(ctx context.Context) error {
 	}
 }
 
+func (s *Server) shutdownConnections() {
+	s.registry.wire.CloseAll()
+	s.connWg.Wait()
+}
+
 func (s *Server) serveConn(ctx context.Context, conn net.Conn) {
+	s.connWg.Add(1)
+	defer s.connWg.Done()
 	r := bufio.NewReaderSize(conn, 512)
 	defer conn.Close()
 	readTimeout := s.readTimeout()
@@ -238,7 +248,7 @@ func (s *Server) serveConn(ctx context.Context, conn net.Conn) {
 			s.handleDisconnect(ctx, clientKey, conn)
 			return
 		}
-		line, err := r.ReadString('\n')
+		line, err := readLineLimited(r, maxLineLen)
 		if err != nil {
 			s.handleDisconnect(ctx, clientKey, conn)
 			return
@@ -246,6 +256,9 @@ func (s *Server) serveConn(ctx context.Context, conn net.Conn) {
 		line = strings.TrimRight(line, "\r\n")
 		if line == "" {
 			continue
+		}
+		if clientKey != "" {
+			s.touchClientActivity(ctx, clientKey, line)
 		}
 		if clientKey == "" {
 			if handled, key := s.handleAnonymous(ctx, conn, line); handled {
@@ -283,8 +296,21 @@ func (s *Server) handleAnonymous(ctx context.Context, conn net.Conn, line string
 		if deviceID == "" {
 			return true, ""
 		}
+		clientKey := inbound.ClientKey(contract.RemoteProtocolWithrottle, deviceID)
+		prevConn := s.registry.wire.Conn(clientKey)
 		now := time.Now().UTC()
 		client := s.registry.TouchByDeviceId(deviceID, conn, now)
+		if prevConn != nil && prevConn != conn && s.registry.IsPaired(client.Key) {
+			fields := logrus.Fields{
+				"client":    client.Key,
+				"deviceId":  deviceID,
+				"newRemote": conn.RemoteAddr().String(),
+			}
+			if prevConn.RemoteAddr() != nil {
+				fields["priorRemote"] = prevConn.RemoteAddr().String()
+			}
+			s.log.WithFields(fields).Warn("withrottle: paired handset device id taken over by new connection")
+		}
 		if s.registry.NeedsSync(client.Key, sessionSyncStale) {
 			s.syncPaired(ctx, client)
 			s.registry.MarkSynced(client.Key)
@@ -404,7 +430,7 @@ func (s *Server) handleAcquire(ctx context.Context, client *Client, cmd MCommand
 			tw.locos[addr] = key
 			tw.lastLoco = addr
 		})
-		s.registry.setSentinelAcquired(client.Key, true)
+		s.registry.setSentinelAcquired(client.Key, true, cmd.ThrottleID)
 		for _, reply := range buildSentinelAcquireReply(cmd.ThrottleID, addr) {
 			_ = s.writeLine(client.Key, reply)
 		}
@@ -420,7 +446,10 @@ func (s *Server) handleRelease(ctx context.Context, client *Client, cmd MCommand
 	if !paired && s.registry.sentinelAcquired(client.Key) {
 		addr, _, ok := parseLocoKey(cmd.LocoKey)
 		if ok && isSentinelAddr(addr, s.cfg.PairingAddr) {
-			s.registry.setSentinelAcquired(client.Key, false)
+			s.registry.setSentinelAcquired(client.Key, false, 0)
+			s.registry.withThrottle(client.Key, cmd.ThrottleID, func(tw *throttleWire) {
+				delete(tw.locos, addr)
+			})
 			s.registry.ClearPairingBuffer(client.Key)
 		}
 		_ = s.writeLine(client.Key, buildReleaseLine(cmd.ThrottleID, cmd.LocoKey))
@@ -464,10 +493,11 @@ func (s *Server) handleThrottleAction(ctx context.Context, client *Client, cmd M
 
 func (s *Server) onPaired(ctx context.Context, clientKey string, active *contract.RemoteSessionWire) {
 	if s.registry.sentinelAcquired(clientKey) {
-		for _, line := range buildSentinelReleaseLines('0', s.cfg.PairingAddr) {
+		throttleID := s.registry.sentinelThrottleID(clientKey)
+		for _, line := range buildSentinelReleaseLines(throttleID, s.cfg.PairingAddr) {
 			_ = s.writeLine(clientKey, line)
 		}
-		s.registry.setSentinelAcquired(clientKey, false)
+		s.registry.setSentinelAcquired(clientKey, false, 0)
 	}
 	s.sendInitialBurst(ctx, clientKey)
 	if active != nil {
@@ -582,11 +612,8 @@ func (s *Server) pushLabelsForAcquired(addr uint16) {
 	if s.registry == nil {
 		return
 	}
-	for _, client := range s.registry.Snapshot() {
-		if client.Session == nil {
-			continue
-		}
-		throttleID, locoKey, ok := s.registry.findThrottleForAddr(client.Key, addr)
+	for _, key := range s.registry.Subscribers(addr) {
+		throttleID, locoKey, ok := s.registry.findThrottleForAddr(key, addr)
 		if !ok {
 			continue
 		}
@@ -594,7 +621,7 @@ func (s *Server) pushLabelsForAcquired(addr uint16) {
 		if line == "" {
 			continue
 		}
-		_ = s.writeLine(client.Key, line)
+		_ = s.writeLine(key, line)
 	}
 }
 
@@ -664,6 +691,15 @@ func (s *Server) noteClientActivity(ctx context.Context, clientKey string) {
 	}
 	if s.coordinator != nil {
 		s.coordinator.NoteActivity(ctx, clientKey)
+	}
+}
+
+func (s *Server) touchClientActivity(ctx context.Context, clientKey, line string) {
+	if line == "*" || strings.HasPrefix(line, "N") || strings.HasPrefix(line, "M") {
+		s.registry.touchLastSeen(clientKey, time.Now().UTC())
+		if s.registry.IsPaired(clientKey) && s.cfg.Store != nil {
+			s.registry.MarkSeenDirty(clientKey, contract.NowMS())
+		}
 	}
 }
 

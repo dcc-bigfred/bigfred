@@ -4,7 +4,10 @@ import (
 	"errors"
 	"net"
 	"sync"
+	"time"
 )
+
+const writeTimeout = 5 * time.Second
 
 const maxWiThrottleFunction = 31
 
@@ -24,16 +27,17 @@ type WireState struct {
 }
 
 type wireClient struct {
-	conn             net.Conn
-	writeMu          sync.Mutex
-	deviceID         string
-	deviceName       string
-	heartbeatMonitor bool
-	pairFnBuf        []string
-	pairFnPrevFn     map[int]bool
-	multiThrottle    map[byte]*throttleWire
-	sentinelAcquired bool
-	initialBurstSent bool
+	conn               net.Conn
+	writeMu            sync.Mutex
+	deviceID           string
+	deviceName         string
+	heartbeatMonitor   bool
+	pairFnBuf          []string
+	pairFnPrevFn       map[int]bool
+	multiThrottle      map[byte]*throttleWire
+	sentinelAcquired   bool
+	sentinelThrottleID byte
+	initialBurstSent   bool
 }
 
 // NewWireState returns an empty WiThrottle wire-state table.
@@ -184,10 +188,23 @@ func (w *WireState) ClearPairingBuffer(key string) {
 }
 
 // SetSentinelAcquired records whether the pairing sentinel is held.
-func (w *WireState) SetSentinelAcquired(key string, acquired bool) {
+func (w *WireState) SetSentinelAcquired(key string, acquired bool, throttleID byte) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	w.client(key).sentinelAcquired = acquired
+	c := w.client(key)
+	c.sentinelAcquired = acquired
+	if acquired {
+		c.sentinelThrottleID = throttleID
+	} else {
+		c.sentinelThrottleID = 0
+	}
+}
+
+// SentinelThrottleID returns the throttle id that holds the pairing sentinel.
+func (w *WireState) SentinelThrottleID(key string) byte {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.client(key).sentinelThrottleID
 }
 
 // SentinelAcquired reports whether the client holds the pairing sentinel.
@@ -267,6 +284,8 @@ func (w *WireState) WriteLine(key, line string) error {
 	conn := c.conn
 	w.mu.Unlock()
 	defer c.writeMu.Unlock()
-	_, err := conn.Write(append([]byte(line), '\n'))
+	_ = conn.SetWriteDeadline(time.Now().Add(writeTimeout))
+	payload := append([]byte(line), '\n')
+	_, err := conn.Write(payload)
 	return err
 }

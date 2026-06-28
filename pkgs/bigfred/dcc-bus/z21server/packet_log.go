@@ -196,12 +196,16 @@ func (s *Server) logRx(clientKey string, pkt []byte, paired bool, action string)
 	if s.log == nil {
 		return
 	}
-	level := logrus.InfoLevel
+	level := logrus.DebugLevel
 	if isDiscoveryHandshakePacket(pkt) {
 		level = logrus.DebugLevel
 	}
 	if !s.log.IsLevelEnabled(level) {
 		return
+	}
+	payload := hex.EncodeToString(pkt)
+	if len(payload) > 64 {
+		payload = payload[:64] + "…"
 	}
 	s.log.WithFields(logrus.Fields{
 		"dir":     "RX",
@@ -210,7 +214,7 @@ func (s *Server) logRx(clientKey string, pkt []byte, paired bool, action string)
 		"paired":  paired,
 		"action":  action,
 		"len":     len(pkt),
-		"payload": hex.EncodeToString(pkt),
+		"payload": payload,
 	}).Log(level, "z21 udp")
 }
 
@@ -218,19 +222,23 @@ func (s *Server) logTx(clientKey string, pkt []byte) {
 	if s.log == nil {
 		return
 	}
-	level := logrus.InfoLevel
+	level := logrus.DebugLevel
 	if isDiscoveryHandshakePacket(pkt) {
 		level = logrus.DebugLevel
 	}
 	if !s.log.IsLevelEnabled(level) {
 		return
 	}
+	payload := hex.EncodeToString(pkt)
+	if len(payload) > 64 {
+		payload = payload[:64] + "…"
+	}
 	s.log.WithFields(logrus.Fields{
 		"dir":     "TX",
 		"client":  clientKey,
 		"packet":  PacketName(pkt),
 		"len":     len(pkt),
-		"payload": hex.EncodeToString(pkt),
+		"payload": payload,
 	}).Log(level, "z21 udp")
 }
 

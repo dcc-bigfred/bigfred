@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -82,8 +83,8 @@ type Config struct {
 
 // Daemon is the assembled dcc-bus instance.
 type Daemon struct {
-	cfg Config
-	log *logrus.Logger
+	cfg             Config
+	log             *logrus.Logger
 
 	redis           *state.Redis
 	rds             *redis.Client
@@ -93,6 +94,7 @@ type Daemon struct {
 	lnMetricsReg    metric.Registration
 	z21MetricsReg   metric.Registration
 	withrottleSrv   *withrottle.Server
+	gatewayWg       sync.WaitGroup
 }
 
 // New validates cfg, opens Redis + the command station driver and
@@ -407,8 +409,10 @@ func (d *Daemon) Run(ctx context.Context) error {
 		}
 	}
 
-	// Stop rolling stock before HTTP shutdown so dead-man timers and client
-	// disconnect grace cannot leave locomotives moving after SIGTERM.
+	// Stop inbound handset servers before emergency-stop so drive commands
+	// cannot race with station cleanup.
+	d.gatewayWg.Wait()
+
 	if d.router != nil {
 		d.router.Shutdown()
 	}
@@ -547,7 +551,9 @@ func (d *Daemon) startRemoteGateways(ctx context.Context) error {
 	go coordinator.Run(ctx)
 	for _, r := range runners {
 		run := r
+		d.gatewayWg.Add(1)
 		go func() {
+			defer d.gatewayWg.Done()
 			if err := run.gw.Run(ctx); err != nil && ctx.Err() == nil {
 				d.log.WithError(err).Errorf("%s inbound server stopped", run.name)
 				_ = d.redis.Publish(ctx, "daemon.degraded", map[string]any{

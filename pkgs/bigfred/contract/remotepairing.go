@@ -33,6 +33,12 @@ func RemotePairingActiveKey(layoutID, commandStationID uint, clientKey string) s
 	return fmt.Sprintf(RemotePairingActiveKeyTmpl, layoutID, commandStationID, clientKey)
 }
 
+// RemotePairingActiveKeyPrefix is the Redis key prefix for all active sessions on
+// one command station (used by Lua eviction scripts).
+func RemotePairingActiveKeyPrefix(layoutID, commandStationID uint) string {
+	return fmt.Sprintf("bigfred:remote:active:%d:%d:", layoutID, commandStationID)
+}
+
 // RemotePairingByUserKey points at the active clientKey for one user (STRING).
 func RemotePairingByUserKey(layoutID, commandStationID, userID uint) string {
 	return fmt.Sprintf(RemotePairingByUserKeyTmpl, layoutID, commandStationID, userID)

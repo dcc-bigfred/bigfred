@@ -188,7 +188,7 @@ func (s *Server) Run(ctx context.Context) error {
 
 	s.startDispatch()
 
-	buf := make([]byte, 2048)
+	buf := make([]byte, 4096)
 	var lastInlineLog time.Time
 	var lastInline int64
 	for {
@@ -264,7 +264,7 @@ func (s *Server) handlePacket(ctx context.Context, remote *net.UDPAddr, pkt []by
 	}
 
 	_, header, ok := packetHeader(pkt)
-	if !ok {
+	if !ok || !validFrame(pkt) {
 		s.logUnhandled(client.Key, pkt, isPaired, "truncated")
 		return
 	}

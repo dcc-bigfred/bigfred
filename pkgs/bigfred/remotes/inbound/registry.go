@@ -39,6 +39,7 @@ type ClientRegistry struct {
 	mu          sync.Mutex
 	clients     map[string]*Client
 	subscribers map[uint16]map[string]struct{}
+	dirtySeen   map[string]int64
 }
 
 // NewClientRegistry returns an empty participant map.
@@ -66,11 +67,11 @@ func (r *ClientRegistry) Touch(protocol string, addr *net.UDPAddr, now time.Time
 			ConnectedAt: now,
 		}
 		r.clients[key] = c
-		return c
+		return copyClient(c)
 	}
 	c.Addr = *addr
 	c.LastSeen = now
-	return c
+	return copyClient(c)
 }
 
 // TouchByEndpoint registers or updates a client keyed by protocol and an
@@ -91,13 +92,13 @@ func (r *ClientRegistry) TouchByEndpoint(protocol, endpoint string, remote net.A
 			ConnectedAt: now,
 		}
 		r.clients[key] = c
-		return c
+		return copyClient(c)
 	}
 	if remote != nil {
 		c.Addr = udpAddrFromNet(remote)
 	}
 	c.LastSeen = now
-	return c
+	return copyClient(c)
 }
 
 func udpAddrFromNet(a net.Addr) net.UDPAddr {
@@ -141,7 +142,10 @@ func (r *ClientRegistry) Get(key string) (*Client, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	c, ok := r.clients[key]
-	return c, ok
+	if !ok {
+		return nil, false
+	}
+	return copyClient(c), true
 }
 
 // Remove drops one participant.
@@ -318,6 +322,39 @@ func (r *ClientRegistry) MarkSeenDirty(key string, ts int64) {
 		c.seenDirty = true
 		c.pendingSeen = ts
 	}
+	if r.dirtySeen == nil {
+		r.dirtySeen = make(map[string]int64)
+	}
+	r.dirtySeen[key] = ts
+}
+
+// PeekSeenDirty returns pending lastSeenAt updates without clearing them.
+func (r *ClientRegistry) PeekSeenDirty() map[string]int64 {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if len(r.dirtySeen) == 0 {
+		return nil
+	}
+	out := make(map[string]int64, len(r.dirtySeen))
+	for key, ts := range r.dirtySeen {
+		out[key] = ts
+	}
+	return out
+}
+
+// ClearSeenDirty removes the given keys from the pending seen set.
+func (r *ClientRegistry) ClearSeenDirty(keys []string) {
+	if len(keys) == 0 {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, key := range keys {
+		delete(r.dirtySeen, key)
+		if c, ok := r.clients[key]; ok {
+			c.seenDirty = false
+		}
+	}
 }
 
 // DrainSeenDirty returns and clears all pending lastSeenAt updates.
@@ -325,13 +362,16 @@ func (r *ClientRegistry) MarkSeenDirty(key string, ts int64) {
 func (r *ClientRegistry) DrainSeenDirty() map[string]int64 {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if len(r.clients) == 0 {
+	if len(r.dirtySeen) == 0 {
 		return nil
 	}
-	out := make(map[string]int64, len(r.clients))
-	for key, c := range r.clients {
-		if c.seenDirty {
-			out[key] = c.pendingSeen
+	out := make(map[string]int64, len(r.dirtySeen))
+	for key, ts := range r.dirtySeen {
+		out[key] = ts
+	}
+	for key := range r.dirtySeen {
+		delete(r.dirtySeen, key)
+		if c, ok := r.clients[key]; ok {
 			c.seenDirty = false
 		}
 	}
@@ -427,6 +467,15 @@ func (c *Client) subscribedToLocked(addr uint16) bool {
 		}
 	}
 	return false
+}
+
+// TouchLastSeen updates LastSeen for an existing client without creating one.
+func (r *ClientRegistry) TouchLastSeen(key string, now time.Time) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if c, ok := r.clients[key]; ok {
+		c.LastSeen = now
+	}
 }
 
 func (r *ClientRegistry) addSubscriberLocked(addr uint16, key string) {

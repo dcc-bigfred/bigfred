@@ -127,6 +127,9 @@ func (a *Adapter) HandleAcquire(ctx context.Context, client *Client, cmd MComman
 	resp := NewResponder(a.server, client, cmd.ThrottleID)
 	result := a.drive.Subscribe(ctx, a.throttleActor(client), resp, []uint16{addr})
 	if !result.OK {
+		a.server.registry.withThrottle(client.Key, cmd.ThrottleID, func(tw *throttleWire) {
+			delete(tw.locos, addr)
+		})
 		a.logDriveFailure(client, addr, "acquire", result.Code)
 		a.server.writeLine(client.Key, "HM"+result.Code)
 		return

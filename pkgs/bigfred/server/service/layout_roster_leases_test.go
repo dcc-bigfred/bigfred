@@ -25,6 +25,10 @@ func (c *captureRosterPublisher) PublishLayoutDefinedTrains(context.Context, con
 	return nil
 }
 
+func (c *captureRosterPublisher) PublishLayoutVehicleFunctions(context.Context, contract.VehicleFunctions) error {
+	return nil
+}
+
 func TestAllowedVehiclesSnapshotFoldsVehicleLease(t *testing.T) {
 	bundle, cleanup := freshRepo(t)
 	defer cleanup()

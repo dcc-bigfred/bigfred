@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -15,13 +16,38 @@ import (
 
 // FunctionHandler serves function list/edit for vehicles and templates (§6.3e).
 type FunctionHandler struct {
-	functions *cmd.Function
-	auth      *cmd.Auth
+	functions    *cmd.Function
+	auth         *cmd.Auth
+	functionSync vehicleFunctionRedisSync
+}
+
+type vehicleFunctionRedisSync interface {
+	SyncVehicleFunctionsForVehicle(ctx context.Context, vehicleID domain.VehicleID) error
+	SyncVehicleFunctionsForTemplate(ctx context.Context, templateID uint) error
 }
 
 // NewFunctionHandler returns a FunctionHandler.
 func NewFunctionHandler(functions *cmd.Function, auth *cmd.Auth) *FunctionHandler {
 	return &FunctionHandler{functions: functions, auth: auth}
+}
+
+// SetVehicleFunctionSync wires Redis republication after catalogue edits.
+func (h *FunctionHandler) SetVehicleFunctionSync(sync vehicleFunctionRedisSync) {
+	h.functionSync = sync
+}
+
+func (h *FunctionHandler) syncVehicleFunctions(ctx context.Context, vehicleID domain.VehicleID) {
+	if h.functionSync == nil || vehicleID.IsZero() {
+		return
+	}
+	_ = h.functionSync.SyncVehicleFunctionsForVehicle(ctx, vehicleID)
+}
+
+func (h *FunctionHandler) syncTemplateFunctions(ctx context.Context, templateID uint) {
+	if h.functionSync == nil || templateID == 0 {
+		return
+	}
+	_ = h.functionSync.SyncVehicleFunctionsForTemplate(ctx, templateID)
 }
 
 // ListCatalogue handles GET /api/v1/vehicles/function-catalogue.
@@ -82,6 +108,7 @@ func (h *FunctionHandler) UpsertVehicle(w http.ResponseWriter, r *http.Request) 
 		writeFunctionError(w, err)
 		return
 	}
+	h.syncVehicleFunctions(r.Context(), vehicleID)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(protocol.ToFunctionResponse(row, "vehicle"))
 }
@@ -96,6 +123,7 @@ func (h *FunctionHandler) DeleteVehicle(w http.ResponseWriter, r *http.Request) 
 		writeFunctionError(w, err)
 		return
 	}
+	h.syncVehicleFunctions(r.Context(), vehicleID)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -139,6 +167,7 @@ func (h *FunctionHandler) AttachVehicle(w http.ResponseWriter, r *http.Request) 
 		writeFunctionError(w, err)
 		return
 	}
+	h.syncVehicleFunctions(r.Context(), vehicleID)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(protocol.ToFunctionResponses(rows))
 }
@@ -163,6 +192,7 @@ func (h *FunctionHandler) ReorderVehicle(w http.ResponseWriter, r *http.Request)
 		writeFunctionError(w, err)
 		return
 	}
+	h.syncVehicleFunctions(r.Context(), vehicleID)
 	h.ListVehicle(w, r)
 }
 
@@ -198,6 +228,7 @@ func (h *FunctionHandler) UpsertTemplate(w http.ResponseWriter, r *http.Request)
 		writeFunctionError(w, err)
 		return
 	}
+	h.syncTemplateFunctions(r.Context(), templateID)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(protocol.ToFunctionResponse(row, "template"))
 }
@@ -212,6 +243,7 @@ func (h *FunctionHandler) DeleteTemplate(w http.ResponseWriter, r *http.Request)
 		writeFunctionError(w, err)
 		return
 	}
+	h.syncTemplateFunctions(r.Context(), templateID)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -240,6 +272,7 @@ func (h *FunctionHandler) ReorderTemplate(w http.ResponseWriter, r *http.Request
 		writeFunctionError(w, err)
 		return
 	}
+	h.syncTemplateFunctions(r.Context(), templateID)
 	h.ListTemplate(w, r)
 }
 

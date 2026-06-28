@@ -99,6 +99,19 @@ func (v *Vehicles) ListByIDs(ctx context.Context, ids []domain.VehicleID) ([]dom
 	return rows, nil
 }
 
+// ListByTemplateID returns every vehicle linked to a function template.
+func (v *Vehicles) ListByTemplateID(ctx context.Context, templateID uint) ([]domain.Vehicle, error) {
+	var rows []domain.Vehicle
+	err := v.repo.FindAll(ctx, &rows,
+		where.Eq("template_id", templateID),
+		sort.Asc("name"),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
 // Insert persists a new vehicle.
 func (v *Vehicles) Insert(ctx context.Context, row *domain.Vehicle) error {
 	return v.repo.Insert(ctx, row)

@@ -89,6 +89,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	presenceH := NewPresenceHandler(cfg.Presence, cfg.DccBusLayoutSync)
 	vehicleH := NewVehicleHandler(cfg.Vehicles, cfg.LayoutVehicles, cfg.DCCPool, cfg.Auth)
 	functionH := NewFunctionHandler(cfg.Functions, cfg.Auth)
+	functionH.SetVehicleFunctionSync(cfg.LayoutVehicles)
 	templateH := NewVehicleTemplateHandler(cfg.VehicleTemplates, cfg.Auth)
 	trainH := NewTrainHandler(cfg.Trains, cfg.LayoutVehicles, cfg.Auth)
 	rosterH := NewLayoutRosterHandler(cfg.LayoutVehicles, cfg.Auth, cfg.Audit)

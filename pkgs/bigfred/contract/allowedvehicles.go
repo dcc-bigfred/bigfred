@@ -46,6 +46,8 @@ type AllowedVehicles struct {
 // needs for subscribe gating and drive-authority checks without SQLite.
 type AllowedVehicle struct {
 	VehicleID   string `json:"vehicleId"`
+	DisplayName string `json:"displayName"`
+	Number      string `json:"number,omitempty"`
 	Addr        uint16 `json:"addr"`
 	OwnerUserID uint   `json:"ownerUserId"`
 

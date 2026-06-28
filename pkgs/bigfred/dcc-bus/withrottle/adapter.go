@@ -131,7 +131,7 @@ func (a *Adapter) HandleAcquire(ctx context.Context, client *Client, cmd MComman
 		a.server.writeLine(client.Key, "HM"+result.Code)
 		return
 	}
-	for _, line := range buildAcquireReply(cmd.ThrottleID, addr) {
+	for _, line := range buildAcquireReply(cmd.ThrottleID, addr, a.server.functionsForAddr(addr)) {
 		_ = a.server.writeLine(client.Key, line)
 	}
 }

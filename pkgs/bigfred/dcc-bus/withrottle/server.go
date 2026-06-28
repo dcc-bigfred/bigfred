@@ -44,7 +44,8 @@ type Config struct {
 	HeartbeatSecs    float64
 	SpeedSteps       uint
 	TrackPowerOn     bool
-	AllowedVehicles  contract.AllowedVehicles
+	AllowedVehicles   contract.AllowedVehicles
+	VehicleFunctions  contract.VehicleFunctions
 
 	OnListening func(ctx context.Context)
 
@@ -64,6 +65,7 @@ type Server struct {
 	coordinator *remotes.Coordinator
 	dispatch    *dispatcher
 	allowedMu   sync.RWMutex
+	catalogueMu sync.RWMutex
 }
 
 // HeartbeatTimeout returns coordinator policy timeout with grace slack.
@@ -165,6 +167,9 @@ func NewGateway(_ context.Context, cfg remotes.GatewayConfig) (remotes.RemotePro
 		}
 		if v, ok := cfg.Extra["allowedVehicles"].(contract.AllowedVehicles); ok {
 			wt.AllowedVehicles = v
+		}
+		if v, ok := cfg.Extra["vehicleFunctions"].(contract.VehicleFunctions); ok {
+			wt.VehicleFunctions = v
 		}
 		if v, ok := cfg.Extra["onListening"].(func(context.Context)); ok {
 			wt.OnListening = v
@@ -372,7 +377,10 @@ func (s *Server) handleM(ctx context.Context, client *Client, line string, paire
 	case MOpAction:
 		s.handleThrottleAction(ctx, client, cmd, paired)
 	case MOpLabels:
-		// function labels deferred in v1
+		if !paired {
+			return
+		}
+		s.handleFunctionLabels(client.Key, cmd)
 	}
 }
 
@@ -537,6 +545,65 @@ func (s *Server) emitRosterUpdate(key string) {
 		return
 	}
 	_ = s.writeLine(key, BuildRosterLine(sess, s.allowedVehicles(), s.cfg.PairingAddr, true))
+}
+
+func (s *Server) handleFunctionLabels(clientKey string, cmd MCommand) {
+	addr, _, ok := parseLocoKey(cmd.LocoKey)
+	if !ok {
+		return
+	}
+	line := buildFunctionLabelLine(cmd.ThrottleID, cmd.LocoKey, s.functionsForAddr(addr))
+	if line == "" {
+		return
+	}
+	_ = s.writeLine(clientKey, line)
+}
+
+// UpdateVehicleFunctions refreshes the layout function catalogue for acquire
+// replies and M…L label requests.
+func (s *Server) UpdateVehicleFunctions(snap contract.VehicleFunctions) {
+	if s == nil {
+		return
+	}
+	s.catalogueMu.Lock()
+	prev := s.cfg.VehicleFunctions
+	s.cfg.VehicleFunctions = snap
+	s.catalogueMu.Unlock()
+	for _, addr := range contract.VehicleFunctionsChangedAddrs(prev, snap) {
+		s.pushLabelsForAcquired(addr)
+	}
+}
+
+func (s *Server) pushLabelsForAcquired(addr uint16) {
+	if s.registry == nil {
+		return
+	}
+	for _, client := range s.registry.Snapshot() {
+		if client.Session == nil {
+			continue
+		}
+		throttleID, locoKey, ok := s.registry.findThrottleForAddr(client.Key, addr)
+		if !ok {
+			continue
+		}
+		line := buildFunctionLabelLine(throttleID, locoKey, s.functionsForAddr(addr))
+		if line == "" {
+			continue
+		}
+		_ = s.writeLine(client.Key, line)
+	}
+}
+
+func (s *Server) functionsForAddr(addr uint16) []contract.FunctionDefinition {
+	s.catalogueMu.RLock()
+	snap := s.cfg.VehicleFunctions
+	s.catalogueMu.RUnlock()
+	for _, v := range snap.Vehicles {
+		if v.Addr == addr {
+			return v.Functions
+		}
+	}
+	return nil
 }
 
 func (s *Server) allowedVehicles() contract.AllowedVehicles {

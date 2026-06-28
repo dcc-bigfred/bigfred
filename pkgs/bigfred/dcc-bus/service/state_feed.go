@@ -167,7 +167,7 @@ func applyObservation(ctx context.Context, deps FeedDeps, o commandstation.LocoO
 	}
 
 	noWS := deps.HubSubs != nil && !deps.HubSubs.IsSubscribed(addr)
-	noHandset := deps.LocoObservers == nil
+	noHandset := deps.LocoObservers == nil || !deps.LocoObservers.AnyRegistered()
 	if noWS && noHandset {
 		if o.FunctionMask != 0 && deps.FnCache != nil {
 			for fn := 0; fn <= pollFnRange; fn++ {

@@ -50,3 +50,13 @@ func (n *LocoStateNotifier) snapshot() []LocoStateObserver {
 	copy(out, n.obs)
 	return out
 }
+
+// AnyRegistered reports whether any inbound gateway observer is connected.
+func (n *LocoStateNotifier) AnyRegistered() bool {
+	if n == nil {
+		return false
+	}
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+	return len(n.obs) > 0
+}

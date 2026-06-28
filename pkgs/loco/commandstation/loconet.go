@@ -48,13 +48,14 @@ type LocoNet struct {
 	// seconds.
 	slotTimeout time.Duration
 
-	// TX pacing: txMu serializes every transport write and enforces a minimum
-	// inter-frame gap (minTxGap) matched to the 16.66 kbit/s bus, so bursts from
-	// many locomotives queue at the driver instead of overflowing the
-	// serial/socket buffer.
-	txMu     sync.Mutex
+	// TX pacing: a dedicated writer goroutine (txLoop) enforces the inter-frame
+	// gap and serializes transport writes so a slow adapter cannot block callers.
 	lastTxAt time.Time
 	minTxGap time.Duration
+
+	// txCh carries normal-priority frames; txLowCh carries keepalive refreshes.
+	txCh    chan lnTxJob
+	txLowCh chan lnTxJob
 
 	// keepaliveInterval is how often active slots are re-touched so the master
 	// does not purge them to COMMON after ~200 s of inactivity (spec §4.3).
@@ -169,6 +170,8 @@ func newLocoNetBase() *LocoNet {
 		slotTimeout:       lnDefaultSlotTimeout,
 		minTxGap:          lnDefaultMinTxGap,
 		keepaliveInterval: lnKeepaliveInterval,
+		txCh:              make(chan lnTxJob, 64),
+		txLowCh:           make(chan lnTxJob, 32),
 		rxCh:              make(chan lnPacket, 64),
 		syncCh:            make(chan lnPacket, 64),
 		obsCh:             make(chan LocoObservation, 64),
@@ -228,6 +231,7 @@ func NewLocoNetSerial(device string, baudrate int) (*LocoNet, error) {
 		return nil, err
 	}
 	ln.t = t
+	go ln.txLoop()
 	go ln.dispatch()
 	go ln.keepaliveLoop()
 	return ln, nil
@@ -240,6 +244,7 @@ func NewLocoNetTCP(host string, port uint16) (*LocoNet, error) {
 		return nil, err
 	}
 	ln.t = t
+	go ln.txLoop()
 	go ln.dispatch()
 	go ln.keepaliveLoop()
 	return ln, nil
@@ -257,9 +262,17 @@ func NewLocoNetTCPBinary(host string, port uint16) (*LocoNet, error) {
 		return nil, err
 	}
 	ln.t = t
+	go ln.txLoop()
 	go ln.dispatch()
 	go ln.keepaliveLoop()
 	return ln, nil
+}
+
+// startWorkers launches background goroutines for tests that wire a transport
+// without going through NewLocoNet*.
+func (l *LocoNet) startWorkers() {
+	go l.txLoop()
+	go l.dispatch()
 }
 
 // SetTimeout adjusts the request/response deadline for LocoNet operations.
@@ -849,20 +862,17 @@ func (l *LocoNet) SetSpeed(addr LocoAddr, speed uint8, forward bool, speedSteps 
 func (l *LocoNet) writeSpeed(addr LocoAddr, slot, lnSpeed byte, forward bool, gen uint64) error {
 	// The direction change below is a read-modify-write of the shared DIRF
 	// byte, so take the per-address function lock first (consistent order with
-	// SendFn: fn-lock → txMu) to avoid losing a concurrent function toggle.
+	// SendFn: fn-lock → txEnqueue) to avoid losing a concurrent function toggle.
 	fl := l.addrFnLock(addr)
 	fl.Lock()
 	defer fl.Unlock()
 
-	l.txMu.Lock()
-	defer l.txMu.Unlock()
-
-	l.pace(lnBuildSetSpeed(slot, lnSpeed))
 	if l.currentSpeedGen(addr) != gen {
 		l.metrics.incr(&l.metrics.txCoalesced)
 		return nil // superseded by a newer SetSpeed; drop this stale frame
 	}
-	if err := l.writeRaw(lnBuildSetSpeed(slot, lnSpeed)); err != nil {
+	spdPkt := lnBuildSetSpeed(slot, lnSpeed)
+	if err := l.txEnqueue(spdPkt, lnTxPriorityNormal); err != nil {
 		return err
 	}
 	l.setSpd(addr, lnSpeed)
@@ -876,9 +886,7 @@ func (l *LocoNet) writeSpeed(addr LocoAddr, slot, lnSpeed byte, forward bool, ge
 		want &^= 0x20
 	}
 	if want != dirf {
-		dirfPkt := lnBuildSetDirF(slot, want)
-		l.pace(dirfPkt)
-		if err := l.writeRaw(dirfPkt); err != nil {
+		if err := l.txEnqueue(lnBuildSetDirF(slot, want), lnTxPriorityNormal); err != nil {
 			return err
 		}
 		l.setDirf(addr, want)
@@ -915,19 +923,13 @@ func (l *LocoNet) GetSpeed(addr LocoAddr) (speed uint8, forward bool, err error)
 	return uint8(sd.Speed), forward, nil
 }
 
-// sendLocked transmits one frame with bus pacing. Despite the historical name
-// it now self-synchronizes: it takes txMu and honours the inter-frame gap, so
-// it is safe to call both from the request/response path (under reqMu) and from
-// the lock-free fast path (SetSpeed/SendFn with a cached slot).
+// sendLocked transmits one frame via the async writer (normal priority).
 func (l *LocoNet) sendLocked(pkt []byte) error {
-	l.txMu.Lock()
-	defer l.txMu.Unlock()
-	l.pace(pkt)
-	return l.writeRaw(pkt)
+	return l.txEnqueue(pkt, lnTxPriorityNormal)
 }
 
 // pace blocks until the minimum inter-frame gap for pkt has elapsed since the
-// last transmission. Caller holds txMu.
+// last transmission. Only txLoop calls this.
 func (l *LocoNet) pace(pkt []byte) {
 	gap := l.frameGap(pkt)
 	if gap <= 0 {
@@ -956,7 +958,7 @@ func (l *LocoNet) frameGap(pkt []byte) time.Duration {
 }
 
 // writeRaw validates and writes one frame to the transport, advancing the
-// pacing clock. Caller holds txMu.
+// pacing clock. Only txLoop calls this.
 func (l *LocoNet) writeRaw(pkt []byte) error {
 	if !lnChecksumOK(pkt) {
 		return fmt.Errorf("refusing to send packet with invalid checksum: % X", pkt)
@@ -1476,14 +1478,14 @@ func (l *LocoNet) refreshOneKeepaliveSlot() {
 	if !ok {
 		return
 	}
-	if err := l.sendLocked(lnBuildSetSpeed(slot, spd)); err != nil {
+	if err := l.txEnqueue(lnBuildSetSpeed(slot, spd), lnTxPriorityLow); err != nil {
 		logrus.WithError(err).Debugf("loconet keepalive: slot %d addr %d", slot, addr)
 		return
 	}
 	l.metrics.incr(&l.metrics.keepaliveRefresh)
 }
 
-// refreshSlots re-sends each cached slot's last known speed (used in tests).
+// refreshSlots re-sends every cached slot's speed (used in tests).
 func (l *LocoNet) refreshSlots() {
 	type pair struct {
 		addr LocoAddr

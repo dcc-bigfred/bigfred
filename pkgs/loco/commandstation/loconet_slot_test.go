@@ -76,6 +76,7 @@ func newSlotTestLoconet(slot, stat1 byte) (*LocoNet, *slotServerTransport) {
 	l.minTxGap = 0
 	srv := &slotServerTransport{rxCh: l.rxCh, slot: slot, stat1: stat1, dirf: 0x20}
 	l.t = srv
+	go l.txLoop()
 	go l.dispatch()
 	return l, srv
 }
@@ -121,6 +122,7 @@ func TestAcquireSlotRefreshesCacheFromBus(t *testing.T) {
 		snd:   0x01,
 	}
 	l.t = srv
+	go l.txLoop()
 	go l.dispatch()
 	t.Cleanup(func() { close(l.stop) })
 
@@ -199,6 +201,7 @@ func TestAcquireSlotTimesOut(t *testing.T) {
 	l.minTxGap = 0
 	l.slotTimeout = 50 * time.Millisecond
 	l.t = &recTransport{} // records writes, never replies
+	go l.txLoop()
 	go l.dispatch()
 	t.Cleanup(func() { close(l.stop) })
 
@@ -209,6 +212,29 @@ func TestAcquireSlotTimesOut(t *testing.T) {
 	// Two attempts (initial + lnSlotAcquireRetries) bounded by slotTimeout each.
 	if elapsed := time.Since(start); elapsed > 2*time.Second {
 		t.Fatalf("AcquireSlot took %s, expected to fail fast", elapsed)
+	}
+}
+
+// TestSlotBreakerTripsAfterRepeatedFailures verifies the circuit breaker opens
+// after consecutive slot-acquire timeouts and blocks further attempts.
+func TestSlotBreakerTripsAfterRepeatedFailures(t *testing.T) {
+	l := newLocoNetBase()
+	l.minTxGap = 0
+	l.slotTimeout = 20 * time.Millisecond
+	l.t = &recTransport{}
+	go l.txLoop()
+	go l.dispatch()
+	t.Cleanup(func() { close(l.stop) })
+
+	if err := l.AcquireSlot(31); err == nil {
+		t.Fatal("expected acquire failure")
+	}
+	start := time.Now()
+	if err := l.AcquireSlot(32); err == nil {
+		t.Fatal("expected breaker to block second acquire")
+	}
+	if elapsed := time.Since(start); elapsed > 500*time.Millisecond {
+		t.Fatalf("breaker should fail fast, took %s", elapsed)
 	}
 }
 
@@ -247,6 +273,7 @@ func TestAcquireSlotIgnoresForeignSlotRead(t *testing.T) {
 		foreignSlot:         20,
 	}
 	l.t = srv
+	go l.txLoop()
 	go l.dispatch()
 	t.Cleanup(func() { close(l.stop) })
 

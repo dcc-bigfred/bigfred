@@ -49,6 +49,7 @@ func newTestLoconet() (*LocoNet, *recTransport) {
 	l.minTxGap = 0
 	rec := &recTransport{}
 	l.t = rec
+	go l.txLoop()
 	return l, rec
 }
 

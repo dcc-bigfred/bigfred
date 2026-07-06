@@ -8,9 +8,12 @@ type EmergencyStopper interface {
 }
 
 // EmergencyStop sends wire speed 1 (DCC emergency stop) on the estop-priority
-// channel, bypassing a full normal TX queue.
+// channel, bypassing a full normal TX queue. When the slot was not already
+// IN_USE on the command station, it is released after the stop so transient
+// acquires (e.g. daemon boot-stop of an idle roster loco) do not consume a
+// slot on the master.
 func (l *LocoNet) EmergencyStop(addr LocoAddr, forward bool) error {
-	slot, err := l.acquireSlot(addr)
+	slot, heldBefore, err := l.acquireSlotWithHeld(addr)
 	if err != nil {
 		return err
 	}
@@ -37,5 +40,8 @@ func (l *LocoNet) EmergencyStop(addr LocoAddr, forward bool) error {
 		}
 		l.setDirf(addr, want)
 	}
-	return nil
+	if heldBefore {
+		return nil
+	}
+	return l.ReleaseSlot(addr)
 }

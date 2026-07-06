@@ -119,6 +119,12 @@ func (c *Client) Subscribe(ctx context.Context, addresses []uint16) error {
 	return err
 }
 
+// Select leases the command-station slot for one drive target (driver-only model).
+func (c *Client) Select(ctx context.Context, address uint16) error {
+	_, err := c.send(ctx, protocol.TypeLocoSelect, protocol.LocoSelectPayload{Address: address})
+	return err
+}
+
 // SetSpeed sends loco.setSpeed.
 func (c *Client) SetSpeed(ctx context.Context, address uint16, speed uint8, forward bool) error {
 	_, err := c.send(ctx, protocol.TypeLocoSetSpeed, contract.LocoSetSpeedWire{

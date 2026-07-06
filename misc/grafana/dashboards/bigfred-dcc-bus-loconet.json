@@ -39,6 +39,17 @@
       "keepTime": true,
       "tags": [],
       "targetBlank": false,
+      "title": "Slots (leaser)",
+      "type": "link",
+      "url": "/d/bigfred-dcc-bus-slots/bigfred-dcc-bus-slots"
+    },
+    {
+      "asDropdown": false,
+      "icon": "external link",
+      "includeVars": true,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
       "title": "Z21 (bus metrics)",
       "type": "link",
       "url": "/d/bigfred-dcc-bus-z21/bigfred-dcc-bus-z21"

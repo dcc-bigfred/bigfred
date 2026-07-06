@@ -21,9 +21,15 @@ type Actor struct {
 // layer implements this port so cmd never imports ws.
 type Responder interface {
 	Subscribe(addrs ...uint16)
+	Unsubscribe(addrs ...uint16)
 	SubscribedAddrs() []uint16
+	OldestSubscribed() (uint16, bool)
+	SelectedAddr() uint16
+	SetSelected(addr uint16)
+	ClearSelected()
 	SendLocoState(ctx context.Context, snap contract.LocoStateWire) error
 	SendLocoError(ctx context.Context, addr uint16, code, detail string) error
+	SendLocoErrorPayload(ctx context.Context, p protocol.LocoErrorPayload) error
 	SendAck(ctx context.Context, requestID string, payload protocol.AckPayload) error
 }
 
@@ -40,6 +46,7 @@ type SessionView struct {
 type HubPort interface {
 	Broadcast(ctx context.Context, addr uint16, env contract.EnvelopeWire)
 	SubscribedAddrs() []uint16
+	IsSubscribed(addr uint16) bool
 	SessionsForUser(userID uint) []SessionView
 	UnsubscribeAll(addrs ...uint16)
 	Snapshot() []SessionView

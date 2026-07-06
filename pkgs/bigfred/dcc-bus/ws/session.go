@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/coder/websocket"
@@ -15,8 +16,13 @@ import (
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/protocol"
 )
 
+const (
+	wsSendQueueCap = 64
+	wsWriteTimeout = 2 * time.Second
+)
+
 // Session is one connected user (one browser tab). Multiple sessions
-// per (userID, layoutID, commandStationID) are allowed — the daemon
+// per (userID, layoutID, commandStationId) are allowed — the daemon
 // fans state events out to every matching tab.
 type Session struct {
 	ID       string
@@ -28,7 +34,12 @@ type Session struct {
 	conn *websocket.Conn
 
 	mu          sync.Mutex
-	subscribed  map[uint16]struct{}
+	sendCh      chan contract.EnvelopeWire
+	sendDrop    atomic.Uint64
+	metrics     *Metrics
+	subscribed     map[uint16]struct{}
+	subscribeOrder []uint16
+	selected       uint16 // active WS drive target; 0 = none
 	lastBeat    time.Time
 	closed      bool
 	closeReason string
@@ -36,16 +47,51 @@ type Session struct {
 
 // NewSession allocates a new client handle from a verified Identity.
 func NewSession(id auth.Identity, conn *websocket.Conn) *Session {
-	return &Session{
+	s := &Session{
 		ID:         uuid.NewString(),
 		UserID:     id.UserID,
 		LayoutID:   id.LayoutID,
 		Login:      id.Login,
 		OpenedAt:   time.Now().UTC(),
 		conn:       conn,
+		sendCh:     make(chan contract.EnvelopeWire, wsSendQueueCap),
 		subscribed: make(map[uint16]struct{}, 8),
 		lastBeat:   time.Now().UTC(),
 	}
+	go s.writeLoop()
+	return s
+}
+
+// SetMetrics wires OTel counters for this session (optional).
+func (s *Session) SetMetrics(m *Metrics) {
+	s.metrics = m
+}
+
+func (s *Session) writeLoop() {
+	s.mu.Lock()
+	ch := s.sendCh
+	s.mu.Unlock()
+	for env := range ch {
+		raw, err := json.Marshal(env)
+		if err != nil {
+			continue
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), wsWriteTimeout)
+		err = s.conn.Write(ctx, websocket.MessageText, raw)
+		cancel()
+		if err != nil {
+			s.Close("write failed: " + err.Error())
+			for range ch {
+			}
+			return
+		}
+	}
+}
+
+// SendDrop returns how many outbound frames were dropped (oldest-first)
+// because the per-client send queue was saturated.
+func (s *Session) SendDrop() uint64 {
+	return s.sendDrop.Load()
 }
 
 // Subscribe records interest in additional locomotive addresses.
@@ -53,7 +99,11 @@ func (s *Session) Subscribe(addrs ...uint16) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, a := range addrs {
+		if _, ok := s.subscribed[a]; ok {
+			continue
+		}
 		s.subscribed[a] = struct{}{}
+		s.subscribeOrder = append(s.subscribeOrder, a)
 	}
 }
 
@@ -62,8 +112,34 @@ func (s *Session) Unsubscribe(addrs ...uint16) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, a := range addrs {
+		if _, ok := s.subscribed[a]; !ok {
+			continue
+		}
 		delete(s.subscribed, a)
+		s.subscribeOrder = removeSubscribeOrder(s.subscribeOrder, a)
 	}
+}
+
+// OldestSubscribed returns the FIFO-first subscribed address, if any.
+func (s *Session) OldestSubscribed() (uint16, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, a := range s.subscribeOrder {
+		if _, ok := s.subscribed[a]; ok {
+			return a, true
+		}
+	}
+	return 0, false
+}
+
+func removeSubscribeOrder(order []uint16, addr uint16) []uint16 {
+	out := order[:0]
+	for _, a := range order {
+		if a != addr {
+			out = append(out, a)
+		}
+	}
+	return out
 }
 
 // SubscribedAddrs returns the current subscription set.
@@ -86,6 +162,27 @@ func (s *Session) IsSubscribed(addr uint16) bool {
 	return ok
 }
 
+// SelectedAddr returns the session's active drive target, or 0.
+func (s *Session) SelectedAddr() uint16 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.selected
+}
+
+// SetSelected records the active drive target for switcher tracking.
+func (s *Session) SetSelected(addr uint16) {
+	s.mu.Lock()
+	s.selected = addr
+	s.mu.Unlock()
+}
+
+// ClearSelected clears the active drive target.
+func (s *Session) ClearSelected() {
+	s.mu.Lock()
+	s.selected = 0
+	s.mu.Unlock()
+}
+
 // Touch resets the dead-man's switch timer.
 func (s *Session) Touch() {
 	s.mu.Lock()
@@ -100,19 +197,28 @@ func (s *Session) IdleFor() time.Duration {
 	return time.Since(s.lastBeat)
 }
 
-// Send marshals the envelope and writes it to the underlying WS.
-// Safe to call from multiple goroutines.
+// Send enqueues env for the session write loop. It is non-blocking:
+// when the queue is full the oldest frame is dropped.
 func (s *Session) Send(ctx context.Context, env contract.EnvelopeWire) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.closed {
+	if s.closed || s.sendCh == nil {
 		return websocket.CloseError{Code: websocket.StatusGoingAway}
 	}
-	raw, err := json.Marshal(env)
-	if err != nil {
-		return err
+	select {
+	case s.sendCh <- env:
+	default:
+		select {
+		case <-s.sendCh:
+		default:
+		}
+		s.sendDrop.Add(1)
+		if s.metrics != nil {
+			s.metrics.RecordSendDrop()
+		}
+		s.sendCh <- env
 	}
-	return s.conn.Write(ctx, websocket.MessageText, raw)
+	return nil
 }
 
 // SendTyped is the typed convenience wrapper around Send. It is the
@@ -152,9 +258,14 @@ func (s *Session) Close(reason string) {
 		s.closeReason = reason
 	}
 	conn := s.conn
+	ch := s.sendCh
+	s.sendCh = nil
 	s.mu.Unlock()
 	if conn != nil {
 		_ = conn.Close(websocket.StatusNormalClosure, reason)
+	}
+	if ch != nil {
+		close(ch)
 	}
 }
 

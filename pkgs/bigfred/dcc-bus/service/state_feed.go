@@ -6,7 +6,6 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/keskad/loco/pkgs/bigfred/contract"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/service/station"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/state"
 	"github.com/keskad/loco/pkgs/bigfred/remotes"
@@ -21,12 +20,12 @@ const (
 
 // FeedDeps are the inputs required to mirror external throttle changes.
 type FeedDeps struct {
-	Station      commandstation.Station
-	Roster       *RosterCache
-	Redis        *state.Redis
-	Hub          StateBroadcaster
+	Station       commandstation.Station
+	Roster        *RosterCache
+	Store         *state.LocoStateStore
+	Hub           StateBroadcaster
 	HubSubs      SubscriptionSource
-	FnCache       *FunctionsCache
+	FnCache      *FunctionsCache
 	LocoObservers *remotes.LocoStateNotifier
 	Log           *logrus.Logger
 	PollInterval time.Duration
@@ -36,6 +35,7 @@ type FeedDeps struct {
 // SubscriptionSource exposes the union of subscribed locomotive addresses.
 type SubscriptionSource interface {
 	SubscribedAddrs() []uint16
+	IsSubscribed(addr uint16) bool
 }
 
 // RunStateFeed keeps Redis and connected WS clients in sync with state
@@ -166,57 +166,36 @@ func applyObservation(ctx context.Context, deps FeedDeps, o commandstation.LocoO
 		return
 	}
 
-	snap := contract.LocoStateWire{Address: addr}
-	if deps.Redis != nil {
-		if cached, ok, err := deps.Redis.GetLocoCurrentState(ctx, addr); err == nil && ok {
-			snap = cached
+	noWS := deps.HubSubs != nil && !deps.HubSubs.IsSubscribed(addr)
+	noHandset := deps.LocoObservers == nil || !deps.LocoObservers.AnyRegistered()
+	if noWS && noHandset {
+		if o.FunctionMask != 0 && deps.FnCache != nil {
+			for fn := 0; fn <= pollFnRange; fn++ {
+				bit := uint32(1) << uint(fn)
+				if o.FunctionMask&bit == 0 {
+					continue
+				}
+				deps.FnCache.Set(addr, uint8(fn), o.FunctionBits&bit != 0)
+			}
 		}
+		return
 	}
 
-	changed := false
-	if o.HasSpeed {
-		observed := UISpeedFromWire(o.Speed)
-		if snap.Speed != observed {
-			snap.Speed = observed
-			changed = true
-		}
+	if deps.Store == nil {
+		return
 	}
-	if o.HasForward && snap.Forward != o.Forward {
-		snap.Forward = o.Forward
-		changed = true
+
+	snap, changed := deps.Store.ApplyObservation(o, source)
+	if !changed {
+		return
 	}
-	if o.FunctionMask != 0 {
+	if o.FunctionMask != 0 && deps.FnCache != nil {
 		for fn := 0; fn <= pollFnRange; fn++ {
 			bit := uint32(1) << uint(fn)
 			if o.FunctionMask&bit == 0 {
 				continue
 			}
-			on := o.FunctionBits&bit != 0
-			if len(snap.Functions) <= fn {
-				grown := make([]bool, fn+1)
-				copy(grown, snap.Functions)
-				snap.Functions = grown
-			}
-			if snap.Functions[fn] != on {
-				snap.Functions[fn] = on
-				changed = true
-				if deps.FnCache != nil {
-					deps.FnCache.Set(addr, uint8(fn), on)
-				}
-			}
-		}
-	}
-	if !changed {
-		return
-	}
-
-	snap.ControlledByUserID = 0
-	snap.Source = source
-	snap.At = time.Now().UTC().UnixMilli()
-
-	if deps.Redis != nil {
-		if err := deps.Redis.StoreLocoCurrentState(ctx, snap, deps.StateTTL); err != nil && deps.Log != nil {
-			deps.Log.WithError(err).Debug("dcc-bus state feed: redis store")
+			deps.FnCache.Set(addr, uint8(fn), o.FunctionBits&bit != 0)
 		}
 	}
 	BroadcastLocoState(ctx, deps.Hub, snap)

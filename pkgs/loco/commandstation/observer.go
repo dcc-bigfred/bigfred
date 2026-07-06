@@ -44,6 +44,19 @@ func (o LocoObservation) FnOn(fn int) (on bool, ok bool) {
 	return o.FunctionBits&bit != 0, true
 }
 
+// mergeIn folds other into o in place: newer scalar fields win, function
+// bits are unioned under the combined mask.
+func (o *LocoObservation) mergeIn(other LocoObservation) {
+	if other.HasSpeed {
+		o.HasSpeed, o.Speed = true, other.Speed
+	}
+	if other.HasForward {
+		o.HasForward, o.Forward = true, other.Forward
+	}
+	o.FunctionMask |= other.FunctionMask
+	o.FunctionBits = (o.FunctionBits &^ other.FunctionMask) | (other.FunctionBits & other.FunctionMask)
+}
+
 // lnDirfFnObservation builds function mask/bits for F0..F4 from a DIRF byte.
 func lnDirfFnObservation(dirf byte) (mask, bits uint32) {
 	mask = 0x1F

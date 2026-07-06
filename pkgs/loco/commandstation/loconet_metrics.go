@@ -147,6 +147,8 @@ type LnMetricsSnapshot struct {
 	ObsQueueCap  int64
 	SyncQueueLen int64
 	SyncQueueCap int64
+	TxQueueLen   int64
+	TxQueueCap   int64
 }
 
 // snapshot copies the cumulative driver counters. Transport stats and gauges

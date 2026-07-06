@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	stderrors "errors"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -24,40 +25,27 @@ func (r *Router) applyEmergencyForSession(ctx context.Context, actor Actor, resp
 	r.applyEmergencyStop(ctx, actor.UserID, actor.SessionID, resp.SubscribedAddrs(), reason, movingOnly)
 }
 
-func (r *Router) isLocoPlacedForward(ctx context.Context, addr uint16) bool {
-	cached, ok, err := r.redis.GetLocoCurrentState(ctx, addr)
-	if err == nil && ok {
-		return cached.Forward
-	}
-	return true
+func (r *Router) isLocoPlacedForward(_ context.Context, addr uint16) bool {
+	return r.store.Snapshot(addr).Forward
 }
 
 func (r *Router) applyEmergencyStop(ctx context.Context, userID uint, sessionID string, addrs []uint16, reason string, movingOnly bool) {
 	affected := make([]uint16, 0, len(addrs))
 	for _, addr := range addrs {
-		if !r.shouldEmergencyStopLoco(ctx, addr, movingOnly) {
+		if !r.shouldEmergencyStopLoco(addr, movingOnly) {
 			continue
 		}
 		forward := r.isLocoPlacedForward(ctx, addr)
-		if err := r.station.SetSpeed(commandstation.LocoAddr(addr), 1, forward, uint8(r.speedSteps)); err != nil {
+		if err := emergencyStopLoco(r.station, addr, forward, uint8(r.speedSteps)); err != nil {
+			if stderrors.Is(err, commandstation.ErrSpeedSuperseded) {
+				continue
+			}
 			r.log.WithError(err).WithField("addr", addr).Warn("dcc-bus estop failed")
 			continue
 		}
 		affected = append(affected, addr)
-		snap := contract.LocoStateWire{
-			Address:            addr,
-			Speed:              0,
-			Forward:            forward,
-			ControlledByUserID: userID,
-			Source:             "estop",
-			At:                 time.Now().UTC().UnixMilli(),
-		}
-		if cached, ok, err := r.redis.GetLocoCurrentState(ctx, addr); err == nil && ok {
-			snap.Functions = cached.Functions
-		}
-		if err := r.redis.StoreLocoCurrentState(ctx, snap, StateTTL); err != nil {
-			r.log.WithError(err).Debug("dcc-bus estop redis store")
-		}
+		snap := r.store.SetSpeed(addr, 0, forward, userID, "estop")
+		r.store.FlushNow(ctx, addr)
 		service.BroadcastLocoState(ctx, r.hub, snap)
 		if v, ok := r.roster.AllowedVehicle(addr); ok {
 			r.applyDeadManSwitchForLoco(context.Background(), addr, userID, v)
@@ -77,9 +65,9 @@ func (r *Router) applyEmergencyStop(ctx context.Context, userID uint, sessionID 
 	}
 }
 
-func (r *Router) shouldEmergencyStopLoco(ctx context.Context, addr uint16, movingOnly bool) bool {
-	cached, ok, err := r.redis.GetLocoCurrentState(ctx, addr)
-	if err != nil || !ok {
+func (r *Router) shouldEmergencyStopLoco(addr uint16, movingOnly bool) bool {
+	cached := r.store.Snapshot(addr)
+	if cached.Source == "" && cached.At == 0 && cached.Speed == 0 {
 		return !movingOnly
 	}
 	if movingOnly {
@@ -110,27 +98,20 @@ func (r *Router) applyEStopTarget(ctx context.Context, addrs []uint16) {
 		if !r.roster.IsOnLayout(addr) {
 			continue
 		}
-		if !r.shouldEmergencyStopLoco(ctx, addr, true) {
+		if !r.shouldEmergencyStopLoco(addr, true) {
 			continue
 		}
 		forward := r.isLocoPlacedForward(ctx, addr)
-		if err := r.station.SetSpeed(commandstation.LocoAddr(addr), 1, forward, uint8(r.speedSteps)); err != nil {
+		if err := emergencyStopLoco(r.station, addr, forward, uint8(r.speedSteps)); err != nil {
+			if stderrors.Is(err, commandstation.ErrSpeedSuperseded) {
+				continue
+			}
 			r.log.WithError(err).WithField("addr", addr).Warn("dcc-bus estop target failed")
 			continue
 		}
 		affected = append(affected, addr)
-		snap := contract.LocoStateWire{
-			Address: addr,
-			Speed:   0,
-			Forward: forward,
-			Source:  "estop",
-			At:      time.Now().UTC().UnixMilli(),
-		}
-		if cached, ok, err := r.redis.GetLocoCurrentState(ctx, addr); err == nil && ok {
-			snap.Functions = cached.Functions
-			snap.ControlledByUserID = cached.ControlledByUserID
-		}
-		_ = r.redis.StoreLocoCurrentState(ctx, snap, StateTTL)
+		snap := r.store.SetSpeedPreservingUser(addr, 0, forward, "estop")
+		r.store.FlushNow(ctx, addr)
 		service.BroadcastLocoState(ctx, r.hub, snap)
 	}
 	if len(affected) == 0 {
@@ -148,19 +129,13 @@ func (r *Router) applyEStopAll(ctx context.Context, reason string) []uint16 {
 	addrs := r.roster.AllowedAddrs()
 	for _, addr := range addrs {
 		forward := r.isLocoPlacedForward(ctx, addr)
-		_ = r.station.SetSpeed(commandstation.LocoAddr(addr), 1, forward, uint8(r.speedSteps))
-		snap := contract.LocoStateWire{
-			Address: addr,
-			Speed:   0,
-			Forward: forward,
-			Source:  "estop",
-			At:      time.Now().UTC().UnixMilli(),
+		if err := emergencyStopLoco(r.station, addr, forward, uint8(r.speedSteps)); err != nil {
+			if stderrors.Is(err, commandstation.ErrSpeedSuperseded) {
+				continue
+			}
 		}
-		if cached, ok, err := r.redis.GetLocoCurrentState(ctx, addr); err == nil && ok {
-			snap.Functions = cached.Functions
-			snap.ControlledByUserID = cached.ControlledByUserID
-		}
-		_ = r.redis.StoreLocoCurrentState(ctx, snap, StateTTL)
+		snap := r.store.SetSpeedPreservingUser(addr, 0, forward, "estop")
+		r.store.FlushNow(ctx, addr)
 		service.BroadcastLocoState(ctx, r.hub, snap)
 	}
 	_ = r.redis.Publish(ctx, "system.estop.audit", map[string]any{
@@ -170,4 +145,12 @@ func (r *Router) applyEStopAll(ctx context.Context, reason string) []uint16 {
 		"at":     time.Now().UTC().UnixMilli(),
 	})
 	return addrs
+}
+
+func emergencyStopLoco(station commandstation.Station, addr uint16, forward bool, speedSteps uint8) error {
+	la := commandstation.LocoAddr(addr)
+	if estopper, ok := station.(commandstation.EmergencyStopper); ok {
+		return estopper.EmergencyStop(la, forward)
+	}
+	return station.SetSpeed(la, 1, forward, speedSteps)
 }

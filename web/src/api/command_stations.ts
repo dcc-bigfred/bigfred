@@ -18,6 +18,9 @@ export const DEFAULT_COMMAND_STATION_HEARTBEAT_SECS = 2;
 export const DEFAULT_COMMAND_STATION_DEADMAN_SECS = 6;
 export const DEFAULT_COMMAND_STATION_POLL_INTERVAL_MS = 0;
 export const DEFAULT_COMMAND_STATION_SPEED_STEPS = 128;
+export const DEFAULT_COMMAND_STATION_MAX_LOCONET_SLOTS = 80;
+export const DEFAULT_COMMAND_STATION_IDLE_TIMEOUT_SECS = 60;
+export const DEFAULT_LAYOUT_MAX_VEHICLES_PER_USER = 8;
 
 export interface CommandStation {
   id: number;
@@ -31,6 +34,8 @@ export interface CommandStation {
   z21ServerEnabled: boolean;
   z21IpStickiness: boolean;
   withrottleServerEnabled: boolean;
+  maxLoconetSlots?: number;
+  idleTimeoutSecs?: number;
 }
 
 const commandStationsCatalogueQueryKey = [
@@ -61,6 +66,8 @@ export function useCreateCommandStation() {
       z21ServerEnabled?: boolean;
       z21IpStickiness?: boolean;
       withrottleServerEnabled?: boolean;
+      maxLoconetSlots?: number;
+      idleTimeoutSecs?: number;
     }) =>
       apiFetch<CommandStation>("/api/v1/command-stations", {
         method: "POST",
@@ -87,6 +94,8 @@ export function useUpdateCommandStation() {
       z21ServerEnabled?: boolean;
       z21IpStickiness?: boolean;
       withrottleServerEnabled?: boolean;
+      maxLoconetSlots?: number;
+      idleTimeoutSecs?: number;
     }) =>
       apiFetch<CommandStation>(`/api/v1/command-stations/${args.id}`, {
         method: "PUT",
@@ -101,6 +110,8 @@ export function useUpdateCommandStation() {
           z21ServerEnabled: args.z21ServerEnabled,
           z21IpStickiness: args.z21IpStickiness,
           withrottleServerEnabled: args.withrottleServerEnabled,
+          maxLoconetSlots: args.maxLoconetSlots,
+          idleTimeoutSecs: args.idleTimeoutSecs,
         }),
       }),
     onSuccess: () => {

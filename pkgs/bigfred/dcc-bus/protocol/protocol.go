@@ -64,6 +64,23 @@ type LocoSubscribePayload struct {
 	Addresses []uint16 `json:"addresses"`
 }
 
+// LocoSelectPayload marks one address as the session's active drive
+// target and leases its command-station slot (LocoNet only).
+type LocoSelectPayload struct {
+	Address uint16 `json:"address"`
+}
+
+// LocoDeselectPayload clears the active drive target and releases the
+// slot when this session was the last driver.
+type LocoDeselectPayload struct {
+	Address uint16 `json:"address"`
+}
+
+// TrainSelectPayload leases slots for every powered member of a train.
+type TrainSelectPayload struct {
+	TrainID string `json:"trainId"`
+}
+
 // SystemEStopPayload is the data-plane emergency stop. Scope is
 // always "the command station this daemon owns"; the loco-server
 // emits the broader cross-cs broadcast as documented in §7e.4.
@@ -99,9 +116,10 @@ type DccBusOpenedPayload struct {
 // the command station dropped). `Code` is machine-readable so the
 // frontend can localise without parsing free text.
 type LocoErrorPayload struct {
-	Address uint16 `json:"address,omitempty"`
-	Code    string `json:"code"`
-	Detail  string `json:"detail,omitempty"`
+	Address     uint16   `json:"address,omitempty"`
+	Code        string   `json:"code"`
+	Detail      string   `json:"detail,omitempty"`
+	DrivenAddrs []uint16 `json:"drivenAddrs,omitempty"`
 }
 
 // TrainSetSpeedMemberAck is one member result inside a train.setSpeed ack.
@@ -115,9 +133,11 @@ type TrainSetSpeedMemberAck struct {
 // expected confirmation. `Ok` is true on success; `Error` is the
 // machine-readable failure code when `Ok` is false.
 type AckPayload struct {
-	OK      bool                   `json:"ok"`
-	Error   string                 `json:"error,omitempty"`
-	Members []TrainSetSpeedMemberAck `json:"members,omitempty"`
+	OK          bool                     `json:"ok"`
+	Error       string                   `json:"error,omitempty"`
+	Members     []TrainSetSpeedMemberAck `json:"members,omitempty"`
+	EvictedAddr uint16                   `json:"evictedAddr,omitempty"`
+	DrivenAddrs []uint16                 `json:"drivenAddrs,omitempty"`
 }
 
 // -------- Frame type catalogue --------
@@ -128,6 +148,9 @@ const (
 	TypePing              = "ping"
 	TypePong              = "pong"
 	TypeLocoSubscribe     = "loco.subscribe"
+	TypeLocoSelect        = "loco.select"
+	TypeLocoDeselect      = "loco.deselect"
+	TypeTrainSelect       = "train.select"
 	TypeLocoSetSpeed      = "loco.setSpeed"
 	TypeTrainSetSpeed     = "train.setSpeed"
 	TypeLocoSetFunction   = "loco.setFunction"

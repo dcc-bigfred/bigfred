@@ -50,6 +50,17 @@
       "keepTime": true,
       "tags": [],
       "targetBlank": false,
+      "title": "Slots (leaser)",
+      "type": "link",
+      "url": "/d/bigfred-dcc-bus-slots/bigfred-dcc-bus-slots"
+    },
+    {
+      "asDropdown": false,
+      "icon": "external link",
+      "includeVars": true,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
       "title": "Z21 (bus metrics)",
       "type": "link",
       "url": "/d/bigfred-dcc-bus-z21/bigfred-dcc-bus-z21"
@@ -2381,6 +2392,370 @@
       ],
       "title": "Dead-man triggers over time",
       "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 130 },
+      "id": 600,
+      "panels": [],
+      "title": "Slot leaser (driver-only)",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "BigFred leased slot count vs max_loconet_slots budget (D14). Should track driven vehicles, not subscriptions.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "decimals": 0,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 60 },
+              { "color": "red", "value": 75 }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 131 },
+      "id": 601,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "sum(bigfred_dcc_bus_slot_budget_used{service_name=\"dcc-bus\", layout_id=~\"$layout_id\", command_station_id=~\"$command_station_id\"})",
+          "legendFormat": "leased",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Slot budget used",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Active leases with at least one holder per source (ws / z21 / withrottle).",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "decimals": 0,
+          "mappings": [],
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 131 },
+      "id": 602,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "sum(bigfred_dcc_bus_slot_active{service_name=\"dcc-bus\", layout_id=~\"$layout_id\", command_station_id=~\"$command_station_id\"}) by (source)",
+          "legendFormat": "{{source}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Active leases by source",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Select/deselect churn — high rates indicate switcher changes or cap evictions.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "decimals": 2,
+          "mappings": [],
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 131 },
+      "id": 603,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "sum(rate(bigfred_dcc_bus_slot_select_total{service_name=\"dcc-bus\", layout_id=~\"$layout_id\", command_station_id=~\"$command_station_id\"}[$__rate_interval]))",
+          "legendFormat": "select/s",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Select / s",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Live admin slot-diagnostic WebSocket clients (D19).",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "decimals": 0,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 3 },
+              { "color": "red", "value": 10 }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 131 },
+      "id": 604,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "sum(bigfred_dcc_bus_slot_diagnostic_subscribers{service_name=\"dcc-bus\", layout_id=~\"$layout_id\", command_station_id=~\"$command_station_id\"})",
+          "legendFormat": "clients",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Diag WS clients",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Lease acquire/release rates and rejection reasons.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "gradientMode": "none",
+            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": { "type": "linear" },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": { "group": "A", "mode": "none" },
+            "thresholdsStyle": { "mode": "off" }
+          },
+          "decimals": 2,
+          "mappings": [],
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 135 },
+      "id": 605,
+      "options": {
+        "legend": { "calcs": ["mean", "sum"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "sum(rate(bigfred_dcc_bus_slot_leased_total{service_name=\"dcc-bus\", layout_id=~\"$layout_id\", command_station_id=~\"$command_station_id\"}[$__rate_interval])) by (source)",
+          "legendFormat": "leased {{source}}",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "sum(rate(bigfred_dcc_bus_slot_released_total{service_name=\"dcc-bus\", layout_id=~\"$layout_id\", command_station_id=~\"$command_station_id\"}[$__rate_interval])) by (reason)",
+          "legendFormat": "released {{reason}}",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "Slot lease / release / s",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Rejection and cap-eviction counters — should stay near zero during normal load tests.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "gradientMode": "none",
+            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": { "type": "linear" },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": { "group": "A", "mode": "none" },
+            "thresholdsStyle": { "mode": "off" }
+          },
+          "decimals": 2,
+          "mappings": [],
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 135 },
+      "id": 606,
+      "options": {
+        "legend": { "calcs": ["mean", "sum"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "sum(rate(bigfred_dcc_bus_slot_budget_exceeded_total{service_name=\"dcc-bus\", layout_id=~\"$layout_id\", command_station_id=~\"$command_station_id\"}[$__rate_interval]))",
+          "legendFormat": "budget_exceeded",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "sum(rate(bigfred_dcc_bus_slot_cap_evict_total{service_name=\"dcc-bus\", layout_id=~\"$layout_id\", command_station_id=~\"$command_station_id\"}[$__rate_interval]))",
+          "legendFormat": "cap_evict",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "sum(rate(bigfred_dcc_bus_slot_no_free_slot_total{service_name=\"dcc-bus\", layout_id=~\"$layout_id\", command_station_id=~\"$command_station_id\"}[$__rate_interval]))",
+          "legendFormat": "no_free_slot",
+          "range": true,
+          "refId": "C"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "sum(rate(bigfred_dcc_bus_loco_subscribe_cap_total{service_name=\"dcc-bus\", layout_id=~\"$layout_id\", command_station_id=~\"$command_station_id\"}[$__rate_interval]))",
+          "legendFormat": "subscribe_cap",
+          "range": true,
+          "refId": "D"
+        }
+      ],
+      "title": "Slot rejections / s",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "slot_budget_used (driver leases) vs LocoNet keepalive refresh rate. After driver-only redesign, keepalive should track driven slots, not every subscription.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": { "type": "linear" },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": { "group": "A", "mode": "none" },
+            "thresholdsStyle": { "mode": "off" }
+          },
+          "mappings": [],
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byRegexp", "options": "keepalive.*" },
+            "properties": [{ "id": "custom.axisPlacement", "value": "right" }, { "id": "unit", "value": "ops" }]
+          }
+        ]
+      },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 143 },
+      "id": 607,
+      "options": {
+        "legend": { "calcs": ["mean", "lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "sum(bigfred_dcc_bus_slot_budget_used{service_name=\"dcc-bus\", layout_id=~\"$layout_id\", command_station_id=~\"$command_station_id\"})",
+          "legendFormat": "slot_budget_used",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "sum(rate(bigfred_dcc_bus_loconet_slot_ops_total{service_name=\"dcc-bus\", op=\"keepalive\", layout_id=~\"$layout_id\", command_station_id=~\"$command_station_id\", station_kind=~\"$station_kind\"}[$__rate_interval]))",
+          "legendFormat": "keepalive /s",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "Leased slots vs keepalive rate",
+      "type": "timeseries"
     }
   ],
   "refresh": "30s",
@@ -2564,6 +2939,6 @@
   "timezone": "browser",
   "title": "BigFred / dcc-bus",
   "uid": "bigfred-dcc-bus",
-  "version": 8,
+  "version": 9,
   "weekStart": ""
 }

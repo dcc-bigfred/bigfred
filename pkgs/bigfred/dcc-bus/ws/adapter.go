@@ -23,6 +23,18 @@ func (a *RouterAdapter) HandleSubscribe(ctx context.Context, sess *Session, payl
 	return deliver(ctx, sess, requestID, a.inner.HandleSubscribe(ctx, actor(sess), NewResponder(sess), payload, requestID))
 }
 
+func (a *RouterAdapter) HandleLocoSelect(ctx context.Context, sess *Session, payload protocol.LocoSelectPayload, requestID string) Outcome {
+	return deliver(ctx, sess, requestID, a.inner.HandleLocoSelect(ctx, actor(sess), NewResponder(sess), payload, requestID))
+}
+
+func (a *RouterAdapter) HandleLocoDeselect(ctx context.Context, sess *Session, payload protocol.LocoDeselectPayload, requestID string) Outcome {
+	return deliver(ctx, sess, requestID, a.inner.HandleLocoDeselect(ctx, actor(sess), NewResponder(sess), payload, requestID))
+}
+
+func (a *RouterAdapter) HandleTrainSelect(ctx context.Context, sess *Session, payload protocol.TrainSelectPayload, requestID string) Outcome {
+	return deliver(ctx, sess, requestID, a.inner.HandleTrainSelect(ctx, actor(sess), NewResponder(sess), payload, requestID))
+}
+
 func (a *RouterAdapter) HandleSetSpeed(ctx context.Context, sess *Session, payload contract.LocoSetSpeedWire, requestID string) Outcome {
 	return deliver(ctx, sess, requestID, a.inner.HandleSetSpeed(ctx, actor(sess), NewResponder(sess), payload, requestID))
 }
@@ -52,13 +64,15 @@ func actor(sess *Session) cmd.Actor {
 }
 
 func deliver(ctx context.Context, sess *Session, requestID string, res cmd.Result) Outcome {
-	if len(res.Members) > 0 && requestID != "" {
-		ack := protocol.AckPayload{OK: res.OK, Error: res.Code, Members: res.Members}
-		if err := NewResponder(sess).SendAck(ctx, requestID, ack); err != nil {
-			return Fail(errors.WsCodeSendFailed)
+	if requestID != "" {
+		ack := protocol.AckPayload{
+			OK:          res.OK,
+			Error:       res.Code,
+			Members:     res.Members,
+			EvictedAddr: res.EvictedAddr,
+			DrivenAddrs: res.DrivenAddrs,
 		}
-	} else if requestID != "" {
-		if err := sess.SendAck(ctx, requestID, res.OK, res.Code); err != nil {
+		if err := NewResponder(sess).SendAck(ctx, requestID, ack); err != nil {
 			return Fail(errors.WsCodeSendFailed)
 		}
 	}

@@ -97,3 +97,23 @@ func TestTrainSetSpeedDefaultStepsCap(t *testing.T) {
 		t.Fatal("expected speed above 128 to be invalid when speed steps unset")
 	}
 }
+
+func TestLocoSelectValid(t *testing.T) {
+	v := validation.LocoSelect{}
+	if !v.Valid(protocol.LocoSelectPayload{Address: 3}) {
+		t.Fatal("expected non-zero address")
+	}
+	if v.Valid(protocol.LocoSelectPayload{}) {
+		t.Fatal("expected zero address to be invalid")
+	}
+}
+
+func TestTrainSelectValid(t *testing.T) {
+	v := validation.TrainSelect{}
+	if !v.Valid(protocol.TrainSelectPayload{TrainID: "T-1"}) {
+		t.Fatal("expected non-empty train id")
+	}
+	if v.Valid(protocol.TrainSelectPayload{}) {
+		t.Fatal("expected empty train id to be invalid")
+	}
+}

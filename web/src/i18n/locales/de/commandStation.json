@@ -16,7 +16,8 @@
     "actions": {
       "create": "Neue Zentrale",
       "edit": "Bearbeiten",
-      "delete": "Löschen"
+      "delete": "Löschen",
+      "slotsDiag": "Slot-Diagnose"
     },
     "kind": {
       "z21": "Z21 (UDP)",
@@ -54,9 +55,42 @@
         "z21ServerDisableWarn": "Das Deaktivieren stoppt neue Kopplungen. Aktive Handgeräte-Sitzungen funktionieren nach einem dcc-bus-Neustart nicht mehr.",
         "withrottleServerEnabled": "WiThrottle-Server",
         "withrottleServerEnabledHelp": "Engine Driver und WiThrottle verbinden sich mit dem dcc-bus-Host über TCP-Port 12090. Die Kopplung erfolgt per 6-stelligem Code über die Sentinel-Lok oder den Gerätenamen (N).",
-        "withrottleServerDisableWarn": "Das Deaktivieren stoppt neue Kopplungen. Aktive WiThrottle-Sitzungen funktionieren nach einem dcc-bus-Neustart nicht mehr."
+        "withrottleServerDisableWarn": "Das Deaktivieren stoppt neue Kopplungen. Aktive WiThrottle-Sitzungen funktionieren nach einem dcc-bus-Neustart nicht mehr.",
+        "maxLoconetSlots": "LocoNet-Slot-Budget",
+        "maxLoconetSlotsHelp": "Wie viele Slots BigFred auf dieser Zentrale belegen darf; der Rest bleibt physischen FREDs vorbehalten. Standard 80.",
+        "idleTimeoutSecs": "Remote-Leerlaufzeit (s)",
+        "idleTimeoutSecsHelp": "Nach dieser Leerlaufzeit verliert ein Fern-Handgerät (Z21/WiThrottle) seinen Slot. 0 deaktiviert die Freigabe. Standard 60 s."
       }
     },
-    "empty": "Keine Zentralen anzuzeigen."
+    "empty": "Keine Zentralen anzuzeigen.",
+    "slotsDiag": {
+      "title": "DCC-Bus Slot-Diagnose",
+      "subtitle": "Live LocoNet-Slot-Leases, Benutzerlimits und FRED-Reserve. Nur Lesen.",
+      "back": "Zentralen",
+      "station": "Zentrale",
+      "live": "Live",
+      "stale": "Veraltet",
+      "disconnected": "Getrennt",
+      "reconnecting": "Verbinde…",
+      "budgetTitle": "Slot-Budget",
+      "budgetUsed": "{{used}} / {{max}} belegt ({{headroom}} frei für FREDs)",
+      "unlimitedSlots": "{{used}} aktive Leases (kein LocoNet-Budget auf dieser Zentrale)",
+      "maxPerUser": "max {{n}} Fahrzeuge / Benutzer",
+      "perUserTitle": "Gefahrene Fahrzeuge pro Benutzer",
+      "userId": "Benutzer",
+      "driven": "Gefahren",
+      "capBar": "Limit",
+      "noDrivers": "Keine aktiven Fahrer.",
+      "tableTitle": "Belegte Adressen",
+      "addr": "Adr.",
+      "kind": "Art",
+      "holders": "Inhaber",
+      "acquired": "Erworben",
+      "flags": "Flags",
+      "noLeases": "Keine aktiven Slot-Leases.",
+      "singleKind": "Einzel",
+      "trainKind": "Zug {{id}}",
+      "releasePending": "Freigabe ausstehend"
+    }
   }
 }

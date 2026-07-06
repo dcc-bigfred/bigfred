@@ -29,3 +29,15 @@ func TestLocoStateNotifier(t *testing.T) {
 		t.Fatalf("observer count = %d, want 1 (no duplicate registration)", obs.count)
 	}
 }
+
+func TestLocoStateNotifierAnyRegistered(t *testing.T) {
+	t.Parallel()
+	n := remotes.NewLocoStateNotifier()
+	if n.AnyRegistered() {
+		t.Fatal("empty notifier should report no observers")
+	}
+	n.Register(&recordingObserver{})
+	if !n.AnyRegistered() {
+		t.Fatal("registered observer should be visible")
+	}
+}

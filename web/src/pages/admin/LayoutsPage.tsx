@@ -40,6 +40,7 @@ import {
   useDeleteLayout,
   useSetLayoutLock,
   useUpdateLayout,
+  DEFAULT_LAYOUT_MAX_VEHICLES_PER_USER,
   type Layout,
 } from "../../api/layouts";
 import {
@@ -94,6 +95,9 @@ export default function LayoutsPage() {
     CommandStation[]
   >([]);
   const [adminPinInput, setAdminPinInput] = useState("");
+  const [maxVehiclesInput, setMaxVehiclesInput] = useState<number>(
+    DEFAULT_LAYOUT_MAX_VEHICLES_PER_USER,
+  );
   const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -115,6 +119,7 @@ export default function LayoutsPage() {
     setSelectedInterlockings([]);
     setSelectedCommandStations([]);
     setAdminPinInput("");
+    setMaxVehiclesInput(DEFAULT_LAYOUT_MAX_VEHICLES_PER_USER);
     setActionError(null);
     create.reset();
     update.reset();
@@ -141,6 +146,7 @@ export default function LayoutsPage() {
     setSelectedInterlockings([]);
     setSelectedCommandStations([]);
     setAdminPinInput("");
+    setMaxVehiclesInput(DEFAULT_LAYOUT_MAX_VEHICLES_PER_USER);
     setActionError(null);
   };
 
@@ -151,6 +157,9 @@ export default function LayoutsPage() {
     setSelectedInterlockings([]);
     setSelectedCommandStations([]);
     setAdminPinInput("");
+    setMaxVehiclesInput(
+      target.maxVehiclesPerUser ?? DEFAULT_LAYOUT_MAX_VEHICLES_PER_USER,
+    );
     setActionError(null);
   };
 
@@ -186,6 +195,7 @@ export default function LayoutsPage() {
           interlockingIds,
           commandStationIds,
           adminPin: adminPin === "" ? undefined : adminPin,
+          maxVehiclesPerUser: maxVehiclesInput,
         });
       } else if (dialog.kind === "edit") {
         const name = dialog.target.isSystem
@@ -199,8 +209,8 @@ export default function LayoutsPage() {
             ? undefined
             : commandStationIds,
           adminPin: adminPin === "" ? undefined : adminPin,
+          maxVehiclesPerUser: maxVehiclesInput,
         });
-      } else if (dialog.kind === "delete") {
         await remove.mutateAsync(dialog.target.id);
       } else if (dialog.kind === "lock") {
         await setLock.mutateAsync({ id: dialog.target.id, lock: dialog.lock });
@@ -510,6 +520,17 @@ export default function LayoutsPage() {
                 <CircularProgress size={24} />
               </Box>
             )}
+
+            <TextField
+              label={t("layout:admin.fields.maxVehiclesPerUser")}
+              type="number"
+              value={maxVehiclesInput}
+              onChange={(e) => setMaxVehiclesInput(Number(e.target.value))}
+              helperText={t("layout:admin.fields.maxVehiclesPerUserHelp")}
+              inputProps={{ min: 1, max: 120, step: 1 }}
+              fullWidth
+              required
+            />
 
             <TextField
               label={t("sudo:settings.pinLabel")}

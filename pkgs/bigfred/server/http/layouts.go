@@ -240,10 +240,11 @@ func (h *LayoutHandler) SetInterlockings(w http.ResponseWriter, r *http.Request)
 // MUST keep the existing digest. A non-empty value replaces the
 // digest after passing the digit / length policy.
 type updateRequest struct {
-	Name              string `json:"name"`
-	InterlockingIDs   []uint `json:"interlockingIds"`
-	CommandStationIDs []uint `json:"commandStationIds"`
-	AdminPIN          string `json:"adminPin"`
+	Name                 string `json:"name"`
+	InterlockingIDs      []uint `json:"interlockingIds"`
+	CommandStationIDs    []uint `json:"commandStationIds"`
+	AdminPIN             string `json:"adminPin"`
+	MaxVehiclesPerUser   *uint  `json:"maxVehiclesPerUser"`
 }
 
 // Update handles `PUT /api/v1/layouts/{id}` (admin only). Renames
@@ -292,6 +293,14 @@ func (h *LayoutHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.AdminPIN != "" {
 		updated, err := h.svc.UpdateAdminPIN(r.Context(), eff, id, req.AdminPIN)
+		if err != nil {
+			writeLayoutError(w, err)
+			return
+		}
+		layout = updated
+	}
+	if req.MaxVehiclesPerUser != nil {
+		updated, err := h.svc.UpdateMaxVehiclesPerUser(r.Context(), eff, id, *req.MaxVehiclesPerUser)
 		if err != nil {
 			writeLayoutError(w, err)
 			return

@@ -59,6 +59,10 @@
         "message": "Eine gesperrte Anlage erscheint nicht mehr auf dem Anmeldebildschirm, laufende Sitzungen bleiben offen. Sie können sie jederzeit wieder entsperren."
       }
     },
+    "fields": {
+      "maxVehiclesPerUser": "Fahrzeuge pro Benutzer",
+      "maxVehiclesPerUserHelp": "Maximal gleichzeitig geführte Loks pro Benutzer (Slots und Abonnements). Standard 8."
+    },
     "empty": "Keine Anlagen anzuzeigen."
   }
 }

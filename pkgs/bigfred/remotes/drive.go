@@ -11,12 +11,17 @@ import (
 type ThrottleActor struct {
 	UserID    uint
 	SessionID string
+	// Source is the remote protocol ("z21" or "withrottle") when the actor
+	// originates from an inbound handset; empty for internal callers.
+	Source string
 }
 
 // ThrottleResponder receives per-loco replies for one handset.
 type ThrottleResponder interface {
 	Subscribe(addrs ...uint16)
+	Unsubscribe(addrs ...uint16)
 	SubscribedAddrs() []uint16
+	OldestSubscribed() (uint16, bool)
 	SendLocoState(ctx context.Context, snap contract.LocoStateWire) error
 	SendLocoError(ctx context.Context, addr uint16, code, detail string) error
 }

@@ -16,7 +16,8 @@
     "actions": {
       "create": "Nowa centralka",
       "edit": "Edytuj",
-      "delete": "Usuń"
+      "delete": "Usuń",
+      "slotsDiag": "Diagnostyka slotów"
     },
     "kind": {
       "z21": "Z21 (UDP)",
@@ -54,9 +55,42 @@
         "z21ServerDisableWarn": "Wyłączenie serwera blokuje nowe parowania. Aktywne sesje pilota przestaną działać po restarcie daemona dcc-bus.",
         "withrottleServerEnabled": "Serwer WiThrottle",
         "withrottleServerEnabledHelp": "Engine Driver i WiThrottle łączą się z hostem dcc-bus na porcie TCP 12090. Parowanie odbywa się 6-cyfrowym kodem przez lokomotywę sentinel lub nazwę urządzenia (N).",
-        "withrottleServerDisableWarn": "Wyłączenie serwera blokuje nowe parowania. Aktywne sesje WiThrottle przestaną działać po restarcie daemona dcc-bus."
+        "withrottleServerDisableWarn": "Wyłączenie serwera blokuje nowe parowania. Aktywne sesje WiThrottle przestaną działać po restarcie daemona dcc-bus.",
+        "maxLoconetSlots": "Budżet slotów LocoNet",
+        "maxLoconetSlotsHelp": "Ile slotów może zająć BigFred w tej centralce; pozostałe zostaną dla fizycznych FREDów. Domyślnie 80.",
+        "idleTimeoutSecs": "Limit bezczynności pilota (s)",
+        "idleTimeoutSecsHelp": "Po tym czasie bez jazdy zdalny pilot (Z21/WiThrottle) traci slot. 0 wyłącza zwalnianie po bezczynności. Domyślnie 60 s."
       }
     },
-    "empty": "Brak centralki do wyświetlenia."
+    "empty": "Brak centralki do wyświetlenia.",
+    "slotsDiag": {
+      "title": "Diagnostyka slotów DCC-Bus",
+      "subtitle": "Na żywo: lease slotów LocoNet, limity użytkowników i zapas dla FREDów. Tylko odczyt.",
+      "back": "Centralki",
+      "station": "Centrala",
+      "live": "Na żywo",
+      "stale": "Nieaktualne",
+      "disconnected": "Rozłączono",
+      "reconnecting": "Łączenie…",
+      "budgetTitle": "Budżet slotów",
+      "budgetUsed": "{{used}} / {{max}} zajętych ({{headroom}} wolnych dla FREDów)",
+      "unlimitedSlots": "{{used}} aktywnych lease (brak budżetu LocoNet na tej centralce)",
+      "maxPerUser": "max {{n}} pojazdów / użytk.",
+      "perUserTitle": "Pojazdy prowadzone per użytkownik",
+      "userId": "Użytk.",
+      "driven": "Prowadzone",
+      "capBar": "Limit",
+      "noDrivers": "Brak aktywnych prowadzących.",
+      "tableTitle": "Zajęte adresy",
+      "addr": "Adres",
+      "kind": "Rodzaj",
+      "holders": "Posiadacze",
+      "acquired": "Przejęto",
+      "flags": "Flagi",
+      "noLeases": "Brak aktywnych lease slotów.",
+      "singleKind": "Pojedynczy",
+      "trainKind": "Skład {{id}}",
+      "releasePending": "Zwolnienie oczekuje"
+    }
   }
 }

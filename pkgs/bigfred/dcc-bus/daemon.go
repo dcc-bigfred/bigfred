@@ -23,6 +23,7 @@ import (
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/auth"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/cmd"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/service/station"
+	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/slotlease"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/state"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/withrottle"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/ws"
@@ -79,6 +80,10 @@ type Config struct {
 	WithrottlePort          uint16
 	WithrottlePairingAddr   uint16
 	WithrottleHeartbeatSecs float64
+
+	MaxVehiclesPerUser int
+	MaxLoconetSlots    int
+	IdleTimeoutSecs    uint
 }
 
 // Daemon is the assembled dcc-bus instance.
@@ -93,6 +98,7 @@ type Daemon struct {
 	metricsShutdown func(context.Context) error
 	lnMetricsReg    metric.Registration
 	z21MetricsReg   metric.Registration
+	slotMetricsReg  metric.Registration
 	withrottleSrv   *withrottle.Server
 	gatewayWg       sync.WaitGroup
 }
@@ -200,6 +206,7 @@ func New(ctx context.Context, log *logrus.Logger, cfg Config) (*Daemon, error) {
 			LayoutID:         cfg.LayoutID,
 			CommandStationID: cfg.CommandStationID,
 			Kind:             cs.Kind,
+			SpeedSteps:       cs.SpeedSteps,
 		})
 		if err != nil {
 			if metricsShutdown != nil {
@@ -254,6 +261,29 @@ func New(ctx context.Context, log *logrus.Logger, cfg Config) (*Daemon, error) {
 
 	hub := ws.NewHub()
 
+	slotMetrics, slotMetricsErr := slotlease.NewMetrics(slotlease.MetricsConfig{
+		Enabled:          cfg.EnableTelemetry && cfg.OTLPEndpoint != "",
+		LayoutID:         cfg.LayoutID,
+		CommandStationID: cfg.CommandStationID,
+	})
+	if slotMetricsErr != nil {
+		if metricsShutdown != nil {
+			_ = metricsShutdown(context.Background())
+		}
+		_ = st.CleanUp()
+		_ = rds.Close()
+		return nil, fmt.Errorf("init slot metrics: %w", slotMetricsErr)
+	}
+	if cfg.EnableTelemetry && cfg.OTLPEndpoint != "" {
+		log.Info("dcc-bus slot lease metrics enabled")
+	}
+
+	var remoteIdle time.Duration
+	remoteIdleDisabled := cfg.IdleTimeoutSecs == 0
+	if !remoteIdleDisabled {
+		remoteIdle = time.Duration(cfg.IdleTimeoutSecs) * time.Second
+	}
+
 	router, err := cmd.NewRouter(ctx, cmd.Config{
 		Station:          st,
 		Hub:              ws.HubPort(hub),
@@ -269,11 +299,26 @@ func New(ctx context.Context, log *logrus.Logger, cfg Config) (*Daemon, error) {
 		AllowedVehicles:  allowedSnap,
 		DefinedTrains:    trainSnap,
 		VehicleFunctions: fnSnap,
+		MaxVehiclesPerUser:        cfg.MaxVehiclesPerUser,
+		MaxLoconetSlots:           cfg.MaxLoconetSlots,
+		RemoteIdleTimeout:         remoteIdle,
+		RemoteIdleTimeoutDisabled: remoteIdleDisabled,
+		SlotMetrics:               slotMetrics,
 	})
 	if err != nil {
 		_ = st.CleanUp()
 		_ = rds.Close()
 		return nil, fmt.Errorf("build router: %w", err)
+	}
+
+	var slotMetricsReg metric.Registration
+	if router.SlotLeaser() != nil {
+		reg, regErr := slotMetrics.RegisterGauges(router.SlotLeaser())
+		if regErr != nil {
+			log.WithError(regErr).Warn("dcc-bus slot gauge registration failed")
+		} else {
+			slotMetricsReg = reg
+		}
 	}
 
 	verifier := auth.NewVerifier(cfg.JWTSecret, cfg.LayoutID)
@@ -309,6 +354,13 @@ func New(ctx context.Context, log *logrus.Logger, cfg Config) (*Daemon, error) {
 		DeadmanSecs:    cfg.DeadmanSecs,
 		AllowedOrigins: cfg.AllowedOrigins,
 		Metrics:        wsMetrics,
+		SlotsDiag: ws.NewSlotsDiagHandler(ws.SlotsDiagConfig{
+			Leaser:         router.SlotLeaser(),
+			Metrics:        slotMetrics,
+			Log:            log,
+			AllowedOrigins: cfg.AllowedOrigins,
+			Verifier:       verifier,
+		}),
 	})
 
 	srv := &http.Server{
@@ -327,6 +379,7 @@ func New(ctx context.Context, log *logrus.Logger, cfg Config) (*Daemon, error) {
 		metricsShutdown: metricsShutdown,
 		lnMetricsReg:    lnMetricsReg,
 		z21MetricsReg:   z21MetricsReg,
+		slotMetricsReg:  slotMetricsReg,
 	}, nil
 }
 
@@ -381,7 +434,10 @@ func (d *Daemon) Run(ctx context.Context) error {
 		return err
 	}
 
+	go d.router.RunStoreFlush(ctx)
 	go d.router.RunStateFeed(ctx)
+	go d.router.RunIdleSweep(ctx)
+	go d.router.RunReleaseWorker(ctx)
 
 	serveErr := make(chan error, 1)
 	go func() {
@@ -472,6 +528,9 @@ func (d *Daemon) startRemoteGateways(ctx context.Context) error {
 		Drive:            d.router,
 		Publisher:        d.redis,
 		Log:              d.log,
+	})
+	coordinator.RegisterOnEvict(func(key string) {
+		d.router.ReleaseHandsetSession(remotes.HandsetSessionID(key))
 	})
 	type gatewayRunner struct {
 		name   string
@@ -642,6 +701,9 @@ func (d *Daemon) Close() error {
 	}
 	if d.z21MetricsReg != nil {
 		_ = d.z21MetricsReg.Unregister()
+	}
+	if d.slotMetricsReg != nil {
+		_ = d.slotMetricsReg.Unregister()
 	}
 	if d.rds != nil {
 		_ = d.rds.Close()

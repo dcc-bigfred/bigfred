@@ -23,13 +23,15 @@ type InstrumentConfig struct {
 	LayoutID         uint
 	CommandStationID uint
 	Kind             domain.CommandStationKind
+	SpeedSteps       uint
 	Meter            metric.Meter
 }
 
 type instrumented struct {
-	inner commandstation.Station
-	hist  metric.Float64Histogram
-	base  []attribute.KeyValue
+	inner      commandstation.Station
+	hist       metric.Float64Histogram
+	base       []attribute.KeyValue
+	speedSteps uint8
 }
 
 // Wrap decorates inner with a latency histogram when cfg.Enabled.
@@ -52,9 +54,14 @@ func Wrap(inner commandstation.Station, cfg InstrumentConfig) (commandstation.St
 	if err != nil {
 		return nil, fmt.Errorf("station metrics histogram: %w", err)
 	}
+	speedSteps := cfg.SpeedSteps
+	if speedSteps == 0 {
+		speedSteps = 128
+	}
 	return &instrumented{
 		inner: inner,
 		hist:  hist,
+		speedSteps: uint8(speedSteps),
 		base: []attribute.KeyValue{
 			attribute.String("station.kind", string(cfg.Kind)),
 			attribute.Int("layout.id", int(cfg.LayoutID)),
@@ -99,6 +106,16 @@ func (w *instrumented) SetSpeed(addr commandstation.LocoAddr, speed uint8, forwa
 	a := uint16(addr)
 	return w.observe("set_speed", &a, func() error {
 		return w.inner.SetSpeed(addr, speed, forward, speedSteps)
+	})
+}
+
+func (w *instrumented) EmergencyStop(addr commandstation.LocoAddr, forward bool) error {
+	a := uint16(addr)
+	return w.observe("emergency_stop", &a, func() error {
+		if estopper, ok := w.inner.(commandstation.EmergencyStopper); ok {
+			return estopper.EmergencyStop(addr, forward)
+		}
+		return w.inner.SetSpeed(addr, 1, forward, w.speedSteps)
 	})
 }
 

@@ -80,6 +80,11 @@ func (r *Registry) SubscribeLoco(key string, addr uint16) {
 	r.inbound.SubscribeLoco(key, addr)
 }
 
+// UnsubscribeLoco removes addr from the per-client subscription FIFO.
+func (r *Registry) UnsubscribeLoco(key string, addr uint16) {
+	r.inbound.UnsubscribeLoco(key, addr)
+}
+
 // SetLastActiveLoco records the handset's current locomotive.
 func (r *Registry) SetLastActiveLoco(key string, addr uint16) {
 	r.inbound.SetLastActiveLoco(key, addr)

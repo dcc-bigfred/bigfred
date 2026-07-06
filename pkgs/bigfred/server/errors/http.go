@@ -230,6 +230,10 @@ func LayoutHTTPStatus(err error) (status int, code string) {
 		return http.StatusUnprocessableEntity, CodeSystemLayoutUndeletable
 	case stderrors.Is(err, ErrLayoutAdminPINInvalid):
 		return http.StatusUnprocessableEntity, CodeLayoutAdminPINInvalid
+	case stderrors.Is(err, ErrLayoutMaxVehiclesInvalid):
+		return http.StatusUnprocessableEntity, CodeLayoutMaxVehiclesInvalid
+	case stderrors.Is(err, ErrLayoutMaxVehiclesExceedsSlotBudget):
+		return http.StatusUnprocessableEntity, CodeLayoutMaxVehiclesExceedsSlotBudget
 	case stderrors.Is(err, ErrLayoutForbidden):
 		return http.StatusForbidden, CodeLayoutForbidden
 	default:
@@ -308,6 +312,10 @@ func CommandStationHTTPStatus(err error) (status int, code string) {
 		return http.StatusUnprocessableEntity, CodeCommandStationPollIntervalInvalid
 	case stderrors.Is(err, ErrCommandStationInboundPortConflict):
 		return http.StatusConflict, CodeCommandStationInboundPortConflict
+	case stderrors.Is(err, ErrCommandStationMaxLoconetSlotsInvalid):
+		return http.StatusUnprocessableEntity, CodeCommandStationMaxLoconetSlotsInvalid
+	case stderrors.Is(err, ErrCommandStationIdleTimeoutInvalid):
+		return http.StatusUnprocessableEntity, CodeCommandStationIdleTimeoutInvalid
 	case stderrors.Is(err, ErrLayoutNeedsAtLeastOneCommandStation):
 		return http.StatusConflict, CodeLayoutNeedsAtLeastOneCommandStation
 	default:

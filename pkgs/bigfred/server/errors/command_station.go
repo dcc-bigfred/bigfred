@@ -13,6 +13,8 @@ const (
 	CodeCommandStationDeadmanTooShort        = "command_station_deadman_too_short"
 	CodeCommandStationPollIntervalInvalid    = "command_station_poll_interval_invalid"
 	CodeCommandStationInboundPortConflict    = "command_station_inbound_port_conflict"
+	CodeCommandStationMaxLoconetSlotsInvalid  = "command_station_max_loconet_slots_invalid"
+	CodeCommandStationIdleTimeoutInvalid     = "command_station_idle_timeout_invalid"
 	CodeCommandStationForbidden              = "forbidden"
 	CodeLayoutNeedsAtLeastOneCommandStation  = "layout_needs_at_least_one_command_station"
 	CodeSystemLayoutCommandStationsImmutable = "default_layout_command_stations_immutable"
@@ -29,6 +31,8 @@ var (
 	ErrCommandStationDeadmanTooShort        = errors.New(CodeCommandStationDeadmanTooShort)
 	ErrCommandStationPollIntervalInvalid    = errors.New(CodeCommandStationPollIntervalInvalid)
 	ErrCommandStationInboundPortConflict    = errors.New(CodeCommandStationInboundPortConflict)
+	ErrCommandStationMaxLoconetSlotsInvalid = errors.New(CodeCommandStationMaxLoconetSlotsInvalid)
+	ErrCommandStationIdleTimeoutInvalid     = errors.New(CodeCommandStationIdleTimeoutInvalid)
 	ErrCommandStationForbidden              = errors.New(CodeCommandStationForbidden)
 	ErrLayoutNeedsAtLeastOneCommandStation  = errors.New(CodeLayoutNeedsAtLeastOneCommandStation)
 	ErrSystemLayoutCommandStationsImmutable = errors.New(CodeSystemLayoutCommandStationsImmutable)

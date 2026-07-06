@@ -100,3 +100,28 @@ func SanitiseCommandStationTiming(heartbeatSecs, deadmanSecs float64) (float64, 
 	}
 	return heartbeatSecs, deadmanSecs, nil
 }
+
+const (
+	maxCommandStationIdleTimeoutSecs = 3600
+)
+
+// SanitiseCommandStationMaxLoconetSlots normalises the BigFred LocoNet slot budget.
+// Zero selects the catalogue default (80).
+func SanitiseCommandStationMaxLoconetSlots(maxSlots uint) (uint, error) {
+	if maxSlots == 0 {
+		return 0, nil
+	}
+	if maxSlots > domain.MaxLocoNetPhysicalSlots-1 {
+		return 0, svcerrors.ErrCommandStationMaxLoconetSlotsInvalid
+	}
+	return maxSlots, nil
+}
+
+// SanitiseCommandStationIdleTimeoutSecs validates the remote idle window.
+// Zero means disabled.
+func SanitiseCommandStationIdleTimeoutSecs(secs uint) error {
+	if secs > maxCommandStationIdleTimeoutSecs {
+		return svcerrors.ErrCommandStationIdleTimeoutInvalid
+	}
+	return nil
+}

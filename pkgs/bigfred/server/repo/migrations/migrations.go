@@ -111,6 +111,8 @@ func register(m *migrator.Migrator) {
 	m.Register(migrationVersion(20260625, 2), addCommandStationZ21IPStickinessColumnUp, addCommandStationZ21IPStickinessColumnDown)
 	m.Register(migrationVersion(20260626, 1), addCommandStationZ21InboundPortColumnUp, addCommandStationZ21InboundPortColumnDown)
 	m.Register(migrationVersion(20260627, 1), addCommandStationWithrottleColumnsUp, addCommandStationWithrottleColumnsDown)
+	m.Register(migrationVersion(20260629, 1), addLayoutMaxVehiclesPerUserColumnUp, addLayoutMaxVehiclesPerUserColumnDown)
+	m.Register(migrationVersion(20260629, 2), addCommandStationSlotLeaseColumnsUp, addCommandStationSlotLeaseColumnsDown)
 }
 
 // createCommandStationsUp installs the `command_stations` catalogue
@@ -773,5 +775,24 @@ func addCommandStationWithrottleColumnsUp(s *rel.Schema) {
 }
 
 func addCommandStationWithrottleColumnsDown(s *rel.Schema) {
+	// SQLite cannot DROP COLUMN in older schemas; leave columns in place.
+}
+
+// addLayoutMaxVehiclesPerUserColumnUp stores the per-user driven-vehicle cap (D6).
+func addLayoutMaxVehiclesPerUserColumnUp(s *rel.Schema) {
+	s.Exec(rel.Raw(`ALTER TABLE layouts ADD COLUMN max_vehicles_per_user INTEGER NOT NULL DEFAULT 8`))
+}
+
+func addLayoutMaxVehiclesPerUserColumnDown(s *rel.Schema) {
+	// SQLite cannot DROP COLUMN in older schemas; leave columns in place.
+}
+
+// addCommandStationSlotLeaseColumnsUp stores LocoNet slot budget and remote idle timeout.
+func addCommandStationSlotLeaseColumnsUp(s *rel.Schema) {
+	s.Exec(rel.Raw(`ALTER TABLE command_stations ADD COLUMN max_loconet_slots INTEGER NOT NULL DEFAULT 80`))
+	s.Exec(rel.Raw(`ALTER TABLE command_stations ADD COLUMN idle_timeout_secs INTEGER NOT NULL DEFAULT 60`))
+}
+
+func addCommandStationSlotLeaseColumnsDown(s *rel.Schema) {
 	// SQLite cannot DROP COLUMN in older schemas; leave columns in place.
 }

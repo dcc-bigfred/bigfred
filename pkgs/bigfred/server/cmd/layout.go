@@ -136,6 +136,8 @@ type LayoutCreateInput struct {
 	// a usable PIN until the admin rotates it. Must satisfy
 	// validateLayoutAdminPIN when non-empty.
 	AdminPIN string
+	// MaxVehiclesPerUser caps driven vehicles per user. Zero selects default.
+	MaxVehiclesPerUser uint
 }
 
 // Create inserts a brand-new non-system layout. Name uniqueness and
@@ -173,6 +175,10 @@ func (s *Layout) Create(ctx context.Context, eff domain.EffectiveRoles, in Layou
 	if err := validation.ValidateLayoutAdminPIN(pin); err != nil {
 		return domain.Layout{}, err
 	}
+	maxVehicles, err := validation.SanitiseLayoutMaxVehiclesPerUser(in.MaxVehiclesPerUser)
+	if err != nil {
+		return domain.Layout{}, err
+	}
 	hash, err := helpers.HashPIN(pin)
 	if err != nil {
 		return domain.Layout{}, err
@@ -183,9 +189,10 @@ func (s *Layout) Create(ctx context.Context, eff domain.EffectiveRoles, in Layou
 		Name:         name,
 		IsSystem:     false,
 		Locked:       false,
-		CreatedBy:    in.CreatedBy,
-		AdminPINHash: hash,
-		CreatedAt:    now,
+		CreatedBy:          in.CreatedBy,
+		AdminPINHash:       hash,
+		MaxVehiclesPerUser: maxVehicles,
+		CreatedAt:          now,
 		UpdatedAt:    now,
 	}
 	if err := s.layouts.Insert(ctx, &layout); err != nil {
@@ -197,7 +204,66 @@ func (s *Layout) Create(ctx context.Context, eff domain.EffectiveRoles, in Layou
 	if err := s.setCommandStations(ctx, layout.ID, in.CreatedBy, in.CommandStationIDs); err != nil {
 		return domain.Layout{}, err
 	}
+	if err := s.validateMaxVehiclesAgainstLayoutCS(ctx, layout.ID, layout.EffectiveMaxVehiclesPerUser()); err != nil {
+		return domain.Layout{}, err
+	}
 	return layout, nil
+}
+
+// UpdateMaxVehiclesPerUser sets the per-user driven-vehicle cap for a layout.
+func (s *Layout) UpdateMaxVehiclesPerUser(ctx context.Context, eff domain.EffectiveRoles, id uint, max uint) (domain.Layout, error) {
+	if err := s.checkManageLayouts(eff); err != nil {
+		return domain.Layout{}, err
+	}
+	maxVehicles, err := validation.SanitiseLayoutMaxVehiclesPerUser(max)
+	if err != nil {
+		return domain.Layout{}, err
+	}
+	layout, err := s.Get(ctx, id)
+	if err != nil {
+		return domain.Layout{}, err
+	}
+	effective := maxVehicles
+	if effective == 0 {
+		effective = domain.DefaultLayoutMaxVehiclesPerUser
+	}
+	if err := s.validateMaxVehiclesAgainstLayoutCS(ctx, id, effective); err != nil {
+		return domain.Layout{}, err
+	}
+	layout.MaxVehiclesPerUser = maxVehicles
+	layout.UpdatedAt = time.Now().UTC()
+	if err := s.layouts.Update(ctx, &layout); err != nil {
+		return domain.Layout{}, err
+	}
+	return layout, nil
+}
+
+func (s *Layout) validateMaxVehiclesAgainstLayoutCS(ctx context.Context, layoutID uint, maxVehicles uint) error {
+	csIDs, err := s.layoutCommandStations.CommandStationIDsForLayout(ctx, layoutID)
+	if err != nil {
+		return err
+	}
+	if len(csIDs) == 0 {
+		return nil
+	}
+	minSlots := uint(0)
+	for _, csID := range csIDs {
+		cs, err := s.commandStations.FindByID(ctx, csID)
+		if err != nil {
+			return err
+		}
+		if !cs.Kind.IsLocoNet() {
+			continue
+		}
+		slots := cs.EffectiveMaxLoconetSlots()
+		if minSlots == 0 || slots < minSlots {
+			minSlots = slots
+		}
+	}
+	if minSlots > 0 && maxVehicles > minSlots {
+		return svcerrors.ErrLayoutMaxVehiclesExceedsSlotBudget
+	}
+	return nil
 }
 
 // UpdateAdminPIN rotates the layout's admin PIN.

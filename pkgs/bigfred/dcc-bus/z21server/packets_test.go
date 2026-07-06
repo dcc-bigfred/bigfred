@@ -34,6 +34,61 @@ func TestParseSetLocoDriveZ21AppPacket(t *testing.T) {
 	}
 }
 
+// TestDriveSpeedEncodeDecodeRoundtrip confirms parseSetLocoDrive returns
+// payload/UI speed (Fix S2): the same encoding used when replying with
+// buildLocoInfoReply must round-trip through decodeDriveDB3.
+func TestDriveSpeedEncodeDecodeRoundtrip(t *testing.T) {
+	t.Parallel()
+	proto := byte(3) // 128-step LocoNet-style encoding
+	for _, payload := range []uint8{0, 1, 2, 10, 127} {
+		payload := payload
+		t.Run("", func(t *testing.T) {
+			t.Parallel()
+			db3 := encodeDriveDB3(payload, true, proto)
+			got, forward := decodeDriveDB3(proto, db3)
+			if !forward {
+				t.Fatal("forward bit lost")
+			}
+			if got != payload {
+				t.Fatalf("payload %d: decode = %d", payload, got)
+			}
+		})
+	}
+}
+
+// TestDriveSpeed28StepBoundary confirms the Z21 28-step encoding maps stop to
+// payload 0 and preserves moving steps without exceeding the 28-step range.
+// The 28-step DB3 encoding is lossy (raw<=1 → stop, raw<=3 → step 1, else raw-3).
+func TestDriveSpeed28StepBoundary(t *testing.T) {
+	t.Parallel()
+	proto := byte(2) // 28-step
+	db3 := encodeDriveDB3(0, true, proto)
+	got, _ := decodeDriveDB3(proto, db3)
+	if got != 0 {
+		t.Fatalf("28-step payload 0: decode = %d, want 0", got)
+	}
+	// Payload 1 is the first moving notch in 28-step mode.
+	db3 = encodeDriveDB3(1, true, proto)
+	got, _ = decodeDriveDB3(proto, db3)
+	if got != 1 {
+		t.Fatalf("28-step payload 1: decode = %d, want 1 (first notch)", got)
+	}
+	for _, payload := range []uint8{2, 3, 10, 28} {
+		payload := payload
+		t.Run("", func(t *testing.T) {
+			t.Parallel()
+			db3 := encodeDriveDB3(payload, true, proto)
+			got, _ := decodeDriveDB3(proto, db3)
+			if got == 0 {
+				t.Fatalf("28-step payload %d: decode = 0, want moving step", payload)
+			}
+			if got > 28 {
+				t.Fatalf("28-step payload %d: decode = %d, exceeds 28", payload, got)
+			}
+		})
+	}
+}
+
 func TestParseSetLocoFunctionZ21AppPacket(t *testing.T) {
 	t.Parallel()
 	pkt := mustHex(t, "0a004000e4f8001f5152")

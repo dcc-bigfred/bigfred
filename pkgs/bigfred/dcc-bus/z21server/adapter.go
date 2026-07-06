@@ -14,9 +14,10 @@ import (
 
 // Responder sends Z21 LAN replies to one handset client.
 type Responder struct {
-	client     *Client
-	server     *Server
-	subscribed map[uint16]struct{}
+	client         *Client
+	server         *Server
+	subscribed     map[uint16]struct{}
+	subscribeOrder []uint16
 }
 
 var _ remotes.ThrottleResponder = (*Responder)(nil)
@@ -32,9 +33,43 @@ func NewResponder(server *Server, client *Client) *Responder {
 
 func (r *Responder) Subscribe(addrs ...uint16) {
 	for _, addr := range addrs {
+		if _, ok := r.subscribed[addr]; ok {
+			continue
+		}
 		r.subscribed[addr] = struct{}{}
+		r.subscribeOrder = append(r.subscribeOrder, addr)
 		r.server.registry.SubscribeLoco(r.client.Key, addr)
 	}
+}
+
+func (r *Responder) Unsubscribe(addrs ...uint16) {
+	for _, addr := range addrs {
+		if _, ok := r.subscribed[addr]; !ok {
+			continue
+		}
+		delete(r.subscribed, addr)
+		r.subscribeOrder = removeSubscribeOrder(r.subscribeOrder, addr)
+		r.server.registry.UnsubscribeLoco(r.client.Key, addr)
+	}
+}
+
+func (r *Responder) OldestSubscribed() (uint16, bool) {
+	for _, addr := range r.subscribeOrder {
+		if _, ok := r.subscribed[addr]; ok {
+			return addr, true
+		}
+	}
+	return 0, false
+}
+
+func removeSubscribeOrder(order []uint16, addr uint16) []uint16 {
+	out := order[:0]
+	for _, a := range order {
+		if a != addr {
+			out = append(out, a)
+		}
+	}
+	return out
 }
 
 func (r *Responder) SubscribedAddrs() []uint16 {
@@ -78,6 +113,7 @@ func (a *Adapter) throttleActor(client *Client) remotes.ThrottleActor {
 	return remotes.ThrottleActor{
 		UserID:    userID,
 		SessionID: remotes.HandsetSessionID(client.Key),
+		Source:    "z21",
 	}
 }
 

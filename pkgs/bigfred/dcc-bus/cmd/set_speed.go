@@ -7,6 +7,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/keskad/loco/pkgs/bigfred/contract"
+	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/service"
 	"github.com/keskad/loco/pkgs/loco/commandstation"
 )
 
@@ -39,24 +40,41 @@ func (r *Router) applyMemberSetSpeed(
 	emergency bool,
 	source string,
 ) error {
+	// Reserve a BigFred slot lease for the driver. The LocoNet driver acquires
+	// the physical slot itself inside SetSpeed below; Reserve only records the
+	// holder so per-user cap, budget, switcher-change and diagnostics apply to
+	// throttle UI drive (which no longer sends an explicit loco.select).
+	if _, err := r.leaser.Reserve(actor.UserID, actor.SessionID, "ws", addr); err != nil {
+		return err
+	}
 	if err := r.dcc.SetSpeed(addr, speed, forward, emergency); err != nil {
 		if stderrors.Is(err, commandstation.ErrSpeedSuperseded) {
 			return nil
 		}
-		r.forceRevalidateSlot(addr)
-		if retryErr := r.dcc.SetSpeed(addr, speed, forward, emergency); retryErr != nil {
-			if stderrors.Is(retryErr, commandstation.ErrSpeedSuperseded) {
-				return nil
+		if commandstation.IsSlotAcquireError(err) {
+			r.forceRevalidateSlot(addr)
+			if retryErr := r.dcc.SetSpeed(addr, speed, forward, emergency); retryErr != nil {
+				if stderrors.Is(retryErr, commandstation.ErrSpeedSuperseded) {
+					return nil
+				}
+				fields := r.stationLogFields()
+				fields["addr"] = addr
+				fields["speed"] = speed
+				fields["forward"] = forward
+				fields["emergency"] = emergency
+				r.log.WithError(retryErr).WithFields(fields).Warn("dcc-bus command station SetSpeed failed")
+				return retryErr
 			}
+			r.log.WithField("addr", addr).Debug("dcc-bus SetSpeed succeeded after slot revalidate")
+		} else {
 			fields := r.stationLogFields()
 			fields["addr"] = addr
 			fields["speed"] = speed
 			fields["forward"] = forward
 			fields["emergency"] = emergency
-			r.log.WithError(retryErr).WithFields(fields).Warn("dcc-bus command station SetSpeed failed")
-			return retryErr
+			r.log.WithError(err).WithFields(fields).Warn("dcc-bus command station SetSpeed failed")
+			return err
 		}
-		r.log.WithField("addr", addr).Debug("dcc-bus SetSpeed succeeded after slot revalidate")
 	}
 	r.log.WithFields(logrus.Fields{
 		"addr":    addr,
@@ -64,7 +82,7 @@ func (r *Router) applyMemberSetSpeed(
 		"forward": forward,
 	}).Debug("dcc-bus command station SetSpeed ok")
 
-	snap := r.store.SetSpeed(addr, speed, forward, actor.UserID, source)
+	snap := r.store.SetSpeed(addr, contract.UISpeedFromWire(service.WireSpeedFromPayload(speed, emergency)), forward, actor.UserID, source)
 	r.broadcastLocoState(ctx, snap)
 	return nil
 }

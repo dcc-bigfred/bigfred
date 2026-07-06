@@ -13,6 +13,7 @@ import (
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/security"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/service"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/service/station"
+	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/slotlease"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/state"
 	"github.com/keskad/loco/pkgs/bigfred/remotes"
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
@@ -59,6 +60,11 @@ type Router struct {
 
 	store *state.LocoStateStore
 
+	leaser *slotlease.Leaser
+
+	maxVehiclesPerUser int
+	slotMetrics        slotlease.Recorder
+
 	shutdownOnce sync.Once
 	bootStopMu   sync.Mutex
 	bootStopDone bool
@@ -80,6 +86,11 @@ type Config struct {
 	StationURI       string
 	SpeedSteps       uint
 	PollIntervalMs   uint
+	MaxVehiclesPerUser int
+	MaxLoconetSlots    int // 0 = default 80 when the station supports slots
+	RemoteIdleTimeout         time.Duration
+	RemoteIdleTimeoutDisabled bool
+	SlotMetrics               slotlease.Recorder
 }
 
 // NewRouter assembles the router and seeds roster caches from Redis.
@@ -112,8 +123,12 @@ func NewRouter(_ context.Context, cfg Config) (*Router, error) {
 		pulseActive:   make(map[service.FnKey]bool, 8),
 		locoObservers: remotes.NewLocoStateNotifier(),
 		store:         state.NewLocoStateStore(cfg.Redis, StateTTL, log),
+		maxVehiclesPerUser: cfg.MaxVehiclesPerUser,
+		slotMetrics:        slotlease.RecorderOrNoop(cfg.SlotMetrics),
 	}
 	r.dcc.LogFields = r.stationLogFields
+	r.reconcileBootSlots(cfg)
+	r.initLeaser(cfg)
 	if cfg.AllowedVehicles.LayoutID == 0 || cfg.AllowedVehicles.LayoutID == cfg.LayoutID {
 		if r.roster.ApplySnapshot(cfg.AllowedVehicles) {
 			r.store.LoadMissingFromRedis(context.Background(), r.roster.AllowedAddrs())
@@ -292,4 +307,108 @@ func maxInt(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func (r *Router) initLeaser(cfg Config) {
+	var slotSta slotlease.SlotStation
+	maxSlots := 0
+	if sm, ok := station.AsSlotManager(cfg.Station); ok {
+		slotSta = sm
+		maxSlots = cfg.MaxLoconetSlots
+		if maxSlots <= 0 {
+			maxSlots = 80
+		}
+	}
+	r.leaser = slotlease.New(
+		slotSta,
+		r.dcc,
+		r.store,
+		leaseHub{hub: r.hub},
+		r.leaseDriveGate,
+		slotlease.Config{
+			MaxPerUser:          cfg.MaxVehiclesPerUser,
+			MaxSlots:            maxSlots,
+			IdleTimeout:         cfg.RemoteIdleTimeout,
+			IdleTimeoutDisabled: cfg.RemoteIdleTimeoutDisabled,
+			Metrics:             cfg.SlotMetrics,
+		},
+	)
+	// Attach the leaser as a slot observer so the driver reports IN_USE /
+	// release events for slots it acquires (and master-purges). This keeps the
+	// leaser's lease table in sync with the physical slot table even when a
+	// drive arrives via SetSpeed without an explicit loco.select.
+	if obs, ok := station.AsSlotObservable(cfg.Station); ok {
+		obs.SetSlotObserver(r.leaser)
+	}
+}
+
+// SlotLeaser exposes the slot leaser for admin diagnostics.
+func (r *Router) SlotLeaser() *slotlease.Leaser {
+	if r == nil {
+		return nil
+	}
+	return r.leaser
+}
+
+func (r *Router) reconcileBootSlots(cfg Config) {
+	reconciler, ok := station.AsBootSlotReconciler(cfg.Station)
+	if !ok {
+		return
+	}
+	roster := make(map[commandstation.LocoAddr]struct{}, len(cfg.AllowedVehicles.Vehicles))
+	for _, v := range cfg.AllowedVehicles.Vehicles {
+		roster[commandstation.LocoAddr(v.Addr)] = struct{}{}
+	}
+	if len(roster) == 0 {
+		return
+	}
+	if err := reconciler.ReconcileBootSlots(roster); err != nil {
+		r.log.WithError(err).Warn("dcc-bus boot slot reconciliation failed")
+		return
+	}
+	r.log.WithField("rosterAddrs", len(roster)).Info("dcc-bus boot slot reconciliation complete")
+}
+
+// RunIdleSweep periodically releases remote-only leases past idleTimeout.
+func (r *Router) RunIdleSweep(ctx context.Context) {
+	if r == nil || r.leaser == nil {
+		return
+	}
+	interval := 15 * time.Second
+	if idle := r.leaser.IdleTimeout(); idle > 0 {
+		interval = idle / 4
+		if interval > 15*time.Second {
+			interval = 15 * time.Second
+		}
+		if interval < time.Second {
+			interval = time.Second
+		}
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case now := <-ticker.C:
+			r.leaser.SweepIdle(now)
+			r.leaser.SweepDeferred(now)
+		}
+	}
+}
+
+func (r *Router) leaseDriveGate(userID uint, addr uint16) error {
+	vehicle, onLayout := r.roster.AllowedVehicle(addr)
+	if d := r.drive.CanDrive(userID, vehicle, onLayout); !d.Allowed {
+		return slotlease.ErrNotAllowed
+	}
+	return nil
+}
+
+type leaseHub struct {
+	hub HubPort
+}
+
+func (h leaseHub) BroadcastLocoState(ctx context.Context, snap contract.LocoStateWire) {
+	service.BroadcastLocoState(ctx, h.hub, snap)
 }

@@ -37,7 +37,9 @@ type Session struct {
 	sendCh      chan contract.EnvelopeWire
 	sendDrop    atomic.Uint64
 	metrics     *Metrics
-	subscribed  map[uint16]struct{}
+	subscribed     map[uint16]struct{}
+	subscribeOrder []uint16
+	selected       uint16 // active WS drive target; 0 = none
 	lastBeat    time.Time
 	closed      bool
 	closeReason string
@@ -97,7 +99,11 @@ func (s *Session) Subscribe(addrs ...uint16) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, a := range addrs {
+		if _, ok := s.subscribed[a]; ok {
+			continue
+		}
 		s.subscribed[a] = struct{}{}
+		s.subscribeOrder = append(s.subscribeOrder, a)
 	}
 }
 
@@ -106,8 +112,34 @@ func (s *Session) Unsubscribe(addrs ...uint16) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, a := range addrs {
+		if _, ok := s.subscribed[a]; !ok {
+			continue
+		}
 		delete(s.subscribed, a)
+		s.subscribeOrder = removeSubscribeOrder(s.subscribeOrder, a)
 	}
+}
+
+// OldestSubscribed returns the FIFO-first subscribed address, if any.
+func (s *Session) OldestSubscribed() (uint16, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, a := range s.subscribeOrder {
+		if _, ok := s.subscribed[a]; ok {
+			return a, true
+		}
+	}
+	return 0, false
+}
+
+func removeSubscribeOrder(order []uint16, addr uint16) []uint16 {
+	out := order[:0]
+	for _, a := range order {
+		if a != addr {
+			out = append(out, a)
+		}
+	}
+	return out
 }
 
 // SubscribedAddrs returns the current subscription set.
@@ -128,6 +160,27 @@ func (s *Session) IsSubscribed(addr uint16) bool {
 	defer s.mu.Unlock()
 	_, ok := s.subscribed[addr]
 	return ok
+}
+
+// SelectedAddr returns the session's active drive target, or 0.
+func (s *Session) SelectedAddr() uint16 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.selected
+}
+
+// SetSelected records the active drive target for switcher tracking.
+func (s *Session) SetSelected(addr uint16) {
+	s.mu.Lock()
+	s.selected = addr
+	s.mu.Unlock()
+}
+
+// ClearSelected clears the active drive target.
+func (s *Session) ClearSelected() {
+	s.mu.Lock()
+	s.selected = 0
+	s.mu.Unlock()
 }
 
 // Touch resets the dead-man's switch timer.

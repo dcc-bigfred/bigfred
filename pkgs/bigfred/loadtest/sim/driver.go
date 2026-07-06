@@ -18,6 +18,7 @@ const maxFunction = uint8(28) // LocoNet driver supports F0–F28
 
 // Bus is the subset of dcc-bus operations the simulator needs.
 type Bus interface {
+	Select(ctx context.Context, address uint16) error
 	SetSpeed(ctx context.Context, address uint16, speed uint8, forward bool) error
 	SetFunction(ctx context.Context, address uint16, fn uint8, on bool) error
 }
@@ -121,6 +122,9 @@ func (d *Driver) runLoco(ctx context.Context, loco httpapi.Loco) error {
 	}
 
 	forward := true
+	if err := d.bus.Select(ctx, loco.Address); err != nil {
+		return fmt.Errorf("loco.select: %w", err)
+	}
 	if err := d.bus.SetSpeed(ctx, loco.Address, d.cfg.MaxSpeed, forward); err != nil {
 		return fmt.Errorf("set initial speed: %w", err)
 	}

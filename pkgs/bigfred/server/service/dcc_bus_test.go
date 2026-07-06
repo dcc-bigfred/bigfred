@@ -16,7 +16,7 @@ func TestProgramNameDeterministic(t *testing.T) {
 }
 
 func TestPortAllocationExhausts(t *testing.T) {
-	d := NewDccBusService(DccBusConfig{PortMin: 9200, PortMax: 9201}, nil, nil, nil, nil)
+	d := NewDccBusService(DccBusConfig{PortMin: 9200, PortMax: 9201}, nil, nil, nil, nil, nil)
 
 	p1, err := d.allocatePortLocked(1, 1)
 	if err != nil {
@@ -38,7 +38,7 @@ func TestPortAllocationExhausts(t *testing.T) {
 }
 
 func TestPortForReportsCachedAllocation(t *testing.T) {
-	d := NewDccBusService(DccBusConfig{PortMin: 9300, PortMax: 9309}, nil, nil, nil, nil)
+	d := NewDccBusService(DccBusConfig{PortMin: 9300, PortMax: 9309}, nil, nil, nil, nil, nil)
 	if _, err := d.allocatePortLocked(7, 3); err != nil {
 		t.Fatalf("alloc: %v", err)
 	}

@@ -41,6 +41,11 @@ func (k CommandStationKind) IsValid() bool {
 	return false
 }
 
+// IsLocoNet reports whether the kind uses LocoNet slot leasing.
+func (k CommandStationKind) IsLocoNet() bool {
+	return k == CommandStationKindLocoNetSerial || k == CommandStationKindLocoNetTCP
+}
+
 // CommandStation is one physical DCC command station the system can
 // drive (§7e.1). One station may be attached to several layouts
 // (modelers commonly share a single Z21 between rooms) — see
@@ -91,8 +96,13 @@ type CommandStation struct {
 	// WithrottleHeartbeatSecs is the dead-man heartbeat window advertised to
 	// WiThrottle clients. Zero selects the default (10).
 	WithrottleHeartbeatSecs float64 `db:"withrottle_heartbeat_secs"`
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
+	// MaxLoconetSlots caps how many LocoNet slots BigFred may lease (D14).
+	MaxLoconetSlots uint `db:"max_loconet_slots"`
+	// IdleTimeoutSecs is the remote-handset idle window before SweepIdle
+	// releases the slot. Zero disables idle release.
+	IdleTimeoutSecs uint `db:"idle_timeout_secs"`
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
 }
 
 // Table tells REL which physical table backs this struct.
@@ -107,6 +117,9 @@ const (
 	DefaultWithrottleInboundPort      = 12090
 	DefaultWithrottlePairingAddr      = 10239
 	DefaultWithrottleHeartbeatSecs    = 10
+	DefaultCommandStationMaxLoconetSlots = 80
+	DefaultCommandStationIdleTimeoutSecs = 60
+	MaxLocoNetPhysicalSlots              = 117
 )
 
 // EffectiveSpeedSteps returns the catalogue DCC speed-step count, applying
@@ -181,6 +194,14 @@ func (cs CommandStation) EffectiveWithrottleHeartbeatSecs() float64 {
 		return DefaultWithrottleHeartbeatSecs
 	}
 	return cs.WithrottleHeartbeatSecs
+}
+
+// EffectiveMaxLoconetSlots returns the BigFred slot budget for LocoNet stations.
+func (cs CommandStation) EffectiveMaxLoconetSlots() uint {
+	if cs.MaxLoconetSlots == 0 {
+		return DefaultCommandStationMaxLoconetSlots
+	}
+	return cs.MaxLoconetSlots
 }
 
 // LayoutCommandStation is the join row binding a CommandStation to a

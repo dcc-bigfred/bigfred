@@ -33,6 +33,8 @@ import {
 import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
+import MonitorHeartIcon from "@mui/icons-material/MonitorHeart";
+import { Link as RouterLink } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
 import { ApiError } from "../../api/client";
@@ -47,9 +49,15 @@ import {
   DEFAULT_COMMAND_STATION_HEARTBEAT_SECS,
   DEFAULT_COMMAND_STATION_POLL_INTERVAL_MS,
   DEFAULT_COMMAND_STATION_SPEED_STEPS,
+  DEFAULT_COMMAND_STATION_MAX_LOCONET_SLOTS,
+  DEFAULT_COMMAND_STATION_IDLE_TIMEOUT_SECS,
   type CommandStation,
   type CommandStationKind,
 } from "../../api/command_stations";
+
+function isLoconetKind(kind: CommandStationKind): boolean {
+  return kind === "loconet_serial" || kind === "loconet_tcp";
+}
 
 export default function CommandStationsPage() {
   const { t } = useTranslation(["commandStation", "common", "errors"]);
@@ -84,6 +92,12 @@ export default function CommandStationsPage() {
   const [z21IpStickinessInput, setZ21IpStickinessInput] = useState(false);
   const [withrottleServerEnabledInput, setWithrottleServerEnabledInput] =
     useState(false);
+  const [maxLoconetSlotsInput, setMaxLoconetSlotsInput] = useState<number>(
+    DEFAULT_COMMAND_STATION_MAX_LOCONET_SLOTS,
+  );
+  const [idleTimeoutSecsInput, setIdleTimeoutSecsInput] = useState<number>(
+    DEFAULT_COMMAND_STATION_IDLE_TIMEOUT_SECS,
+  );
   const [actionError, setActionError] = useState<string | null>(null);
 
   const closeDialog = () => {
@@ -98,6 +112,8 @@ export default function CommandStationsPage() {
     setZ21ServerEnabledInput(false);
     setZ21IpStickinessInput(false);
     setWithrottleServerEnabledInput(false);
+    setMaxLoconetSlotsInput(DEFAULT_COMMAND_STATION_MAX_LOCONET_SLOTS);
+    setIdleTimeoutSecsInput(DEFAULT_COMMAND_STATION_IDLE_TIMEOUT_SECS);
     setActionError(null);
     create.reset();
     update.reset();
@@ -125,6 +141,8 @@ export default function CommandStationsPage() {
     setZ21ServerEnabledInput(false);
     setZ21IpStickinessInput(false);
     setWithrottleServerEnabledInput(false);
+    setMaxLoconetSlotsInput(DEFAULT_COMMAND_STATION_MAX_LOCONET_SLOTS);
+    setIdleTimeoutSecsInput(DEFAULT_COMMAND_STATION_IDLE_TIMEOUT_SECS);
     setActionError(null);
   };
 
@@ -140,6 +158,12 @@ export default function CommandStationsPage() {
     setZ21ServerEnabledInput(target.z21ServerEnabled);
     setZ21IpStickinessInput(target.z21IpStickiness);
     setWithrottleServerEnabledInput(target.withrottleServerEnabled);
+    setMaxLoconetSlotsInput(
+      target.maxLoconetSlots ?? DEFAULT_COMMAND_STATION_MAX_LOCONET_SLOTS,
+    );
+    setIdleTimeoutSecsInput(
+      target.idleTimeoutSecs ?? DEFAULT_COMMAND_STATION_IDLE_TIMEOUT_SECS,
+    );
     setActionError(null);
   };
 
@@ -162,6 +186,10 @@ export default function CommandStationsPage() {
         z21ServerEnabled: z21ServerEnabledInput,
         z21IpStickiness: z21ServerEnabledInput ? z21IpStickinessInput : false,
         withrottleServerEnabled: withrottleServerEnabledInput,
+        idleTimeoutSecs: idleTimeoutSecsInput,
+        ...(isLoconetKind(kindInput)
+          ? { maxLoconetSlots: maxLoconetSlotsInput }
+          : {}),
       };
       if (dialog.kind === "create") {
         await create.mutateAsync(body);
@@ -278,6 +306,16 @@ export default function CommandStationsPage() {
                           spacing={0.5}
                           justifyContent="flex-end"
                         >
+                          <Tooltip title={t("commandStation:admin.actions.slotsDiag")}>
+                            <IconButton
+                              size="small"
+                              component={RouterLink}
+                              to={`/admin/dcc-bus/slots?cs=${row.id}`}
+                              aria-label={t("commandStation:admin.actions.slotsDiag")}
+                            >
+                              <MonitorHeartIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
                           <Tooltip title={t("commandStation:admin.actions.edit")}>
                             <IconButton
                               size="small"
@@ -410,6 +448,35 @@ export default function CommandStationsPage() {
               inputProps={{ min: 3, max: 120, step: 0.5 }}
               fullWidth
               required
+            />
+            {isLoconetKind(kindInput) && (
+              <TextField
+                label={t("commandStation:admin.dialogs.fields.maxLoconetSlots")}
+                type="number"
+                value={maxLoconetSlotsInput}
+                onChange={(e) =>
+                  setMaxLoconetSlotsInput(Number(e.target.value))
+                }
+                helperText={t(
+                  "commandStation:admin.dialogs.fields.maxLoconetSlotsHelp",
+                )}
+                inputProps={{ min: 1, max: 116, step: 1 }}
+                fullWidth
+                required
+              />
+            )}
+            <TextField
+              label={t("commandStation:admin.dialogs.fields.idleTimeoutSecs")}
+              type="number"
+              value={idleTimeoutSecsInput}
+              onChange={(e) =>
+                setIdleTimeoutSecsInput(Number(e.target.value))
+              }
+              helperText={t(
+                "commandStation:admin.dialogs.fields.idleTimeoutSecsHelp",
+              )}
+              inputProps={{ min: 0, max: 3600, step: 1 }}
+              fullWidth
             />
             <FormControlLabel
               control={

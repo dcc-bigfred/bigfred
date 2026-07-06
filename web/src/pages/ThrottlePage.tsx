@@ -597,6 +597,8 @@ function ConnectedThrottle({
   );
   const {
     subscribe,
+    select,
+    selectTrain,
     status,
     states,
     lastError,
@@ -636,6 +638,23 @@ function ConnectedThrottle({
     if (subscribeAddrs.length === 0 || status !== "open") return;
     void subscribe(subscribeAddrs);
   }, [subscribeAddrs, subscribe, rosterAddrKey, status]);
+
+  // Reserve the command-station slot for the active drive target on switch
+  // (driver-only model). The backend defers the previous slot's release by
+  // the switcher grace window so A→B→A reuses A's slot. SetSpeed also
+  // reserves, but sending select up front guarantees the slot before the
+  // first throttle move and lets diag show the lease immediately.
+  useEffect(() => {
+    if (status !== "open") return;
+    if (isTrainMode) {
+      if (selectedTarget?.kind === "train") {
+        void selectTrain(selectedTarget.trainId);
+      }
+      return;
+    }
+    if (selectedAddr == null) return;
+    void select(selectedAddr);
+  }, [select, selectTrain, status, selectedAddr, isTrainMode, selectedTarget]);
 
   // Picking a loco in the select box re-fetches its live state from the
   // dcc-bus websocket: the daemon answers loco.subscribe with the current

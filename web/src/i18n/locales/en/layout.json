@@ -59,6 +59,10 @@
         "message": "A locked layout disappears from the login screen, but live sessions stay open. You can unlock it again at any time."
       }
     },
+    "fields": {
+      "maxVehiclesPerUser": "Vehicles per user",
+      "maxVehiclesPerUserHelp": "Maximum concurrently driven locos per user (slots and subscriptions). Default 8."
+    },
     "empty": "There are no layouts to display."
   }
 }

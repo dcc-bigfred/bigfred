@@ -16,7 +16,8 @@
     "actions": {
       "create": "New command station",
       "edit": "Edit",
-      "delete": "Delete"
+      "delete": "Delete",
+      "slotsDiag": "Slot diagnostics"
     },
     "kind": {
       "z21": "Z21 (UDP)",
@@ -54,9 +55,42 @@
         "z21ServerDisableWarn": "Disabling the server stops new pairings. Active handset sessions stop working after the dcc-bus daemon restarts.",
         "withrottleServerEnabled": "WiThrottle server",
         "withrottleServerEnabledHelp": "Engine Driver and WiThrottle apps connect to the dcc-bus host on TCP port 12090. Pairing uses a 6-digit code via the sentinel loco or Device Name (N).",
-        "withrottleServerDisableWarn": "Disabling the server stops new pairings. Active WiThrottle sessions stop working after the dcc-bus daemon restarts."
+        "withrottleServerDisableWarn": "Disabling the server stops new pairings. Active WiThrottle sessions stop working after the dcc-bus daemon restarts.",
+        "maxLoconetSlots": "LocoNet slot budget",
+        "maxLoconetSlotsHelp": "How many slots BigFred may lease on this command station; the rest stay free for physical throttles. Default 80.",
+        "idleTimeoutSecs": "Remote idle timeout (s)",
+        "idleTimeoutSecsHelp": "After this idle period a remote handset (Z21/WiThrottle) loses its slot. 0 disables idle release. Default 60 s."
       }
     },
-    "empty": "No command stations to show."
+    "empty": "No command stations to show.",
+    "slotsDiag": {
+      "title": "DCC-Bus slot diagnostics",
+      "subtitle": "Live LocoNet slot leases, per-user caps, and FRED headroom. Read-only.",
+      "back": "Command stations",
+      "station": "Command station",
+      "live": "Live",
+      "stale": "Stale",
+      "disconnected": "Disconnected",
+      "reconnecting": "Reconnecting…",
+      "budgetTitle": "Slot budget",
+      "budgetUsed": "{{used}} / {{max}} leased ({{headroom}} free for FREDs)",
+      "unlimitedSlots": "{{used}} active leases (no LocoNet budget on this station)",
+      "maxPerUser": "max {{n}} vehicles / user",
+      "perUserTitle": "Per-user driven vehicles",
+      "userId": "User",
+      "driven": "Driven",
+      "capBar": "Cap",
+      "noDrivers": "No active drivers.",
+      "tableTitle": "Leased addresses",
+      "addr": "Addr",
+      "kind": "Kind",
+      "holders": "Holders",
+      "acquired": "Acquired",
+      "flags": "Flags",
+      "noLeases": "No active slot leases.",
+      "singleKind": "Single",
+      "trainKind": "Train {{id}}",
+      "releasePending": "Release pending"
+    }
   }
 }

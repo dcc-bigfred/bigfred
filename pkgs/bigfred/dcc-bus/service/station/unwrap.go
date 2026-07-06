@@ -53,6 +53,37 @@ func AsSlotManager(s commandstation.Station) (commandstation.SlotManager, bool) 
 	return nil, false
 }
 
+// AsBootSlotReconciler returns the boot reconciler behind optional wrappers.
+func AsBootSlotReconciler(s commandstation.Station) (commandstation.BootSlotReconciler, bool) {
+	for s != nil {
+		if br, ok := s.(commandstation.BootSlotReconciler); ok {
+			return br, true
+		}
+		u, ok := s.(innerStation)
+		if !ok {
+			return nil, false
+		}
+		s = u.Inner()
+	}
+	return nil, false
+}
+
+// AsSlotObservable returns the SlotObservable behind optional wrappers so the
+// leaser can subscribe to IN_USE/release events from the driver.
+func AsSlotObservable(s commandstation.Station) (commandstation.SlotObservable, bool) {
+	for s != nil {
+		if obs, ok := s.(commandstation.SlotObservable); ok {
+			return obs, true
+		}
+		u, ok := s.(innerStation)
+		if !ok {
+			return nil, false
+		}
+		s = u.Inner()
+	}
+	return nil, false
+}
+
 // AsMetricsSource returns the MetricsSource behind optional wrappers, so the
 // telemetry layer can read driver counters even when the station is decorated.
 func AsMetricsSource(s commandstation.Station) (commandstation.MetricsSource, bool) {

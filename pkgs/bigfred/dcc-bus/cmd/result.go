@@ -5,9 +5,11 @@ import "github.com/keskad/loco/pkgs/bigfred/dcc-bus/protocol"
 // Result is the outcome of a use-case action before the WS layer maps it
 // onto ack / loco.error frames.
 type Result struct {
-	OK      bool
-	Code    string
-	Members []protocol.TrainSetSpeedMemberAck
+	OK          bool
+	Code        string
+	Members     []protocol.TrainSetSpeedMemberAck
+	EvictedAddr uint16
+	DrivenAddrs []uint16
 }
 
 // OKResult returns a successful action result.

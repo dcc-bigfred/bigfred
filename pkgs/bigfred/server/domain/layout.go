@@ -50,8 +50,21 @@ type Layout struct {
 	// never lives in memory outside Login / Sudo: the service
 	// hashes it at the trust boundary and zeroes the buffer.
 	AdminPINHash string `db:"admin_pin_hash"`
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	// MaxVehiclesPerUser caps concurrent driven vehicles per user session
+	// (slot leases + subscription cap). Zero selects the catalogue default.
+	MaxVehiclesPerUser uint `db:"max_vehicles_per_user"`
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+}
+
+const DefaultLayoutMaxVehiclesPerUser = 8
+
+// EffectiveMaxVehiclesPerUser returns the per-user drive/subscription cap.
+func (l Layout) EffectiveMaxVehiclesPerUser() uint {
+	if l.MaxVehiclesPerUser == 0 {
+		return DefaultLayoutMaxVehiclesPerUser
+	}
+	return l.MaxVehiclesPerUser
 }
 
 // Table tells REL which physical table backs this struct.

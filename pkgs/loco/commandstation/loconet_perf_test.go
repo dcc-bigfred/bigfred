@@ -1,6 +1,7 @@
 package commandstation
 
 import (
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -122,8 +123,8 @@ func TestWriteSpeedCoalescesStale(t *testing.T) {
 	g2 := l.nextSpeedGen(addr) // g2 supersedes g1
 
 	// The stale generation must be dropped.
-	if err := l.writeSpeed(addr, 7, 20, true, g1); err != nil {
-		t.Fatalf("writeSpeed(stale): %v", err)
+	if err := l.writeSpeed(addr, 7, 20, true, g1); !errors.Is(err, ErrSpeedSuperseded) {
+		t.Fatalf("writeSpeed(stale): %v, want ErrSpeedSuperseded", err)
 	}
 	if rec.count() != 0 {
 		t.Fatalf("stale frame was written (% X), expected coalesced/dropped", rec.packets())
@@ -230,8 +231,8 @@ func TestMetricsSnapshotCountsTraffic(t *testing.T) {
 	// A superseded speed frame must be counted as coalesced, not transmitted.
 	g1 := l.nextSpeedGen(addr)
 	_ = l.nextSpeedGen(addr) // supersede g1
-	if err := l.writeSpeed(addr, 5, 99, true, g1); err != nil {
-		t.Fatalf("writeSpeed(stale): %v", err)
+	if err := l.writeSpeed(addr, 5, 99, true, g1); !errors.Is(err, ErrSpeedSuperseded) {
+		t.Fatalf("writeSpeed(stale): %v, want ErrSpeedSuperseded", err)
 	}
 	if s2 := l.MetricsSnapshot(); s2.TxCoalesced != 1 {
 		t.Fatalf("TxCoalesced = %d, want 1", s2.TxCoalesced)
@@ -273,10 +274,20 @@ func TestKeepaliveRefreshesCachedSlots(t *testing.T) {
 	}
 	rec.reset()
 
+	l.slotMu.Lock()
+	l.slotAcquiredAt[addr] = time.Now().Add(-31 * time.Second)
+	l.slotMu.Unlock()
+	if l.recentlyAcquired(addr) {
+		t.Fatal("setup: slot should be aged out before keepalive")
+	}
+
 	l.refreshOneKeepaliveSlot()
 	pkts := rec.packets()
 	if got := countOpcode(pkts, lnOPC_LOCO_SPD); got != 1 {
 		t.Fatalf("keepalive: SPD frames = %d, want 1", got)
+	}
+	if !l.recentlyAcquired(addr) {
+		t.Fatal("keepalive should refresh slotAcquiredAt")
 	}
 }
 
@@ -293,5 +304,94 @@ func TestKeepaliveRoundRobinTouchesEachSlot(t *testing.T) {
 	pkts := rec.packets()
 	if got := countOpcode(pkts, lnOPC_LOCO_SPD); got != 2 {
 		t.Fatalf("round-robin: SPD frames = %d, want 2", got)
+	}
+}
+
+func TestMetricsReportsTxQueueGauge(t *testing.T) {
+	l, _ := newTestLoconet()
+	s := l.MetricsSnapshot()
+	if s.TxQueueCap != 64 {
+		t.Fatalf("TxQueueCap = %d, want 64", s.TxQueueCap)
+	}
+}
+
+// TestWriteSpeedSuperseded returns ErrSpeedSuperseded when a newer generation
+// overtakes the frame before it is transmitted.
+func TestWriteSpeedSuperseded(t *testing.T) {
+	l, _ := newTestLoconet()
+	seedCachedSlot(l, 10, 1)
+	gen := l.nextSpeedGen(10)
+	l.nextSpeedGen(10) // bump generation so gen is stale
+	err := l.writeSpeed(10, 1, 5, true, gen)
+	if !errors.Is(err, ErrSpeedSuperseded) {
+		t.Fatalf("writeSpeed err = %v, want ErrSpeedSuperseded", err)
+	}
+}
+
+func TestEstopEnqueueWhenTxChFull(t *testing.T) {
+	l := newLocoNetBase()
+	l.t = &recTransport{}
+	for i := 0; i < cap(l.txCh); i++ {
+		l.txCh <- lnTxJob{}
+	}
+	go func() {
+		job := <-l.txEstopCh
+		if job.done != nil {
+			job.done <- nil
+		}
+	}()
+	err := l.txEnqueue(lnBuildSetSpeed(1, 1), lnTxPriorityEstop)
+	if err != nil {
+		t.Fatalf("estop should not block on full txCh: %v", err)
+	}
+	if len(l.txEstopCh) != 0 {
+		t.Fatalf("txEstopCh should be drained, len = %d", len(l.txEstopCh))
+	}
+}
+
+func TestEstopBypassesFullTxQueue(t *testing.T) {
+	l := newLocoNetBase()
+	l.minTxGap = 0
+	rec := &recTransport{}
+	l.t = rec
+	go l.txLoop()
+
+	const addr LocoAddr = 42
+	seedCachedSlot(l, addr, 7)
+
+	for i := 0; i < cap(l.txCh); i++ {
+		select {
+		case l.txCh <- lnTxJob{pkt: lnBuildSetSpeed(7, byte(i+2))}:
+		default:
+		}
+	}
+
+	start := time.Now()
+	if err := l.EmergencyStop(addr, true); err != nil {
+		t.Fatalf("EmergencyStop: %v", err)
+	}
+	if d := time.Since(start); d > time.Second {
+		t.Fatalf("EmergencyStop took %v, want fast bypass of saturated txCh", d)
+	}
+
+	deadline := time.After(2 * time.Second)
+	for rec.count() == 0 {
+		select {
+		case <-deadline:
+			t.Fatal("estop frame not transmitted")
+		default:
+			time.Sleep(5 * time.Millisecond)
+		}
+	}
+	pkts := rec.packets()
+	found := false
+	for _, p := range pkts {
+		if len(p) >= 3 && p[0] == lnOPC_LOCO_SPD && p[2] == 1 {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("no wire-estop SPD frame in %d packets", len(pkts))
 	}
 }

@@ -68,6 +68,11 @@ type Coordinator struct {
 	dirty        bool
 	runOnce      sync.Once
 	bgWg         sync.WaitGroup
+	// syncSubReady is closed by markSyncSubReady once the session-sync
+	// subscription is live. Allocated in NewCoordinator when Store is set;
+	// nil otherwise. Lets tests await readiness instead of racing PUBLISH.
+	syncSubReady chan struct{}
+	syncSubOnce  sync.Once
 }
 
 // NewCoordinator returns a coordinator that is not yet running.
@@ -86,11 +91,15 @@ func NewCoordinator(cfg CoordinatorConfig) *Coordinator {
 		log = logrus.New()
 	}
 	cfg.Log = log
-	return &Coordinator{
+	c := &Coordinator{
 		cfg:      cfg,
 		registry: cfg.Registry,
 		policies: make(map[string]ProtocolPolicy),
 	}
+	if cfg.Store != nil {
+		c.syncSubReady = make(chan struct{})
+	}
+	return c
 }
 
 // Registry returns the shared client registry.
@@ -169,6 +178,28 @@ func (c *Coordinator) Run(ctx context.Context) {
 			c.sweep(ctx)
 		}
 	}
+}
+
+// WaitSyncSubscriber blocks until the session-sync pub/sub subscription is
+// active, or ctx is cancelled. No-op when Store is not configured.
+func (c *Coordinator) WaitSyncSubscriber(ctx context.Context) error {
+	if c.syncSubReady == nil {
+		return nil
+	}
+	select {
+	case <-c.syncSubReady:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (c *Coordinator) markSyncSubReady() {
+	c.syncSubOnce.Do(func() {
+		if c.syncSubReady != nil {
+			close(c.syncSubReady)
+		}
+	})
 }
 
 // runSeenFlusher drains pending lastSeenAt updates and writes them to
@@ -263,6 +294,7 @@ func (c *Coordinator) runSessionSyncSubscriber(ctx context.Context) {
 			}
 			continue
 		}
+		c.markSyncSubReady()
 		c.consumeSync(ctx, sub)
 	}
 }

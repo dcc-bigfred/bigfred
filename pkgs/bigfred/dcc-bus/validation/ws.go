@@ -6,6 +6,30 @@ import (
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/protocol"
 )
 
+// LocoSelect validates loco.select payloads.
+type LocoSelect struct{}
+
+// Valid reports whether the address is non-zero.
+func (LocoSelect) Valid(p protocol.LocoSelectPayload) bool {
+	return p.Address != 0
+}
+
+// LocoDeselect validates loco.deselect payloads.
+type LocoDeselect struct{}
+
+// Valid reports whether the address is non-zero.
+func (LocoDeselect) Valid(p protocol.LocoDeselectPayload) bool {
+	return p.Address != 0
+}
+
+// TrainSelect validates train.select payloads.
+type TrainSelect struct{}
+
+// Valid reports whether the train id is non-empty.
+func (TrainSelect) Valid(p protocol.TrainSelectPayload) bool {
+	return p.TrainID != ""
+}
+
 // LocoSubscribe validates loco.subscribe addresses.
 type LocoSubscribe struct{}
 

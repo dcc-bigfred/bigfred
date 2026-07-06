@@ -54,16 +54,12 @@ func (r *Router) collectHandsetDriveTargets(
 	return addrs
 }
 
-func (r *Router) isHandsetControlledLoco(ctx context.Context, userID uint, addr uint16) bool {
-	if r.redis == nil {
+func (r *Router) isHandsetControlledLoco(_ context.Context, userID uint, addr uint16) bool {
+	if r.store == nil {
 		return true
 	}
-	snap, ok, err := r.redis.GetLocoCurrentState(ctx, addr)
-	if err != nil {
-		// Prefer braking on Redis outage so idle handsets cannot leave locos moving.
-		return true
-	}
-	if !ok {
+	snap := r.store.Snapshot(addr)
+	if snap.Source == "" && snap.At == 0 && snap.Speed == 0 {
 		return false
 	}
 	return snap.ControlledByUserID == userID && snap.Speed > 0

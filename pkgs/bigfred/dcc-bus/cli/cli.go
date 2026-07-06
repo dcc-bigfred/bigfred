@@ -53,6 +53,10 @@ type Flags struct {
 	WithrottlePairingAddr uint16
 	WithrottleHeartbeatSecs float64
 
+	MaxVehiclesPerUser int
+	MaxLoconetSlots    int
+	IdleTimeoutSecs    uint
+
 	AllowedOrigins []string
 }
 
@@ -106,6 +110,9 @@ should rarely be invoked manually.`,
 				WithrottlePort:   f.WithrottlePort,
 				WithrottlePairingAddr: f.WithrottlePairingAddr,
 				WithrottleHeartbeatSecs: f.WithrottleHeartbeatSecs,
+				MaxVehiclesPerUser:     f.MaxVehiclesPerUser,
+				MaxLoconetSlots:        f.MaxLoconetSlots,
+				IdleTimeoutSecs:        f.IdleTimeoutSecs,
 			}
 			d, err := dccbus.New(c.Context(), log, cfg)
 			if err != nil {
@@ -142,6 +149,9 @@ should rarely be invoked manually.`,
 	cmd.Flags().Uint16Var(&f.WithrottlePort, "withrottle-port", 12090, "TCP port for inbound WiThrottle connections")
 	cmd.Flags().Uint16Var(&f.WithrottlePairingAddr, "withrottle-pairing-addr", 10239, "DCC address of the WiThrottle pairing sentinel loco")
 	cmd.Flags().Float64Var(&f.WithrottleHeartbeatSecs, "withrottle-heartbeat-secs", 10, "WiThrottle dead-man heartbeat window advertised to clients")
+	cmd.Flags().IntVar(&f.MaxVehiclesPerUser, FlagMaxVehiclesPerUser, 8, "per-user cap on driven vehicles (slot leases)")
+	cmd.Flags().IntVar(&f.MaxLoconetSlots, FlagMaxLoconetSlots, 80, "LocoNet slot budget for BigFred on this command station")
+	cmd.Flags().UintVar(&f.IdleTimeoutSecs, FlagIdleTimeoutSecs, 60, "remote-handset idle timeout before slot release (0 disables)")
 
 	return cmd
 }

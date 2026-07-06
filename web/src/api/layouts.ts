@@ -21,10 +21,13 @@ export interface Layout {
   name: string;
   isSystem: boolean;
   locked: boolean;
+  maxVehiclesPerUser: number;
 }
 
 const loginLayoutsQueryKey = ["layouts", "login"] as const;
 const layoutsQueryKey = ["layouts"] as const;
+
+export const DEFAULT_LAYOUT_MAX_VEHICLES_PER_USER = 8;
 
 // useLoginLayouts powers the layout dropdown on the login page. It is
 // unauthenticated (the matching backend route lives outside
@@ -67,6 +70,7 @@ export function useCreateLayout() {
       interlockingIds?: number[];
       commandStationIds?: number[];
       adminPin?: string;
+      maxVehiclesPerUser?: number;
     }) =>
       apiFetch<Layout>("/api/v1/layouts", {
         method: "POST",
@@ -93,6 +97,7 @@ export function useUpdateLayout() {
       interlockingIds?: number[];
       commandStationIds?: number[];
       adminPin?: string;
+      maxVehiclesPerUser?: number;
     }) => {
       const body: Record<string, unknown> = {
         name: args.name,
@@ -103,6 +108,9 @@ export function useUpdateLayout() {
       }
       if (args.adminPin && args.adminPin.length > 0) {
         body.adminPin = args.adminPin;
+      }
+      if (args.maxVehiclesPerUser !== undefined) {
+        body.maxVehiclesPerUser = args.maxVehiclesPerUser;
       }
       return apiFetch<Layout>(`/api/v1/layouts/${args.id}`, {
         method: "PUT",

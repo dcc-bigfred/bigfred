@@ -69,6 +69,8 @@ type CommandStationCreateInput struct {
 	Z21ServerEnabled bool
 	Z21IPStickiness  bool
 	WithrottleServerEnabled bool
+	MaxLoconetSlots         uint
+	IdleTimeoutSecs         uint
 }
 
 func (s *CommandStation) Create(ctx context.Context, eff domain.EffectiveRoles, in CommandStationCreateInput) (domain.CommandStation, error) {
@@ -111,6 +113,9 @@ func (s *CommandStation) Create(ctx context.Context, eff domain.EffectiveRoles, 
 	if err := s.validateInboundPorts(ctx, row, 0); err != nil {
 		return domain.CommandStation{}, err
 	}
+	if err := s.applySlotLeaseSettings(&row, in.MaxLoconetSlots, in.IdleTimeoutSecs); err != nil {
+		return domain.CommandStation{}, err
+	}
 	if err := s.stations.Insert(ctx, &row); err != nil {
 		return domain.CommandStation{}, err
 	}
@@ -118,16 +123,18 @@ func (s *CommandStation) Create(ctx context.Context, eff domain.EffectiveRoles, 
 }
 
 type CommandStationUpdateInput struct {
-	Name             *string
-	Kind             *domain.CommandStationKind
-	ConnectionURI    *string
-	SpeedSteps       *uint
-	HeartbeatSecs    *float64
-	DeadmanSecs      *float64
-	PollIntervalMs   *uint
-	Z21ServerEnabled *bool
-	Z21IPStickiness  *bool
+	Name                    *string
+	Kind                    *domain.CommandStationKind
+	ConnectionURI           *string
+	SpeedSteps              *uint
+	HeartbeatSecs           *float64
+	DeadmanSecs             *float64
+	PollIntervalMs          *uint
+	Z21ServerEnabled        *bool
+	Z21IPStickiness         *bool
 	WithrottleServerEnabled *bool
+	MaxLoconetSlots         *uint
+	IdleTimeoutSecs         *uint
 }
 
 func (s *CommandStation) Update(ctx context.Context, eff domain.EffectiveRoles, id uint, in CommandStationUpdateInput) (domain.CommandStation, error) {
@@ -202,6 +209,19 @@ func (s *CommandStation) Update(ctx context.Context, eff domain.EffectiveRoles, 
 	}
 	if in.WithrottleServerEnabled != nil {
 		row.WithrottleServerEnabled = *in.WithrottleServerEnabled
+	}
+	if in.MaxLoconetSlots != nil || in.IdleTimeoutSecs != nil {
+		maxSlots := row.MaxLoconetSlots
+		idleSecs := row.IdleTimeoutSecs
+		if in.MaxLoconetSlots != nil {
+			maxSlots = *in.MaxLoconetSlots
+		}
+		if in.IdleTimeoutSecs != nil {
+			idleSecs = *in.IdleTimeoutSecs
+		}
+		if err := s.applySlotLeaseSettings(&row, maxSlots, idleSecs); err != nil {
+			return domain.CommandStation{}, err
+		}
 	}
 	row.UpdatedAt = time.Now().UTC()
 
@@ -285,5 +305,26 @@ func (s *CommandStation) validateInboundPorts(ctx context.Context, row domain.Co
 			}
 		}
 	}
+	return nil
+}
+
+func (s *CommandStation) applySlotLeaseSettings(row *domain.CommandStation, maxSlots, idleSecs uint) error {
+	if !row.Kind.IsLocoNet() {
+		row.MaxLoconetSlots = 0
+		row.IdleTimeoutSecs = idleSecs
+		if err := validation.SanitiseCommandStationIdleTimeoutSecs(idleSecs); err != nil {
+			return err
+		}
+		return nil
+	}
+	slots, err := validation.SanitiseCommandStationMaxLoconetSlots(maxSlots)
+	if err != nil {
+		return err
+	}
+	if err := validation.SanitiseCommandStationIdleTimeoutSecs(idleSecs); err != nil {
+		return err
+	}
+	row.MaxLoconetSlots = slots
+	row.IdleTimeoutSecs = idleSecs
 	return nil
 }

@@ -3,10 +3,12 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	stderrors "errors"
 
 	"github.com/keskad/loco/pkgs/bigfred/contract"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/protocol"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/service"
+	"github.com/keskad/loco/pkgs/loco/commandstation"
 )
 
 // HandleControlCommand decodes a server-initiated command frame from the
@@ -54,23 +56,13 @@ func (r *Router) applyControlSetSpeed(ctx context.Context, p contract.LocoSetSpe
 		return
 	}
 	if err := r.dcc.SetSpeed(p.Address, p.Speed, p.Forward, p.Emergency); err != nil {
+		if stderrors.Is(err, commandstation.ErrSpeedSuperseded) {
+			return
+		}
 		r.log.WithError(err).WithField("addr", p.Address).Warn("dcc-bus control setSpeed failed")
 		return
 	}
-	snap := contract.LocoStateWire{
-		Address: p.Address,
-		Speed:   p.Speed,
-		Forward: p.Forward,
-		Source:  "server",
-		At:      contract.NowMS(),
-	}
-	if cached, ok, err := r.redis.GetLocoCurrentState(ctx, p.Address); err == nil && ok {
-		snap.Functions = cached.Functions
-		snap.ControlledByUserID = cached.ControlledByUserID
-	}
-	if err := r.redis.StoreLocoCurrentState(ctx, snap, StateTTL); err != nil {
-		r.log.WithError(err).Debug("dcc-bus control redis store")
-	}
+	snap := r.store.SetSpeedPreservingUser(p.Address, contract.UISpeedFromWire(service.WireSpeedFromPayload(p.Speed, p.Emergency)), p.Forward, "server")
 	service.BroadcastLocoState(ctx, r.hub, snap)
 }
 
@@ -78,9 +70,8 @@ func (r *Router) applyControlSetFunction(ctx context.Context, p contract.LocoSet
 	if !r.roster.IsOnLayout(p.Address) {
 		return
 	}
-	userID := uint(0)
-	if cached, ok, err := r.redis.GetLocoCurrentState(ctx, p.Address); err == nil && ok {
-		userID = cached.ControlledByUserID
-	}
-	_ = r.setLocoFunction(ctx, p.Address, userID, p.Function, p.On, "server")
+	// userID 0 preserves the current controller and avoids a Snapshot→
+	// SetFunction TOCTOU where a concurrent observation could reset
+	// ownership between the read and the write.
+	_ = r.setLocoFunction(ctx, p.Address, 0, p.Function, p.On, "server")
 }

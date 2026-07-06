@@ -60,6 +60,37 @@ type SlotManager interface {
 	AcquireDispatched() (LocoAddr, error)
 }
 
+// BootSlotReconciler is an optional interface for LocoNet drivers that can
+// scan the command-station slot table on daemon boot and release IN_USE
+// roster slots left from an unclean shutdown.
+type BootSlotReconciler interface {
+	ReconcileBootSlots(roster map[LocoAddr]struct{}) error
+}
+
+// SlotObserver receives slot lifecycle events from the driver. The driver
+// emits these for every IN_USE slot it knows about — both BigFred-acquired
+// (via SetSpeed/AcquireSlot) and slots observed on the bus held by external
+// throttles (physical FREDs). Implementations MUST be safe to call from the
+// driver's hot path and MUST NOT block (the driver calls them synchronously
+// under its own locks).
+type SlotObserver interface {
+	// OnSlotInUse is called after a slot for addr becomes IN_USE on the
+	// command station (acquired by us or observed from a bus SLOT_STAT1
+	// transition to IN_USE).
+	OnSlotInUse(addr LocoAddr)
+	// OnSlotReleased is called after a slot for addr is no longer IN_USE
+	// (we released it to COMMON, or the master purged/reassigned it, or an
+	// external throttle released it and the bus reported COMMON).
+	OnSlotReleased(addr LocoAddr)
+}
+
+// SlotObservable is implemented by drivers that can feed a SlotObserver.
+// Callers type-assert the Station value and attach an observer before the
+// bus read loop starts emitting events.
+type SlotObservable interface {
+	SetSlotObserver(obs SlotObserver)
+}
+
 // MetricsSource is an optional interface implemented by LocoNet drivers that
 // expose a point-in-time snapshot of low-level counters for telemetry.
 // Implementations import no telemetry library and only bump atomic counters

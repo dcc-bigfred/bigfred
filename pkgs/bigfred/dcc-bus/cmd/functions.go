@@ -6,7 +6,6 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/keskad/loco/pkgs/bigfred/contract"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/service"
 	"github.com/keskad/loco/pkgs/loco/commandstation"
 )
@@ -61,24 +60,7 @@ func (r *Router) setLocoFunction(ctx context.Context, addr uint16, userID uint, 
 		r.log.WithFields(logrus.Fields{"addr": addr, "function": fn}).Debug("dcc-bus SendFn succeeded after slot revalidate")
 	}
 
-	snap := contract.LocoStateWire{
-		Address:            addr,
-		ControlledByUserID: userID,
-		Source:             source,
-		At:                 time.Now().UTC().UnixMilli(),
-	}
-	if env, ok, err := r.redis.GetLocoCurrentState(ctx, addr); err == nil && ok {
-		snap.Speed = env.Speed
-		snap.Forward = env.Forward
-		snap.Functions = make([]bool, maxInt(len(env.Functions), int(fn)+1))
-		copy(snap.Functions, env.Functions)
-	} else {
-		snap.Functions = make([]bool, int(fn)+1)
-	}
-	snap.Functions[fn] = on
-	if err := r.redis.StoreLocoCurrentState(ctx, snap, StateTTL); err != nil {
-		r.log.WithError(err).Debug("dcc-bus redis store")
-	}
+	snap := r.store.SetFunction(addr, userID, fn, on, source)
 	r.broadcastLocoState(ctx, snap)
 	return nil
 }
@@ -124,10 +106,7 @@ func (r *Router) checkFnStateMatches(ctx context.Context, addr uint16, fn uint8,
 	if !r.cache.Matches(addr, fn, on) {
 		return false
 	}
-	env, ok, err := r.redis.GetLocoCurrentState(ctx, addr)
-	if err != nil || !ok {
-		return false
-	}
+	env := r.store.Snapshot(addr)
 	if int(fn) >= len(env.Functions) {
 		return !on
 	}

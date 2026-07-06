@@ -45,6 +45,9 @@ interface DccBusContextValue {
   pingLatencyMs: number | null;
   states: Map<number, LocoState>;
   subscribe: (addresses: number[]) => Promise<{ ok: boolean; error?: string }>;
+  select: (address: number) => Promise<{ ok: boolean; error?: string }>;
+  deselect: (address: number) => Promise<{ ok: boolean; error?: string }>;
+  selectTrain: (trainId: string) => Promise<{ ok: boolean; error?: string }>;
   setSpeed: (
     address: number,
     speed: number,
@@ -264,6 +267,18 @@ export function DccBusProvider({
     (addresses: number[]) => send("loco.subscribe", { addresses }),
     [send],
   );
+  const select = useCallback(
+    (address: number) => send("loco.select", { address }),
+    [send],
+  );
+  const deselect = useCallback(
+    (address: number) => send("loco.deselect", { address }),
+    [send],
+  );
+  const selectTrain = useCallback(
+    (trainId: string) => send("train.select", { trainId }),
+    [send],
+  );
   const setSpeed = useCallback(
     (address: number, speed: number, forward: boolean, emergency?: boolean) =>
       send("loco.setSpeed", { address, speed, forward, emergency }),
@@ -292,6 +307,9 @@ export function DccBusProvider({
       pingLatencyMs,
       states,
       subscribe,
+      select,
+      deselect,
+      selectTrain,
       setSpeed,
       setTrainSpeed,
       setFunction,
@@ -305,6 +323,9 @@ export function DccBusProvider({
       pingLatencyMs,
       states,
       subscribe,
+      select,
+      deselect,
+      selectTrain,
       setSpeed,
       setTrainSpeed,
       setFunction,

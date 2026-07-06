@@ -42,20 +42,25 @@ type LocoNet struct {
 	// shorter slotTimeout instead.
 	timeout time.Duration
 
-	// slotTimeout bounds a single slot request/response (LOCO_ADR, RQ_SL_DATA,
-	// NULL MOVE). LocoNet replies arrive well under 30 ms; a tight bound keeps a
-	// lost reply from stalling slot acquisition — and thus the whole fleet — for
-	// seconds.
+	// slotTimeout bounds long request/response sequences (service-mode CV reads).
 	slotTimeout time.Duration
+
+	// slotReplyTimeout bounds slot acquire round-trips (LOCO_ADR, RQ_SL_DATA,
+	// NULL MOVE). LocoNet replies arrive well under 30 ms; a tight bound keeps
+	// a lost reply from stalling slot acquisition — and thus the whole fleet —
+	// for hundreds of milliseconds.
+	slotReplyTimeout time.Duration
 
 	// TX pacing: a dedicated writer goroutine (txLoop) enforces the inter-frame
 	// gap and serializes transport writes so a slow adapter cannot block callers.
 	lastTxAt time.Time
 	minTxGap time.Duration
 
-	// txCh carries normal-priority frames; txLowCh carries keepalive refreshes.
-	txCh    chan lnTxJob
-	txLowCh chan lnTxJob
+	// txCh carries normal-priority frames; txLowCh carries keepalive refreshes;
+	// txEstopCh carries emergency stops ahead of both.
+	txCh      chan lnTxJob
+	txLowCh   chan lnTxJob
+	txEstopCh chan lnTxJob
 
 	// keepaliveInterval is how often active slots are re-touched so the master
 	// does not purge them to COMMON after ~200 s of inactivity (spec §4.3).
@@ -76,6 +81,8 @@ type LocoNet struct {
 
 	// obsCh streams observed state changes to StateObserver consumers.
 	obsCh chan LocoObservation
+	// obsCoalesce batches observations per address before obsCh.
+	obsCoalesce *obsCoalescer
 
 	stop chan struct{}
 
@@ -123,6 +130,12 @@ type LocoNet struct {
 	// fails fast after repeated acquire timeouts (circuit breaker).
 	slotBreakerUntil atomic.Int64
 
+	// slotObs is the optional SlotObserver notified when one of OUR owned
+	// slots becomes IN_USE or is released (COMMON/purge/reassign). External
+	// throttles' slots are not reported here because the driver does not map
+	// their slot number to a LocoAddr. nil-safe; calls are non-blocking.
+	slotObs atomic.Pointer[SlotObserver]
+
 	// keepaliveIdx rotates round-robin across cached slots for spread refreshes.
 	keepaliveIdx int
 }
@@ -136,8 +149,11 @@ const (
 	// the transport buffer when many locomotives move at once.
 	lnDefaultMinTxGap = 5 * time.Millisecond
 
-	// lnDefaultSlotTimeout bounds slot request/response sequences.
+	// lnDefaultSlotTimeout bounds long request/response sequences (programming).
 	lnDefaultSlotTimeout = 600 * time.Millisecond
+
+	// lnDefaultSlotReplyTimeout bounds slot acquire round-trips on a healthy bus.
+	lnDefaultSlotReplyTimeout = 200 * time.Millisecond
 
 	// lnSlotAcquireRetries retries a timed-out slot acquisition once before
 	// giving up, since a single dropped reply is common on a busy bus.
@@ -165,13 +181,15 @@ const (
 )
 
 func newLocoNetBase() *LocoNet {
-	return &LocoNet{
+	ln := &LocoNet{
 		timeout:           4 * time.Second,
-		slotTimeout:       lnDefaultSlotTimeout,
+		slotTimeout:        lnDefaultSlotTimeout,
+		slotReplyTimeout:   lnDefaultSlotReplyTimeout,
 		minTxGap:          lnDefaultMinTxGap,
 		keepaliveInterval: lnKeepaliveInterval,
 		txCh:              make(chan lnTxJob, 64),
 		txLowCh:           make(chan lnTxJob, 32),
+		txEstopCh:         make(chan lnTxJob, 8),
 		rxCh:              make(chan lnPacket, 64),
 		syncCh:            make(chan lnPacket, 64),
 		obsCh:             make(chan LocoObservation, 64),
@@ -187,6 +205,8 @@ func newLocoNetBase() *LocoNet {
 		extFnByA:          make(map[LocoAddr]uint32),
 		metrics:           newLnMetrics(),
 	}
+	ln.obsCoalesce = newObsCoalescer(ln.obsCh, lnObsCoalesceTick, ln.stop, &ln.metrics.obsDropped)
+	return ln
 }
 
 // MetricsSnapshot implements the MetricsSource interface: it returns the
@@ -221,6 +241,7 @@ func (l *LocoNet) MetricsSnapshot() LnMetricsSnapshot {
 	s.RxQueueLen, s.RxQueueCap = int64(len(l.rxCh)), int64(cap(l.rxCh))
 	s.ObsQueueLen, s.ObsQueueCap = int64(len(l.obsCh)), int64(cap(l.obsCh))
 	s.SyncQueueLen, s.SyncQueueCap = int64(len(l.syncCh)), int64(cap(l.syncCh))
+	s.TxQueueLen, s.TxQueueCap = int64(len(l.txCh)), int64(cap(l.txCh))
 	return s
 }
 
@@ -402,6 +423,53 @@ func (l *LocoNet) trackCsSlotStatus(slot byte, stat1 byte) {
 		l.metrics.incr(&l.metrics.csSlotOccupied)
 	case prev == lnSLOT_IN_USE && sta != lnSLOT_IN_USE:
 		l.metrics.incr(&l.metrics.csSlotReleased)
+		// If the master purged/reassigned one of OUR owned slots, notify the
+		// observer so the leaser can drop the stale lease. External slots are
+		// not mapped to an addr here, so they are not reported.
+		if addr, ok := l.slotAddrLocked(slot); ok {
+			l.emitSlotReleased(addr)
+		}
+	}
+}
+
+// SetSlotObserver attaches a SlotObserver that receives IN_USE/release events
+// for slots the driver owns. nil clears the observer. Safe to call before the
+// bus loops start.
+func (l *LocoNet) SetSlotObserver(obs SlotObserver) {
+	if obs == nil {
+		l.slotObs.Store(nil)
+		return
+	}
+	l.slotObs.Store(&obs)
+}
+
+func (l *LocoNet) slotAddrLocked(slot byte) (LocoAddr, bool) {
+	l.slotMu.Lock()
+	defer l.slotMu.Unlock()
+	addr, ok := l.slotAddr[slot]
+	return addr, ok
+}
+
+// emitSlotInUse notifies the observer (if any) that addr's slot is IN_USE.
+// Called after a successful acquire. Non-blocking: the observer must not hold
+// driver locks on the callback path.
+func (l *LocoNet) emitSlotInUse(addr LocoAddr) {
+	if addr == 0 {
+		return
+	}
+	if p := l.slotObs.Load(); p != nil {
+		(*p).OnSlotInUse(addr)
+	}
+}
+
+// emitSlotReleased notifies the observer (if any) that addr's slot is no longer
+// IN_USE (released to COMMON, purged, or reassigned).
+func (l *LocoNet) emitSlotReleased(addr LocoAddr) {
+	if addr == 0 {
+		return
+	}
+	if p := l.slotObs.Load(); p != nil {
+		(*p).OnSlotReleased(addr)
 	}
 }
 
@@ -519,6 +587,10 @@ func (l *LocoNet) observe(pkt []byte) {
 }
 
 func (l *LocoNet) emit(obs LocoObservation) {
+	if l.obsCoalesce != nil {
+		l.obsCoalesce.submit(obs)
+		return
+	}
 	select {
 	case l.obsCh <- obs:
 	default:
@@ -862,7 +934,7 @@ func (l *LocoNet) writeSpeed(addr LocoAddr, slot, lnSpeed byte, forward bool, ge
 
 	if l.currentSpeedGen(addr) != gen {
 		l.metrics.incr(&l.metrics.txCoalesced)
-		return nil // superseded by a newer SetSpeed; drop this stale frame
+		return ErrSpeedSuperseded
 	}
 	spdPkt := lnBuildSetSpeed(slot, lnSpeed)
 	if err := l.txEnqueue(spdPkt, lnTxPriorityNormal); err != nil {
@@ -892,10 +964,21 @@ func (l *LocoNet) writeSpeed(addr LocoAddr, slot, lnSpeed byte, forward bool, ge
 // mapping is revalidated so a stale slot number (e.g. after a purge/reassign
 // or a buggy external client) cannot silently swallow drive commands.
 func (l *LocoNet) acquireSlot(addr LocoAddr) (byte, error) {
+	slot, _, err := l.acquireSlotWithHeld(addr)
+	return slot, err
+}
+
+// acquireSlotWithHeld is like acquireSlot but reports whether the slot was
+// already IN_USE (or recently validated in our cache) before this call.
+func (l *LocoNet) acquireSlotWithHeld(addr LocoAddr) (slot byte, heldBefore bool, err error) {
 	if slot, ok := l.getSlot(addr); ok && l.recentlyAcquired(addr) {
-		return slot, nil
+		return slot, true, nil
 	}
-	return l.validateSlot(addr)
+	slot, heldBefore, err = l.validateSlot(addr)
+	if err == nil {
+		l.emitSlotInUse(addr)
+	}
+	return slot, heldBefore, err
 }
 
 func (l *LocoNet) GetSpeed(addr LocoAddr) (speed uint8, forward bool, err error) {
@@ -973,7 +1056,8 @@ func (l *LocoNet) ensureSlotLocked(addr LocoAddr) (byte, error) {
 	if slot, ok := l.getSlot(addr); ok {
 		return slot, nil
 	}
-	return l.acquireSlotFreshLocked(addr)
+	slot, _, err := l.acquireSlotFreshLocked(addr)
+	return slot, err
 }
 
 // acquireSlotFreshLocked always queries the command station for addr's slot,
@@ -983,30 +1067,32 @@ func (l *LocoNet) ensureSlotLocked(addr LocoAddr) (byte, error) {
 // loco while BigFred was idle. NULL MOVE runs only when the slot is not already
 // IN_USE, so an active physical throttle (FRED) currently owning the slot is
 // never stolen. Caller holds reqMu and has called beginSync.
-func (l *LocoNet) acquireSlotFreshLocked(addr LocoAddr) (byte, error) {
+// wasAlreadyInUse reports whether the slot was IN_USE before this call (no NULL
+// MOVE was needed).
+func (l *LocoNet) acquireSlotFreshLocked(addr LocoAddr) (slot byte, wasAlreadyInUse bool, err error) {
 	if _, owned := l.getSlot(addr); !owned {
 		l.slotMu.Lock()
 		n := len(l.slotByAd)
 		l.slotMu.Unlock()
 		if n >= lnMaxOwnedSlots {
-			return 0, fmt.Errorf("loconet: owned-slot cap reached (%d); release a slot first", n)
+			return 0, false, fmt.Errorf("loconet: owned-slot cap reached (%d); release a slot first", n)
 		}
 	}
 	// Request slot allocation/lookup.
 	if err := l.sendLocked(lnBuildLocoAdr(addr)); err != nil {
-		return 0, err
+		return 0, false, err
 	}
 
-	deadline := time.Now().Add(l.slotTimeout)
+	deadline := time.Now().Add(l.slotReplyTimeout)
 	for time.Now().Before(deadline) {
 		pkt, err := l.readPacketUntil(deadline)
 		if err != nil {
-			return 0, err
+			return 0, false, err
 		}
 		if len(pkt) >= 4 && pkt[0] == lnOPC_LONG_ACK && pkt[1] == (lnOPC_LOCO_ADR&0x7F) {
 			if pkt[2] == 0x00 {
 				l.metrics.incr(&l.metrics.lackRejections)
-				return 0, fmt.Errorf("loconet: command station has no free slot for loco %d", addr)
+				return 0, false, ErrNoFreeSlot
 			}
 		}
 		if sd, ok := parseLnSlotData(pkt); ok {
@@ -1017,19 +1103,20 @@ func (l *LocoNet) acquireSlotFreshLocked(addr LocoAddr) (byte, error) {
 				continue
 			}
 			l.applySlotData(sd)
+			wasAlreadyInUse = sd.Stat1&lnSLOT_STA_MASK == lnSLOT_IN_USE
 			// Promote slot to IN_USE via NULL MOVE so BigFred is the
 			// authoritative throttle. Without this, the slot stays
 			// COMMON and the command station may allow another throttle
 			// to steal it. Failure is non-fatal: log and continue.
-			if sd.Stat1&lnSLOT_STA_MASK != lnSLOT_IN_USE {
+			if !wasAlreadyInUse {
 				if err := l.nullMoveLocked(sd.Slot); err != nil {
 					logrus.WithError(err).Debugf("loconet: null move for slot %d addr %d skipped", sd.Slot, addr)
 				}
 			}
-			return sd.Slot, nil
+			return sd.Slot, wasAlreadyInUse, nil
 		}
 	}
-	return 0, fmt.Errorf("timeout waiting for slot data for loco %d", addr)
+	return 0, false, errSlotAcquireTimeout(addr, 0)
 }
 
 // AcquireSlot makes BigFred the authoritative server-side owner of addr's slot.
@@ -1055,7 +1142,7 @@ func (l *LocoNet) AcquireSlot(addr LocoAddr) error {
 	if l.recentlyAcquired(addr) {
 		return nil
 	}
-	_, err := l.validateSlot(addr)
+	_, _, err := l.validateSlot(addr)
 	return err
 }
 
@@ -1068,16 +1155,17 @@ func (l *LocoNet) ForceAcquireSlot(addr LocoAddr) error {
 	l.slotMu.Lock()
 	delete(l.slotAcquiredAt, addr)
 	l.slotMu.Unlock()
-	_, err := l.validateSlot(addr)
+	_, _, err := l.validateSlot(addr)
 	return err
 }
 
 // validateSlot queries the command station for addr's slot, refreshes the local
 // cache from the reply, and asserts IN_USE when needed. Caller must not hold
-// reqMu.
-func (l *LocoNet) validateSlot(addr LocoAddr) (byte, error) {
+// reqMu. wasAlreadyInUse is true when the slot was already IN_USE on the master
+// (no NULL MOVE was sent).
+func (l *LocoNet) validateSlot(addr LocoAddr) (byte, bool, error) {
 	if until := l.slotBreakerUntil.Load(); until > 0 && time.Now().UnixNano() < until {
-		return 0, fmt.Errorf("loconet: slot bus temporarily unavailable (recent acquire failures)")
+		return 0, false, ErrSlotBusUnavailable
 	}
 
 	l.reqMu.Lock()
@@ -1090,12 +1178,12 @@ func (l *LocoNet) validateSlot(addr LocoAddr) (byte, error) {
 		if i > 0 {
 			l.metrics.incr(&l.metrics.slotRetries)
 		}
-		slot, err := l.acquireSlotFreshLocked(addr)
+		slot, wasAlreadyInUse, err := l.acquireSlotFreshLocked(addr)
 		if err == nil {
 			l.slotBreakerUntil.Store(0)
 			l.markAcquired(addr)
 			l.metrics.incr(&l.metrics.slotAcquires)
-			return slot, nil
+			return slot, wasAlreadyInUse, nil
 		}
 		lastErr = err
 		logrus.Debugf("loconet: slot validate attempt %d/%d for addr %d failed: %v",
@@ -1103,7 +1191,7 @@ func (l *LocoNet) validateSlot(addr LocoAddr) (byte, error) {
 	}
 	l.metrics.incr(&l.metrics.slotAcquireFails)
 	l.slotBreakerUntil.Store(time.Now().Add(lnSlotBreakerCooldown).UnixNano())
-	return 0, lastErr
+	return 0, false, lastErr
 }
 
 // slotRevalidateInterval bounds how long AcquireSlot trusts a previously
@@ -1138,7 +1226,7 @@ func (l *LocoNet) nullMoveLocked(slot byte) error {
 	if err := l.sendLocked(lnBuildMoveSlots(slot, slot)); err != nil {
 		return err
 	}
-	deadline := time.Now().Add(l.slotTimeout)
+	deadline := time.Now().Add(l.slotReplyTimeout)
 	for time.Now().Before(deadline) {
 		pkt, err := l.readPacketUntil(deadline)
 		if err != nil {
@@ -1180,7 +1268,7 @@ func (l *LocoNet) querySlotLocked(slot byte, addr LocoAddr) (lnSlotData, error) 
 	if err := l.sendLocked(lnBuildRqSlotData(slot)); err != nil {
 		return lnSlotData{}, err
 	}
-	deadline := time.Now().Add(l.slotTimeout)
+	deadline := time.Now().Add(l.slotReplyTimeout)
 	for time.Now().Before(deadline) {
 		pkt, err := l.readPacketUntil(deadline)
 		if err != nil {
@@ -1193,7 +1281,7 @@ func (l *LocoNet) querySlotLocked(slot byte, addr LocoAddr) (lnSlotData, error) 
 			}
 		}
 	}
-	return lnSlotData{}, fmt.Errorf("timeout waiting for slot %d data", slot)
+	return lnSlotData{}, errSlotAcquireTimeout(addr, slot)
 }
 
 func (l *LocoNet) readPacketUntil(deadline time.Time) (lnPacket, error) {
@@ -1239,6 +1327,7 @@ func (l *LocoNet) clearSlot(addr LocoAddr, slot byte) {
 	delete(l.slotAcquiredAt, addr)
 	l.slotMu.Unlock()
 	l.clearLocoState(addr)
+	l.emitSlotReleased(addr)
 }
 
 // clearLocoState drops cached speed/direction/function bytes for addr so the
@@ -1265,12 +1354,53 @@ func (l *LocoNet) slotToAddr(slot byte) (LocoAddr, bool) {
 	return addr, ok
 }
 
+// ReconcileBootSlots scans the command-station slot table and releases
+// IN_USE roster slots left from an unclean BigFred shutdown.
+func (l *LocoNet) ReconcileBootSlots(roster map[LocoAddr]struct{}) error {
+	if len(roster) == 0 {
+		return nil
+	}
+	l.reqMu.Lock()
+	defer l.reqMu.Unlock()
+	l.beginSync()
+	defer l.endSync()
+
+	released := 0
+	for slot := byte(1); slot < 120; slot++ {
+		sd, err := l.querySlotLocked(slot, 0)
+		if err != nil || sd.Addr == 0 {
+			continue
+		}
+		addr := LocoAddr(sd.Addr)
+		if _, ok := roster[addr]; !ok {
+			continue
+		}
+		if sd.Stat1&lnSLOT_STA_MASK != lnSLOT_IN_USE {
+			continue
+		}
+		if err := l.sendLocked(lnBuildSetSpeed(slot, 0)); err != nil {
+			logrus.WithError(err).Debugf("loconet: boot reconcile stop slot %d addr %d", slot, addr)
+		}
+		if err := l.sendLocked(lnBuildSlotStat1(slot, lnSLOT_COMMON)); err != nil {
+			logrus.WithError(err).Debugf("loconet: boot reconcile release slot %d addr %d", slot, addr)
+			continue
+		}
+		l.trackCsSlotStatus(slot, lnSLOT_COMMON)
+		l.clearSlot(addr, slot)
+		l.metrics.incr(&l.metrics.slotReleases)
+		released++
+		logrus.WithFields(logrus.Fields{
+			"slot": slot,
+			"addr": addr,
+		}).Info("loconet: boot-released stale IN_USE slot")
+	}
+	if released > 0 {
+		logrus.WithField("count", released).Info("loconet: boot slot reconciliation complete")
+	}
+	return nil
+}
+
 // ReleaseSlot writes OPC_SLOT_STAT1 with COMMON status, relinquishing
-// BigFred's ownership of the slot without stopping the locomotive. The slot
-// remains in the command station's table (loco address and speed preserved)
-// but is now claimable by any throttle. The local cache entry is removed.
-//
-// This is a fire-and-forget operation: OPC_SLOT_STAT1 produces no reply.
 func (l *LocoNet) ReleaseSlot(addr LocoAddr) error {
 	slot, ok := l.getSlot(addr)
 	if !ok {
@@ -1475,6 +1605,7 @@ func (l *LocoNet) refreshOneKeepaliveSlot() {
 		logrus.WithError(err).Debugf("loconet keepalive: slot %d addr %d", slot, addr)
 		return
 	}
+	l.markAcquired(addr)
 	l.metrics.incr(&l.metrics.keepaliveRefresh)
 }
 

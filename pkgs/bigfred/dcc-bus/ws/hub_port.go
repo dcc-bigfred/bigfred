@@ -24,6 +24,10 @@ func (a *hubAdapter) SubscribedAddrs() []uint16 {
 	return a.h.SubscribedAddrs()
 }
 
+func (a *hubAdapter) IsSubscribed(addr uint16) bool {
+	return a.h.IsSubscribed(addr)
+}
+
 func (a *hubAdapter) SessionsForUser(userID uint) []cmd.SessionView {
 	return sessionViews(a.h.SessionsForUser(userID))
 }

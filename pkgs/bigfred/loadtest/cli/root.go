@@ -162,9 +162,6 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	if err := bus.Subscribe(ctx, addrs); err != nil {
 		return fmt.Errorf("loco.subscribe: %w", err)
 	}
-	// Slot acquire on subscribe is async in dcc-bus; give LocoNet a moment
-	// before the per-vehicle drive loops start hammering SetSpeed.
-	time.Sleep(500 * time.Millisecond)
 
 	driver := sim.New(bus, log, sim.Config{
 		MaxSpeed:          uint8(f.MaxSpeed),

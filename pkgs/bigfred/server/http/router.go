@@ -254,6 +254,11 @@ func NewRouter(cfg RouterConfig) http.Handler {
 
 				r.Get("/diagnostics/sources", diagnosticsH.ListSources)
 				r.Get("/diagnostics/content", diagnosticsH.ReadContent)
+
+				if cfg.DccBus != nil {
+					slotsProxy := NewDccBusSlotsProxy(cfg.Auth, cfg.DccBus)
+					r.Get("/admin/dcc-bus/{commandStationId}/slots/ws", slotsProxy.ServeHTTP)
+				}
 			})
 		})
 	})

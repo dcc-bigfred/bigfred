@@ -31,6 +31,17 @@
       "title": "dcc-bus (driver + WS)",
       "type": "link",
       "url": "/d/bigfred-dcc-bus/bigfred-dcc-bus"
+    },
+    {
+      "asDropdown": false,
+      "icon": "external link",
+      "includeVars": true,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "Slots (leaser)",
+      "type": "link",
+      "url": "/d/bigfred-dcc-bus-slots/bigfred-dcc-bus-slots"
     }
   ],
   "panels": [

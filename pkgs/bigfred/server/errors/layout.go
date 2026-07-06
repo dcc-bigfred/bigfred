@@ -13,6 +13,8 @@ const (
 	CodeLayoutAdminPINUnset       = "layout_admin_pin_unset"
 	CodeLayoutAdminPINMismatch    = "layout_admin_pin_mismatch"
 	CodeLayoutForbidden           = "forbidden"
+	CodeLayoutMaxVehiclesInvalid  = "layout_max_vehicles_invalid"
+	CodeLayoutMaxVehiclesExceedsSlotBudget = "layout_max_vehicles_exceeds_slot_budget"
 )
 
 var (
@@ -26,4 +28,6 @@ var (
 	ErrLayoutAdminPINUnset       = errors.New(CodeLayoutAdminPINUnset)
 	ErrLayoutAdminPINMismatch    = errors.New(CodeLayoutAdminPINMismatch)
 	ErrLayoutForbidden           = errors.New(CodeLayoutForbidden)
+	ErrLayoutMaxVehiclesInvalid  = errors.New(CodeLayoutMaxVehiclesInvalid)
+	ErrLayoutMaxVehiclesExceedsSlotBudget = errors.New(CodeLayoutMaxVehiclesExceedsSlotBudget)
 )

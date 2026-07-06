@@ -17,6 +17,7 @@ import (
 	"github.com/keskad/loco/pkgs/bigfred/contract"
 	dccbuscli "github.com/keskad/loco/pkgs/bigfred/dcc-bus/cli"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/protocol"
+	"github.com/keskad/loco/pkgs/bigfred/server/domain"
 	"github.com/keskad/loco/pkgs/bigfred/server/metrics"
 	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
 	"github.com/keskad/loco/pkgs/bigfred/server/repo"
@@ -79,6 +80,7 @@ type DccBusService struct {
 	sup   Supervisor
 	redis *RedisService
 	cs    *repo.CommandStations
+	layouts *repo.Layouts
 	log   *logrus.Logger
 
 	mu      sync.Mutex
@@ -95,7 +97,7 @@ type portKey struct {
 // caller MUST run SupervisordService.Start before any EnsureRunning
 // call. `redis` may be nil in tests that don't need the persistent
 // port assignment; production wires it.
-func NewDccBusService(cfg DccBusConfig, sup Supervisor, redis *RedisService, cs *repo.CommandStations, log *logrus.Logger) *DccBusService {
+func NewDccBusService(cfg DccBusConfig, sup Supervisor, redis *RedisService, cs *repo.CommandStations, layouts *repo.Layouts, log *logrus.Logger) *DccBusService {
 	if log == nil {
 		log = logrus.New()
 	}
@@ -115,8 +117,9 @@ func NewDccBusService(cfg DccBusConfig, sup Supervisor, redis *RedisService, cs 
 		cfg:   cfg,
 		sup:   sup,
 		redis: redis,
-		cs:    cs,
-		log:   log,
+		cs:      cs,
+		layouts: layouts,
+		log:     log,
 		ports: make(map[portKey]uint16, 8),
 	}
 }
@@ -402,6 +405,13 @@ func (d *DccBusService) buildProgramSpec(ctx context.Context, name string, layou
 	if err != nil {
 		return supervisord.ProgramSpec{}, fmt.Errorf("load command station %d: %w", commandStationID, err)
 	}
+	var layout domain.Layout
+	if d.layouts != nil {
+		layout, err = d.layouts.FindByID(ctx, layoutID)
+		if err != nil {
+			return supervisord.ProgramSpec{}, fmt.Errorf("load layout %d: %w", layoutID, err)
+		}
+	}
 	args := []string{
 		d.cfg.Executable, "dcc-bus",
 		"--layout-id", strconv.FormatUint(uint64(layoutID), 10),
@@ -412,6 +422,7 @@ func (d *DccBusService) buildProgramSpec(ctx context.Context, name string, layou
 		"--jwt-secret", string(d.cfg.JWTSecret),
 	}
 	args = dccbuscli.AppendStationFlags(args, cs)
+	args = dccbuscli.AppendLeaseFlags(args, layout, cs)
 	if cs.Z21ServerEnabled {
 		args = append(args, "--enable-z21")
 		args = append(args, "--z21-port", strconv.FormatUint(uint64(cs.EffectiveZ21InboundPort()), 10))

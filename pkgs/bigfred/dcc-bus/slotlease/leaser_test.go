@@ -15,6 +15,7 @@ type fakeStation struct {
 	acquired  []uint16
 	released  []uint16
 	acquireFn func(addr uint16) error
+	releaseFn func(addr uint16) error
 }
 
 func (f *fakeStation) AcquireSlot(addr commandstation.LocoAddr) error {
@@ -32,21 +33,30 @@ func (f *fakeStation) AcquireSlot(addr commandstation.LocoAddr) error {
 func (f *fakeStation) ReleaseSlot(addr commandstation.LocoAddr) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.releaseFn != nil {
+		if err := f.releaseFn(uint16(addr)); err != nil {
+			return err
+		}
+	}
 	f.released = append(f.released, uint16(addr))
 	return nil
 }
 
 type fakeWriter struct {
-	mu    sync.Mutex
-	calls []struct {
+	mu            sync.Mutex
+	calls         []struct {
 		addr      uint16
 		speed     uint8
 		forward   bool
 		emergency bool
 	}
+	blockSetSpeed chan struct{}
 }
 
 func (f *fakeWriter) SetSpeed(addr uint16, speed uint8, forward bool, emergency bool) error {
+	if f.blockSetSpeed != nil {
+		<-f.blockSetSpeed
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.calls = append(f.calls, struct {
@@ -113,6 +123,32 @@ func newTestLeaser(station *fakeStation, maxPerUser, maxSlots int) *Leaser {
 		IdleTimeout:  time.Minute,
 		ReleaseGrace: 0,
 	})
+}
+
+func startReleaseWorker(t *testing.T, l *Leaser) {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	go l.RunReleaseWorker(ctx)
+	t.Cleanup(cancel)
+}
+
+func waitReleased(t *testing.T, st *fakeStation, want int) []uint16 {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		st.mu.Lock()
+		got := append([]uint16(nil), st.released...)
+		st.mu.Unlock()
+		if len(got) >= want {
+			return got
+		}
+		time.Sleep(time.Millisecond)
+	}
+	st.mu.Lock()
+	got := append([]uint16(nil), st.released...)
+	st.mu.Unlock()
+	t.Fatalf("timed out: got %d releases %v, want %d", len(got), got, want)
+	return nil
 }
 
 func TestSelectDeselectReleasesSlot(t *testing.T) {
@@ -313,6 +349,7 @@ func putLeaseInGrace(l *Leaser, addr uint16, releaseAt time.Time) {
 func TestGraceEvictFreesBudgetForReserve(t *testing.T) {
 	st := &fakeStation{}
 	l := newTestLeaser(st, 8, 2)
+	startReleaseWorker(t, l)
 
 	putLeaseInGrace(l, 20, time.Now().Add(30*time.Minute))
 	putLeaseInGrace(l, 21, time.Now().Add(40*time.Minute))
@@ -324,9 +361,7 @@ func TestGraceEvictFreesBudgetForReserve(t *testing.T) {
 		t.Fatalf("Reserve after grace evict: %v", err)
 	}
 
-	st.mu.Lock()
-	released := append([]uint16(nil), st.released...)
-	st.mu.Unlock()
+	released := waitReleased(t, st, 1)
 	if len(released) != 1 {
 		t.Fatalf("released = %v, want one grace eviction", released)
 	}
@@ -360,6 +395,7 @@ func TestGraceEvictRejectsWhenNoGraceCandidates(t *testing.T) {
 func TestGraceEvictCapsAtFiveAttempts(t *testing.T) {
 	st := &fakeStation{}
 	l := newTestLeaser(st, 8, 2)
+	startReleaseWorker(t, l)
 	now := time.Now()
 
 	for i := uint16(0); i < 7; i++ {
@@ -373,9 +409,7 @@ func TestGraceEvictCapsAtFiveAttempts(t *testing.T) {
 		t.Fatalf("Reserve err = %v, want budget exceeded after 5 evictions", err)
 	}
 
-	st.mu.Lock()
-	released := append([]uint16(nil), st.released...)
-	st.mu.Unlock()
+	released := waitReleased(t, st, 5)
 	if len(released) != 5 {
 		t.Fatalf("released %v, want 5 (D20 attempt cap)", released)
 	}
@@ -390,6 +424,7 @@ func TestGraceEvictCapsAtFiveAttempts(t *testing.T) {
 func TestGraceEvictDoesNotTakeActiveLease(t *testing.T) {
 	st := &fakeStation{}
 	l := newTestLeaser(st, 8, 2)
+	startReleaseWorker(t, l)
 
 	if _, err := l.Select(1, "s", "ws", 10); err != nil {
 		t.Fatal(err)
@@ -400,9 +435,7 @@ func TestGraceEvictDoesNotTakeActiveLease(t *testing.T) {
 		t.Fatalf("Reserve: %v", err)
 	}
 
-	st.mu.Lock()
-	released := append([]uint16(nil), st.released...)
-	st.mu.Unlock()
+	released := waitReleased(t, st, 1)
 	if len(released) != 1 || released[0] != 20 {
 		t.Fatalf("released = %v, want [20]", released)
 	}
@@ -414,6 +447,7 @@ func TestGraceEvictDoesNotTakeActiveLease(t *testing.T) {
 func TestSelectTrainGraceEvict(t *testing.T) {
 	st := &fakeStation{}
 	l := newTestLeaser(st, 8, 2)
+	startReleaseWorker(t, l)
 
 	putLeaseInGrace(l, 20, time.Now().Add(10*time.Minute))
 	putLeaseInGrace(l, 21, time.Now().Add(20*time.Minute))
@@ -422,9 +456,7 @@ func TestSelectTrainGraceEvict(t *testing.T) {
 		t.Fatalf("SelectTrain: %v", err)
 	}
 
-	st.mu.Lock()
-	released := append([]uint16(nil), st.released...)
-	st.mu.Unlock()
+	released := waitReleased(t, st, 2)
 	if len(released) != 2 {
 		t.Fatalf("released = %v, want two grace evictions (one per needed slot)", released)
 	}
@@ -433,5 +465,88 @@ func TestSelectTrainGraceEvict(t *testing.T) {
 	}
 	if l.LeaseCount() < 2 {
 		t.Fatalf("lease count = %d, want train members retained", l.LeaseCount())
+	}
+}
+
+func TestReserveCapEvictDoesNotBlockOnBus(t *testing.T) {
+	block := make(chan struct{})
+	st := &fakeStation{
+		releaseFn: func(addr uint16) error {
+			<-block
+			return nil
+		},
+	}
+	l := newTestLeaser(st, 2, 0)
+	startReleaseWorker(t, l)
+
+	if _, err := l.Select(1, "s1", "ws", 11); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := l.Select(1, "s1", "ws", 22); err != nil {
+		t.Fatal(err)
+	}
+
+	done := make(chan struct{})
+	go func() {
+		_, err := l.Reserve(1, "s1", "ws", 33)
+		if err != nil {
+			t.Errorf("Reserve: %v", err)
+		}
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("Reserve blocked on bus release; want immediate return")
+	}
+	close(block)
+	waitReleased(t, st, 1)
+}
+
+func TestReserveReuseCancelsScheduledRelease(t *testing.T) {
+	block := make(chan struct{})
+	w := &fakeWriter{blockSetSpeed: block}
+	st := &fakeStation{}
+	l := New(st, w, newFakeStore(), fakeHub{}, nil, Config{
+		MaxPerUser:   8,
+		MaxSlots:     0,
+		IdleTimeout:  time.Minute,
+		ReleaseGrace: 0,
+	})
+	startReleaseWorker(t, l)
+
+	l.mu.Lock()
+	l.releasing[11] = struct{}{}
+	l.mu.Unlock()
+	l.enqueueRelease(11, ReleaseCapEvict)
+
+	if _, err := l.Reserve(1, "s1", "ws", 11); err != nil {
+		t.Fatal(err)
+	}
+	close(block)
+	time.Sleep(50 * time.Millisecond)
+	st.mu.Lock()
+	n := len(st.released)
+	st.mu.Unlock()
+	if n != 0 {
+		t.Fatalf("released = %d, want 0 (reuse cancelled scheduled release)", n)
+	}
+}
+
+func TestEnqueueReleaseSyncFallbackWhenFull(t *testing.T) {
+	st := &fakeStation{}
+	l := newTestLeaser(st, 8, 2)
+	for i := 0; i < releaseQueueSize; i++ {
+		l.releaseCh <- releaseJob{addr: uint16(1000 + i), reason: ReleaseGraceEvict}
+	}
+	putLeaseInGrace(l, 20, time.Now().Add(time.Hour))
+	putLeaseInGrace(l, 21, time.Now().Add(time.Hour))
+	if _, err := l.Reserve(1, "s", "ws", 30); err != nil {
+		t.Fatalf("Reserve: %v", err)
+	}
+	released := waitReleased(t, st, 1)
+	if len(released) != 1 || released[0] != 21 {
+		t.Fatalf("released = %v, want [21] (sync fallback when queue full)", released)
 	}
 }

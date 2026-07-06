@@ -397,6 +397,15 @@ func (r *Router) RunIdleSweep(ctx context.Context) {
 	}
 }
 
+// RunReleaseWorker drains the leaser's background slot-release queue so
+// latency-sensitive Reserve calls never block on a bus release.
+func (r *Router) RunReleaseWorker(ctx context.Context) {
+	if r == nil || r.leaser == nil {
+		return
+	}
+	r.leaser.RunReleaseWorker(ctx)
+}
+
 func (r *Router) leaseDriveGate(userID uint, addr uint16) error {
 	vehicle, onLayout := r.roster.AllowedVehicle(addr)
 	if d := r.drive.CanDrive(userID, vehicle, onLayout); !d.Allowed {

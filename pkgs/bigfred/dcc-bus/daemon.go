@@ -437,6 +437,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 	go d.router.RunStoreFlush(ctx)
 	go d.router.RunStateFeed(ctx)
 	go d.router.RunIdleSweep(ctx)
+	go d.router.RunReleaseWorker(ctx)
 
 	serveErr := make(chan error, 1)
 	go func() {

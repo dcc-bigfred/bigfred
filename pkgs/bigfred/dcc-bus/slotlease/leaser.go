@@ -20,6 +20,7 @@ const (
 	slotReleaseStopGrace  = 500 * time.Millisecond
 	slotReleaseRetryCount = 3
 	slotReleaseRetryGap   = 100 * time.Millisecond
+	releaseQueueSize      = 64
 )
 
 type leaseKind uint8
@@ -55,6 +56,13 @@ type lease struct {
 type trainLease struct {
 	trainID string
 	addrs   []uint16
+}
+
+// releaseJob is one background e-stop-then-release scheduled off a
+// latency-sensitive path (Reserve on the WS read loop).
+type releaseJob struct {
+	addr   uint16
+	reason ReleaseReason
 }
 
 // DriveGate reports whether userID may drive addr. nil allows all.
@@ -102,6 +110,7 @@ type Leaser struct {
 	perUser         map[uint]int
 	userAddrOrder   map[uint][]uint16 // FIFO per user for cap eviction
 	releasePending  map[uint16]struct{}
+	releasing       map[uint16]struct{} // addrs with a scheduled background release (reuse-race guard)
 	station         SlotStation
 	writer          SpeedWriter
 	store           LocoStore
@@ -114,6 +123,7 @@ type Leaser struct {
 	switcherGrace   time.Duration
 	metrics         Recorder
 	diagCh          chan struct{}
+	releaseCh       chan releaseJob
 	stop            chan struct{}
 }
 
@@ -148,6 +158,7 @@ func New(station SlotStation, writer SpeedWriter, store LocoStore, hub StateBroa
 		perUser:        make(map[uint]int, 16),
 		userAddrOrder:  make(map[uint][]uint16, 16),
 		releasePending: make(map[uint16]struct{}, 8),
+		releasing:      make(map[uint16]struct{}, 8),
 		station:        station,
 		writer:         writer,
 		store:          store,
@@ -160,6 +171,7 @@ func New(station SlotStation, writer SpeedWriter, store LocoStore, hub StateBroa
 		switcherGrace:  sg,
 		metrics:        recorderOrNoop(cfg.Metrics),
 		diagCh:         make(chan struct{}, 8),
+		releaseCh:      make(chan releaseJob, releaseQueueSize),
 		stop:           make(chan struct{}),
 	}
 }
@@ -196,7 +208,7 @@ func (l *Leaser) Reserve(userID uint, session string, source string, addr uint16
 			return 0, ErrVehicleCapExceeded
 		}
 		l.mu.Unlock()
-		l.deselect(userID, session, evictAddr, ReleaseCapEvict, false)
+		l.deselect(userID, session, evictAddr, ReleaseCapEvict, false, true)
 		l.metrics.RecordCapEvict()
 		evicted = evictAddr
 		l.mu.Lock()
@@ -210,6 +222,14 @@ func (l *Leaser) Reserve(userID uint, session string, source string, addr uint16
 			lastDriveAt: make(map[holderKey]time.Time, 2),
 		}
 		l.leases[addr] = le
+	}
+	// If a background release for this addr is still scheduled, cancel it and
+	// reuse the physical slot that is still IN_USE on the command station.
+	if _, scheduled := l.releasing[addr]; scheduled {
+		delete(l.releasing, addr)
+		if le.acquiredAt.IsZero() {
+			le.acquiredAt = time.Now()
+		}
 	}
 	// Reuse a slot that was scheduled for deferred release (switcher grace):
 	// cancel the pending release and keep the slot IN_USE.
@@ -381,7 +401,7 @@ func (l *Leaser) DrivenAddrs(userID uint) []uint16 {
 // Deselect drops one holder; e-stop-then-release when the last holder leaves.
 // For switcher-change with a grace window use DeselectDeferred instead.
 func (l *Leaser) Deselect(userID uint, session string, addr uint16) {
-	l.deselect(userID, session, addr, ReleaseSwitcherChange, false)
+	l.deselect(userID, session, addr, ReleaseSwitcherChange, false, false)
 }
 
 // Touch updates lastDriveAt for a remote holder (Z21/WiThrottle drive activity).
@@ -509,8 +529,8 @@ func (le *lease) leaseOccupiesSlotLocked() bool {
 }
 
 // ensureBudgetHeadroomLocked tries to free budget for needed new physical slots
-// (D20). Caller must hold l.mu. It may drop and re-acquire l.mu while running
-// stopAndRelease on evicted grace leases.
+// (D20). Caller must hold l.mu. It may drop and re-acquire l.mu while
+// enqueueing background releases on evicted grace leases.
 func (l *Leaser) ensureBudgetHeadroomLocked(needed int) bool {
 	if l.maxSlots <= 0 || needed <= 0 {
 		return true
@@ -520,10 +540,13 @@ func (l *Leaser) ensureBudgetHeadroomLocked(needed int) bool {
 		if len(toRelease) == 0 {
 			return false
 		}
+		for _, addr := range toRelease {
+			l.releasing[addr] = struct{}{}
+		}
 		l.notifyDiagLocked()
 		l.mu.Unlock()
 		for _, addr := range toRelease {
-			l.stopAndRelease(addr, ReleaseGraceEvict)
+			l.enqueueRelease(addr, ReleaseGraceEvict)
 		}
 		l.mu.Lock()
 	}
@@ -632,6 +655,7 @@ func (l *Leaser) OnSlotReleased(addr commandstation.LocoAddr) {
 	}
 	delete(l.leases, a16)
 	delete(l.releasePending, a16)
+	delete(l.releasing, a16)
 	l.notifyDiagLocked()
 	l.mu.Unlock()
 	if external {
@@ -648,10 +672,10 @@ func (l *Leaser) OnSlotReleased(addr commandstation.LocoAddr) {
 // for addr cancels the pending release. SweepDeferred performs the actual
 // release once the grace window elapses.
 func (l *Leaser) DeselectDeferred(userID uint, session string, addr uint16) {
-	l.deselect(userID, session, addr, ReleaseSwitcherChange, true)
+	l.deselect(userID, session, addr, ReleaseSwitcherChange, true, false)
 }
 
-func (l *Leaser) deselect(userID uint, session string, addr uint16, reason ReleaseReason, deferred bool) {
+func (l *Leaser) deselect(userID uint, session string, addr uint16, reason ReleaseReason, deferred, async bool) {
 	l.mu.Lock()
 	le, ok := l.leases[addr]
 	if !ok {
@@ -688,9 +712,16 @@ func (l *Leaser) deselect(userID uint, session string, addr uint16, reason Relea
 			return
 		}
 		delete(l.leases, addr)
+		if async {
+			l.releasing[addr] = struct{}{}
+		}
 		l.notifyDiagLocked()
 		l.mu.Unlock()
-		l.stopAndRelease(addr, reason)
+		if async {
+			l.enqueueRelease(addr, reason)
+		} else {
+			l.stopAndRelease(addr, reason)
+		}
 		return
 	}
 	l.notifyDiagLocked()
@@ -808,6 +839,9 @@ func (l *Leaser) youngestDriveLocked(le *lease) time.Time {
 }
 
 func (l *Leaser) stopAndRelease(addr uint16, reason ReleaseReason) {
+	if l.releaseAbortedByReuse(addr) {
+		return
+	}
 	l.metrics.RecordReleaseEstop()
 	ctx := context.Background()
 	forward := true
@@ -827,6 +861,9 @@ func (l *Leaser) stopAndRelease(addr uint16, reason ReleaseReason) {
 		snap := l.store.SetSpeedPreservingUser(addr, 0, forward, "slot_release")
 		l.hub.BroadcastLocoState(ctx, snap)
 	}
+	if l.releaseAbortedByReuse(addr) {
+		return
+	}
 	if err := l.releaseSlotWithRetry(addr); err != nil {
 		l.mu.Lock()
 		l.releasePending[addr] = struct{}{}
@@ -841,6 +878,9 @@ func (l *Leaser) stopAndRelease(addr uint16, reason ReleaseReason) {
 }
 
 func (l *Leaser) releaseSlotWithRetry(addr uint16) error {
+	if l.releaseAbortedByReuse(addr) {
+		return nil
+	}
 	if l.station == nil {
 		return nil
 	}
@@ -857,6 +897,19 @@ func (l *Leaser) releaseSlotWithRetry(addr uint16) error {
 	return last
 }
 
+// releaseAbortedByReuse reports whether a background release for addr was
+// cancelled because Reserve re-leased the address before the physical
+// ReleaseSlot completed. Clears a stale releasing mark when reuse wins.
+func (l *Leaser) releaseAbortedByReuse(addr uint16) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.leases[addr] == nil {
+		return false
+	}
+	delete(l.releasing, addr)
+	return true
+}
+
 func (l *Leaser) drainReleasePending() {
 	l.mu.Lock()
 	pending := make([]uint16, 0, len(l.releasePending))
@@ -871,6 +924,51 @@ func (l *Leaser) drainReleasePending() {
 			l.mu.Unlock()
 			l.metrics.RecordReleased(ReleasePendingRetry)
 			l.notifyDiag()
+		}
+	}
+}
+
+// enqueueRelease schedules an e-stop-then-release on the background release
+// worker so a latency-sensitive caller (Reserve on the WS read loop) never
+// blocks on a bus round-trip. The lease bookkeeping is already removed under
+// mu and the addr marked in l.releasing; only the physical e-stop +
+// ReleaseSlot is deferred. If the worker queue is full it releases inline so a
+// slot is never silently leaked. MUST be called without holding l.mu.
+func (l *Leaser) enqueueRelease(addr uint16, reason ReleaseReason) {
+	select {
+	case l.releaseCh <- releaseJob{addr: addr, reason: reason}:
+	default:
+		l.releaseScheduled(addr, reason)
+	}
+}
+
+// releaseScheduled runs stopAndRelease unless the addr was re-leased before
+// the worker ran (guard against yanking a freshly re-acquired slot). Clears
+// the l.releasing mark either way.
+func (l *Leaser) releaseScheduled(addr uint16, reason ReleaseReason) {
+	l.mu.Lock()
+	_, scheduled := l.releasing[addr]
+	reused := l.leases[addr] != nil
+	delete(l.releasing, addr)
+	l.mu.Unlock()
+	if !scheduled || reused {
+		return
+	}
+	l.stopAndRelease(addr, reason)
+}
+
+// RunReleaseWorker drains scheduled background releases until ctx is
+// cancelled. Wire it once per leaser from the daemon alongside RunIdleSweep.
+func (l *Leaser) RunReleaseWorker(ctx context.Context) {
+	if l == nil {
+		return
+	}
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case job := <-l.releaseCh:
+			l.releaseScheduled(job.addr, job.reason)
 		}
 	}
 }

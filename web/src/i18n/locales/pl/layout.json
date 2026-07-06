@@ -59,6 +59,10 @@
         "message": "Zablokowana makieta zniknie z ekranu logowania, ale działające sesje pozostaną otwarte. Możesz ją w każdej chwili odblokować."
       }
     },
+    "fields": {
+      "maxVehiclesPerUser": "Limit pojazdów na użytkownika",
+      "maxVehiclesPerUserHelp": "Maksymalna liczba jednocześnie prowadzonych loków na użytkownika (sloty + subskrypcje). Domyślnie 8."
+    },
     "empty": "Brak makiet do wyświetlenia."
   }
 }

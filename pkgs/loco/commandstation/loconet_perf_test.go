@@ -274,10 +274,20 @@ func TestKeepaliveRefreshesCachedSlots(t *testing.T) {
 	}
 	rec.reset()
 
+	l.slotMu.Lock()
+	l.slotAcquiredAt[addr] = time.Now().Add(-31 * time.Second)
+	l.slotMu.Unlock()
+	if l.recentlyAcquired(addr) {
+		t.Fatal("setup: slot should be aged out before keepalive")
+	}
+
 	l.refreshOneKeepaliveSlot()
 	pkts := rec.packets()
 	if got := countOpcode(pkts, lnOPC_LOCO_SPD); got != 1 {
 		t.Fatalf("keepalive: SPD frames = %d, want 1", got)
+	}
+	if !l.recentlyAcquired(addr) {
+		t.Fatal("keepalive should refresh slotAcquiredAt")
 	}
 }
 

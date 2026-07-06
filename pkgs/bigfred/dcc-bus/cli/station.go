@@ -19,6 +19,9 @@ const (
 	FlagHeartbeatSecs  = "heartbeat-secs"
 	FlagDeadmanSecs    = "deadman-secs"
 	FlagPollIntervalMs = "poll-interval-ms"
+	FlagMaxVehiclesPerUser = "max-vehicles-per-user"
+	FlagMaxLoconetSlots    = "max-loconet-slots"
+	FlagIdleTimeoutSecs    = "idle-timeout-secs"
 )
 
 // AppendStationFlags appends command-station connection flags for cs.
@@ -32,6 +35,20 @@ func AppendStationFlags(args []string, cs domain.CommandStation) []string {
 		"--"+FlagDeadmanSecs, strconv.FormatFloat(cs.EffectiveDeadmanSecs(), 'f', -1, 64),
 		"--"+FlagPollIntervalMs, strconv.FormatUint(uint64(cs.EffectivePollIntervalMs()), 10),
 	)
+}
+
+// AppendLeaseFlags appends slot-lease limits for the daemon router.
+func AppendLeaseFlags(args []string, layout domain.Layout, cs domain.CommandStation) []string {
+	args = append(args,
+		"--"+FlagMaxVehiclesPerUser, strconv.FormatUint(uint64(layout.EffectiveMaxVehiclesPerUser()), 10),
+		"--"+FlagIdleTimeoutSecs, strconv.FormatUint(uint64(cs.IdleTimeoutSecs), 10),
+	)
+	if cs.Kind.IsLocoNet() {
+		args = append(args,
+			"--"+FlagMaxLoconetSlots, strconv.FormatUint(uint64(cs.EffectiveMaxLoconetSlots()), 10),
+		)
+	}
+	return args
 }
 
 // CommandStationFromFlags parses CLI flags into a CommandStation row

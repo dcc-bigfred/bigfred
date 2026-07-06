@@ -26,6 +26,12 @@ type Router interface {
 	// validates membership in the layout roster and pushes a
 	// `loco.state` snapshot for each accepted address.
 	HandleSubscribe(ctx context.Context, sess *Session, payload protocol.LocoSubscribePayload, requestID string) Outcome
+	// HandleLocoSelect leases the command-station slot for the active drive target.
+	HandleLocoSelect(ctx context.Context, sess *Session, payload protocol.LocoSelectPayload, requestID string) Outcome
+	// HandleLocoDeselect releases the drive-target slot when appropriate.
+	HandleLocoDeselect(ctx context.Context, sess *Session, payload protocol.LocoDeselectPayload, requestID string) Outcome
+	// HandleTrainSelect leases slots for every powered train member.
+	HandleTrainSelect(ctx context.Context, sess *Session, payload protocol.TrainSelectPayload, requestID string) Outcome
 	// HandleSetSpeed handles a single throttle move.
 	HandleSetSpeed(ctx context.Context, sess *Session, payload contract.LocoSetSpeedWire, requestID string) Outcome
 	// HandleTrainSetSpeed fans a throttle move to every powered member.
@@ -56,6 +62,7 @@ type Server struct {
 	layoutID      uint
 	csID          uint
 	metrics       *Metrics
+	slotsDiag     *SlotsDiagHandler
 
 	// AllowedOrigins is forwarded verbatim to websocket.AcceptOptions.
 	// Empty slice means InsecureSkipVerify = true (acceptable when
@@ -77,6 +84,7 @@ type ServerConfig struct {
 	DeadmanSecs    float64
 	AllowedOrigins []string
 	Metrics        *Metrics
+	SlotsDiag      *SlotsDiagHandler
 }
 
 // NewServer returns a ready-to-mount Server. Heartbeat and dead-man
@@ -111,6 +119,7 @@ func NewServer(cfg ServerConfig) *Server {
 		deadmanSecs:    dms,
 		AllowedOrigins: cfg.AllowedOrigins,
 		metrics:        cfg.Metrics,
+		slotsDiag:      cfg.SlotsDiag,
 	}
 }
 
@@ -121,6 +130,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
 	case "/ws":
 		s.handleWS(w, r)
+	case "/admin/slots/ws":
+		if s.slotsDiag != nil {
+			s.slotsDiag.ServeHTTP(w, r)
+		} else {
+			http.NotFound(w, r)
+		}
 	case "/healthz":
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
@@ -280,6 +295,51 @@ func (s *Server) dispatch(ctx context.Context, sess *Session, env contract.Envel
 		}
 		out = s.router.HandleSubscribe(ctx, sess, p, env.ID)
 
+	case protocol.TypeLocoSelect:
+		var p protocol.LocoSelectPayload
+		if err := json.Unmarshal(env.Payload, &p); err != nil {
+			out = s.ackOrFail(ctx, sess, env.ID, false, errors.WsCodeBadPayload)
+			break
+		}
+		if !(validation.LocoSelect{}).Valid(p) {
+			out = s.ackOrFail(ctx, sess, env.ID, false, errors.WsCodeBadPayload)
+			break
+		}
+		s.dispatchAsync(ctx, sess, env, func() Outcome {
+			return s.router.HandleLocoSelect(ctx, sess, p, env.ID)
+		})
+		return
+
+	case protocol.TypeLocoDeselect:
+		var p protocol.LocoDeselectPayload
+		if err := json.Unmarshal(env.Payload, &p); err != nil {
+			out = s.ackOrFail(ctx, sess, env.ID, false, errors.WsCodeBadPayload)
+			break
+		}
+		if !(validation.LocoDeselect{}).Valid(p) {
+			out = s.ackOrFail(ctx, sess, env.ID, false, errors.WsCodeBadPayload)
+			break
+		}
+		s.dispatchAsync(ctx, sess, env, func() Outcome {
+			return s.router.HandleLocoDeselect(ctx, sess, p, env.ID)
+		})
+		return
+
+	case protocol.TypeTrainSelect:
+		var p protocol.TrainSelectPayload
+		if err := json.Unmarshal(env.Payload, &p); err != nil {
+			out = s.ackOrFail(ctx, sess, env.ID, false, errors.WsCodeBadPayload)
+			break
+		}
+		if !(validation.TrainSelect{}).Valid(p) {
+			out = s.ackOrFail(ctx, sess, env.ID, false, errors.WsCodeBadPayload)
+			break
+		}
+		s.dispatchAsync(ctx, sess, env, func() Outcome {
+			return s.router.HandleTrainSelect(ctx, sess, p, env.ID)
+		})
+		return
+
 	case protocol.TypeLocoSetSpeed:
 		var p contract.LocoSetSpeedWire
 		if err := json.Unmarshal(env.Payload, &p); err != nil {
@@ -330,6 +390,18 @@ func (s *Server) dispatch(ctx context.Context, sess *Session, env contract.Envel
 	if s.metrics != nil {
 		s.metrics.Record(env.Type, out, time.Since(start))
 	}
+}
+
+// dispatchAsync runs a lease handler in its own goroutine so a cold-path
+// AcquireSlot ack does not head-of-line block the session read loop (D12).
+func (s *Server) dispatchAsync(ctx context.Context, sess *Session, env contract.EnvelopeWire, fn func() Outcome) {
+	go func() {
+		start := time.Now()
+		out := fn()
+		if s.metrics != nil {
+			s.metrics.Record(env.Type, out, time.Since(start))
+		}
+	}()
 }
 
 func (s *Server) handlePing(ctx context.Context, sess *Session) Outcome {

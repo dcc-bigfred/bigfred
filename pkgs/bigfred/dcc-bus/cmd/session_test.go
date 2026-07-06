@@ -15,10 +15,16 @@ import (
 type slotStubStation struct {
 	commandstation.StubStation
 	mu       sync.Mutex
+	acquired []uint16
 	released []uint16
 }
 
-func (s *slotStubStation) AcquireSlot(commandstation.LocoAddr) error { return nil }
+func (s *slotStubStation) AcquireSlot(addr commandstation.LocoAddr) error {
+	s.mu.Lock()
+	s.acquired = append(s.acquired, uint16(addr))
+	s.mu.Unlock()
+	return nil
+}
 func (s *slotStubStation) ForceAcquireSlot(commandstation.LocoAddr) error { return nil }
 func (s *slotStubStation) DispatchSlot(commandstation.LocoAddr) error { return nil }
 func (s *slotStubStation) AcquireDispatched() (commandstation.LocoAddr, error) {
@@ -34,6 +40,11 @@ func (s *slotStubStation) releasedAddrs() []uint16 {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return append([]uint16(nil), s.released...)
+}
+func (s *slotStubStation) acquiredAddrs() []uint16 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]uint16(nil), s.acquired...)
 }
 
 type stubHub struct {
@@ -86,38 +97,33 @@ func waitForRelease(t *testing.T, st *slotStubStation, n int) []uint16 {
 	return st.releasedAddrs()
 }
 
-func TestHandleSessionClose_releasesSlotsWhenNoSessionsRemain(t *testing.T) {
+func TestHandleSessionClose_releasesLeaseOnSessionClose(t *testing.T) {
 	t.Parallel()
 	rs, cleanup := testRedis(t)
 	defer cleanup()
 	ctx := context.Background()
 	const addr uint16 = 7
 
-	// The closing user was driving addr.
-	if err := rs.StoreLocoCurrentState(ctx, contract.LocoStateWire{
-		Address:            addr,
-		ControlledByUserID: 42,
-	}, StateTTL); err != nil {
-		t.Fatal(err)
-	}
-
 	st := &slotStubStation{}
 	r, err := NewRouter(ctx, Config{
 		Station:          st,
-		Hub:              &stubHub{}, // no remaining sessions
+		Hub:              &stubHub{},
 		Redis:            rs,
 		LayoutID:         2,
 		CommandStationID: 1,
 		SpeedSteps:       128,
 		AllowedVehicles: contract.AllowedVehicles{
 			LayoutID: 2,
-			Vehicles: []contract.AllowedVehicle{{Addr: addr}},
+			Vehicles: []contract.AllowedVehicle{{Addr: addr, ControllerUserIDs: []uint{42}}},
 		},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
+	if _, err := r.leaser.Select(42, "last-tab", "ws", addr); err != nil {
+		t.Fatal(err)
+	}
 	r.HandleSessionClose(ctx, Actor{UserID: 42, SessionID: "last-tab"}, "ws_closed")
 
 	got := waitForRelease(t, st, 1)
@@ -126,11 +132,9 @@ func TestHandleSessionClose_releasesSlotsWhenNoSessionsRemain(t *testing.T) {
 	}
 }
 
-// When the closing tab had subscribed locos but Redis has no ControlledByUserID
-// (user viewed throttle without driving), slots must still be released. This
-// mirrors production: the hub unregisters the session before the delayed DMS runs,
-// so drive targets must come from ClosingSubscribedAddrs, not the live hub.
-func TestHandleSessionClose_releasesSlotsFromClosingSubscriptions(t *testing.T) {
+// Subscribing without selecting does not hold a slot; closing a view-only
+// session must not release command-station slots.
+func TestHandleSessionClose_subscribeOnlyDoesNotReleaseSlot(t *testing.T) {
 	t.Parallel()
 	rs, cleanup := testRedis(t)
 	defer cleanup()
@@ -140,7 +144,7 @@ func TestHandleSessionClose_releasesSlotsFromClosingSubscriptions(t *testing.T) 
 	st := &slotStubStation{}
 	r, err := NewRouter(ctx, Config{
 		Station:          st,
-		Hub:              &stubHub{}, // session already gone from hub
+		Hub:              &stubHub{},
 		Redis:            rs,
 		LayoutID:         2,
 		CommandStationID: 1,
@@ -160,28 +164,20 @@ func TestHandleSessionClose_releasesSlotsFromClosingSubscriptions(t *testing.T) 
 		ClosingSubscribedAddrs: []uint16{addr},
 	}, "ws_closed")
 
-	got := waitForRelease(t, st, 1)
-	if len(got) != 1 || got[0] != addr {
-		t.Fatalf("released = %v, want [%d]", got, addr)
+	time.Sleep(100 * time.Millisecond)
+	if got := st.releasedAddrs(); len(got) != 0 {
+		t.Fatalf("released = %v, want none (subscribe is view-only)", got)
 	}
 }
 
-func TestHandleSessionClose_keepsSlotWhenAnotherSessionSubscribed(t *testing.T) {
+func TestHandleSessionClose_releasesLeaseEvenWhenOthersSubscribed(t *testing.T) {
 	t.Parallel()
 	rs, cleanup := testRedis(t)
 	defer cleanup()
 	ctx := context.Background()
 	const addr uint16 = 7
 
-	if err := rs.StoreLocoCurrentState(ctx, contract.LocoStateWire{
-		Address:            addr,
-		ControlledByUserID: 42,
-	}, StateTTL); err != nil {
-		t.Fatal(err)
-	}
-
 	st := &slotStubStation{}
-	// A different user's session is still subscribed to addr.
 	hub := &stubHub{sessions: []SessionView{
 		{ID: "other-user-tab", UserID: 99, SubscribedAddrs: []uint16{addr}},
 	}}
@@ -194,18 +190,20 @@ func TestHandleSessionClose_keepsSlotWhenAnotherSessionSubscribed(t *testing.T) 
 		SpeedSteps:       128,
 		AllowedVehicles: contract.AllowedVehicles{
 			LayoutID: 2,
-			Vehicles: []contract.AllowedVehicle{{Addr: addr}},
+			Vehicles: []contract.AllowedVehicle{{Addr: addr, ControllerUserIDs: []uint{42}}},
 		},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
+	if _, err := r.leaser.Select(42, "last-tab", "ws", addr); err != nil {
+		t.Fatal(err)
+	}
 	r.HandleSessionClose(ctx, Actor{UserID: 42, SessionID: "last-tab"}, "ws_closed")
 
-	// Give the async release a chance to (incorrectly) fire.
-	time.Sleep(100 * time.Millisecond)
-	if got := st.releasedAddrs(); len(got) != 0 {
-		t.Fatalf("released = %v, want none (co-driver still subscribed)", got)
+	got := waitForRelease(t, st, 1)
+	if len(got) != 1 || got[0] != addr {
+		t.Fatalf("released = %v, want [%d] (viewers do not hold slots)", got, addr)
 	}
 }

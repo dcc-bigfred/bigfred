@@ -19,10 +19,16 @@ func (r *Router) AuthorizeDrive(userID uint, addr uint16, scope remotes.DriveSco
 }
 
 func (r *Router) SetSpeed(ctx context.Context, actor remotes.ThrottleActor, resp remotes.ThrottleResponder, req contract.LocoSetSpeedWire) remotes.CommandResult {
+	if res := r.prepareHandsetLease(actor, req.Address); !res.OK {
+		return toCommandResult(res)
+	}
 	return toCommandResult(r.HandleSetSpeed(ctx, throttleActor(actor), bridgeResponder(resp), req, ""))
 }
 
 func (r *Router) SetFunction(ctx context.Context, actor remotes.ThrottleActor, resp remotes.ThrottleResponder, req contract.LocoSetFunctionWire) remotes.CommandResult {
+	if res := r.prepareHandsetLease(actor, req.Address); !res.OK {
+		return toCommandResult(res)
+	}
 	return toCommandResult(r.HandleSetFunction(ctx, throttleActor(actor), bridgeResponder(resp), req, ""))
 }
 
@@ -48,5 +54,23 @@ func (throttleResponderBridge) SendAck(ctx context.Context, requestID string, pa
 	_ = ctx
 	_ = requestID
 	_ = payload
+	return nil
+}
+
+func (throttleResponderBridge) SelectedAddr() uint16 { return 0 }
+
+func (throttleResponderBridge) SetSelected(uint16) {}
+
+func (throttleResponderBridge) ClearSelected() {}
+
+func (b throttleResponderBridge) Unsubscribe(addrs ...uint16) {
+	b.ThrottleResponder.Unsubscribe(addrs...)
+}
+
+func (b throttleResponderBridge) OldestSubscribed() (uint16, bool) {
+	return b.ThrottleResponder.OldestSubscribed()
+}
+
+func (throttleResponderBridge) SendLocoErrorPayload(context.Context, protocol.LocoErrorPayload) error {
 	return nil
 }

@@ -15,6 +15,18 @@ import (
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/auth"
 )
 
+func TestSessionSubscribeFIFOOrder(t *testing.T) {
+	s := &Session{subscribed: make(map[uint16]struct{}, 4)}
+	s.Subscribe(3, 7, 42)
+	if oldest, ok := s.OldestSubscribed(); !ok || oldest != 3 {
+		t.Fatalf("oldest = %d ok=%v, want 3", oldest, ok)
+	}
+	s.Unsubscribe(3)
+	if oldest, ok := s.OldestSubscribed(); !ok || oldest != 7 {
+		t.Fatalf("oldest after unsubscribe = %d ok=%v, want 7", oldest, ok)
+	}
+}
+
 func TestSessionSendNonBlockingDropOldest(t *testing.T) {
 	hold := make(chan struct{})
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

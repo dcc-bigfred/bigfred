@@ -20,15 +20,26 @@ type DCCWriter struct {
 	LogFields  func() logrus.Fields
 }
 
-// SetSpeed sends one SetSpeed to the command station. When payloadSpeed is 0
-// or emergency is true, a failed call is retried in a background goroutine.
-func (w *DCCWriter) SetSpeed(addr uint16, payloadSpeed uint8, forward bool, emergency bool) error {
-	wireSpeed := payloadSpeed
+// WireSpeedFromPayload maps a throttle payload speed to the DCC wire speed
+// sent to the command station. DCC wire speed 1 is the emergency-brake step,
+// so a normal (non-emergency) request for payload 1 — the first driving notch —
+// is promoted to wire speed 2, the first real moving step. Emergency requests
+// always emit wire speed 1; stop (payload 0) emits wire speed 0.
+func WireSpeedFromPayload(payload uint8, emergency bool) uint8 {
 	if emergency {
-		wireSpeed = 1
-	} else if wireSpeed == 1 {
-		wireSpeed = 0 // wire speed 1 is DCC e-stop; skip for normal throttle
+		return 1
 	}
+	if payload == 1 {
+		return 2
+	}
+	return payload
+}
+
+// SetSpeed sends one SetSpeed to the command station. When the resulting wire
+// speed is a stop/emergency-brake (0 or 1), a failed call is retried in a
+// background goroutine so a dropped frame never leaves a loco moving.
+func (w *DCCWriter) SetSpeed(addr uint16, payloadSpeed uint8, forward bool, emergency bool) error {
+	wireSpeed := WireSpeedFromPayload(payloadSpeed, emergency)
 	err := w.setSpeedOnStation(addr, wireSpeed, forward, emergency)
 	if err == nil {
 		return nil
@@ -36,7 +47,7 @@ func (w *DCCWriter) SetSpeed(addr uint16, payloadSpeed uint8, forward bool, emer
 	if errors.Is(err, commandstation.ErrSpeedSuperseded) {
 		return err
 	}
-	if payloadSpeed <= 1 || emergency {
+	if wireSpeed <= 1 {
 		go w.retrySetSpeed(addr, wireSpeed, forward, brakeRetryCount)
 	}
 	return err

@@ -5,11 +5,52 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/errors"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/protocol"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/security"
-	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/service/station"
-	"github.com/keskad/loco/pkgs/loco/commandstation"
 )
+
+const defaultSubscriptionCap = 8
+
+func (r *Router) subscriptionCap() int {
+	if r == nil || r.maxVehiclesPerUser <= 0 {
+		return defaultSubscriptionCap
+	}
+	return r.maxVehiclesPerUser
+}
+
+// enforceSubscriptionCap adds incoming addresses while respecting the per-session
+// subscription limit (D16). When full, the oldest subscription is dropped and
+// subscription_cap is emitted for the evicted address.
+func (r *Router) enforceSubscriptionCap(ctx context.Context, resp Responder, incoming []uint16) {
+	cap := r.subscriptionCap()
+	known := make(map[uint16]struct{}, len(incoming))
+	for _, a := range resp.SubscribedAddrs() {
+		known[a] = struct{}{}
+	}
+	for _, addr := range incoming {
+		if _, ok := known[addr]; ok {
+			continue
+		}
+		for len(resp.SubscribedAddrs()) >= cap {
+			oldest, ok := resp.OldestSubscribed()
+			if !ok {
+				break
+			}
+			resp.Unsubscribe(oldest)
+			delete(known, oldest)
+			_ = resp.SendLocoError(ctx, oldest, errors.CodeSubscriptionCap, "")
+			r.slotMetrics.RecordSubscribeCap()
+			r.log.WithFields(logrus.Fields{
+				"evictedAddr": oldest,
+				"incoming":    addr,
+				"cap":         cap,
+			}).Debug("dcc-bus subscription cap: dropped oldest")
+		}
+		resp.Subscribe(addr)
+		known[addr] = struct{}{}
+	}
+}
 
 // HandleSubscribe accepts a subscription request and immediately emits a
 // state snapshot for each accepted address.
@@ -35,8 +76,7 @@ func (r *Router) HandleSubscribe(ctx context.Context, actor Actor, resp Responde
 	} else {
 		r.log.WithFields(fields).Debug("dcc-bus loco.subscribe")
 	}
-	resp.Subscribe(accepted...)
-	r.reclaimSlotOwnership(accepted)
+	r.enforceSubscriptionCap(ctx, resp, accepted)
 
 	for _, addr := range accepted {
 		snap := r.locoSnapOrDefault(ctx, addr)
@@ -46,52 +86,4 @@ func (r *Router) HandleSubscribe(ctx context.Context, actor Actor, resp Responde
 		_ = resp.SendLocoState(ctx, snap)
 	}
 	return OKResult()
-}
-
-// reclaimSlotOwnership re-claims the command-station slot for each loco and
-// syncs Redis/UI from the bus. Slots are owned per-locomotive by the server,
-// not per session: a client leaving and returning to the throttle must not
-// lose control just because the command station purged the idle slot to COMMON
-// or reassigned it. This occupies the slot at the server level and runs
-// independently of (and before) the drive-permission layer enforced in
-// HandleSetSpeed — viewing is enough to keep BigFred's ownership warm.
-//
-// Best-effort and asynchronous: each ForceAcquireSlot is a command-station round
-// trip, so it must not block the subscribe ack. Drivers without slots (e.g.
-// Z21) do not implement SlotManager and are skipped.
-func (r *Router) reclaimSlotOwnership(addrs []uint16) {
-	if len(addrs) == 0 {
-		return
-	}
-	sm, ok := station.AsSlotManager(r.station)
-	if !ok {
-		return
-	}
-	targets := append([]uint16(nil), addrs...)
-	go func() {
-		ctx := context.Background()
-		for _, addr := range targets {
-			r.cache.ClearAddr(addr)
-			if err := sm.ForceAcquireSlot(commandstation.LocoAddr(addr)); err != nil {
-				r.log.WithError(err).WithField("addr", addr).
-					Warn("dcc-bus slot reclaim failed")
-				continue
-			}
-			r.syncLocoStateFromBus(ctx, addr)
-		}
-	}()
-}
-
-// reclaimSlotsStillSubscribed revalidates locos from a closing session that
-// remain subscribed elsewhere (e.g. load-test disconnect while the throttle
-// tab stays open). Without this, a stale LocoNet slot mapping from the
-// departing client can leave co-subscribers unable to drive.
-func (r *Router) reclaimSlotsStillSubscribed(closingAddrs []uint16) {
-	targets := make([]uint16, 0, len(closingAddrs))
-	for _, addr := range closingAddrs {
-		if r.addrStillSubscribed(addr) {
-			targets = append(targets, addr)
-		}
-	}
-	r.reclaimSlotOwnership(targets)
 }

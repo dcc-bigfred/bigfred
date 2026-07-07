@@ -66,6 +66,7 @@ func (s *Server) handleProgTrackCVWrite(ctx context.Context, remote *net.UDPAddr
 	if isPairingCVWire(cvWire) {
 		if _, active := s.pairing.Handle(ctx, client, cvWire, value); active != nil {
 			s.syncPaired(ctx, client)
+			s.clearVirtualLoco(client.Key)
 			if s.log != nil {
 				fields := pairingLogFields(active)
 				fields["client"] = client.Key

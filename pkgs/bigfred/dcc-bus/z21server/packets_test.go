@@ -92,9 +92,19 @@ func TestDriveSpeed28StepBoundary(t *testing.T) {
 func TestParseSetLocoFunctionZ21AppPacket(t *testing.T) {
 	t.Parallel()
 	pkt := mustHex(t, "0a004000e4f8001f5152")
-	addr, fn, on, ok := parseSetLocoFunction(pkt)
-	if !ok || addr != 31 || fn != 17 || !on {
-		t.Fatalf("parseSetLocoFunction = (%d, %d, %v, %v)", addr, fn, on, ok)
+	addr, fn, sw, ok := parseSetLocoFunction(pkt)
+	if !ok || addr != 31 || fn != 17 || sw != funcSwitchOn {
+		t.Fatalf("parseSetLocoFunction = (%d, %d, %v, %v)", addr, fn, sw, ok)
+	}
+}
+
+func TestParseSetLocoFunctionToggle(t *testing.T) {
+	t.Parallel()
+	// WLANmaus F1 toggle: DB3 = 0x81 = 10_000001.
+	pkt := mustHex(t, "0a004000e4f8001f8100")
+	addr, fn, sw, ok := parseSetLocoFunction(pkt)
+	if !ok || addr != 31 || fn != 1 || sw != funcSwitchToggle {
+		t.Fatalf("parseSetLocoFunction toggle = (%d, %d, %v, %v)", addr, fn, sw, ok)
 	}
 }
 

@@ -49,6 +49,7 @@ type Server struct {
 	pairing     *PairingHandler
 	adapter     *Adapter
 	coordinator *remotes.Coordinator
+	virtual     *remotes.VirtualLocoStore
 	dispatch    *dispatcher
 }
 
@@ -101,6 +102,11 @@ func New(cfg Config) (*Server, error) {
 		log:         log,
 		registry:    registry,
 		coordinator: cfg.Coordinator,
+	}
+	if cfg.Coordinator != nil {
+		s.virtual = cfg.Coordinator.VirtualLocos()
+	} else {
+		s.virtual = remotes.NewVirtualLocoStore()
 	}
 	if cfg.Coordinator != nil {
 		cfg.Coordinator.RegisterSessionSyncHandler(contract.RemoteProtocolZ21, func(ctx context.Context, clientKey string) {
@@ -325,16 +331,43 @@ func (s *Server) handlePacket(ctx context.Context, remote *net.UDPAddr, pkt []by
 			s.applyBroadcastFlags(client, broadcastFlagsFromPkt(pkt))
 			return
 		}
+		if isGetLocoInfo(header, pkt) {
+			handled = true
+			if addr, ok := parseGetLocoInfo(pkt); ok {
+				s.sendVirtualLoco(ctx, client, s.virtual.Snapshot(client.Key, addr))
+			}
+			return
+		}
+		if isSetLocoDrive(header, pkt) {
+			handled = true
+			if addr, speed, forward, ok := parseSetLocoDrive(pkt); ok {
+				s.sendVirtualLoco(ctx, client, s.virtual.SetSpeed(client.Key, addr, speed, forward))
+			}
+			return
+		}
 		if isSetLocoFunction(header, pkt) {
 			handled = true
-			if addr, fn, on, ok := parseSetLocoFunction(pkt); ok && on {
-				s.handleUnpairedPairingFn(ctx, client, addr, fn)
+			if addr, fn, sw, ok := parseSetLocoFunction(pkt); ok {
+				var snap contract.LocoStateWire
+				if sw == funcSwitchToggle {
+					snap = s.virtual.ToggleFunction(client.Key, addr, fn)
+				} else {
+					snap = s.virtual.SetFunction(client.Key, addr, fn, sw == funcSwitchOn)
+				}
+				s.sendVirtualLoco(ctx, client, snap)
+				if sw == funcSwitchOn || sw == funcSwitchToggle {
+					s.handleUnpairedPairingFn(ctx, client, addr, fn)
+				}
 			}
 			return
 		}
 		if isSetLocoFunctionGroup(header, pkt) {
 			handled = true
-			if addr, _, ok := parseSetLocoFunctionGroup(pkt); ok && len(pkt) >= 9 {
+			if addr, updates, ok := parseSetLocoFunctionGroup(pkt); ok && len(pkt) >= 9 {
+				for _, u := range updates {
+					s.virtual.SetFunction(client.Key, addr, u.fn, u.on)
+				}
+				s.sendVirtualLoco(ctx, client, s.virtual.Snapshot(client.Key, addr))
 				for _, fn := range s.registry.PairingFnRisingEdges(client.Key, pkt[5], pkt[8]) {
 					if s.handleUnpairedPairingFn(ctx, client, addr, fn) {
 						break
@@ -342,10 +375,6 @@ func (s *Server) handlePacket(ctx context.Context, remote *net.UDPAddr, pkt []by
 				}
 			}
 			return
-		}
-		if isDriveHeader(header, pkt) {
-			handled = true
-			s.log.WithField("client", client.Key).Info("z21 drive rejected: not paired")
 		}
 		return
 	}
@@ -418,12 +447,23 @@ func (s *Server) handleUnpairedPairingFn(ctx context.Context, client *Client, lo
 		return false
 	}
 	s.syncPaired(ctx, client)
+	s.clearVirtualLoco(client.Key)
 	fields := pairingLogFields(active)
 	fields["client"] = client.Key
 	fields["pairingCV3"] = active.PairingCV3
 	fields["pairingCV4"] = active.PairingCV4
 	s.log.WithFields(fields).Info("z21 handset paired via function keys")
 	return true
+}
+
+func (s *Server) sendVirtualLoco(ctx context.Context, client *Client, snap contract.LocoStateWire) {
+	_ = NewResponder(s, client).SendLocoState(ctx, snap)
+}
+
+func (s *Server) clearVirtualLoco(clientKey string) {
+	if s.virtual != nil {
+		s.virtual.RemoveClient(clientKey)
+	}
 }
 
 func (s *Server) syncPaired(ctx context.Context, client *Client) {

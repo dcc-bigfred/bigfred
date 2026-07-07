@@ -86,6 +86,7 @@ type LocoSetFunctionWire struct {
 	Address  uint16 `json:"address"`
 	Function uint8  `json:"function"`
 	On       bool   `json:"on"`
+	Toggle   bool   `json:"toggle,omitempty"`
 }
 
 func marshalEnvelope(eventType, id string, payload []byte) ([]byte, error) {

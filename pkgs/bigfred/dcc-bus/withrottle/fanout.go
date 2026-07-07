@@ -11,13 +11,19 @@ import (
 
 var _ remotes.LocoStateObserver = (*Server)(nil)
 
-// OnLocoStateChanged pushes M…A lines to paired clients subscribed to the address.
-func (s *Server) OnLocoStateChanged(ctx context.Context, snap contract.LocoStateWire) {
+// OnLocoStateChanged pushes M…A lines to paired clients subscribed to the
+// address. The commanding handset (originClientKey) is skipped because the
+// adapter already echoed the state directly; empty origin means a non-handset
+// source, so nobody is skipped.
+func (s *Server) OnLocoStateChanged(ctx context.Context, snap contract.LocoStateWire, originClientKey string) {
 	_ = ctx
 	if s.registry == nil {
 		return
 	}
 	for _, key := range s.registry.Subscribers(snap.Address) {
+		if key == originClientKey {
+			continue
+		}
 		client, ok := s.registry.Get(key)
 		if !ok || client.Session == nil {
 			continue

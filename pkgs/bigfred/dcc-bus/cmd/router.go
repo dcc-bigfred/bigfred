@@ -266,9 +266,11 @@ func (r *Router) FunctionsSnapshot() contract.VehicleFunctions {
 }
 
 // broadcastLocoState fans a snapshot to WS sessions and registered remotes.
-func (r *Router) broadcastLocoState(ctx context.Context, snap contract.LocoStateWire) {
+// originClientKey is the commanding handset's client key (or "" for
+// non-handset origins) so gateway fanouts can skip double-echoing the sender.
+func (r *Router) broadcastLocoState(ctx context.Context, snap contract.LocoStateWire, originClientKey string) {
 	service.BroadcastLocoState(ctx, r.hub, snap)
-	r.locoObservers.Notify(ctx, snap)
+	r.locoObservers.Notify(ctx, snap, originClientKey)
 }
 
 // locoSnapOrDefault returns the in-memory snapshot or a stopped default.

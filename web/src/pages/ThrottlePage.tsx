@@ -38,8 +38,17 @@ import TrainFunctionAccordions, {
 import TrainMemberSettingsDialog from "../components/throttle/TrainMemberSettingsDialog";
 import ThrottleNavigationGuard from "../components/throttle/ThrottleNavigationGuard";
 import ThrottleSetupDialog from "../components/throttle/ThrottleSetupDialog";
+import ThrottleGamepadDialog from "../components/throttle/ThrottleGamepadDialog";
 import CommandStationPicker from "../components/throttle/CommandStationPicker";
 import { useDebouncedSpeedSend } from "../hooks/useDebouncedSpeedSend";
+import { useGamepads } from "../hooks/useGamepads";
+import { useGamepadControl } from "../hooks/useGamepadControl";
+import {
+  defaultGamepadMapping,
+  loadGamepadMapping,
+  saveGamepadMapping,
+  type GamepadMapping,
+} from "../hooks/gamepadMapping";
 import { useRadioStopSound } from "../hooks/useRadioStopSound";
 import { useThrottleSpeedOverride } from "../hooks/useThrottleSpeedOverride";
 import { useThrottleCommandStationSelection } from "../hooks/useThrottleCommandStationSelection";
@@ -702,10 +711,33 @@ function ConnectedThrottle({
   const isMoving = cockpitSpeed > 0 && witnessAddr != null;
 
   const [settingsMemberId, setSettingsMemberId] = useState<number | null>(null);
+  const [gamepadOpen, setGamepadOpen] = useState(false);
+  const [gamepadMapping, setGamepadMapping] = useState<GamepadMapping | null>(
+    null,
+  );
+  const { gamepads } = useGamepads();
   const patchMemberSettings = usePatchTrainMemberSettings();
   const { expandedMemberIds, toggleMember } = useTrainAccordionExpanded(
     isTrainMode ? selectedTarget.trainId : null,
   );
+
+  useEffect(() => {
+    if (gamepads.length === 0) {
+      return;
+    }
+    const pad = gamepads[0];
+    setGamepadMapping((prev) => {
+      if (prev?.gamepadId === pad.id) {
+        return prev;
+      }
+      return loadGamepadMapping(pad.id);
+    });
+  }, [gamepads]);
+
+  const activeGamepadIndex =
+    gamepads.find((gp) => gp.id === gamepadMapping?.gamepadId)?.index ??
+    gamepads[0]?.index ??
+    null;
 
   const handleSpeed = (next: number) => {
     const clamped = Math.min(next, throttleMaxSpeed);
@@ -746,6 +778,19 @@ function ConnectedThrottle({
     if (selectedAddr == null) return;
     sendSpeedNow(selectedAddr, 0, forward);
   };
+
+  useGamepadControl({
+    mapping: gamepadMapping,
+    gamepadIndex: activeGamepadIndex,
+    maxSpeed: throttleMaxSpeed,
+    currentSpeed: cockpitSpeed,
+    forward,
+    disabled: witnessAddr == null,
+    onSpeed: handleSpeed,
+    onDirectionChange: handleDir,
+    onFunctionToggle: handleFn,
+    onStop: handleStop,
+  });
 
   const handleLeaveConfirm = useCallback(async () => {
     flush();
@@ -867,9 +912,29 @@ function ConnectedThrottle({
             });
         }}
       />
+      {gamepadOpen && (
+        <ThrottleGamepadDialog
+          open={gamepadOpen}
+          onClose={() => setGamepadOpen(false)}
+          gamepads={gamepads}
+          configuredFunctions={configuredFunctions}
+          mapping={
+            gamepadMapping ??
+            defaultGamepadMapping(gamepads[0]?.id ?? "default")
+          }
+          maxSpeed={throttleMaxSpeed}
+          onMappingChange={setGamepadMapping}
+          onConfirm={(next) => {
+            setGamepadMapping(next);
+            saveGamepadMapping(next);
+          }}
+        />
+      )}
       <ThrottleCockpit
         layoutId={layoutID}
         onOpenSetup={onOpenSetup}
+        onOpenGamepad={() => setGamepadOpen(true)}
+        gamepadActive={gamepadMapping?.enabled === true}
         vehicles={vehicles}
         trains={trains}
         selectedTarget={selectedTarget}

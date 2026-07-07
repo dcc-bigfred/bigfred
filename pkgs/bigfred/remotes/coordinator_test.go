@@ -179,3 +179,19 @@ func TestSessionSyncEventUpdatesRegistry(t *testing.T) {
 		t.Fatalf("handler received clientKey %q, want %q", got, clientKey)
 	}
 }
+
+func TestCoordinatorEvictClearsVirtualLoco(t *testing.T) {
+	reg := inbound.NewClientRegistry()
+	c := NewCoordinator(CoordinatorConfig{
+		LayoutID:         1,
+		CommandStationID: 2,
+		Registry:         reg,
+	})
+	addr, _ := net.ResolveUDPAddr("udp", "10.0.0.5:40001")
+	client := reg.Touch(contract.RemoteProtocolZ21, addr, time.Now().UTC(), false)
+	c.VirtualLocos().SetSpeed(client.Key, 31, 10, true)
+	c.Evict(context.Background(), client.Key)
+	if c.VirtualLocos().HasClient(client.Key) {
+		t.Fatal("expected virtual loco state cleared on evict")
+	}
+}

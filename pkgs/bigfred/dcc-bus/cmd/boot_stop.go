@@ -30,5 +30,9 @@ func (r *Router) ensureBootStop(ctx context.Context) {
 			"count":    len(addrs),
 		}).Info("dcc-bus startup — stopping all layout locomotives after daemon restart")
 	}
+	if r.leaser != nil {
+		r.leaser.SuppressExternal(true)
+		defer r.leaser.SuppressExternal(false)
+	}
 	r.applyEStopAll(ctx, "daemon_startup")
 }

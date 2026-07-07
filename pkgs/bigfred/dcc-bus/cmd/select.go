@@ -31,7 +31,7 @@ func (r *Router) HandleLocoSelect(ctx context.Context, actor Actor, resp Respond
 		resp.ClearSelected()
 	}
 
-	evicted, err := r.leaser.Select(actor.UserID, actor.SessionID, "ws", p.Address)
+	evicted, err := r.leaser.Select(actor.UserID, actor.SessionID, actor.LeaseSource(), p.Address)
 	if err != nil {
 		res := leaseErrorResult(actor.UserID, r.leaser, err)
 		if res.Code == buserrors.CodeVehicleCapExceeded {
@@ -92,7 +92,7 @@ func (r *Router) HandleTrainSelect(ctx context.Context, actor Actor, resp Respon
 		return OKResult()
 	}
 
-	if err := r.leaser.SelectTrain(actor.UserID, actor.SessionID, "ws", p.TrainID, addrs); err != nil {
+	if err := r.leaser.SelectTrain(actor.UserID, actor.SessionID, actor.LeaseSource(), p.TrainID, addrs); err != nil {
 		res := leaseErrorResult(actor.UserID, r.leaser, err)
 		if res.Code == buserrors.CodeVehicleCapExceeded {
 			_ = resp.SendLocoErrorPayload(ctx, protocol.LocoErrorPayload{

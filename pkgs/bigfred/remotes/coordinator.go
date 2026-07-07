@@ -63,6 +63,8 @@ type Coordinator struct {
 	syncHandlers map[string]SessionSyncHandler
 	evictMu      sync.RWMutex
 	onEvict      []func(string)
+	unpairMu     sync.RWMutex
+	onUnpair     []func(string)
 	pubMu        sync.Mutex
 	lastPub      time.Time
 	dirty        bool
@@ -123,6 +125,18 @@ func (c *Coordinator) RegisterOnEvict(fn func(key string)) {
 	c.evictMu.Lock()
 	c.onEvict = append(c.onEvict, fn)
 	c.evictMu.Unlock()
+}
+
+// RegisterOnUnpair adds a hook invoked when loco-server signals an explicit
+// REST unpair. The client stays connected; hooks typically release slot
+// leases without evicting the handset from the registry.
+func (c *Coordinator) RegisterOnUnpair(fn func(key string)) {
+	if fn == nil {
+		return
+	}
+	c.unpairMu.Lock()
+	c.onUnpair = append(c.onUnpair, fn)
+	c.unpairMu.Unlock()
 }
 
 // RegisterPolicy sets sweep behaviour for one protocol.
@@ -347,6 +361,14 @@ func (c *Coordinator) handleSyncMessage(ctx context.Context, msg *redis.Message)
 	} else {
 		c.syncPairedClientGeneric(ctx, ev.ClientKey)
 		return
+	}
+	if ev.Action == contract.RemoteSessionSyncUnpair {
+		c.unpairMu.RLock()
+		hooks := append([]func(string){}, c.onUnpair...)
+		c.unpairMu.RUnlock()
+		for _, fn := range hooks {
+			fn(ev.ClientKey)
+		}
 	}
 	c.registry.MarkSynced(ev.ClientKey)
 	c.markDirty()

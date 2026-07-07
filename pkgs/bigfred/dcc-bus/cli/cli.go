@@ -56,6 +56,7 @@ type Flags struct {
 	MaxVehiclesPerUser int
 	MaxLoconetSlots    int
 	IdleTimeoutSecs    uint
+	BootStopEnabled    bool
 
 	AllowedOrigins []string
 }
@@ -113,6 +114,7 @@ should rarely be invoked manually.`,
 				MaxVehiclesPerUser:     f.MaxVehiclesPerUser,
 				MaxLoconetSlots:        f.MaxLoconetSlots,
 				IdleTimeoutSecs:        f.IdleTimeoutSecs,
+				BootStopEnabled:        f.BootStopEnabled,
 			}
 			d, err := dccbus.New(c.Context(), log, cfg)
 			if err != nil {
@@ -152,6 +154,7 @@ should rarely be invoked manually.`,
 	cmd.Flags().IntVar(&f.MaxVehiclesPerUser, FlagMaxVehiclesPerUser, 8, "per-user cap on driven vehicles (slot leases)")
 	cmd.Flags().IntVar(&f.MaxLoconetSlots, FlagMaxLoconetSlots, 80, "LocoNet slot budget for BigFred on this command station")
 	cmd.Flags().UintVar(&f.IdleTimeoutSecs, FlagIdleTimeoutSecs, 60, "remote-handset idle timeout before slot release (0 disables)")
+	cmd.Flags().BoolVar(&f.BootStopEnabled, FlagBootStopEnabled, false, "emergency-stop all roster locomotives once after daemon start")
 
 	return cmd
 }

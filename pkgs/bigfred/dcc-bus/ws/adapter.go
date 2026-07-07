@@ -60,7 +60,7 @@ func (a *RouterAdapter) HandleSessionClose(ctx context.Context, sess *Session, r
 }
 
 func actor(sess *Session) cmd.Actor {
-	return cmd.Actor{UserID: sess.UserID, SessionID: sess.ID}
+	return cmd.Actor{UserID: sess.UserID, SessionID: sess.ID, Source: "ws"}
 }
 
 func deliver(ctx context.Context, sess *Session, requestID string, res cmd.Result) Outcome {

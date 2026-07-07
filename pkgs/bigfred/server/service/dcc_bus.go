@@ -436,6 +436,9 @@ func (d *DccBusService) buildProgramSpec(ctx context.Context, name string, layou
 		args = append(args, "--withrottle-pairing-addr", strconv.FormatUint(uint64(cs.EffectiveWithrottlePairingAddr()), 10))
 		args = append(args, "--withrottle-heartbeat-secs", strconv.FormatFloat(cs.EffectiveWithrottleHeartbeatSecs(), 'f', -1, 64))
 	}
+	if cs.BootStopEnabled {
+		args = append(args, "--"+dccbuscli.FlagBootStopEnabled)
+	}
 	for _, origin := range d.cfg.AllowedOrigins {
 		args = append(args, "--allowed-origin", origin)
 	}

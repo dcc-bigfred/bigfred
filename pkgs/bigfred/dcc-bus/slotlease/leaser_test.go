@@ -550,3 +550,22 @@ func TestEnqueueReleaseSyncFallbackWhenFull(t *testing.T) {
 		t.Fatalf("released = %v, want [21] (sync fallback when queue full)", released)
 	}
 }
+
+func TestOnSlotInUse_suppressExternalSkipsSyntheticLease(t *testing.T) {
+	l := newTestLeaser(&fakeStation{}, 8, 80)
+	l.SuppressExternal(true)
+	l.OnSlotInUse(commandstation.LocoAddr(42))
+	snap := l.DiagnosticSnapshot()
+	if len(snap.Leases) != 0 {
+		t.Fatalf("leases = %d, want 0 while external suppressed", len(snap.Leases))
+	}
+	l.SuppressExternal(false)
+	l.OnSlotInUse(commandstation.LocoAddr(42))
+	snap = l.DiagnosticSnapshot()
+	if len(snap.Leases) != 1 {
+		t.Fatalf("leases = %d, want 1 after suppress off", len(snap.Leases))
+	}
+	if snap.Leases[0].Holders[0].Source != "external" {
+		t.Fatalf("holder source = %q, want external", snap.Leases[0].Holders[0].Source)
+	}
+}

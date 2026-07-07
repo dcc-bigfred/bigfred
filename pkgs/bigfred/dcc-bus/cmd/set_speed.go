@@ -46,7 +46,7 @@ func (r *Router) applyMemberSetSpeed(
 	// the physical slot itself inside SetSpeed below; Reserve only records the
 	// holder so per-user cap, budget, switcher-change and diagnostics apply to
 	// throttle UI drive (which no longer sends an explicit loco.select).
-	if _, err := r.leaser.Reserve(actor.UserID, actor.SessionID, "ws", addr); err != nil {
+	if _, err := r.leaser.Reserve(actor.UserID, actor.SessionID, actor.LeaseSource(), addr); err != nil {
 		return err
 	}
 	if err := r.dcc.SetSpeed(addr, speed, forward, emergency); err != nil {

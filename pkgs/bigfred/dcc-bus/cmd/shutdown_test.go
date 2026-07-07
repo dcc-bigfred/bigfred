@@ -60,8 +60,8 @@ func TestRouterShutdown_estopsAllRosterLocosAndCleansUp(t *testing.T) {
 	}
 
 	r.Shutdown()
-	if speedCalls != 4 {
-		t.Fatalf("SetSpeed calls = %d, want 4 (2 boot stop + 2 shutdown)", speedCalls)
+	if speedCalls != 2 {
+		t.Fatalf("SetSpeed calls = %d, want 2 (shutdown only; boot stop disabled by default)", speedCalls)
 	}
 	if st.cleanups != 1 {
 		t.Fatalf("CleanUp calls = %d, want 1", st.cleanups)

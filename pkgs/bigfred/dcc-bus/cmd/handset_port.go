@@ -44,7 +44,7 @@ func (r *Router) LocoSnapshot(addr uint16) contract.LocoStateWire {
 }
 
 func throttleActor(actor remotes.ThrottleActor) Actor {
-	return Actor{UserID: actor.UserID, SessionID: actor.SessionID}
+	return Actor{UserID: actor.UserID, SessionID: actor.SessionID, Source: actor.Source}
 }
 
 type throttleResponderBridge struct {

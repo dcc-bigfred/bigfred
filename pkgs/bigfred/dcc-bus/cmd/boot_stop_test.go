@@ -32,6 +32,7 @@ func TestEnsureBootStop_onFirstNonEmptyRoster(t *testing.T) {
 		LayoutID:         2,
 		CommandStationID: 1,
 		SpeedSteps:       128,
+		BootStopEnabled:  true,
 		AllowedVehicles: contract.AllowedVehicles{
 			LayoutID: 2,
 			Vehicles: []contract.AllowedVehicle{{Addr: 3}, {Addr: 7}},
@@ -75,6 +76,7 @@ func TestEnsureBootStop_waitsForFirstLayoutList(t *testing.T) {
 		LayoutID:         2,
 		CommandStationID: 1,
 		SpeedSteps:       128,
+		BootStopEnabled:  true,
 		AllowedVehicles:  contract.AllowedVehicles{LayoutID: 2},
 	})
 	if err != nil {
@@ -90,5 +92,39 @@ func TestEnsureBootStop_waitsForFirstLayoutList(t *testing.T) {
 	})
 	if len(speedAddrs) != 1 || speedAddrs[0] != 5 {
 		t.Fatalf("first layout list stop = %v, want [5]", speedAddrs)
+	}
+}
+
+func TestEnsureBootStop_disabledByDefault(t *testing.T) {
+	t.Parallel()
+
+	var speedAddrs []uint16
+	st := &commandstation.StubStation{
+		SetSpeedFn: func(addr commandstation.LocoAddr, speed uint8, _ bool, _ uint8) error {
+			speedAddrs = append(speedAddrs, uint16(addr))
+			return nil
+		},
+	}
+	rs, cleanup := testRedis(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	_, err := NewRouter(ctx, Config{
+		Station:          st,
+		Hub:              &stubHub{},
+		Redis:            rs,
+		LayoutID:         2,
+		CommandStationID: 1,
+		SpeedSteps:       128,
+		AllowedVehicles: contract.AllowedVehicles{
+			LayoutID: 2,
+			Vehicles: []contract.AllowedVehicle{{Addr: 3}},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(speedAddrs) != 0 {
+		t.Fatalf("boot stop disabled: SetSpeed calls = %d, want 0", len(speedAddrs))
 	}
 }

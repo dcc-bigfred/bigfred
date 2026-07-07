@@ -180,6 +180,109 @@ func TestSessionSyncEventUpdatesRegistry(t *testing.T) {
 	}
 }
 
+func TestSessionSyncUnpairInvokesOnUnpairHook(t *testing.T) {
+	mr, err := miniredis.Run()
+	if err != nil {
+		t.Fatalf("miniredis: %v", err)
+	}
+	defer mr.Close()
+	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	defer client.Close()
+	store := remotepairing.NewStore(client)
+
+	addr := inbound.NewClientRegistry()
+	c := NewCoordinator(CoordinatorConfig{
+		LayoutID:         1,
+		CommandStationID: 2,
+		Registry:         addr,
+		Store:            store,
+		Publisher:        &countingPublisher{},
+	})
+
+	var unpairKey atomic.Value
+	var unpairCalled int32
+	c.RegisterOnUnpair(func(key string) {
+		unpairKey.Store(key)
+		atomic.AddInt32(&unpairCalled, 1)
+	})
+	c.RegisterSessionSyncHandler(contract.RemoteProtocolZ21, func(ctx context.Context, clientKey string) {})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go c.Run(ctx)
+
+	readyCtx, readyCancel := context.WithTimeout(ctx, 2*time.Second)
+	defer readyCancel()
+	if err := c.WaitSyncSubscriber(readyCtx); err != nil {
+		t.Fatalf("sync subscriber not ready: %v", err)
+	}
+
+	clientKey := contract.RemoteProtocolZ21 + ":10.0.0.55:40001"
+	if err := store.PublishSessionSync(ctx, 1, 2, clientKey, contract.RemoteSessionSyncUnpair); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if atomic.LoadInt32(&unpairCalled) > 0 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if atomic.LoadInt32(&unpairCalled) == 0 {
+		t.Fatal("onUnpair hook not invoked after unpair sync")
+	}
+	if got, _ := unpairKey.Load().(string); got != clientKey {
+		t.Fatalf("onUnpair received clientKey %q, want %q", got, clientKey)
+	}
+}
+
+func TestSessionSyncScopeDoesNotInvokeOnUnpairHook(t *testing.T) {
+	mr, err := miniredis.Run()
+	if err != nil {
+		t.Fatalf("miniredis: %v", err)
+	}
+	defer mr.Close()
+	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	defer client.Close()
+	store := remotepairing.NewStore(client)
+
+	addr := inbound.NewClientRegistry()
+	c := NewCoordinator(CoordinatorConfig{
+		LayoutID:         1,
+		CommandStationID: 2,
+		Registry:         addr,
+		Store:            store,
+		Publisher:        &countingPublisher{},
+	})
+
+	var unpairCalled int32
+	c.RegisterOnUnpair(func(key string) {
+		atomic.AddInt32(&unpairCalled, 1)
+	})
+	c.RegisterSessionSyncHandler(contract.RemoteProtocolZ21, func(ctx context.Context, clientKey string) {})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go c.Run(ctx)
+
+	readyCtx, readyCancel := context.WithTimeout(ctx, 2*time.Second)
+	defer readyCancel()
+	if err := c.WaitSyncSubscriber(readyCtx); err != nil {
+		t.Fatalf("sync subscriber not ready: %v", err)
+	}
+
+	clientKey := contract.RemoteProtocolZ21 + ":10.0.0.55:40001"
+	if err := store.PublishSessionSync(ctx, 1, 2, clientKey, contract.RemoteSessionSyncScope); err != nil {
+		t.Fatal(err)
+	}
+
+	time.Sleep(200 * time.Millisecond)
+	if atomic.LoadInt32(&unpairCalled) != 0 {
+		t.Fatal("onUnpair hook must not run for scope sync")
+	}
+}
+
 func TestCoordinatorEvictClearsVirtualLoco(t *testing.T) {
 	reg := inbound.NewClientRegistry()
 	c := NewCoordinator(CoordinatorConfig{

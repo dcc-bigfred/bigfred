@@ -11,10 +11,21 @@ import (
 type Actor struct {
 	UserID    uint
 	SessionID string
+	// Source is the lease holder source: "ws" for browser throttle, or the
+	// inbound protocol name ("z21", "withrottle") for remote handsets.
+	Source string
 	// ClosingSubscribedAddrs is populated only on session close. The WS layer
 	// unregisters the session from the hub before the delayed dead-man fires,
 	// so drive-target collection must not rely on the hub still listing this tab.
 	ClosingSubscribedAddrs []uint16
+}
+
+// LeaseSource returns the slot-lease holder source for this actor.
+func (a Actor) LeaseSource() string {
+	if a.Source == "" {
+		return "ws"
+	}
+	return a.Source
 }
 
 // Responder sends protocol frames back to one connected client. The WS

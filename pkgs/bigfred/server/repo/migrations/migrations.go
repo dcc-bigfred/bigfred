@@ -113,6 +113,7 @@ func register(m *migrator.Migrator) {
 	m.Register(migrationVersion(20260627, 1), addCommandStationWithrottleColumnsUp, addCommandStationWithrottleColumnsDown)
 	m.Register(migrationVersion(20260629, 1), addLayoutMaxVehiclesPerUserColumnUp, addLayoutMaxVehiclesPerUserColumnDown)
 	m.Register(migrationVersion(20260629, 2), addCommandStationSlotLeaseColumnsUp, addCommandStationSlotLeaseColumnsDown)
+	m.Register(migrationVersion(20260707, 1), addCommandStationBootStopEnabledColumnUp, addCommandStationBootStopEnabledColumnDown)
 }
 
 // createCommandStationsUp installs the `command_stations` catalogue
@@ -794,5 +795,15 @@ func addCommandStationSlotLeaseColumnsUp(s *rel.Schema) {
 }
 
 func addCommandStationSlotLeaseColumnsDown(s *rel.Schema) {
+	// SQLite cannot DROP COLUMN in older schemas; leave columns in place.
+}
+
+// addCommandStationBootStopEnabledColumnUp enables per-station daemon boot-stop
+// (emergency stop all roster locos once after dcc-bus starts).
+func addCommandStationBootStopEnabledColumnUp(s *rel.Schema) {
+	s.Exec(rel.Raw(`ALTER TABLE command_stations ADD COLUMN boot_stop_enabled INTEGER NOT NULL DEFAULT 0`))
+}
+
+func addCommandStationBootStopEnabledColumnDown(s *rel.Schema) {
 	// SQLite cannot DROP COLUMN in older schemas; leave columns in place.
 }

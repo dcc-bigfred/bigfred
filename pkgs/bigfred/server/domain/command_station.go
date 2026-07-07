@@ -101,6 +101,9 @@ type CommandStation struct {
 	// IdleTimeoutSecs is the remote-handset idle window before SweepIdle
 	// releases the slot. Zero disables idle release.
 	IdleTimeoutSecs uint `db:"idle_timeout_secs"`
+	// BootStopEnabled sends speed 0 to every roster locomotive once when
+	// dcc-bus starts (after the first non-empty allowed_vehicles snapshot).
+	BootStopEnabled bool `db:"boot_stop_enabled"`
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
 }

@@ -59,7 +59,9 @@
         "maxLoconetSlots": "LocoNet-Slot-Budget",
         "maxLoconetSlotsHelp": "Wie viele Slots BigFred auf dieser Zentrale belegen darf; der Rest bleibt physischen FREDs vorbehalten. Standard 80.",
         "idleTimeoutSecs": "Remote-Leerlaufzeit (s)",
-        "idleTimeoutSecsHelp": "Nach dieser Leerlaufzeit verliert ein Fern-Handgerät (Z21/WiThrottle) seinen Slot. 0 deaktiviert die Freigabe. Standard 60 s."
+        "idleTimeoutSecsHelp": "Nach dieser Leerlaufzeit verliert ein Fern-Handgerät (Z21/WiThrottle) seinen Slot. 0 deaktiviert die Freigabe. Standard 60 s.",
+        "bootStopEnabled": "Boot-Stop für gesamten Roster",
+        "bootStopEnabledHelp": "Wenn aktiviert, sendet dcc-bus nach dem Start einmal einen Notstopp an jede Roster-Lok. Standard aus — vermeidet falsche „external“-Leases auf LocoNet nach einem Neustart."
       }
     },
     "empty": "Keine Zentralen anzuzeigen.",

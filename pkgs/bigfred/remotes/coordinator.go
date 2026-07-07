@@ -73,6 +73,7 @@ type Coordinator struct {
 	// nil otherwise. Lets tests await readiness instead of racing PUBLISH.
 	syncSubReady chan struct{}
 	syncSubOnce  sync.Once
+	virtual      *VirtualLocoStore
 }
 
 // NewCoordinator returns a coordinator that is not yet running.
@@ -95,6 +96,7 @@ func NewCoordinator(cfg CoordinatorConfig) *Coordinator {
 		cfg:      cfg,
 		registry: cfg.Registry,
 		policies: make(map[string]ProtocolPolicy),
+		virtual:  NewVirtualLocoStore(),
 	}
 	if cfg.Store != nil {
 		c.syncSubReady = make(chan struct{})
@@ -105,6 +107,11 @@ func NewCoordinator(cfg CoordinatorConfig) *Coordinator {
 // Registry returns the shared client registry.
 func (c *Coordinator) Registry() *inbound.ClientRegistry {
 	return c.registry
+}
+
+// VirtualLocos returns the shared simulated-loco store for unpaired handsets.
+func (c *Coordinator) VirtualLocos() *VirtualLocoStore {
+	return c.virtual
 }
 
 // RegisterOnEvict adds a hook invoked after a client is evicted. Safe to
@@ -585,6 +592,9 @@ func (c *Coordinator) evictClient(ctx context.Context, key string) {
 		}
 	}
 	c.registry.Remove(key)
+	if c.virtual != nil {
+		c.virtual.RemoveClient(key)
+	}
 	c.evictMu.RLock()
 	hooks := append([]func(string){}, c.onEvict...)
 	c.evictMu.RUnlock()

@@ -137,23 +137,37 @@ func (a *Adapter) authorize(client *Client, addr uint16) bool {
 }
 
 func (a *Adapter) HandleSetLocoFunction(ctx context.Context, client *Client, pkt []byte) {
-	addr, fn, on, ok := parseSetLocoFunction(pkt)
+	addr, fn, sw, ok := parseSetLocoFunction(pkt)
 	if !ok {
 		return
 	}
+	toggle := sw == funcSwitchToggle
+	on := sw == funcSwitchOn
 	if !a.authorize(client, addr) {
 		a.logDriveRejected(client, addr, "set_function")
 		return
 	}
 	a.server.registry.SetLastActiveLoco(client.Key, addr)
-	result := a.drive.SetFunction(ctx, a.throttleActor(client), NewResponder(a.server, client), contract.LocoSetFunctionWire{
+	resp := NewResponder(a.server, client)
+	result := a.drive.SetFunction(ctx, a.throttleActor(client), resp, contract.LocoSetFunctionWire{
 		Address:  addr,
 		Function: uint8(fn),
 		On:       on,
+		Toggle:   toggle,
 	})
 	if !result.OK {
 		a.logDriveFailure(client, addr, "set_function", result.Code)
+		return
 	}
+	a.echoLocoState(ctx, resp, addr)
+}
+
+// echoLocoState pushes the current loco state straight back to the commanding
+// handset. Handsets like the WLANmaus never enable the driving broadcast flag,
+// so the shared fanout (gated on that flag) would leave their display stale
+// after a paired command. A direct echo mirrors the unpaired virtual-loco path.
+func (a *Adapter) echoLocoState(ctx context.Context, resp *Responder, addr uint16) {
+	_ = resp.SendLocoState(ctx, a.drive.LocoSnapshot(addr))
 }
 
 func (a *Adapter) HandleSetLocoFunctionGroup(ctx context.Context, client *Client, pkt []byte) {
@@ -178,6 +192,7 @@ func (a *Adapter) HandleSetLocoFunctionGroup(ctx context.Context, client *Client
 			return
 		}
 	}
+	a.echoLocoState(ctx, resp, addr)
 }
 
 func (a *Adapter) HandleGetLocoInfo(ctx context.Context, client *Client, pkt []byte) {
@@ -217,14 +232,17 @@ func (a *Adapter) HandleSetLocoDrive(ctx context.Context, client *Client, pkt []
 		return
 	}
 	a.server.registry.SetLastActiveLoco(client.Key, addr)
-	result := a.drive.SetSpeed(ctx, a.throttleActor(client), NewResponder(a.server, client), contract.LocoSetSpeedWire{
+	resp := NewResponder(a.server, client)
+	result := a.drive.SetSpeed(ctx, a.throttleActor(client), resp, contract.LocoSetSpeedWire{
 		Address: addr,
 		Speed:   speed,
 		Forward: forward,
 	})
 	if !result.OK {
 		a.logDriveFailure(client, addr, "set_speed", result.Code)
+		return
 	}
+	a.echoLocoState(ctx, resp, addr)
 }
 
 func (a *Adapter) logDriveFailure(client *Client, addr uint16, action, code string) {

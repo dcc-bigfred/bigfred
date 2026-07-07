@@ -246,6 +246,16 @@ func (s *Server) logUnhandled(clientKey string, pkt []byte, paired bool, reason 
 	if s.log == nil {
 		return
 	}
+	// Handsets like the WLANmaus cyclically poll turnout/accessory state
+	// (LAN_X_GET_TURNOUT_INFO, X-Header 0x43), which we do not implement.
+	// This is expected chatter, so keep it at Debug to avoid log spam.
+	level := logrus.InfoLevel
+	if isTurnoutPoll(pkt) {
+		level = logrus.DebugLevel
+	}
+	if !s.log.IsLevelEnabled(level) {
+		return
+	}
 	s.log.WithFields(logrus.Fields{
 		"client":  clientKey,
 		"packet":  PacketName(pkt),
@@ -253,5 +263,12 @@ func (s *Server) logUnhandled(clientKey string, pkt []byte, paired bool, reason 
 		"reason":  reason,
 		"len":     len(pkt),
 		"payload": hex.EncodeToString(pkt),
-	}).Info("z21 unhandled packet")
+	}).Log(level, "z21 unhandled packet")
+}
+
+// isTurnoutPoll reports LAN_X_GET_TURNOUT_INFO / TURNOUT_INFO frames (X-Header
+// 0x43) that handsets emit periodically while polling accessory state.
+func isTurnoutPoll(pkt []byte) bool {
+	_, header, ok := packetHeader(pkt)
+	return ok && header == HeaderXBus && len(pkt) >= 5 && pkt[4] == 0x43
 }

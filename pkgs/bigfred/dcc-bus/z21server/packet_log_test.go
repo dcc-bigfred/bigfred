@@ -33,6 +33,21 @@ func TestPacketNameGetVersion(t *testing.T) {
 	}
 }
 
+func TestIsTurnoutPoll(t *testing.T) {
+	// WLANmaus turnout/accessory poll (LAN_X_GET_TURNOUT_INFO, X-Header 0x43).
+	poll := []byte{0x09, 0x00, 0x40, 0x00, 0x43, 0x00, 0x00, 0x00, 0x81}
+	if !isTurnoutPoll(poll) {
+		t.Fatal("expected 0x43 frame to be classified as turnout poll")
+	}
+	getInfo := []byte{0x09, 0x00, 0x40, 0x00, 0xE3, 0xF0, 0x00, 0x1F, 0x0C}
+	if isTurnoutPoll(getInfo) {
+		t.Fatal("LAN_X_GET_LOCO_INFO must not be a turnout poll")
+	}
+	if isTurnoutPoll([]byte{0x04, 0x00, 0x10, 0x00}) {
+		t.Fatal("non X-Bus header must not be a turnout poll")
+	}
+}
+
 func TestIsDiscoveryHandshakePacket(t *testing.T) {
 	serialReq := []byte{0x04, 0x00, 0x10, 0x00}
 	serialReply := SerialReply(0x0f60cc55)

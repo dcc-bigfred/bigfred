@@ -38,6 +38,11 @@ func (r *Router) Subscribe(ctx context.Context, actor remotes.ThrottleActor, res
 	}, ""))
 }
 
+// LocoSnapshot exposes the current merged loco state for gateway echoes.
+func (r *Router) LocoSnapshot(addr uint16) contract.LocoStateWire {
+	return r.locoSnapOrDefault(context.Background(), addr)
+}
+
 func throttleActor(actor remotes.ThrottleActor) Actor {
 	return Actor{UserID: actor.UserID, SessionID: actor.SessionID}
 }

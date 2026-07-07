@@ -13,6 +13,7 @@ import {
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import SettingsIcon from "@mui/icons-material/Settings";
+import SportsEsportsIcon from "@mui/icons-material/SportsEsports";
 import SyncIcon from "@mui/icons-material/Sync";
 import TuneIcon from "@mui/icons-material/Tune";
 import { useTranslation } from "react-i18next";
@@ -74,6 +75,9 @@ export interface ThrottleCockpitProps {
   onFunctionToggle: (fn: number) => void;
   onStop: () => void;
   headerExtra?: ReactNode;
+  onOpenGamepad?: () => void;
+  /** When true, gamepad input is active for this session. */
+  gamepadActive?: boolean;
 }
 
 function targetKey(target: ThrottleTarget | null): string {
@@ -106,6 +110,8 @@ export default function ThrottleCockpit({
   onFunctionToggle,
   onStop,
   headerExtra,
+  onOpenGamepad,
+  gamepadActive = false,
 }: ThrottleCockpitProps) {
   const { t } = useTranslation("throttle");
   const navigate = useNavigate();
@@ -263,6 +269,22 @@ export default function ThrottleCockpit({
         >
           <TuneIcon fontSize="small" />
         </IconButton>
+
+        {onOpenGamepad && (
+          <IconButton
+            size="small"
+            onClick={onOpenGamepad}
+            aria-label={t("gamepad.open")}
+            sx={{
+              color: gamepadActive ? cockpit.accent : cockpit.text,
+              border: gamepadActive
+                ? `1px solid ${cockpit.accent}`
+                : undefined,
+            }}
+          >
+            <SportsEsportsIcon fontSize="small" />
+          </IconButton>
+        )}
 
         <IconButton
           size="small"

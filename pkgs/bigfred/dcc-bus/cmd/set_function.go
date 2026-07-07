@@ -13,9 +13,24 @@ func (r *Router) HandleSetFunction(ctx context.Context, actor Actor, resp Respon
 	if d := r.drive.CanDrive(actor.UserID, vehicle, onLayout); !d.Allowed {
 		return FailResult(d.Reason)
 	}
-	if err := r.setLocoFunction(ctx, p.Address, actor.UserID, p.Function, p.On, "throttle"); err != nil {
+	on := p.On
+	if p.Toggle {
+		on = !r.currentFunctionState(p.Address, p.Function)
+	}
+	if err := r.setLocoFunction(ctx, p.Address, actor.UserID, p.Function, on, "throttle"); err != nil {
 		_ = resp.SendLocoError(ctx, p.Address, errors.CodeCommandStationError, err.Error())
 		return FailResult(errors.CodeCommandStationError)
 	}
 	return OKResult()
+}
+
+func (r *Router) currentFunctionState(addr uint16, fn uint8) bool {
+	if r.store == nil {
+		return false
+	}
+	env := r.store.Snapshot(addr)
+	if int(fn) >= len(env.Functions) {
+		return false
+	}
+	return env.Functions[fn]
 }

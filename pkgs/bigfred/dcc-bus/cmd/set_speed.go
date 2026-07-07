@@ -8,6 +8,7 @@ import (
 
 	"github.com/keskad/loco/pkgs/bigfred/contract"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/service"
+	"github.com/keskad/loco/pkgs/bigfred/remotes"
 	"github.com/keskad/loco/pkgs/loco/commandstation"
 )
 
@@ -23,7 +24,7 @@ func (r *Router) HandleSetSpeed(ctx context.Context, actor Actor, resp Responder
 	if limit := vehicle.ControllerSpeedLimits[actor.UserID]; limit > 0 {
 		p.Speed = contract.ClampSpeedForControllerLimit(p.Speed, maxSpeed, limit)
 	}
-	if err := r.applyMemberSetSpeed(ctx, actor, p.Address, p.Speed, p.Forward, p.Emergency, "throttle"); err != nil {
+	if err := r.applyMemberSetSpeed(ctx, actor, p.Address, p.Speed, p.Forward, p.Emergency, "throttle", remotes.HandsetClientKeyFromSession(actor.SessionID)); err != nil {
 		code := locoCommandErrorCode(err)
 		_ = resp.SendLocoError(ctx, p.Address, code, err.Error())
 		return FailResult(code)
@@ -39,6 +40,7 @@ func (r *Router) applyMemberSetSpeed(
 	forward bool,
 	emergency bool,
 	source string,
+	originClientKey string,
 ) error {
 	// Reserve a BigFred slot lease for the driver. The LocoNet driver acquires
 	// the physical slot itself inside SetSpeed below; Reserve only records the
@@ -83,6 +85,6 @@ func (r *Router) applyMemberSetSpeed(
 	}).Debug("dcc-bus command station SetSpeed ok")
 
 	snap := r.store.SetSpeed(addr, contract.UISpeedFromWire(service.WireSpeedFromPayload(speed, emergency)), forward, actor.UserID, source)
-	r.broadcastLocoState(ctx, snap)
+	r.broadcastLocoState(ctx, snap, originClientKey)
 	return nil
 }

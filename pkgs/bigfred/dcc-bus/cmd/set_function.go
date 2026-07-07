@@ -5,6 +5,7 @@ import (
 
 	"github.com/keskad/loco/pkgs/bigfred/contract"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/errors"
+	"github.com/keskad/loco/pkgs/bigfred/remotes"
 )
 
 // HandleSetFunction sets a single function on or off.
@@ -17,7 +18,8 @@ func (r *Router) HandleSetFunction(ctx context.Context, actor Actor, resp Respon
 	if p.Toggle {
 		on = !r.currentFunctionState(p.Address, p.Function)
 	}
-	if err := r.setLocoFunction(ctx, p.Address, actor.UserID, p.Function, on, "throttle"); err != nil {
+	origin := remotes.HandsetClientKeyFromSession(actor.SessionID)
+	if err := r.setLocoFunction(ctx, p.Address, actor.UserID, p.Function, on, "throttle", origin); err != nil {
 		_ = resp.SendLocoError(ctx, p.Address, errors.CodeCommandStationError, err.Error())
 		return FailResult(errors.CodeCommandStationError)
 	}

@@ -26,11 +26,11 @@ func (r *Router) markTimedFunctionStopped(key service.FnKey) {
 	r.pulseMu.Unlock()
 }
 
-func (r *Router) setLocoFunctionWithRetry(ctx context.Context, addr uint16, userID uint, fn uint8, on bool, source string, retry int) error {
+func (r *Router) setLocoFunctionWithRetry(ctx context.Context, addr uint16, userID uint, fn uint8, on bool, source string, retry int, originClientKey string) error {
 	attempts := retry + 1
 	var last error
 	for i := 0; i < attempts; i++ {
-		last = r.setLocoFunction(ctx, addr, userID, fn, on, source)
+		last = r.setLocoFunction(ctx, addr, userID, fn, on, source, originClientKey)
 		if last == nil {
 			return nil
 		}
@@ -41,7 +41,7 @@ func (r *Router) setLocoFunctionWithRetry(ctx context.Context, addr uint16, user
 	return last
 }
 
-func (r *Router) setLocoFunction(ctx context.Context, addr uint16, userID uint, fn uint8, on bool, source string) error {
+func (r *Router) setLocoFunction(ctx context.Context, addr uint16, userID uint, fn uint8, on bool, source string, originClientKey string) error {
 	if r.checkFnStateMatches(ctx, addr, fn, on) {
 		return nil
 	}
@@ -61,11 +61,11 @@ func (r *Router) setLocoFunction(ctx context.Context, addr uint16, userID uint, 
 	}
 
 	snap := r.store.SetFunction(addr, userID, fn, on, source)
-	r.broadcastLocoState(ctx, snap)
+	r.broadcastLocoState(ctx, snap, originClientKey)
 	return nil
 }
 
-func (r *Router) setTimedLocoFunctionWithRetry(addr uint16, userID uint, fn uint8, duration time.Duration, source string, retry int) {
+func (r *Router) setTimedLocoFunctionWithRetry(addr uint16, userID uint, fn uint8, duration time.Duration, source string, retry int, originClientKey string) {
 	key := service.FnKey{Addr: addr, Fn: fn}
 	if !r.markTimedFunctionStarted(key) {
 		r.log.WithFields(logrus.Fields{
@@ -77,7 +77,7 @@ func (r *Router) setTimedLocoFunctionWithRetry(addr uint16, userID uint, fn uint
 	}
 	go func() {
 		ctx := context.Background()
-		if err := r.setLocoFunctionWithRetry(ctx, addr, userID, fn, true, source, retry); err != nil {
+		if err := r.setLocoFunctionWithRetry(ctx, addr, userID, fn, true, source, retry, originClientKey); err != nil {
 			r.markTimedFunctionStopped(key)
 			r.log.WithError(err).WithFields(logrus.Fields{
 				"addr":     addr,
@@ -90,7 +90,7 @@ func (r *Router) setTimedLocoFunctionWithRetry(addr uint16, userID uint, fn uint
 		}
 		time.AfterFunc(duration, func() {
 			defer r.markTimedFunctionStopped(key)
-			if err := r.setLocoFunctionWithRetry(context.Background(), addr, userID, fn, false, source, retry); err != nil {
+			if err := r.setLocoFunctionWithRetry(context.Background(), addr, userID, fn, false, source, retry, originClientKey); err != nil {
 				r.log.WithError(err).WithFields(logrus.Fields{
 					"addr":     addr,
 					"function": fn,

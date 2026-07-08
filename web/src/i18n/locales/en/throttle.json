@@ -104,7 +104,6 @@
   "gamepad": {
     "open": "Joystick / gamepad",
     "title": "Gamepad",
-    "noGamepad": "Connect a gamepad and press any button or move a stick to detect it.",
     "connected": "Detected controller",
     "speedAxis": "Speed axis (throttle)",
     "axisEnabled": "Axis on",
@@ -116,8 +115,6 @@
     "invertAxis": "Invert axis",
     "sensitivity": "Sensitivity",
     "sensitivityHelp": "Max speed from axis: {{scale}}",
-    "sensitivityFull": "×1",
-    "sensitivityDivisor": "÷{{divisor}}",
     "extraButtons": "Extra buttons",
     "speedButtons": "Speed buttons",
     "speedButtonSteps": "Step count",

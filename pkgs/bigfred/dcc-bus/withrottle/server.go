@@ -64,6 +64,7 @@ type Server struct {
 	pairing     *PairingHandler
 	adapter     *Adapter
 	coordinator *remotes.Coordinator
+	virtual     *remotes.VirtualLocoStore
 	dispatch    *dispatcher
 	allowedMu   sync.RWMutex
 	catalogueMu sync.RWMutex
@@ -117,6 +118,11 @@ func New(cfg Config) (*Server, error) {
 		log:         log,
 		registry:    registry,
 		coordinator: cfg.Coordinator,
+	}
+	if cfg.Coordinator != nil {
+		s.virtual = cfg.Coordinator.VirtualLocos()
+	} else {
+		s.virtual = remotes.NewVirtualLocoStore()
 	}
 	if cfg.Coordinator != nil {
 		cfg.Coordinator.RegisterSessionSyncHandler(contract.RemoteProtocolWithrottle, func(ctx context.Context, clientKey string) {
@@ -470,15 +476,34 @@ func (s *Server) handleThrottleAction(ctx context.Context, client *Client, cmd M
 	prop := cmd.Properties[0]
 	if !paired {
 		if s.registry.sentinelAcquired(client.Key) {
-			if fn, on, force, ok := parseFunctionAction(prop); ok {
-				rising := s.registry.PairingFnRisingEdge(client.Key, fn, on)
-				if pairingFnAccept(on, force, rising) {
-					if consumed, active := s.pairing.HandleFn(ctx, client, fn); consumed && active != nil {
-						fields := pairingLogFields(active)
-						fields["client"] = client.Key
-						fields["pairingCode"] = active.PairingCode
-						s.log.WithFields(fields).Info("withrottle handset paired via function keys")
-						return
+			addr := s.cfg.PairingAddr
+			switch {
+			case len(prop) >= 2 && prop[0] == 'V':
+				if wireSpeed, estop, ok := parseSpeedValue(prop); ok {
+					speed := uint8(0)
+					if !estop {
+						speed = dccSpeedFromWire(wireSpeed, s.cfg.SpeedSteps)
+					}
+					forward := s.virtual.Snapshot(client.Key, addr).Forward
+					s.sendVirtualLoco(ctx, client, cmd.ThrottleID, s.virtual.SetSpeed(client.Key, addr, speed, forward))
+				}
+				return
+			case len(prop) >= 2 && prop[0] == 'R':
+				forward := prop[1] != '0'
+				cur := s.virtual.Snapshot(client.Key, addr)
+				s.sendVirtualLoco(ctx, client, cmd.ThrottleID, s.virtual.SetSpeed(client.Key, addr, cur.Speed, forward))
+				return
+			case len(prop) >= 2 && (prop[0] == 'F' || prop[0] == 'f'):
+				if fn, on, force, ok := parseFunctionAction(prop); ok {
+					s.sendVirtualLoco(ctx, client, cmd.ThrottleID, s.virtual.SetFunction(client.Key, addr, fn, on))
+					rising := s.registry.PairingFnRisingEdge(client.Key, fn, on)
+					if pairingFnAccept(on, force, rising) {
+						if consumed, active := s.pairing.HandleFn(ctx, client, fn); consumed && active != nil {
+							fields := pairingLogFields(active)
+							fields["client"] = client.Key
+							fields["pairingCode"] = active.PairingCode
+							s.log.WithFields(fields).Info("withrottle handset paired via function keys")
+						}
 					}
 				}
 				return
@@ -492,6 +517,7 @@ func (s *Server) handleThrottleAction(ctx context.Context, client *Client, cmd M
 }
 
 func (s *Server) onPaired(ctx context.Context, clientKey string, active *contract.RemoteSessionWire) {
+	s.clearVirtualLoco(clientKey)
 	if s.registry.sentinelAcquired(clientKey) {
 		throttleID := s.registry.sentinelThrottleID(clientKey)
 		for _, line := range buildSentinelReleaseLines(throttleID, s.cfg.PairingAddr) {
@@ -505,6 +531,16 @@ func (s *Server) onPaired(ctx context.Context, clientKey string, active *contrac
 	}
 	if s.coordinator != nil {
 		s.coordinator.PublishSnapshotThrottled(ctx)
+	}
+}
+
+func (s *Server) sendVirtualLoco(ctx context.Context, client *Client, throttleID byte, snap contract.LocoStateWire) {
+	_ = NewResponder(s, client, throttleID).SendLocoState(ctx, snap)
+}
+
+func (s *Server) clearVirtualLoco(clientKey string) {
+	if s.virtual != nil {
+		s.virtual.RemoveClient(clientKey)
 	}
 }
 

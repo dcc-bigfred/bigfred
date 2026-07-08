@@ -100,6 +100,7 @@ func (s *Server) handlePOMWrite(ctx context.Context, remote *net.UDPAddr, client
 	if isPairingCVWire(cvWire) {
 		if _, active := s.pairing.Handle(ctx, client, cvWire, value); active != nil {
 			s.syncPaired(ctx, client)
+			s.clearVirtualLoco(client.Key)
 			fields := pairingLogFields(active)
 			fields["client"] = client.Key
 			s.log.WithFields(fields).Info("z21 handset paired via CV3/CV4")

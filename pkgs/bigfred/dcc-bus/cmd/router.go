@@ -68,6 +68,7 @@ type Router struct {
 	shutdownOnce sync.Once
 	bootStopMu   sync.Mutex
 	bootStopDone bool
+	bootStopEnabled bool
 }
 
 // Config carries the inputs Router needs at construction time.
@@ -90,6 +91,7 @@ type Config struct {
 	MaxLoconetSlots    int // 0 = default 80 when the station supports slots
 	RemoteIdleTimeout         time.Duration
 	RemoteIdleTimeoutDisabled bool
+	BootStopEnabled           bool
 	SlotMetrics               slotlease.Recorder
 }
 
@@ -125,6 +127,7 @@ func NewRouter(_ context.Context, cfg Config) (*Router, error) {
 		store:         state.NewLocoStateStore(cfg.Redis, StateTTL, log),
 		maxVehiclesPerUser: cfg.MaxVehiclesPerUser,
 		slotMetrics:        slotlease.RecorderOrNoop(cfg.SlotMetrics),
+		bootStopEnabled:    cfg.BootStopEnabled,
 	}
 	r.dcc.LogFields = r.stationLogFields
 	r.reconcileBootSlots(cfg)
@@ -188,7 +191,9 @@ func (r *Router) ApplyAllowedVehicles(ctx context.Context, snap contract.Allowed
 		"addrs":    addrs,
 		"count":    len(addrs),
 	}).Info("dcc-bus allowed vehicles updated")
-	r.ensureBootStop(ctx)
+	if r.bootStopEnabled {
+		r.ensureBootStop(ctx)
+	}
 }
 
 // ApplyDefinedTrains replaces the layout train roster cache.
@@ -266,9 +271,11 @@ func (r *Router) FunctionsSnapshot() contract.VehicleFunctions {
 }
 
 // broadcastLocoState fans a snapshot to WS sessions and registered remotes.
-func (r *Router) broadcastLocoState(ctx context.Context, snap contract.LocoStateWire) {
+// originClientKey is the commanding handset's client key (or "" for
+// non-handset origins) so gateway fanouts can skip double-echoing the sender.
+func (r *Router) broadcastLocoState(ctx context.Context, snap contract.LocoStateWire, originClientKey string) {
 	service.BroadcastLocoState(ctx, r.hub, snap)
-	r.locoObservers.Notify(ctx, snap)
+	r.locoObservers.Notify(ctx, snap, originClientKey)
 }
 
 // locoSnapOrDefault returns the in-memory snapshot or a stopped default.

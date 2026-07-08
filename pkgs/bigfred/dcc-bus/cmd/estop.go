@@ -79,10 +79,10 @@ func (r *Router) shouldEmergencyStopLoco(addr uint16, movingOnly bool) bool {
 func (r *Router) applyDeadManSwitchForLoco(ctx context.Context, addr uint16, userID uint, v contract.AllowedVehicle) {
 	switch v.DeadManSwitchOption {
 	case string(domain.DeadManSwitchStopHorn):
-		r.setTimedLocoFunctionWithRetry(addr, userID, v.Rp1Function, time.Second, "deadman", 3)
+		r.setTimedLocoFunctionWithRetry(addr, userID, v.Rp1Function, time.Second, "deadman", 3, "")
 	case string(domain.DeadManSwitchStopHornEmergencyLights):
-		r.setTimedLocoFunctionWithRetry(addr, userID, v.Rp1Function, time.Second, "deadman", 3)
-		if err := r.setLocoFunction(ctx, addr, userID, v.EmergencyLightsFunction, true, "deadman"); err != nil {
+		r.setTimedLocoFunctionWithRetry(addr, userID, v.Rp1Function, time.Second, "deadman", 3, "")
+		if err := r.setLocoFunction(ctx, addr, userID, v.EmergencyLightsFunction, true, "deadman", ""); err != nil {
 			r.log.WithError(err).WithFields(logrus.Fields{
 				"addr":     addr,
 				"function": v.EmergencyLightsFunction,

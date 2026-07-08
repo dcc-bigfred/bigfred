@@ -91,10 +91,24 @@ func TestApplyAllowedVehiclesBootStopsOnFirstRoster(t *testing.T) {
 			return nil
 		},
 	}
-	_ = newTestRouter(t, st, contract.AllowedVehicles{
-		LayoutID: 2,
-		Vehicles: []contract.AllowedVehicle{{Addr: 7}},
+	rs, cleanup := testRedis(t)
+	defer cleanup()
+	_, err := cmd.NewRouter(context.Background(), cmd.Config{
+		Station:          st,
+		Hub:              ws.HubPort(ws.NewHub()),
+		Redis:            rs,
+		LayoutID:         2,
+		CommandStationID: 1,
+		SpeedSteps:       128,
+		BootStopEnabled:  true,
+		AllowedVehicles: contract.AllowedVehicles{
+			LayoutID: 2,
+			Vehicles: []contract.AllowedVehicle{{Addr: 7}},
+		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(speedAddrs) != 1 || speedAddrs[0] != 7 {
 		t.Fatalf("boot stop should stop roster loco, got SetSpeed %v", speedAddrs)
 	}

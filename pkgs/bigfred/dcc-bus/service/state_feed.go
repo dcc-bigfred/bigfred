@@ -200,7 +200,7 @@ func applyObservation(ctx context.Context, deps FeedDeps, o commandstation.LocoO
 	}
 	BroadcastLocoState(ctx, deps.Hub, snap)
 	if deps.LocoObservers != nil {
-		deps.LocoObservers.Notify(ctx, snap)
+		deps.LocoObservers.Notify(ctx, snap, "")
 	}
 	if deps.Log != nil {
 		deps.Log.WithFields(logrus.Fields{

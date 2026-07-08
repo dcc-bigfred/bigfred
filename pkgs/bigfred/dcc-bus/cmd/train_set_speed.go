@@ -6,6 +6,7 @@ import (
 	"github.com/keskad/loco/pkgs/bigfred/contract"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/errors"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/service"
+	"github.com/keskad/loco/pkgs/bigfred/remotes"
 )
 
 func (r *Router) leadingWasAtStartSpeed(_ context.Context, leading contract.DefinedTrainMember) bool {
@@ -76,7 +77,7 @@ func (r *Router) HandleTrainSetSpeed(ctx context.Context, actor Actor, _ Respond
 	}
 
 	apply := func(callCtx context.Context, addr uint16, speed uint8, forward bool) error {
-		return r.applyMemberSetSpeed(callCtx, actor, addr, speed, forward, false, "train")
+		return r.applyMemberSetSpeed(callCtx, actor, addr, speed, forward, false, "train", remotes.HandsetClientKeyFromSession(actor.SessionID))
 	}
 	acks, allOK := r.trainSpeed.Apply(
 		ctx,

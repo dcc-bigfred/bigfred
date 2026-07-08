@@ -63,6 +63,8 @@ type Coordinator struct {
 	syncHandlers map[string]SessionSyncHandler
 	evictMu      sync.RWMutex
 	onEvict      []func(string)
+	unpairMu     sync.RWMutex
+	onUnpair     []func(string)
 	pubMu        sync.Mutex
 	lastPub      time.Time
 	dirty        bool
@@ -73,6 +75,7 @@ type Coordinator struct {
 	// nil otherwise. Lets tests await readiness instead of racing PUBLISH.
 	syncSubReady chan struct{}
 	syncSubOnce  sync.Once
+	virtual      *VirtualLocoStore
 }
 
 // NewCoordinator returns a coordinator that is not yet running.
@@ -95,6 +98,7 @@ func NewCoordinator(cfg CoordinatorConfig) *Coordinator {
 		cfg:      cfg,
 		registry: cfg.Registry,
 		policies: make(map[string]ProtocolPolicy),
+		virtual:  NewVirtualLocoStore(),
 	}
 	if cfg.Store != nil {
 		c.syncSubReady = make(chan struct{})
@@ -107,6 +111,11 @@ func (c *Coordinator) Registry() *inbound.ClientRegistry {
 	return c.registry
 }
 
+// VirtualLocos returns the shared simulated-loco store for unpaired handsets.
+func (c *Coordinator) VirtualLocos() *VirtualLocoStore {
+	return c.virtual
+}
+
 // RegisterOnEvict adds a hook invoked after a client is evicted. Safe to
 // call before or while Run is active.
 func (c *Coordinator) RegisterOnEvict(fn func(key string)) {
@@ -116,6 +125,18 @@ func (c *Coordinator) RegisterOnEvict(fn func(key string)) {
 	c.evictMu.Lock()
 	c.onEvict = append(c.onEvict, fn)
 	c.evictMu.Unlock()
+}
+
+// RegisterOnUnpair adds a hook invoked when loco-server signals an explicit
+// REST unpair. The client stays connected; hooks typically release slot
+// leases without evicting the handset from the registry.
+func (c *Coordinator) RegisterOnUnpair(fn func(key string)) {
+	if fn == nil {
+		return
+	}
+	c.unpairMu.Lock()
+	c.onUnpair = append(c.onUnpair, fn)
+	c.unpairMu.Unlock()
 }
 
 // RegisterPolicy sets sweep behaviour for one protocol.
@@ -340,6 +361,14 @@ func (c *Coordinator) handleSyncMessage(ctx context.Context, msg *redis.Message)
 	} else {
 		c.syncPairedClientGeneric(ctx, ev.ClientKey)
 		return
+	}
+	if ev.Action == contract.RemoteSessionSyncUnpair {
+		c.unpairMu.RLock()
+		hooks := append([]func(string){}, c.onUnpair...)
+		c.unpairMu.RUnlock()
+		for _, fn := range hooks {
+			fn(ev.ClientKey)
+		}
 	}
 	c.registry.MarkSynced(ev.ClientKey)
 	c.markDirty()
@@ -585,6 +614,9 @@ func (c *Coordinator) evictClient(ctx context.Context, key string) {
 		}
 	}
 	c.registry.Remove(key)
+	if c.virtual != nil {
+		c.virtual.RemoveClient(key)
+	}
 	c.evictMu.RLock()
 	hooks := append([]func(string){}, c.onEvict...)
 	c.evictMu.RUnlock()

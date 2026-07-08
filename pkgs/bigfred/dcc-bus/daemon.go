@@ -84,6 +84,7 @@ type Config struct {
 	MaxVehiclesPerUser int
 	MaxLoconetSlots    int
 	IdleTimeoutSecs    uint
+	BootStopEnabled    bool
 }
 
 // Daemon is the assembled dcc-bus instance.
@@ -303,6 +304,7 @@ func New(ctx context.Context, log *logrus.Logger, cfg Config) (*Daemon, error) {
 		MaxLoconetSlots:           cfg.MaxLoconetSlots,
 		RemoteIdleTimeout:         remoteIdle,
 		RemoteIdleTimeoutDisabled: remoteIdleDisabled,
+		BootStopEnabled:           cfg.BootStopEnabled,
 		SlotMetrics:               slotMetrics,
 	})
 	if err != nil {
@@ -530,6 +532,9 @@ func (d *Daemon) startRemoteGateways(ctx context.Context) error {
 		Log:              d.log,
 	})
 	coordinator.RegisterOnEvict(func(key string) {
+		d.router.ReleaseHandsetSession(remotes.HandsetSessionID(key))
+	})
+	coordinator.RegisterOnUnpair(func(key string) {
 		d.router.ReleaseHandsetSession(remotes.HandsetSessionID(key))
 	})
 	type gatewayRunner struct {

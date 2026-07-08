@@ -77,28 +77,33 @@ func parseSetLocoDrive(pkt []byte) (addr uint16, speed uint8, forward bool, ok b
 	return addr, speed, forward, true
 }
 
-func parseSetLocoFunction(pkt []byte) (addr uint16, fn int, on bool, ok bool) {
+// funcSwitchType is the DB3 switch-type field of LAN_X_SET_LOCO_FUNCTION
+// (Z21 spec 4.3.1): 00 = off, 01 = on, 10 = toggle. 11 is reserved.
+type funcSwitchType uint8
+
+const (
+	funcSwitchOff    funcSwitchType = 0
+	funcSwitchOn     funcSwitchType = 1
+	funcSwitchToggle funcSwitchType = 2
+)
+
+func parseSetLocoFunction(pkt []byte) (addr uint16, fn int, sw funcSwitchType, ok bool) {
 	if len(pkt) < 10 {
-		return 0, 0, false, false
+		return 0, 0, 0, false
 	}
 	_, header, okHdr := packetHeader(pkt)
 	if !okHdr || header != HeaderXBus || pkt[4] != 0xE4 || pkt[5] != 0xF8 {
-		return 0, 0, false, false
+		return 0, 0, 0, false
 	}
 	addr, ok = parseLocoAddr(pkt, 6)
 	if !ok {
-		return 0, 0, false, false
+		return 0, 0, 0, false
 	}
-	db3 := pkt[8]
-	switch db3 >> 6 {
-	case 0:
-		on = false
-	case 1:
-		on = true
-	default:
-		return 0, 0, false, false
+	sw = funcSwitchType(pkt[8] >> 6)
+	if sw > funcSwitchToggle {
+		return 0, 0, 0, false
 	}
-	return addr, int(db3 & 0x3F), on, true
+	return addr, int(pkt[8] & 0x3F), sw, true
 }
 
 func parseSetLocoFunctionGroup(pkt []byte) (addr uint16, updates []struct {

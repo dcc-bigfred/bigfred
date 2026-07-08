@@ -33,13 +33,14 @@ func (n *LocoStateNotifier) Register(obs LocoStateObserver) {
 	n.obs = append(n.obs, obs)
 }
 
-// Notify delivers one snapshot to every registered observer.
-func (n *LocoStateNotifier) Notify(ctx context.Context, snap contract.LocoStateWire) {
+// Notify delivers one snapshot to every registered observer. originClientKey
+// is the commanding handset's client key (or "" for non-handset origins).
+func (n *LocoStateNotifier) Notify(ctx context.Context, snap contract.LocoStateWire, originClientKey string) {
 	if n == nil {
 		return
 	}
 	for _, obs := range n.snapshot() {
-		obs.OnLocoStateChanged(ctx, snap)
+		obs.OnLocoStateChanged(ctx, snap, originClientKey)
 	}
 }
 

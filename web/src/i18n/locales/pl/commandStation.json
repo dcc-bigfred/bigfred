@@ -59,7 +59,9 @@
         "maxLoconetSlots": "Budżet slotów LocoNet",
         "maxLoconetSlotsHelp": "Ile slotów może zająć BigFred w tej centralce; pozostałe zostaną dla fizycznych FREDów. Domyślnie 80.",
         "idleTimeoutSecs": "Limit bezczynności pilota (s)",
-        "idleTimeoutSecsHelp": "Po tym czasie bez jazdy zdalny pilot (Z21/WiThrottle) traci slot. 0 wyłącza zwalnianie po bezczynności. Domyślnie 60 s."
+        "idleTimeoutSecsHelp": "Po tym czasie bez jazdy zdalny pilot (Z21/WiThrottle) traci slot. 0 wyłącza zwalnianie po bezczynności. Domyślnie 60 s.",
+        "bootStopEnabled": "Boot-stop całego rostera",
+        "bootStopEnabledHelp": "Po włączeniu dcc-bus raz po starcie wysyła emergency stop do każdej lokomotywy z rostera. Domyślnie wyłączone — unika fałszywych lease „external” na LocoNet po restarcie."
       }
     },
     "empty": "Brak centralki do wyświetlenia.",

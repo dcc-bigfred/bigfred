@@ -36,6 +36,7 @@ export interface CommandStation {
   withrottleServerEnabled: boolean;
   maxLoconetSlots?: number;
   idleTimeoutSecs?: number;
+  bootStopEnabled: boolean;
 }
 
 const commandStationsCatalogueQueryKey = [
@@ -68,6 +69,7 @@ export function useCreateCommandStation() {
       withrottleServerEnabled?: boolean;
       maxLoconetSlots?: number;
       idleTimeoutSecs?: number;
+      bootStopEnabled?: boolean;
     }) =>
       apiFetch<CommandStation>("/api/v1/command-stations", {
         method: "POST",
@@ -96,6 +98,7 @@ export function useUpdateCommandStation() {
       withrottleServerEnabled?: boolean;
       maxLoconetSlots?: number;
       idleTimeoutSecs?: number;
+      bootStopEnabled?: boolean;
     }) =>
       apiFetch<CommandStation>(`/api/v1/command-stations/${args.id}`, {
         method: "PUT",
@@ -112,6 +115,7 @@ export function useUpdateCommandStation() {
           withrottleServerEnabled: args.withrottleServerEnabled,
           maxLoconetSlots: args.maxLoconetSlots,
           idleTimeoutSecs: args.idleTimeoutSecs,
+          bootStopEnabled: args.bootStopEnabled,
         }),
       }),
     onSuccess: () => {

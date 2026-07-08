@@ -9,17 +9,24 @@ import (
 
 const MaxFunctionNameLen = 64
 
+// MaxMomentaryDurationMs caps the auto-off duration of a momentary function.
+const MaxMomentaryDurationMs = 300_000
+
 // FunctionUpsertInput is the validated payload for upserting one slot.
 type FunctionUpsertInput struct {
-	Name     string
-	Icon     domain.FunctionIcon
-	Position int
+	Name                string
+	Icon                domain.FunctionIcon
+	Position            int
+	Momentary           bool
+	MomentaryDurationMs int
 }
 
 type ValidatedFunction struct {
-	Name     string
-	Icon     domain.FunctionIcon
-	Position int
+	Name                string
+	Icon                domain.FunctionIcon
+	Position            int
+	Momentary           bool
+	MomentaryDurationMs int
 }
 
 // ValidateFunctionUpsert trims and validates one function slot payload.
@@ -34,9 +41,14 @@ func ValidateFunctionUpsert(in FunctionUpsertInput) (ValidatedFunction, error) {
 	if !in.Icon.IsValid() {
 		return ValidatedFunction{}, svcerrors.ErrFunctionIconInvalid
 	}
+	if in.MomentaryDurationMs < 0 || in.MomentaryDurationMs > MaxMomentaryDurationMs {
+		return ValidatedFunction{}, svcerrors.ErrFunctionDurationInvalid
+	}
 	return ValidatedFunction{
-		Name:     name,
-		Icon:     in.Icon,
-		Position: in.Position,
+		Name:                name,
+		Icon:                in.Icon,
+		Position:            in.Position,
+		Momentary:           in.Momentary,
+		MomentaryDurationMs: in.MomentaryDurationMs,
 	}, nil
 }

@@ -7,11 +7,13 @@ import (
 
 // FunctionResponse is one resolved function slot on the wire.
 type FunctionResponse struct {
-	Num      uint8              `json:"num"`
-	Name     string             `json:"name"`
-	Icon     domain.FunctionIcon `json:"icon"`
-	Position int                `json:"position"`
-	Source   string             `json:"source,omitempty"`
+	Num        uint8               `json:"num"`
+	Name       string              `json:"name"`
+	Icon       domain.FunctionIcon `json:"icon"`
+	Position   int                 `json:"position"`
+	Momentary  bool                `json:"momentary"`
+	DurationMs int                 `json:"durationMs"`
+	Source     string              `json:"source,omitempty"`
 }
 
 // ToFunctionResponses maps cmd rows to REST wire shape.
@@ -19,11 +21,13 @@ func ToFunctionResponses(rows []cmd.ResolvedFunction) []FunctionResponse {
 	out := make([]FunctionResponse, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, FunctionResponse{
-			Num:      r.Num,
-			Name:     r.Name,
-			Icon:     r.Icon,
-			Position: r.Position,
-			Source:   r.Source,
+			Num:        r.Num,
+			Name:       r.Name,
+			Icon:       r.Icon,
+			Position:   r.Position,
+			Momentary:  r.Momentary,
+			DurationMs: r.MomentaryDurationMs,
+			Source:     r.Source,
 		})
 	}
 	return out
@@ -32,27 +36,33 @@ func ToFunctionResponses(rows []cmd.ResolvedFunction) []FunctionResponse {
 // ToFunctionResponse maps one domain row to the wire shape.
 func ToFunctionResponse(row domain.DccFunction, source string) FunctionResponse {
 	return FunctionResponse{
-		Num:      row.Num,
-		Name:     row.Name,
-		Icon:     row.Icon,
-		Position: row.Position,
-		Source:   source,
+		Num:        row.Num,
+		Name:       row.Name,
+		Icon:       row.Icon,
+		Position:   row.Position,
+		Momentary:  row.Momentary,
+		DurationMs: row.MomentaryDurationMs,
+		Source:     source,
 	}
 }
 
 // FunctionUpsertRequest is the PUT body for one function slot.
 type FunctionUpsertRequest struct {
-	Name     string              `json:"name"`
-	Icon     domain.FunctionIcon `json:"icon"`
-	Position int                 `json:"position"`
+	Name       string              `json:"name"`
+	Icon       domain.FunctionIcon `json:"icon"`
+	Position   int                 `json:"position"`
+	Momentary  bool                `json:"momentary"`
+	DurationMs int                 `json:"durationMs"`
 }
 
 // ToUpsertInput maps the HTTP body to cmd input.
 func (r FunctionUpsertRequest) ToUpsertInput() cmd.FunctionUpsertInput {
 	return cmd.FunctionUpsertInput{
-		Name:     r.Name,
-		Icon:     r.Icon,
-		Position: r.Position,
+		Name:                r.Name,
+		Icon:                r.Icon,
+		Position:            r.Position,
+		Momentary:           r.Momentary,
+		MomentaryDurationMs: r.DurationMs,
 	}
 }
 

@@ -89,6 +89,7 @@
   "function_num_invalid": "Numer funkcji musi być w zakresie F0–F31.",
   "function_icon_invalid": "Wybierz ikonę z katalogu.",
   "function_name_required": "Wpisz tytuł funkcji.",
+  "function_duration_invalid": "Czas trwania musi być z zakresu 0–300000 ms.",
   "vehicle_template_not_found": "Szablon nie istnieje.",
   "vehicle_template_name_required": "Wpisz nazwę szablonu.",
   "vehicle_template_name_taken": "Szablon o tej nazwie już istnieje.",

@@ -12,6 +12,7 @@
       "num": "No.",
       "title": "Title",
       "icon": "Icon",
+      "momentary": "Momentary",
       "source": "Source",
       "actions": "Actions"
     },
@@ -27,6 +28,10 @@
     "fieldNum": "Function number",
     "fieldTitle": "Title",
     "fieldIcon": "Icon",
+    "fieldMomentary": "Momentary",
+    "fieldDuration": "Duration [ms]",
+    "durationRange": "Enter a value 0–300000 ms.",
+    "momentaryChip": "Momentary ({{seconds}} s)",
     "iconSearchPlaceholder": "Search icon…",
     "iconNoResults": "No matching icons",
     "cancel": "Cancel",

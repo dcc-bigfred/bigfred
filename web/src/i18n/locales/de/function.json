@@ -12,6 +12,7 @@
       "num": "Nr.",
       "title": "Titel",
       "icon": "Symbol",
+      "momentary": "Moment",
       "source": "Quelle",
       "actions": "Aktionen"
     },
@@ -27,6 +28,10 @@
     "fieldNum": "Funktionsnummer",
     "fieldTitle": "Titel",
     "fieldIcon": "Symbol",
+    "fieldMomentary": "Moment",
+    "fieldDuration": "Dauer [ms]",
+    "durationRange": "Wert zwischen 0 und 300000 ms eingeben.",
+    "momentaryChip": "Moment ({{seconds}} s)",
     "iconSearchPlaceholder": "Symbol suchen…",
     "iconNoResults": "Keine passenden Symbole",
     "cancel": "Abbrechen",

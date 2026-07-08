@@ -15,11 +15,13 @@ import (
 
 // ResolvedFunction is the effective slot a throttle or editor displays.
 type ResolvedFunction struct {
-	Num      uint8
-	Name     string
-	Icon     domain.FunctionIcon
-	Position int
-	Source   string // "template" | "vehicle"
+	Num                 uint8
+	Name                string
+	Icon                domain.FunctionIcon
+	Position            int
+	Momentary           bool
+	MomentaryDurationMs int
+	Source              string // "template" | "vehicle"
 }
 
 // FunctionUpsertInput is the validated payload for upserting one slot.
@@ -346,6 +348,8 @@ func (f *Function) CopyVehicleFunctionsFromVehicle(
 				Name:       fn.Name,
 				Icon:       fn.Icon,
 				Position:   fn.Position,
+				Momentary:           fn.Momentary,
+				MomentaryDurationMs: fn.MomentaryDurationMs,
 				CreatedAt:  now,
 				UpdatedAt:  now,
 			}
@@ -478,6 +482,8 @@ func (f *Function) ensureDetached(ctx context.Context, v *domain.Vehicle) error 
 			Name:       tf.Name,
 			Icon:       tf.Icon,
 			Position:   tf.Position,
+			Momentary:           tf.Momentary,
+			MomentaryDurationMs: tf.MomentaryDurationMs,
 			CreatedAt:  now,
 			UpdatedAt:  now,
 		}
@@ -503,6 +509,8 @@ func (f *Function) upsertVehicleRow(
 		existing.Name = in.Name
 		existing.Icon = in.Icon
 		existing.Position = in.Position
+		existing.Momentary = in.Momentary
+		existing.MomentaryDurationMs = in.MomentaryDurationMs
 		existing.UpdatedAt = now
 		if err := f.functions.Update(ctx, &existing); err != nil {
 			return domain.DccFunction{}, err
@@ -520,6 +528,8 @@ func (f *Function) upsertVehicleRow(
 		Name:       in.Name,
 		Icon:       in.Icon,
 		Position:   in.Position,
+		Momentary:           in.Momentary,
+		MomentaryDurationMs: in.MomentaryDurationMs,
 		CreatedAt:  now,
 		UpdatedAt:  now,
 	}
@@ -544,6 +554,8 @@ func (f *Function) upsertTemplateRow(
 		existing.Name = in.Name
 		existing.Icon = in.Icon
 		existing.Position = in.Position
+		existing.Momentary = in.Momentary
+		existing.MomentaryDurationMs = in.MomentaryDurationMs
 		existing.UpdatedAt = now
 		if err := f.functions.Update(ctx, &existing); err != nil {
 			return domain.DccFunction{}, err
@@ -561,6 +573,8 @@ func (f *Function) upsertTemplateRow(
 		Name:       in.Name,
 		Icon:       in.Icon,
 		Position:   in.Position,
+		Momentary:           in.Momentary,
+		MomentaryDurationMs: in.MomentaryDurationMs,
 		CreatedAt:  now,
 		UpdatedAt:  now,
 	}
@@ -605,11 +619,13 @@ func toResolved(rows []domain.DccFunction, source string) []ResolvedFunction {
 	out := make([]ResolvedFunction, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, ResolvedFunction{
-			Num:      r.Num,
-			Name:     r.Name,
-			Icon:     r.Icon,
-			Position: r.Position,
-			Source:   source,
+			Num:                 r.Num,
+			Name:                r.Name,
+			Icon:                r.Icon,
+			Position:            r.Position,
+			Momentary:           r.Momentary,
+			MomentaryDurationMs: r.MomentaryDurationMs,
+			Source:              source,
 		})
 	}
 	return out

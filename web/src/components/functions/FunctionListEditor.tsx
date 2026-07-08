@@ -10,12 +10,14 @@ import {
   DialogContent,
   DialogTitle,
   FormControl,
+  FormControlLabel,
   IconButton,
   InputLabel,
   MenuItem,
   Paper,
   Select,
   Stack,
+  Switch,
   Table,
   TableBody,
   TableCell,
@@ -123,6 +125,10 @@ type EditState =
   | null;
 
 const FN_MAX = 31;
+const DURATION_MIN_MS = 0;
+const DURATION_MAX_MS = 300_000;
+const DEFAULT_DURATION_MS = 1000;
+const isMomentaryDefaultFor = (num: number) => num === 2 || num === 3;
 
 export default function FunctionListEditor({
   mode,
@@ -144,6 +150,8 @@ export default function FunctionListEditor({
   );
   const [name, setName] = useState("");
   const [icon, setIcon] = useState("unspecified");
+  const [momentary, setMomentary] = useState(false);
+  const [durationMs, setDurationMs] = useState(DEFAULT_DURATION_MS);
 
   const sorted = useMemo(
     () => [...(functions ?? [])].sort((a, b) => a.position - b.position),
@@ -181,21 +189,33 @@ export default function FunctionListEditor({
 
   const openAdd = () => {
     if (freeNums.length === 0) return;
-    setEdit({ kind: "add", num: freeNums[0] });
+    const num = freeNums[0];
+    setEdit({ kind: "add", num });
     setName("");
     setIcon("unspecified");
+    setMomentary(isMomentaryDefaultFor(num));
+    setDurationMs(DEFAULT_DURATION_MS);
   };
 
   const openEditRow = (row: DccFunction) => {
     setEdit({ kind: "edit", row });
     setName(row.name);
     setIcon(row.icon);
+    setMomentary(row.momentary);
+    setDurationMs(row.durationMs);
   };
 
   const closeEdit = () => setEdit(null);
 
+  const isDurationValid =
+    !momentary ||
+    (Number.isInteger(durationMs) &&
+      durationMs >= DURATION_MIN_MS &&
+      durationMs <= DURATION_MAX_MS);
+
   const saveEdit = () => {
     if (!edit) return;
+    if (!isDurationValid) return;
     const num = edit.kind === "add" ? edit.num : edit.row.num;
     const position =
       edit.kind === "edit"
@@ -203,7 +223,13 @@ export default function FunctionListEditor({
         : sorted.length;
     mutations.upsert.mutate({
       num,
-      body: { name: name.trim(), icon, position },
+      body: {
+        name: name.trim(),
+        icon,
+        position,
+        momentary,
+        durationMs: momentary ? durationMs : 0,
+      },
     });
     closeEdit();
   };
@@ -310,6 +336,7 @@ export default function FunctionListEditor({
                   <TableCell width={72}>{t("function:editor.columns.num")}</TableCell>
                   <TableCell>{t("function:editor.columns.title")}</TableCell>
                   <TableCell>{t("function:editor.columns.icon")}</TableCell>
+                  <TableCell>{t("function:editor.columns.momentary")}</TableCell>
                   {mode === "vehicle" && (
                     <TableCell>{t("function:editor.columns.source")}</TableCell>
                   )}
@@ -319,13 +346,13 @@ export default function FunctionListEditor({
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={mode === "vehicle" ? 6 : 5} align="center" sx={{ py: 3 }}>
+                    <TableCell colSpan={mode === "vehicle" ? 7 : 6} align="center" sx={{ py: 3 }}>
                       {t("common:loading")}
                     </TableCell>
                   </TableRow>
                 ) : sorted.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={mode === "vehicle" ? 6 : 5} align="center" sx={{ py: 3 }}>
+                    <TableCell colSpan={mode === "vehicle" ? 7 : 6} align="center" sx={{ py: 3 }}>
                       {t("function:editor.empty")}
                     </TableCell>
                   </TableRow>
@@ -361,6 +388,18 @@ export default function FunctionListEditor({
                           <FunctionIconVisual icon={row.icon} />
                           <Typography variant="body2">{iconLabel(row.icon)}</Typography>
                         </Stack>
+                      </TableCell>
+                      <TableCell>
+                        {row.momentary ? (
+                          <Chip
+                            size="small"
+                            label={t("function:editor.momentaryChip", {
+                              seconds: row.durationMs / 1000,
+                            })}
+                          />
+                        ) : (
+                          "—"
+                        )}
                       </TableCell>
                       {mode === "vehicle" && (
                         <TableCell>
@@ -417,9 +456,11 @@ export default function FunctionListEditor({
                 <Select
                   label={t("function:editor.fieldNum")}
                   value={edit.num}
-                  onChange={(e) =>
-                    setEdit({ kind: "add", num: Number(e.target.value) })
-                  }
+                  onChange={(e) => {
+                    const num = Number(e.target.value);
+                    setEdit({ kind: "add", num });
+                    setMomentary(isMomentaryDefaultFor(num));
+                  }}
                 >
                   {freeNums.map((n) => (
                     <MenuItem key={n} value={n}>
@@ -523,6 +564,29 @@ export default function FunctionListEditor({
               fullWidth
               required
             />
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={momentary}
+                  onChange={(e) => setMomentary(e.target.checked)}
+                />
+              }
+              label={t("function:editor.fieldMomentary")}
+            />
+            {momentary && (
+              <TextField
+                label={t("function:editor.fieldDuration")}
+                type="number"
+                value={durationMs}
+                onChange={(e) => setDurationMs(Number(e.target.value))}
+                inputProps={{ min: DURATION_MIN_MS, max: DURATION_MAX_MS, step: 100 }}
+                error={!isDurationValid}
+                helperText={
+                  !isDurationValid ? t("function:editor.durationRange") : undefined
+                }
+                fullWidth
+              />
+            )}
           </Stack>
         </DialogContent>
         <DialogActions>
@@ -530,7 +594,7 @@ export default function FunctionListEditor({
           <Button
             variant="contained"
             onClick={saveEdit}
-            disabled={!name.trim() || mutations.upsert.isPending}
+            disabled={!name.trim() || !isDurationValid || mutations.upsert.isPending}
           >
             {t("function:editor.save")}
           </Button>

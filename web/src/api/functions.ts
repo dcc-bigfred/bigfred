@@ -9,6 +9,8 @@ export interface DccFunction {
   name: string;
   icon: string;
   position: number;
+  momentary: boolean;
+  durationMs: number;
   source?: FunctionSource;
 }
 
@@ -131,6 +133,8 @@ export interface FunctionUpsertBody {
   name: string;
   icon: string;
   position: number;
+  momentary: boolean;
+  durationMs: number;
 }
 
 export function useUpsertVehicleFunction(vehicleId: string) {

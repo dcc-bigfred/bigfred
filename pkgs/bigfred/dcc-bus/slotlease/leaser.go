@@ -5,6 +5,7 @@ import (
 	stderrors "errors"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/keskad/loco/pkgs/bigfred/contract"
@@ -125,6 +126,7 @@ type Leaser struct {
 	diagCh          chan struct{}
 	releaseCh       chan releaseJob
 	stop            chan struct{}
+	suppressExternal atomic.Bool
 }
 
 // New returns a Leaser with defaults from Config.
@@ -593,6 +595,16 @@ func (le *lease) leaseHasBigFredHolderLocked() bool {
 	return false
 }
 
+// SuppressExternal skips creating synthetic external leases while enabled.
+// Used during daemon boot-stop so transient slot acquires do not pollute the
+// lease table.
+func (l *Leaser) SuppressExternal(on bool) {
+	if l == nil {
+		return
+	}
+	l.suppressExternal.Store(on)
+}
+
 // OnSlotInUse implements commandstation.SlotObserver. The driver calls it
 // after a slot for addr becomes IN_USE. If BigFred already holds a lease
 // (Reserve/Select created one), this confirms the lease's acquiredAt. If no
@@ -611,6 +623,10 @@ func (l *Leaser) OnSlotInUse(addr commandstation.LocoAddr) {
 			le.acquiredAt = time.Now()
 			l.notifyDiagLocked()
 		}
+		l.mu.Unlock()
+		return
+	}
+	if l.suppressExternal.Load() {
 		l.mu.Unlock()
 		return
 	}

@@ -98,6 +98,7 @@ export default function CommandStationsPage() {
   const [idleTimeoutSecsInput, setIdleTimeoutSecsInput] = useState<number>(
     DEFAULT_COMMAND_STATION_IDLE_TIMEOUT_SECS,
   );
+  const [bootStopEnabledInput, setBootStopEnabledInput] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const closeDialog = () => {
@@ -114,6 +115,7 @@ export default function CommandStationsPage() {
     setWithrottleServerEnabledInput(false);
     setMaxLoconetSlotsInput(DEFAULT_COMMAND_STATION_MAX_LOCONET_SLOTS);
     setIdleTimeoutSecsInput(DEFAULT_COMMAND_STATION_IDLE_TIMEOUT_SECS);
+    setBootStopEnabledInput(false);
     setActionError(null);
     create.reset();
     update.reset();
@@ -143,6 +145,7 @@ export default function CommandStationsPage() {
     setWithrottleServerEnabledInput(false);
     setMaxLoconetSlotsInput(DEFAULT_COMMAND_STATION_MAX_LOCONET_SLOTS);
     setIdleTimeoutSecsInput(DEFAULT_COMMAND_STATION_IDLE_TIMEOUT_SECS);
+    setBootStopEnabledInput(false);
     setActionError(null);
   };
 
@@ -164,6 +167,7 @@ export default function CommandStationsPage() {
     setIdleTimeoutSecsInput(
       target.idleTimeoutSecs ?? DEFAULT_COMMAND_STATION_IDLE_TIMEOUT_SECS,
     );
+    setBootStopEnabledInput(target.bootStopEnabled);
     setActionError(null);
   };
 
@@ -187,6 +191,7 @@ export default function CommandStationsPage() {
         z21IpStickiness: z21ServerEnabledInput ? z21IpStickinessInput : false,
         withrottleServerEnabled: withrottleServerEnabledInput,
         idleTimeoutSecs: idleTimeoutSecsInput,
+        bootStopEnabled: bootStopEnabledInput,
         ...(isLoconetKind(kindInput)
           ? { maxLoconetSlots: maxLoconetSlotsInput }
           : {}),
@@ -478,6 +483,20 @@ export default function CommandStationsPage() {
               inputProps={{ min: 0, max: 3600, step: 1 }}
               fullWidth
             />
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={bootStopEnabledInput}
+                  onChange={(e) =>
+                    setBootStopEnabledInput(e.target.checked)
+                  }
+                />
+              }
+              label={t("commandStation:admin.dialogs.fields.bootStopEnabled")}
+            />
+            <Typography variant="body2" color="text.secondary">
+              {t("commandStation:admin.dialogs.fields.bootStopEnabledHelp")}
+            </Typography>
             <FormControlLabel
               control={
                 <Switch

@@ -19,6 +19,7 @@ type CommandStationResponse struct {
 	WithrottleServerEnabled bool                      `json:"withrottleServerEnabled"`
 	MaxLoconetSlots         uint                      `json:"maxLoconetSlots,omitempty"`
 	IdleTimeoutSecs         uint                      `json:"idleTimeoutSecs,omitempty"`
+	BootStopEnabled         bool                      `json:"bootStopEnabled"`
 }
 
 func ToCommandStationResponse(cs domain.CommandStation) CommandStationResponse {
@@ -34,6 +35,7 @@ func ToCommandStationResponse(cs domain.CommandStation) CommandStationResponse {
 		Z21ServerEnabled:        cs.Z21ServerEnabled,
 		Z21IPStickiness:         cs.Z21IPStickiness,
 		WithrottleServerEnabled: cs.WithrottleServerEnabled,
+		BootStopEnabled:         cs.BootStopEnabled,
 	}
 	if cs.Kind.IsLocoNet() {
 		resp.MaxLoconetSlots = cs.EffectiveMaxLoconetSlots()
@@ -55,6 +57,7 @@ type CommandStationCreateRequest struct {
 	WithrottleServerEnabled bool                      `json:"withrottleServerEnabled"`
 	MaxLoconetSlots         uint                      `json:"maxLoconetSlots"`
 	IdleTimeoutSecs         uint                      `json:"idleTimeoutSecs"`
+	BootStopEnabled         bool                      `json:"bootStopEnabled"`
 }
 
 func (r CommandStationCreateRequest) ToCreateInput() cmd.CommandStationCreateInput {
@@ -71,6 +74,7 @@ func (r CommandStationCreateRequest) ToCreateInput() cmd.CommandStationCreateInp
 		WithrottleServerEnabled: r.WithrottleServerEnabled,
 		MaxLoconetSlots:         r.MaxLoconetSlots,
 		IdleTimeoutSecs:         r.IdleTimeoutSecs,
+		BootStopEnabled:         r.BootStopEnabled,
 	}
 }
 
@@ -87,6 +91,7 @@ type CommandStationUpdateRequest struct {
 	WithrottleServerEnabled *bool                      `json:"withrottleServerEnabled"`
 	MaxLoconetSlots         *uint                      `json:"maxLoconetSlots"`
 	IdleTimeoutSecs         *uint                      `json:"idleTimeoutSecs"`
+	BootStopEnabled         *bool                      `json:"bootStopEnabled"`
 }
 
 func (r CommandStationUpdateRequest) ToUpdateInput() cmd.CommandStationUpdateInput {
@@ -103,5 +108,6 @@ func (r CommandStationUpdateRequest) ToUpdateInput() cmd.CommandStationUpdateInp
 		WithrottleServerEnabled: r.WithrottleServerEnabled,
 		MaxLoconetSlots:         r.MaxLoconetSlots,
 		IdleTimeoutSecs:         r.IdleTimeoutSecs,
+		BootStopEnabled:         r.BootStopEnabled,
 	}
 }

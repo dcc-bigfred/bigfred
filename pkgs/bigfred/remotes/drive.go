@@ -48,4 +48,7 @@ type InboundDrivePort interface {
 	SetSpeed(ctx context.Context, actor ThrottleActor, resp ThrottleResponder, req contract.LocoSetSpeedWire) CommandResult
 	SetFunction(ctx context.Context, actor ThrottleActor, resp ThrottleResponder, req contract.LocoSetFunctionWire) CommandResult
 	Subscribe(ctx context.Context, actor ThrottleActor, resp ThrottleResponder, addrs []uint16) CommandResult
+	// LocoSnapshot returns the current merged state for an address so a
+	// gateway can echo it straight back to the commanding handset.
+	LocoSnapshot(addr uint16) contract.LocoStateWire
 }

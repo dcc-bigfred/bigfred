@@ -4,6 +4,7 @@ import {
   axisToSpeed,
   GAMEPAD_MAX_SPEED_STEP,
   GAMEPAD_SPEED_WINDOW_MS,
+  speedButtonStepSize,
   stabilizeGamepadSpeedStep,
   type GamepadMapping,
 } from "./gamepadMapping";
@@ -49,6 +50,7 @@ export function useGamepadControl({
   const forwardRef = useRef(forward);
   const prevButtonsRef = useRef<boolean[]>([]);
   const appliedSpeedRef = useRef<number | null>(null);
+  const buttonLatchedSpeedRef = useRef(0);
   const windowEndSpeedRef = useRef(0);
   const windowDeadlineRef = useRef(0);
 
@@ -72,11 +74,13 @@ export function useGamepadControl({
     ) {
       prevButtonsRef.current = [];
       appliedSpeedRef.current = null;
+      buttonLatchedSpeedRef.current = 0;
       windowDeadlineRef.current = 0;
       return;
     }
 
     appliedSpeedRef.current = currentSpeedRef.current;
+    buttonLatchedSpeedRef.current = currentSpeedRef.current;
     windowDeadlineRef.current = performance.now() + GAMEPAD_SPEED_WINDOW_MS;
 
     let frame = 0;
@@ -109,16 +113,23 @@ export function useGamepadControl({
         return;
       }
 
-      const axisValue = gp.axes[active.speedAxis] ?? 0;
-      windowEndSpeedRef.current = axisToSpeed(
-        axisValue,
-        maxSpeedRef.current,
-        active,
-      );
-
       const now = performance.now();
-      if (now >= windowDeadlineRef.current) {
-        emitStabilizedSpeed(now);
+
+      if (active.axisEnabled !== false) {
+        const axisValue = gp.axes[active.speedAxis] ?? 0;
+        const axisSpeed = axisToSpeed(
+          axisValue,
+          maxSpeedRef.current,
+          active,
+        );
+        // Button steps latch; neutral axis must not pull speed below that floor.
+        windowEndSpeedRef.current = Math.max(
+          axisSpeed,
+          buttonLatchedSpeedRef.current,
+        );
+        if (now >= windowDeadlineRef.current) {
+          emitStabilizedSpeed(now);
+        }
       }
 
       const prev = prevButtonsRef.current;
@@ -130,9 +141,44 @@ export function useGamepadControl({
         !prev[active.stopButton]
       ) {
         appliedSpeedRef.current = 0;
+        buttonLatchedSpeedRef.current = 0;
         windowEndSpeedRef.current = 0;
         windowDeadlineRef.current = now + GAMEPAD_SPEED_WINDOW_MS;
         handlersRef.current.onStop();
+      }
+
+      const stepDelta = speedButtonStepSize(
+        maxSpeedRef.current,
+        active.speedButtonSteps,
+      );
+
+      if (
+        active.accelerateButton != null &&
+        pressed(active.accelerateButton) &&
+        !prev[active.accelerateButton]
+      ) {
+        const next = Math.min(
+          maxSpeedRef.current,
+          buttonLatchedSpeedRef.current + stepDelta,
+        );
+        buttonLatchedSpeedRef.current = next;
+        appliedSpeedRef.current = next;
+        windowEndSpeedRef.current = next;
+        windowDeadlineRef.current = now + GAMEPAD_SPEED_WINDOW_MS;
+        handlersRef.current.onSpeed(next);
+      }
+
+      if (
+        active.decelerateButton != null &&
+        pressed(active.decelerateButton) &&
+        !prev[active.decelerateButton]
+      ) {
+        const next = Math.max(0, buttonLatchedSpeedRef.current - stepDelta);
+        buttonLatchedSpeedRef.current = next;
+        appliedSpeedRef.current = next;
+        windowEndSpeedRef.current = next;
+        windowDeadlineRef.current = now + GAMEPAD_SPEED_WINDOW_MS;
+        handlersRef.current.onSpeed(next);
       }
 
       if (
@@ -160,6 +206,7 @@ export function useGamepadControl({
       cancelAnimationFrame(frame);
       prevButtonsRef.current = [];
       appliedSpeedRef.current = null;
+      buttonLatchedSpeedRef.current = 0;
       windowDeadlineRef.current = 0;
     };
   }, [disabled, mapping, gamepadIndex]);

@@ -1,23 +1,15 @@
 package migrations
 
 import (
-	"fmt"
-	"strings"
-
 	"github.com/go-rel/rel"
 )
 
 const pikoXpEn57TemplateName = "PIKO / XP / EN57"
 
-type pikoXpEn57FunctionSeed struct {
-	num  uint8
-	name string
-	icon string
-}
 
 // pikoXpEn57Functions is the F0–F28 mapping from the PIKO SmartDecoder XP
 // Sound leaflet for EN57 PKP (#56599).
-var pikoXpEn57Functions = []pikoXpEn57FunctionSeed{
+var pikoXpEn57Functions = []templateFunctionSeed{
 	{0, "Światła", "light"},
 	{1, "Silnik", "engine"},
 	{2, "Trąbka dwutonowa", "horn_high"},
@@ -50,44 +42,9 @@ var pikoXpEn57Functions = []pikoXpEn57FunctionSeed{
 }
 
 func seedPikoXpEn57TemplateUp(s *rel.Schema) {
-	name := sqlLiteral(pikoXpEn57TemplateName)
-	s.Exec(rel.Raw(fmt.Sprintf(`
-		INSERT INTO vehicle_templates (name, description, owner_user_id, version, created_at, updated_at)
-		SELECT '%s', '', COALESCE((SELECT id FROM users WHERE login = 'admin' LIMIT 1), 0), 1, datetime('now'), datetime('now')
-		WHERE NOT EXISTS (SELECT 1 FROM vehicle_templates WHERE name = '%s')
-	`, name, name)))
-
-	var parts []string
-	for _, fn := range pikoXpEn57Functions {
-		parts = append(parts, fmt.Sprintf(
-			`SELECT NULL, t.id, %d, '%s', '%s', %d, datetime('now'), datetime('now')
-			 FROM vehicle_templates t
-			 WHERE t.name = '%s'
-			   AND NOT EXISTS (
-			     SELECT 1 FROM dcc_functions f
-			     WHERE f.template_id = t.id AND f.num = %d
-			   )`,
-			fn.num,
-			sqlLiteral(fn.name),
-			fn.icon,
-			fn.num,
-			name,
-			fn.num,
-		))
-	}
-
-	s.Exec(rel.Raw(`
-		INSERT INTO dcc_functions (vehicle_id, template_id, num, name, icon, position, created_at, updated_at)
-	` + strings.Join(parts, " UNION ALL ")))
+	seedTemplateFunctions(s, pikoXpEn57TemplateName, pikoXpEn57Functions)
 }
 
 func seedPikoXpEn57TemplateDown(s *rel.Schema) {
-	name := sqlLiteral(pikoXpEn57TemplateName)
-	s.Exec(rel.Raw(fmt.Sprintf(`
-		DELETE FROM dcc_functions
-		WHERE template_id IN (SELECT id FROM vehicle_templates WHERE name = '%s')
-	`, name)))
-	s.Exec(rel.Raw(fmt.Sprintf(`
-		DELETE FROM vehicle_templates WHERE name = '%s'
-	`, name)))
+	deleteTemplateSeed(s, pikoXpEn57TemplateName)
 }

@@ -7,6 +7,7 @@ package migrations
 
 import (
 	"context"
+	"strings"
 
 	"github.com/go-rel/rel"
 	"github.com/go-rel/rel/migrator"
@@ -63,6 +64,7 @@ func register(m *migrator.Migrator) {
 	m.Register(migrationVersion(20260526, 2), createLayoutCommandStationsUp, createLayoutCommandStationsDown)
 	m.Register(migrationVersion(20260604, 1), createVehicleTemplatesAndDccFunctionsUp, createVehicleTemplatesAndDccFunctionsDown)
 	m.Register(migrationVersion(20260604, 2), addVehicleDeadManSwitchColumnsUp, addVehicleDeadManSwitchColumnsDown)
+	m.Register(migrationVersion(20260607, 1), addDccFunctionMomentaryColumnsUp, addDccFunctionMomentaryColumnsDown)
 
 	m.Register(migrationVersion(20260608, 1), seedPikoSm31TemplateUp, seedPikoSm31TemplateDown)
 	m.Register(migrationVersion(20260608, 2), seedPikoZimoSm31TemplateUp, seedPikoZimoSm31TemplateDown)
@@ -114,7 +116,7 @@ func register(m *migrator.Migrator) {
 	m.Register(migrationVersion(20260629, 1), addLayoutMaxVehiclesPerUserColumnUp, addLayoutMaxVehiclesPerUserColumnDown)
 	m.Register(migrationVersion(20260629, 2), addCommandStationSlotLeaseColumnsUp, addCommandStationSlotLeaseColumnsDown)
 	m.Register(migrationVersion(20260707, 1), addCommandStationBootStopEnabledColumnUp, addCommandStationBootStopEnabledColumnDown)
-	m.Register(migrationVersion(20260708, 1), addDccFunctionMomentaryColumnsUp, addDccFunctionMomentaryColumnsDown)
+	m.Register(migrationVersion(20260708, 1), backfillMomentaryHornFunctionsUp, backfillMomentaryHornFunctionsDown)
 }
 
 // createCommandStationsUp installs the `command_stations` catalogue
@@ -616,6 +618,44 @@ func addDccFunctionMomentaryColumnsDown(s *rel.Schema) {
 		t.DropColumn("momentary")
 		t.DropColumn("momentary_duration_ms")
 	})
+}
+
+// backfillMomentaryHornFunctionsUp ensures momentary columns exist on databases
+// that migrated before 20260607_1, then marks horn-icon catalogue rows momentary.
+func backfillMomentaryHornFunctionsUp(s *rel.Schema) {
+	s.Do(func(ctx context.Context, r rel.Repository) error {
+		if err := ensureDccFunctionMomentaryColumns(ctx, r); err != nil {
+			return err
+		}
+		_, _, err := r.Exec(ctx, `
+			UPDATE dcc_functions
+			SET momentary = 1, momentary_duration_ms = 1000
+			WHERE icon LIKE '%horn%'
+		`)
+		return err
+	})
+}
+
+func backfillMomentaryHornFunctionsDown(s *rel.Schema) {
+	s.Exec(rel.Raw(`
+		UPDATE dcc_functions
+		SET momentary = 0, momentary_duration_ms = 1000
+		WHERE icon LIKE '%horn%'
+	`))
+}
+
+func ensureDccFunctionMomentaryColumns(ctx context.Context, r rel.Repository) error {
+	if _, _, err := r.Exec(ctx, `ALTER TABLE dcc_functions ADD COLUMN momentary INTEGER NOT NULL DEFAULT 0`); err != nil && !isDuplicateColumnErr(err) {
+		return err
+	}
+	if _, _, err := r.Exec(ctx, `ALTER TABLE dcc_functions ADD COLUMN momentary_duration_ms INTEGER NOT NULL DEFAULT 1000`); err != nil && !isDuplicateColumnErr(err) {
+		return err
+	}
+	return nil
+}
+
+func isDuplicateColumnErr(err error) bool {
+	return err != nil && strings.Contains(strings.ToLower(err.Error()), "duplicate column")
 }
 
 func createVehicleLeasesUp(s *rel.Schema) {

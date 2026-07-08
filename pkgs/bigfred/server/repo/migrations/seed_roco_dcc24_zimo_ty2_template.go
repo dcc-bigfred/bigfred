@@ -1,22 +1,14 @@
 package migrations
 
 import (
-	"fmt"
-	"strings"
-
 	"github.com/go-rel/rel"
 )
 
 const rocoDcc24ZimoTy2TemplateName = "Roco / DCC24 / ZIMO / Ty2"
 
-type rocoDcc24ZimoTy2FunctionSeed struct {
-	num  uint8
-	name string
-	icon string
-}
 
 // rocoDcc24ZimoTy2Functions is the F0–F23 mapping for the Roco DCC24 ZIMO Ty2.
-var rocoDcc24ZimoTy2Functions = []rocoDcc24ZimoTy2FunctionSeed{
+var rocoDcc24ZimoTy2Functions = []templateFunctionSeed{
 	{0, "Światła", "light"},
 	{1, "Dźwięk jazdy", "sound"},
 	{2, "Gwizd krótki", "horn_low"},
@@ -44,44 +36,9 @@ var rocoDcc24ZimoTy2Functions = []rocoDcc24ZimoTy2FunctionSeed{
 }
 
 func seedRocoDcc24ZimoTy2TemplateUp(s *rel.Schema) {
-	name := sqlLiteral(rocoDcc24ZimoTy2TemplateName)
-	s.Exec(rel.Raw(fmt.Sprintf(`
-		INSERT INTO vehicle_templates (name, description, owner_user_id, version, created_at, updated_at)
-		SELECT '%s', '', COALESCE((SELECT id FROM users WHERE login = 'admin' LIMIT 1), 0), 1, datetime('now'), datetime('now')
-		WHERE NOT EXISTS (SELECT 1 FROM vehicle_templates WHERE name = '%s')
-	`, name, name)))
-
-	var parts []string
-	for _, fn := range rocoDcc24ZimoTy2Functions {
-		parts = append(parts, fmt.Sprintf(
-			`SELECT NULL, t.id, %d, '%s', '%s', %d, datetime('now'), datetime('now')
-			 FROM vehicle_templates t
-			 WHERE t.name = '%s'
-			   AND NOT EXISTS (
-			     SELECT 1 FROM dcc_functions f
-			     WHERE f.template_id = t.id AND f.num = %d
-			   )`,
-			fn.num,
-			sqlLiteral(fn.name),
-			fn.icon,
-			fn.num,
-			name,
-			fn.num,
-		))
-	}
-
-	s.Exec(rel.Raw(`
-		INSERT INTO dcc_functions (vehicle_id, template_id, num, name, icon, position, created_at, updated_at)
-	` + strings.Join(parts, " UNION ALL ")))
+	seedTemplateFunctions(s, rocoDcc24ZimoTy2TemplateName, rocoDcc24ZimoTy2Functions)
 }
 
 func seedRocoDcc24ZimoTy2TemplateDown(s *rel.Schema) {
-	name := sqlLiteral(rocoDcc24ZimoTy2TemplateName)
-	s.Exec(rel.Raw(fmt.Sprintf(`
-		DELETE FROM dcc_functions
-		WHERE template_id IN (SELECT id FROM vehicle_templates WHERE name = '%s')
-	`, name)))
-	s.Exec(rel.Raw(fmt.Sprintf(`
-		DELETE FROM vehicle_templates WHERE name = '%s'
-	`, name)))
+	deleteTemplateSeed(s, rocoDcc24ZimoTy2TemplateName)
 }

@@ -602,7 +602,7 @@ function ConnectedThrottle({
   );
   const configuredFunctions = useCockpitConfiguredFunctions(
     vehicles,
-    selectedAddr,
+    isTrainMode ? trainCtx.leadingAddr : selectedAddr,
   );
   const {
     subscribe,
@@ -759,8 +759,9 @@ function ConnectedThrottle({
     sendSpeedNow(selectedAddr, cockpitSpeed, fwd);
   };
   const handleFn = (n: number) => {
-    if (selectedAddr == null) return;
-    sendFunction(selectedAddr, n, !(functions[n] ?? false));
+    const fnAddr = isTrainMode ? witnessAddr : selectedAddr;
+    if (fnAddr == null) return;
+    sendFunction(fnAddr, n, !(functions[n] ?? false));
   };
   const handleTrainFn = (memberId: number, fn: number) => {
     const member = trainCtx.members.find((m) => m.memberId === memberId);
@@ -779,13 +780,19 @@ function ConnectedThrottle({
     sendSpeedNow(selectedAddr, 0, forward);
   };
 
+  const gamepadDisabled =
+    gamepadOpen ||
+    (isTrainMode
+      ? trainMemberDccAddresses(trainCtx.members).length === 0
+      : witnessAddr == null);
+
   useGamepadControl({
     mapping: gamepadMapping,
     gamepadIndex: activeGamepadIndex,
     maxSpeed: throttleMaxSpeed,
     currentSpeed: cockpitSpeed,
     forward,
-    disabled: witnessAddr == null,
+    disabled: gamepadDisabled,
     onSpeed: handleSpeed,
     onDirectionChange: handleDir,
     onFunctionToggle: handleFn,

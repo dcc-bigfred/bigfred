@@ -36,7 +36,7 @@ export const GAMEPAD_SPEED_SENSITIVITY_DIVISORS: readonly [
 export const GAMEPAD_IDLE_LEARN_SECONDS = 10;
 /** Abort idle learning when the resting range grows beyond this width. */
 export const GAMEPAD_IDLE_MOVEMENT_THRESHOLD = 0.28;
-/** Expand detected idle max by this fraction of |max| for a safety margin. */
+/** Expand detected idle range by this fraction on each side for a safety margin. */
 export const GAMEPAD_IDLE_MAX_BUFFER_RATIO = 0.15;
 
 export const DEFAULT_SPEED_BUTTON_STEPS = 20;
@@ -154,13 +154,8 @@ export function gamepadSpeedDivisor(
   return GAMEPAD_SPEED_SENSITIVITY_DIVISORS[parseSpeedSensitivity(sensitivity)];
 }
 
-/** Human-readable scale label for slider marks (×4 … ÷4). */
+/** Human-readable scale label for slider marks (÷1.25 … ÷3). */
 export function formatSpeedSensitivityDivisor(divisor: number): string {
-  if (divisor < 1) {
-    const mult = 1 / divisor;
-    const rounded = Math.round(mult * 100) / 100;
-    return `×${rounded}`;
-  }
   return `÷${divisor}`;
 }
 
@@ -201,6 +196,9 @@ export function axisToSpeed(
     return Math.round(Math.min(1, Math.max(0, normalized)) * scaledMax);
   }
 
+  // Fallback without idle calibration: maps the full -1..1 axis range to 0..maxSpeed,
+  // so a centred spring-return stick still yields ~50% speed past the deadzone.
+  // The setup wizard normally learns idle range first; this path covers partial state.
   let v = invertAxis ? -axisValue : axisValue;
   if (Math.abs(v) < deadzone) {
     return 0;
@@ -218,19 +216,18 @@ export function hasIdleCalibration(
   );
 }
 
-/** Apply a +15% buffer on the detected idle max edge. */
+/** Expand the detected idle range by a safety margin on both sides. */
 export function finalizeIdleAxisRange(
   detectedMin: number,
   detectedMax: number,
 ): { idleAxisMin: number; idleAxisMax: number } {
   const span = detectedMax - detectedMin;
-  const maxBuffer =
-    Math.abs(detectedMax) > 0.001
-      ? Math.abs(detectedMax) * GAMEPAD_IDLE_MAX_BUFFER_RATIO
-      : span * GAMEPAD_IDLE_MAX_BUFFER_RATIO;
+  const buffer =
+    Math.max(Math.abs(detectedMin), Math.abs(detectedMax), span) *
+    GAMEPAD_IDLE_MAX_BUFFER_RATIO;
   return {
-    idleAxisMin: detectedMin,
-    idleAxisMax: Math.min(1, detectedMax + maxBuffer),
+    idleAxisMin: Math.max(-1, detectedMin - buffer),
+    idleAxisMax: Math.min(1, detectedMax + buffer),
   };
 }
 

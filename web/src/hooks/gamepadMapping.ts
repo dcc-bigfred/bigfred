@@ -7,25 +7,31 @@ export interface GamepadMapping {
   gamepadId: string;
   speedAxis: number;
   invertAxis: boolean;
+  /** When false, speed axis and sensitivity are ignored; buttons still work. */
+  axisEnabled?: boolean;
   /** Resting axis range learned while idle — values inside mean speed 0. */
   idleAxisMin?: number;
   idleAxisMax?: number;
   reverseButton?: number;
   stopButton?: number;
+  accelerateButton?: number;
+  decelerateButton?: number;
+  /** Discrete speed steps per accelerate/decelerate press (default 20). */
+  speedButtonSteps?: number;
   /** DCC function number -> gamepad button index. */
   fnButtons: Record<number, number>;
-  /** 0..7 — each step divides axis-to-speed output (÷1 … ÷8). */
+  /** 0..4 — each step scales axis-to-speed output via GAMEPAD_SPEED_SENSITIVITY_DIVISORS. */
   speedSensitivity?: GamepadSpeedSensitivity;
   enabled: boolean;
 }
 
-export type GamepadSpeedSensitivity = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
+export type GamepadSpeedSensitivity = 0 | 1 | 2 | 3 | 4;
 
-export const GAMEPAD_SPEED_SENSITIVITY_MAX = 7;
+export const GAMEPAD_SPEED_SENSITIVITY_MAX = 4;
 
 export const GAMEPAD_SPEED_SENSITIVITY_DIVISORS: readonly [
-  1, 2, 3, 4, 5, 6, 7, 8,
-] = [1, 2, 3, 4, 5, 6, 7, 8];
+  1.25, 1.5, 1.75, 2, 3,
+] = [1.25, 1.5, 1.75, 2, 3];
 
 export const GAMEPAD_IDLE_LEARN_SECONDS = 10;
 /** Abort idle learning when the resting range grows beyond this width. */
@@ -33,13 +39,19 @@ export const GAMEPAD_IDLE_MOVEMENT_THRESHOLD = 0.28;
 /** Expand detected idle max by this fraction of |max| for a safety margin. */
 export const GAMEPAD_IDLE_MAX_BUFFER_RATIO = 0.15;
 
+export const DEFAULT_SPEED_BUTTON_STEPS = 20;
+export const MIN_SPEED_BUTTON_STEPS = 2;
+export const MAX_SPEED_BUTTON_STEPS = 20;
+
 export function defaultGamepadMapping(gamepadId: string): GamepadMapping {
   return {
     gamepadId,
     speedAxis: DEFAULT_SPEED_AXIS,
     invertAxis: true,
+    axisEnabled: true,
     fnButtons: {},
     speedSensitivity: 0,
+    speedButtonSteps: DEFAULT_SPEED_BUTTON_STEPS,
     enabled: false,
   };
 }
@@ -72,6 +84,7 @@ export function loadGamepadMapping(gamepadId: string): GamepadMapping {
           ? parsed.speedAxis
           : DEFAULT_SPEED_AXIS,
       invertAxis: parsed.invertAxis !== false,
+      axisEnabled: parsed.axisEnabled !== false,
       idleAxisMin:
         typeof parsed.idleAxisMin === "number"
           ? parsed.idleAxisMin
@@ -86,8 +99,17 @@ export function loadGamepadMapping(gamepadId: string): GamepadMapping {
           : undefined,
       stopButton:
         typeof parsed.stopButton === "number" ? parsed.stopButton : undefined,
+      accelerateButton:
+        typeof parsed.accelerateButton === "number"
+          ? parsed.accelerateButton
+          : undefined,
+      decelerateButton:
+        typeof parsed.decelerateButton === "number"
+          ? parsed.decelerateButton
+          : undefined,
       fnButtons,
       speedSensitivity: parseSpeedSensitivity(parsed.speedSensitivity),
+      speedButtonSteps: parseSpeedButtonSteps(parsed.speedButtonSteps),
       enabled: parsed.enabled === true,
     };
   } catch {
@@ -110,10 +132,36 @@ export function parseSpeedSensitivity(value: unknown): GamepadSpeedSensitivity {
   return n as GamepadSpeedSensitivity;
 }
 
+export function parseSpeedButtonSteps(value: unknown): number {
+  const n =
+    typeof value === "number" ? Math.round(value) : DEFAULT_SPEED_BUTTON_STEPS;
+  if (n < MIN_SPEED_BUTTON_STEPS) return MIN_SPEED_BUTTON_STEPS;
+  if (n > MAX_SPEED_BUTTON_STEPS) return MAX_SPEED_BUTTON_STEPS;
+  return n;
+}
+
+/** Speed delta for one accelerate/decelerate button press. */
+export function speedButtonStepSize(maxSpeed: number, steps?: number): number {
+  return Math.max(
+    1,
+    Math.round(maxSpeed / parseSpeedButtonSteps(steps)),
+  );
+}
+
 export function gamepadSpeedDivisor(
   sensitivity: number | undefined,
 ): number {
   return GAMEPAD_SPEED_SENSITIVITY_DIVISORS[parseSpeedSensitivity(sensitivity)];
+}
+
+/** Human-readable scale label for slider marks (×4 … ÷4). */
+export function formatSpeedSensitivityDivisor(divisor: number): string {
+  if (divisor < 1) {
+    const mult = 1 / divisor;
+    const rounded = Math.round(mult * 100) / 100;
+    return `×${rounded}`;
+  }
+  return `÷${divisor}`;
 }
 
 /** Map axis value (-1..1) to speed 0..maxSpeed. */

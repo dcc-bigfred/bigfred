@@ -12,6 +12,7 @@ import {
   Slider,
   Stack,
   Switch,
+  TextField,
   Typography,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
@@ -27,6 +28,12 @@ import {
   GAMEPAD_IDLE_MOVEMENT_THRESHOLD,
   GAMEPAD_SPEED_SENSITIVITY_DIVISORS,
   GAMEPAD_SPEED_SENSITIVITY_MAX,
+  MAX_SPEED_BUTTON_STEPS,
+  MIN_SPEED_BUTTON_STEPS,
+  DEFAULT_SPEED_BUTTON_STEPS,
+  formatSpeedSensitivityDivisor,
+  parseSpeedButtonSteps,
+  speedButtonStepSize,
   hasIdleCalibration,
   type GamepadMapping,
   type GamepadSpeedSensitivity,
@@ -38,7 +45,9 @@ type LearnTarget =
   | { kind: "axis" }
   | { kind: "fn"; num: number }
   | { kind: "reverse" }
-  | { kind: "stop" };
+  | { kind: "stop" }
+  | { kind: "accelerate" }
+  | { kind: "decelerate" };
 
 interface ThrottleGamepadDialogProps {
   open: boolean;
@@ -247,6 +256,10 @@ export default function ThrottleGamepadDialog({
               setDraft((current) => ({ ...current, reverseButton: i }));
             } else if (learn.kind === "stop") {
               setDraft((current) => ({ ...current, stopButton: i }));
+            } else if (learn.kind === "accelerate") {
+              setDraft((current) => ({ ...current, accelerateButton: i }));
+            } else if (learn.kind === "decelerate") {
+              setDraft((current) => ({ ...current, decelerateButton: i }));
             }
             setLearn(null);
             break;
@@ -368,50 +381,78 @@ export default function ThrottleGamepadDialog({
       </Box>
 
       <Box>
-        <Typography variant="subtitle2" gutterBottom>
-          {t("gamepad.speedAxis")}
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          {t("gamepad.speedAxisValue", {
-            axis: draft.speedAxis,
-            value: previewAxis.toFixed(2),
-            speed: previewSpeed,
-          })}
-        </Typography>
-        <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
-          <Button
-            size="small"
-            variant={learn?.kind === "axis" ? "contained" : "outlined"}
-            onClick={() => {
-              learnBaselineRef.current = null;
-              setLearn({ kind: "axis" });
-            }}
-          >
-            {t("gamepad.learnAxis")}
-          </Button>
+        <Stack
+          direction="row"
+          alignItems="center"
+          justifyContent="space-between"
+          sx={{ mb: 1 }}
+        >
+          <Typography variant="subtitle2">{t("gamepad.speedAxis")}</Typography>
           <FormControlLabel
             control={
               <Switch
                 size="small"
-                checked={draft.invertAxis}
+                checked={draft.axisEnabled !== false}
                 onChange={(_, checked) =>
-                  updateDraft({ invertAxis: checked })
+                  updateDraft({ axisEnabled: checked })
                 }
               />
             }
-            label={t("gamepad.invertAxis")}
+            label={t("gamepad.axisEnabled")}
+            sx={{ mr: 0 }}
           />
         </Stack>
+        {draft.axisEnabled !== false ? (
+          <>
+            <Typography variant="body2" color="text.secondary">
+              {t("gamepad.speedAxisValue", {
+                axis: draft.speedAxis,
+                value: previewAxis.toFixed(2),
+                speed: previewSpeed,
+              })}
+            </Typography>
+            <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+              <Button
+                size="small"
+                variant={learn?.kind === "axis" ? "contained" : "outlined"}
+                onClick={() => {
+                  learnBaselineRef.current = null;
+                  setLearn({ kind: "axis" });
+                }}
+              >
+                {t("gamepad.learnAxis")}
+              </Button>
+              <FormControlLabel
+                control={
+                  <Switch
+                    size="small"
+                    checked={draft.invertAxis}
+                    onChange={(_, checked) =>
+                      updateDraft({ invertAxis: checked })
+                    }
+                  />
+                }
+                label={t("gamepad.invertAxis")}
+              />
+            </Stack>
+          </>
+        ) : (
+          <Typography variant="body2" color="text.secondary">
+            {t("gamepad.axisDisabledHint")}
+          </Typography>
+        )}
       </Box>
 
+      {draft.axisEnabled !== false && (
       <Box>
         <Typography variant="subtitle2" gutterBottom>
           {t("gamepad.sensitivity")}
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
           {t("gamepad.sensitivityHelp", {
-            divisor:
+            scale: formatSpeedSensitivityDivisor(
               GAMEPAD_SPEED_SENSITIVITY_DIVISORS[draft.speedSensitivity ?? 0],
+            ),
           })}
         </Typography>
         <Slider
@@ -426,14 +467,82 @@ export default function ThrottleGamepadDialog({
           max={GAMEPAD_SPEED_SENSITIVITY_MAX}
           marks={GAMEPAD_SPEED_SENSITIVITY_DIVISORS.map((divisor, index) => ({
             value: index,
-            label:
-              divisor === 1
-                ? t("gamepad.sensitivityFull")
-                : t("gamepad.sensitivityDivisor", { divisor }),
+            label: formatSpeedSensitivityDivisor(divisor),
           }))}
           valueLabelDisplay="off"
           sx={{ mx: 1 }}
         />
+      </Box>
+      )}
+
+      <Box>
+        <Typography variant="subtitle2" gutterBottom>
+          {t("gamepad.speedButtons")}
+        </Typography>
+        <TextField
+          label={t("gamepad.speedButtonSteps")}
+          type="number"
+          size="small"
+          value={draft.speedButtonSteps ?? DEFAULT_SPEED_BUTTON_STEPS}
+          onChange={(e) =>
+            updateDraft({
+              speedButtonSteps: parseSpeedButtonSteps(Number(e.target.value)),
+            })
+          }
+          helperText={t("gamepad.speedButtonStepsHelp", {
+            step: speedButtonStepSize(
+              maxSpeed,
+              draft.speedButtonSteps ?? DEFAULT_SPEED_BUTTON_STEPS,
+            ),
+            max: maxSpeed,
+          })}
+          inputProps={{
+            min: MIN_SPEED_BUTTON_STEPS,
+            max: MAX_SPEED_BUTTON_STEPS,
+            step: 1,
+          }}
+          sx={{ mb: 1.5, maxWidth: 200 }}
+        />
+        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+          <Button
+            size="small"
+            variant={learn?.kind === "accelerate" ? "contained" : "outlined"}
+            onClick={() => setLearn({ kind: "accelerate" })}
+          >
+            {draft.accelerateButton != null
+              ? t("gamepad.accelerateAssigned", {
+                  button: buttonLabel(draft.accelerateButton),
+                })
+              : t("gamepad.assignAccelerate")}
+          </Button>
+          {draft.accelerateButton != null && (
+            <Button
+              size="small"
+              onClick={() => updateDraft({ accelerateButton: undefined })}
+            >
+              {t("gamepad.clear")}
+            </Button>
+          )}
+          <Button
+            size="small"
+            variant={learn?.kind === "decelerate" ? "contained" : "outlined"}
+            onClick={() => setLearn({ kind: "decelerate" })}
+          >
+            {draft.decelerateButton != null
+              ? t("gamepad.decelerateAssigned", {
+                  button: buttonLabel(draft.decelerateButton),
+                })
+              : t("gamepad.assignDecelerate")}
+          </Button>
+          {draft.decelerateButton != null && (
+            <Button
+              size="small"
+              onClick={() => updateDraft({ decelerateButton: undefined })}
+            >
+              {t("gamepad.clear")}
+            </Button>
+          )}
+        </Stack>
       </Box>
 
       <Box>

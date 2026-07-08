@@ -59,7 +59,9 @@
         "maxLoconetSlots": "LocoNet slot budget",
         "maxLoconetSlotsHelp": "How many slots BigFred may lease on this command station; the rest stay free for physical throttles. Default 80.",
         "idleTimeoutSecs": "Remote idle timeout (s)",
-        "idleTimeoutSecsHelp": "After this idle period a remote handset (Z21/WiThrottle) loses its slot. 0 disables idle release. Default 60 s."
+        "idleTimeoutSecsHelp": "After this idle period a remote handset (Z21/WiThrottle) loses its slot. 0 disables idle release. Default 60 s.",
+        "bootStopEnabled": "Boot-stop all roster locos",
+        "bootStopEnabledHelp": "When enabled, dcc-bus sends emergency stop to every roster locomotive once after daemon start. Off by default — avoids spurious slot leases on LocoNet after restart."
       }
     },
     "empty": "No command stations to show.",

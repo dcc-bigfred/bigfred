@@ -12,7 +12,7 @@ type recordingObserver struct {
 	count int
 }
 
-func (o *recordingObserver) OnLocoStateChanged(_ context.Context, _ contract.LocoStateWire) {
+func (o *recordingObserver) OnLocoStateChanged(_ context.Context, _ contract.LocoStateWire, _ string) {
 	o.count++
 }
 
@@ -24,7 +24,7 @@ func TestLocoStateNotifier(t *testing.T) {
 	n.Register(obs)
 
 	snap := contract.LocoStateWire{Address: 3, Speed: 10}
-	n.Notify(context.Background(), snap)
+	n.Notify(context.Background(), snap, "")
 	if obs.count != 1 {
 		t.Fatalf("observer count = %d, want 1 (no duplicate registration)", obs.count)
 	}

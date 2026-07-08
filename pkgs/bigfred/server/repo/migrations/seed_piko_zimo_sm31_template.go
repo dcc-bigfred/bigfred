@@ -1,23 +1,15 @@
 package migrations
 
 import (
-	"fmt"
-	"strings"
-
 	"github.com/go-rel/rel"
 )
 
 const pikoZimoSm31TemplateName = "PIKO / DCC24 / ZIMO / SM31"
 
-type pikoZimoSm31FunctionSeed struct {
-	num  uint8
-	name string
-	icon string
-}
 
 // pikoZimoSm31Functions is the F0–F28 mapping from the PIKO DCC24 ZIMO
 // decoder leaflet for the SM31 locomotive.
-var pikoZimoSm31Functions = []pikoZimoSm31FunctionSeed{
+var pikoZimoSm31Functions = []templateFunctionSeed{
 	{0, "Światła białe + podświetlenie pulpitu maszynisty zmienne kierunkowo + dźwięk przełącznika", "headlight"},
 	{1, "Włączenie / wyłączenie dźwięku silnika spalinowego a8C22W", "engine"},
 	{2, "Trąbka długa", "horn_high"},
@@ -50,44 +42,9 @@ var pikoZimoSm31Functions = []pikoZimoSm31FunctionSeed{
 }
 
 func seedPikoZimoSm31TemplateUp(s *rel.Schema) {
-	name := sqlLiteral(pikoZimoSm31TemplateName)
-	s.Exec(rel.Raw(fmt.Sprintf(`
-		INSERT INTO vehicle_templates (name, description, owner_user_id, version, created_at, updated_at)
-		SELECT '%s', '', COALESCE((SELECT id FROM users WHERE login = 'admin' LIMIT 1), 0), 1, datetime('now'), datetime('now')
-		WHERE NOT EXISTS (SELECT 1 FROM vehicle_templates WHERE name = '%s')
-	`, name, name)))
-
-	var parts []string
-	for _, fn := range pikoZimoSm31Functions {
-		parts = append(parts, fmt.Sprintf(
-			`SELECT NULL, t.id, %d, '%s', '%s', %d, datetime('now'), datetime('now')
-			 FROM vehicle_templates t
-			 WHERE t.name = '%s'
-			   AND NOT EXISTS (
-			     SELECT 1 FROM dcc_functions f
-			     WHERE f.template_id = t.id AND f.num = %d
-			   )`,
-			fn.num,
-			sqlLiteral(fn.name),
-			fn.icon,
-			fn.num,
-			name,
-			fn.num,
-		))
-	}
-
-	s.Exec(rel.Raw(`
-		INSERT INTO dcc_functions (vehicle_id, template_id, num, name, icon, position, created_at, updated_at)
-	` + strings.Join(parts, " UNION ALL ")))
+	seedTemplateFunctions(s, pikoZimoSm31TemplateName, pikoZimoSm31Functions)
 }
 
 func seedPikoZimoSm31TemplateDown(s *rel.Schema) {
-	name := sqlLiteral(pikoZimoSm31TemplateName)
-	s.Exec(rel.Raw(fmt.Sprintf(`
-		DELETE FROM dcc_functions
-		WHERE template_id IN (SELECT id FROM vehicle_templates WHERE name = '%s')
-	`, name)))
-	s.Exec(rel.Raw(fmt.Sprintf(`
-		DELETE FROM vehicle_templates WHERE name = '%s'
-	`, name)))
+	deleteTemplateSeed(s, pikoZimoSm31TemplateName)
 }

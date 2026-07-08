@@ -89,6 +89,7 @@
   "function_num_invalid": "Function number must be in range F0–F31.",
   "function_icon_invalid": "Pick an icon from the catalogue.",
   "function_name_required": "Enter a function title.",
+  "function_duration_invalid": "Duration must be between 0 and 300000 ms.",
   "vehicle_template_not_found": "Template not found.",
   "vehicle_template_name_required": "Enter a template name.",
   "vehicle_template_name_taken": "A template with this name already exists.",

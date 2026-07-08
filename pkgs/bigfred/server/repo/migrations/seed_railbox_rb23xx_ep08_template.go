@@ -1,23 +1,15 @@
 package migrations
 
 import (
-	"fmt"
-	"strings"
-
 	"github.com/go-rel/rel"
 )
 
 const railboxRb23xxEp08TemplateName = "RB23xx / EP08"
 
-type railboxRb23xxEp08FunctionSeed struct {
-	num  uint8
-	name string
-	icon string
-}
 
 // railboxRb23xxEp08Functions is the F0–F28 mapping from the RailBOX
 // RB23xx sound pack for EP08 locomotives.
-var railboxRb23xxEp08Functions = []railboxRb23xxEp08FunctionSeed{
+var railboxRb23xxEp08Functions = []templateFunctionSeed{
 	{0, "Światła pociągowe", "light"},
 	{1, "Silnik", "engine"},
 	{2, "Trąbka Wysoka", "horn_high"},
@@ -48,44 +40,9 @@ var railboxRb23xxEp08Functions = []railboxRb23xxEp08FunctionSeed{
 }
 
 func seedRailboxRb23xxEp08TemplateUp(s *rel.Schema) {
-	name := sqlLiteral(railboxRb23xxEp08TemplateName)
-	s.Exec(rel.Raw(fmt.Sprintf(`
-		INSERT INTO vehicle_templates (name, description, owner_user_id, version, created_at, updated_at)
-		SELECT '%s', '', COALESCE((SELECT id FROM users WHERE login = 'admin' LIMIT 1), 0), 1, datetime('now'), datetime('now')
-		WHERE NOT EXISTS (SELECT 1 FROM vehicle_templates WHERE name = '%s')
-	`, name, name)))
-
-	var parts []string
-	for _, fn := range railboxRb23xxEp08Functions {
-		parts = append(parts, fmt.Sprintf(
-			`SELECT NULL, t.id, %d, '%s', '%s', %d, datetime('now'), datetime('now')
-			 FROM vehicle_templates t
-			 WHERE t.name = '%s'
-			   AND NOT EXISTS (
-			     SELECT 1 FROM dcc_functions f
-			     WHERE f.template_id = t.id AND f.num = %d
-			   )`,
-			fn.num,
-			sqlLiteral(fn.name),
-			fn.icon,
-			fn.num,
-			name,
-			fn.num,
-		))
-	}
-
-	s.Exec(rel.Raw(`
-		INSERT INTO dcc_functions (vehicle_id, template_id, num, name, icon, position, created_at, updated_at)
-	` + strings.Join(parts, " UNION ALL ")))
+	seedTemplateFunctions(s, railboxRb23xxEp08TemplateName, railboxRb23xxEp08Functions)
 }
 
 func seedRailboxRb23xxEp08TemplateDown(s *rel.Schema) {
-	name := sqlLiteral(railboxRb23xxEp08TemplateName)
-	s.Exec(rel.Raw(fmt.Sprintf(`
-		DELETE FROM dcc_functions
-		WHERE template_id IN (SELECT id FROM vehicle_templates WHERE name = '%s')
-	`, name)))
-	s.Exec(rel.Raw(fmt.Sprintf(`
-		DELETE FROM vehicle_templates WHERE name = '%s'
-	`, name)))
+	deleteTemplateSeed(s, railboxRb23xxEp08TemplateName)
 }

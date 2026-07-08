@@ -15,6 +15,8 @@ type DccFunction struct {
 	Name       string
 	Icon       FunctionIcon
 	Position   int
+	Momentary           bool `db:"momentary"`
+	MomentaryDurationMs int  `db:"momentary_duration_ms"`
 	CreatedAt  time.Time `db:"created_at"`
 	UpdatedAt  time.Time `db:"updated_at"`
 }

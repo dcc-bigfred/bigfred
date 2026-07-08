@@ -12,6 +12,7 @@
       "num": "Nr",
       "title": "Tytuł",
       "icon": "Ikona",
+      "momentary": "Chwilowa",
       "source": "Źródło",
       "actions": "Akcje"
     },
@@ -27,6 +28,10 @@
     "fieldNum": "Numer funkcji",
     "fieldTitle": "Tytuł",
     "fieldIcon": "Ikona",
+    "fieldMomentary": "Chwilowa",
+    "fieldDuration": "Czas trwania [ms]",
+    "durationRange": "Podaj wartość 0–300000 ms.",
+    "momentaryChip": "Chwilowa ({{seconds}} s)",
     "iconSearchPlaceholder": "Szukaj ikony…",
     "iconNoResults": "Brak pasujących ikon",
     "cancel": "Anuluj",

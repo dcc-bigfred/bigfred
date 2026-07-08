@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"time"
 )
 
 const (
@@ -35,10 +36,17 @@ type VehicleFunctionCatalogue struct {
 
 // FunctionDefinition is one F0–F31 slot from the vehicle catalogue.
 type FunctionDefinition struct {
-	Num      uint8  `json:"num"`
-	Name     string `json:"name"`
-	Icon     string `json:"icon"`
-	Position int    `json:"position"`
+	Num        uint8  `json:"num"`
+	Name       string `json:"name"`
+	Icon       string `json:"icon"`
+	Position   int    `json:"position"`
+	Momentary  bool   `json:"momentary,omitempty"`
+	DurationMs int    `json:"durationMs,omitempty"`
+}
+
+// GetMomentaryDuration returns the auto-off delay for a momentary function.
+func (f FunctionDefinition) GetMomentaryDuration() time.Duration {
+	return time.Duration(f.DurationMs) * time.Millisecond
 }
 
 // SortFunctionDefinitions orders slots by display position, then F number.

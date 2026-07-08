@@ -6,6 +6,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/keskad/loco/pkgs/bigfred/contract"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/service"
 	"github.com/keskad/loco/pkgs/loco/commandstation"
 )
@@ -111,4 +112,15 @@ func (r *Router) checkFnStateMatches(ctx context.Context, addr uint16, fn uint8,
 		return !on
 	}
 	return env.Functions[fn] == on
+}
+
+// getMomentaryDef returns the catalogue definition for (addr, fn) when the
+// function is configured as momentary.
+func (r *Router) getMomentaryDef(addr uint16, fn uint8) (contract.FunctionDefinition, bool) {
+	for _, d := range r.FunctionsForAddr(addr) {
+		if d.Num == fn && d.Momentary {
+			return d, true
+		}
+	}
+	return contract.FunctionDefinition{}, false
 }

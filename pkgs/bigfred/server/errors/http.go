@@ -168,6 +168,8 @@ func FunctionHTTPStatus(err error) (status int, code string) {
 		return http.StatusUnprocessableEntity, CodeFunctionIconInvalid
 	case stderrors.Is(err, ErrFunctionNameRequired):
 		return http.StatusUnprocessableEntity, CodeFunctionNameRequired
+	case stderrors.Is(err, ErrFunctionDurationInvalid):
+		return http.StatusUnprocessableEntity, CodeFunctionDurationInvalid
 	case stderrors.Is(err, ErrFunctionNumTaken):
 		return http.StatusConflict, CodeFunctionNumTaken
 	default:

@@ -89,6 +89,7 @@
   "function_num_invalid": "Funktionsnummer muss im Bereich F0–F31 liegen.",
   "function_icon_invalid": "Symbol aus dem Katalog wählen.",
   "function_name_required": "Funktionstitel eingeben.",
+  "function_duration_invalid": "Die Dauer muss zwischen 0 und 300000 ms liegen.",
   "vehicle_template_not_found": "Vorlage nicht gefunden.",
   "vehicle_template_name_required": "Vorlagennamen eingeben.",
   "vehicle_template_name_taken": "Eine Vorlage mit diesem Namen existiert bereits.",

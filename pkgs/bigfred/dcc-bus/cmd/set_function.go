@@ -19,6 +19,12 @@ func (r *Router) HandleSetFunction(ctx context.Context, actor Actor, resp Respon
 		on = !r.currentFunctionState(p.Address, p.Function)
 	}
 	origin := remotes.HandsetClientKeyFromSession(actor.SessionID)
+	if on {
+		if def, ok := r.getMomentaryDef(p.Address, p.Function); ok {
+			r.setTimedLocoFunctionWithRetry(p.Address, actor.UserID, p.Function, def.GetMomentaryDuration(), "throttle", 0, origin)
+			return OKResult()
+		}
+	}
 	if err := r.setLocoFunction(ctx, p.Address, actor.UserID, p.Function, on, "throttle", origin); err != nil {
 		_ = resp.SendLocoError(ctx, p.Address, errors.CodeCommandStationError, err.Error())
 		return FailResult(errors.CodeCommandStationError)

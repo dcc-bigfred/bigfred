@@ -487,10 +487,12 @@ func (s *LayoutRosterSnapshot) buildVehicleFunctionsSnapshot(
 		fns := make([]contract.FunctionDefinition, 0, len(rows))
 		for _, row := range rows {
 			fns = append(fns, contract.FunctionDefinition{
-				Num:      row.Num,
-				Name:     row.Name,
-				Icon:     string(row.Icon),
-				Position: row.Position,
+				Num:        row.Num,
+				Name:       row.Name,
+				Icon:       string(row.Icon),
+				Position:   row.Position,
+				Momentary:  row.Momentary,
+				DurationMs: row.MomentaryDurationMs,
 			})
 		}
 		contract.SortFunctionDefinitions(fns)

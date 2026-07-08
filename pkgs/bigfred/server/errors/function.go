@@ -11,6 +11,7 @@ const (
 	CodeOnlyOwnerCanEdit             = "only_owner_can_edit"
 	CodeTemplateNotOwned             = "template_not_owned"
 	CodeFunctionReplaceSourceInvalid = "function_replace_source_invalid"
+	CodeFunctionDurationInvalid      = "function_duration_invalid"
 )
 
 var (
@@ -22,4 +23,5 @@ var (
 	ErrOnlyOwnerCanEdit             = errors.New(CodeOnlyOwnerCanEdit)
 	ErrTemplateNotOwned             = errors.New(CodeTemplateNotOwned)
 	ErrFunctionReplaceSourceInvalid = errors.New(CodeFunctionReplaceSourceInvalid)
+	ErrFunctionDurationInvalid      = errors.New(CodeFunctionDurationInvalid)
 )

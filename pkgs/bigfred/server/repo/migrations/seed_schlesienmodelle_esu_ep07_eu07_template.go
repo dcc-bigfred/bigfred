@@ -1,24 +1,16 @@
 package migrations
 
 import (
-	"fmt"
-	"strings"
-
 	"github.com/go-rel/rel"
 )
 
 const schlesienModelleEsuEp07Eu07TemplateName = "SchlesienModelle / ESU Loksound / EP07 - EU07"
 
-type schlesienModelleEsuEp07Eu07FunctionSeed struct {
-	num  uint8
-	name string
-	icon string
-}
 
 // schlesienModelleEsuEp07Eu07Functions is the F0–F27 mapping from the
 // SchlesienModelle EU07 303E instruction manual (ESU LokSound V4.0).
 // F28 is unassigned on this decoder.
-var schlesienModelleEsuEp07Eu07Functions = []schlesienModelleEsuEp07Eu07FunctionSeed{
+var schlesienModelleEsuEp07Eu07Functions = []templateFunctionSeed{
 	{0, "Światła czołowe białe krótkie", "light"},
 	{1, "Dźwięk wł. / wył.", "sound"},
 	{2, "Syrena wysokotonowa", "horn_high"},
@@ -50,44 +42,9 @@ var schlesienModelleEsuEp07Eu07Functions = []schlesienModelleEsuEp07Eu07Function
 }
 
 func seedSchlesienModelleEsuEp07Eu07TemplateUp(s *rel.Schema) {
-	name := sqlLiteral(schlesienModelleEsuEp07Eu07TemplateName)
-	s.Exec(rel.Raw(fmt.Sprintf(`
-		INSERT INTO vehicle_templates (name, description, owner_user_id, version, created_at, updated_at)
-		SELECT '%s', '', COALESCE((SELECT id FROM users WHERE login = 'admin' LIMIT 1), 0), 1, datetime('now'), datetime('now')
-		WHERE NOT EXISTS (SELECT 1 FROM vehicle_templates WHERE name = '%s')
-	`, name, name)))
-
-	var parts []string
-	for _, fn := range schlesienModelleEsuEp07Eu07Functions {
-		parts = append(parts, fmt.Sprintf(
-			`SELECT NULL, t.id, %d, '%s', '%s', %d, datetime('now'), datetime('now')
-			 FROM vehicle_templates t
-			 WHERE t.name = '%s'
-			   AND NOT EXISTS (
-			     SELECT 1 FROM dcc_functions f
-			     WHERE f.template_id = t.id AND f.num = %d
-			   )`,
-			fn.num,
-			sqlLiteral(fn.name),
-			fn.icon,
-			fn.num,
-			name,
-			fn.num,
-		))
-	}
-
-	s.Exec(rel.Raw(`
-		INSERT INTO dcc_functions (vehicle_id, template_id, num, name, icon, position, created_at, updated_at)
-	` + strings.Join(parts, " UNION ALL ")))
+	seedTemplateFunctions(s, schlesienModelleEsuEp07Eu07TemplateName, schlesienModelleEsuEp07Eu07Functions)
 }
 
 func seedSchlesienModelleEsuEp07Eu07TemplateDown(s *rel.Schema) {
-	name := sqlLiteral(schlesienModelleEsuEp07Eu07TemplateName)
-	s.Exec(rel.Raw(fmt.Sprintf(`
-		DELETE FROM dcc_functions
-		WHERE template_id IN (SELECT id FROM vehicle_templates WHERE name = '%s')
-	`, name)))
-	s.Exec(rel.Raw(fmt.Sprintf(`
-		DELETE FROM vehicle_templates WHERE name = '%s'
-	`, name)))
+	deleteTemplateSeed(s, schlesienModelleEsuEp07Eu07TemplateName)
 }

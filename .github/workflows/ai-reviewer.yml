@@ -14,8 +14,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Gemini Review Bot
-        uses: Nasubikun/ai-reviewer@v1
+        uses: Nasubikun/ai-reviewer@v1.0.6
         with:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          MODEL_CODE: "models/gemini-2.5-flash"
           LANGUAGE: "English"

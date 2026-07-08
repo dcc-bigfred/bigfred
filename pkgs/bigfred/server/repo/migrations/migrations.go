@@ -116,7 +116,8 @@ func register(m *migrator.Migrator) {
 	m.Register(migrationVersion(20260629, 1), addLayoutMaxVehiclesPerUserColumnUp, addLayoutMaxVehiclesPerUserColumnDown)
 	m.Register(migrationVersion(20260629, 2), addCommandStationSlotLeaseColumnsUp, addCommandStationSlotLeaseColumnsDown)
 	m.Register(migrationVersion(20260707, 1), addCommandStationBootStopEnabledColumnUp, addCommandStationBootStopEnabledColumnDown)
-	m.Register(migrationVersion(20260708, 1), backfillMomentaryHornFunctionsUp, backfillMomentaryHornFunctionsDown)
+	m.Register(migrationVersion(20260708, 1), addDccFunctionMomentaryColumnsUp, addDccFunctionMomentaryColumnsDown)
+	m.Register(migrationVersion(20260709, 1), backfillMomentaryHornFunctionsUp, backfillMomentaryHornFunctionsDown)
 }
 
 // createCommandStationsUp installs the `command_stations` catalogue
@@ -607,9 +608,8 @@ func addVehicleDeadManSwitchColumnsDown(s *rel.Schema) {
 // addDccFunctionMomentaryColumnsUp adds the per-function "momentary"
 // attribute and its auto-off duration (ms) to dcc_functions.
 func addDccFunctionMomentaryColumnsUp(s *rel.Schema) {
-	s.AlterTable("dcc_functions", func(t *rel.AlterTable) {
-		t.Bool("momentary", rel.Default(false))
-		t.Int("momentary_duration_ms", rel.Default("1000"))
+	s.Do(func(ctx context.Context, r rel.Repository) error {
+		return ensureDccFunctionMomentaryColumns(ctx, r)
 	})
 }
 

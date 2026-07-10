@@ -28,19 +28,19 @@ func TestParseGetLocoInfoZ21AppPacket(t *testing.T) {
 func TestParseSetLocoDriveZ21AppPacket(t *testing.T) {
 	t.Parallel()
 	pkt := mustHex(t, "0a004000e413001f00e8")
-	addr, speed, forward, ok := parseSetLocoDrive(pkt)
-	if !ok || addr != 31 || speed != 0 || forward {
-		t.Fatalf("parseSetLocoDrive = (%d, %d, %v, %v)", addr, speed, forward, ok)
+	addr, speed, forward, estop, ok := parseSetLocoDrive(pkt)
+	if !ok || addr != 31 || speed != 0 || forward || estop {
+		t.Fatalf("parseSetLocoDrive = (%d, %d, %v, %v, %v)", addr, speed, forward, estop, ok)
 	}
 }
 
-// TestDriveSpeedEncodeDecodeRoundtrip confirms parseSetLocoDrive returns
-// payload/UI speed (Fix S2): the same encoding used when replying with
-// buildLocoInfoReply must round-trip through decodeDriveDB3.
+// TestDriveSpeedEncodeDecodeRoundtrip confirms non-estop payload speeds round-trip
+// through encodeDriveDB3 and decodeDriveDB3. Payload 1 is excluded because the
+// Z21 wire encoding for V=1 is always E-Stop, not the first driving notch.
 func TestDriveSpeedEncodeDecodeRoundtrip(t *testing.T) {
 	t.Parallel()
 	proto := byte(3) // 128-step LocoNet-style encoding
-	for _, payload := range []uint8{0, 1, 2, 10, 127} {
+	for _, payload := range []uint8{0, 2, 10, 127} {
 		payload := payload
 		t.Run("", func(t *testing.T) {
 			t.Parallel()
@@ -49,11 +49,50 @@ func TestDriveSpeedEncodeDecodeRoundtrip(t *testing.T) {
 			if !forward {
 				t.Fatal("forward bit lost")
 			}
+			if isDriveDB3EStop(proto, db3) {
+				t.Fatal("expected non-estop wire pattern")
+			}
 			if got != payload {
 				t.Fatalf("payload %d: decode = %d", payload, got)
 			}
 		})
 	}
+}
+
+func TestDriveDB3EStopDetection(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name  string
+		proto byte
+		db3   byte
+	}{
+		{"128-step forward estop", 3, 0x81},
+		{"128-step reverse estop", 3, 0x01},
+		{"14-step forward estop", 0, 0x81},
+		{"28-step forward estop V5=0", 2, 0x81},
+		{"28-step forward estop V5=1", 2, 0x91},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if !isDriveDB3EStop(tc.proto, tc.db3) {
+				t.Fatal("expected estop")
+			}
+			_, _, _, estop, ok := parseSetLocoDrive(buildSetLocoDrivePkt(31, tc.proto, tc.db3))
+			if !ok || !estop {
+				t.Fatalf("parseSetLocoDrive estop = %v, ok = %v", estop, ok)
+			}
+		})
+	}
+}
+
+func buildSetLocoDrivePkt(addr uint16, speedStepsProto, db3 byte) []byte {
+	adrMSB := byte((addr >> 8) & 0x3F)
+	adrLSB := byte(addr & 0xFF)
+	pkt := []byte{0x0a, 0x00, 0x40, 0x00, 0xe4, 0x10 | speedStepsProto, adrMSB, adrLSB, db3, 0x00}
+	pkt[9] = xorSum(pkt[4:9])
+	return pkt
 }
 
 // TestDriveSpeed28StepBoundary confirms the Z21 28-step encoding maps stop to
@@ -67,8 +106,11 @@ func TestDriveSpeed28StepBoundary(t *testing.T) {
 	if got != 0 {
 		t.Fatalf("28-step payload 0: decode = %d, want 0", got)
 	}
-	// Payload 1 is the first moving notch in 28-step mode.
-	db3 = encodeDriveDB3(1, true, proto)
+	// First moving notch in 28-step uses wire V=2 (not V=1, which is E-Stop).
+	db3 = 0x82
+	if isDriveDB3EStop(proto, db3) {
+		t.Fatal("28-step first notch must not be estop")
+	}
 	got, _ = decodeDriveDB3(proto, db3)
 	if got != 1 {
 		t.Fatalf("28-step payload 1: decode = %d, want 1 (first notch)", got)

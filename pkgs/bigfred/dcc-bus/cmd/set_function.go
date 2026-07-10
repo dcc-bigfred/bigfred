@@ -14,6 +14,11 @@ func (r *Router) HandleSetFunction(ctx context.Context, actor Actor, resp Respon
 	if d := r.drive.CanDrive(actor.UserID, vehicle, onLayout); !d.Allowed {
 		return FailResult(d.Reason)
 	}
+	if err := r.reserveDriveLease(actor, p.Address); err != nil {
+		code := locoCommandErrorCode(err)
+		_ = resp.SendLocoError(ctx, p.Address, code, err.Error())
+		return FailResult(code)
+	}
 	on := p.On
 	if p.Toggle {
 		on = !r.currentFunctionState(p.Address, p.Function)

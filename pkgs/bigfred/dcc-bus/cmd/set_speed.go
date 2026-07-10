@@ -32,6 +32,14 @@ func (r *Router) HandleSetSpeed(ctx context.Context, actor Actor, resp Responder
 	return OKResult()
 }
 
+// reserveDriveLease records a driver holder for addr before the command
+// station acquires the physical slot. OnSlotInUse confirms acquiredAt once
+// the driver reports IN_USE.
+func (r *Router) reserveDriveLease(actor Actor, addr uint16) error {
+	_, err := r.leaser.Reserve(actor.UserID, actor.SessionID, actor.LeaseSource(), addr)
+	return err
+}
+
 func (r *Router) applyMemberSetSpeed(
 	ctx context.Context,
 	actor Actor,
@@ -42,11 +50,7 @@ func (r *Router) applyMemberSetSpeed(
 	source string,
 	originClientKey string,
 ) error {
-	// Reserve a BigFred slot lease for the driver. The LocoNet driver acquires
-	// the physical slot itself inside SetSpeed below; Reserve only records the
-	// holder so per-user cap, budget, switcher-change and diagnostics apply to
-	// throttle UI drive (which no longer sends an explicit loco.select).
-	if _, err := r.leaser.Reserve(actor.UserID, actor.SessionID, actor.LeaseSource(), addr); err != nil {
+	if err := r.reserveDriveLease(actor, addr); err != nil {
 		return err
 	}
 	if err := r.dcc.SetSpeed(addr, speed, forward, emergency); err != nil {

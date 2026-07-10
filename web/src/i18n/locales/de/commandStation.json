@@ -92,7 +92,11 @@
       "noLeases": "Keine aktiven Slot-Leases.",
       "singleKind": "Einzel",
       "trainKind": "Zug {{id}}",
-      "releasePending": "Freigabe ausstehend"
+      "releasePending": "Freigabe ausstehend",
+      "actions": "Aktionen",
+      "release": "Freigeben",
+      "releaseTitle": "Slot freigeben?",
+      "releaseConfirm": "Slot für Adresse {{addr}} freigeben? Die Lokomotive wird notgestoppt."
     }
   }
 }

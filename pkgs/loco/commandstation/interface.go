@@ -67,16 +67,30 @@ type BootSlotReconciler interface {
 	ReconcileBootSlots(roster map[LocoAddr]struct{}) error
 }
 
+// SlotReconciler is an optional interface for LocoNet drivers that can
+// actively read the current IN_USE status of a locomotive's slot, so the
+// leaser can reconcile stale leases against physical reality (dropping
+// orphaned "external" and lost leases). Callers type-assert the Station value.
+type SlotReconciler interface {
+	// SlotStatus actively queries the command station for addr's slot and
+	// reports whether it is IN_USE. known is false when the driver has no
+	// slot mapping for addr (nothing to reconcile). On a bus error err is
+	// non-nil; callers MUST treat err or !known as "do not release" so a
+	// transient failure never yanks a slot.
+	SlotStatus(addr LocoAddr) (inUse bool, known bool, err error)
+}
+
 // SlotObserver receives slot lifecycle events from the driver. The driver
-// emits these for every IN_USE slot it knows about — both BigFred-acquired
-// (via SetSpeed/AcquireSlot) and slots observed on the bus held by external
-// throttles (physical FREDs). Implementations MUST be safe to call from the
-// driver's hot path and MUST NOT block (the driver calls them synchronously
-// under its own locks).
+// emits OnSlotInUse only after BigFred-initiated acquire paths (SetSpeed,
+// SendFn, AcquireSlot via acquireSlotWithHeld). Passive bus IN_USE transitions
+// from external throttles are not reported here (they are tracked in CS slot
+// metrics only). OnSlotReleased fires when BigFred releases a slot or when a
+// mapped slot index transitions away from IN_USE on the bus.
+// Implementations MUST be safe to call from the driver's hot path and MUST
+// NOT block (the driver calls them synchronously under its own locks).
 type SlotObserver interface {
-	// OnSlotInUse is called after a slot for addr becomes IN_USE on the
-	// command station (acquired by us or observed from a bus SLOT_STAT1
-	// transition to IN_USE).
+	// OnSlotInUse is called after BigFred successfully acquires or revalidates
+	// a slot for addr (driver-initiated, not passive bus observation).
 	OnSlotInUse(addr LocoAddr)
 	// OnSlotReleased is called after a slot for addr is no longer IN_USE
 	// (we released it to COMMON, or the master purged/reassigned it, or an

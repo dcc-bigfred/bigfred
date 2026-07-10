@@ -48,6 +48,9 @@ type InboundDrivePort interface {
 	SetSpeed(ctx context.Context, actor ThrottleActor, resp ThrottleResponder, req contract.LocoSetSpeedWire) CommandResult
 	SetFunction(ctx context.Context, actor ThrottleActor, resp ThrottleResponder, req contract.LocoSetFunctionWire) CommandResult
 	Subscribe(ctx context.Context, actor ThrottleActor, resp ThrottleResponder, addrs []uint16) CommandResult
+	// Release drops the driver's slot lease for addr (handset MT- parity with
+	// WS loco.deselect). No-op when the actor holds no lease for addr.
+	Release(actor ThrottleActor, addr uint16)
 	// LocoSnapshot returns the current merged state for an address so a
 	// gateway can echo it straight back to the commanding handset.
 	LocoSnapshot(addr uint16) contract.LocoStateWire

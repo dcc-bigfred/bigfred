@@ -38,6 +38,16 @@ func (r *Router) Subscribe(ctx context.Context, actor remotes.ThrottleActor, res
 	}, ""))
 }
 
+// Release drops the handset's slot lease for addr (WiThrottle MT-), matching
+// the WS loco.deselect behaviour so single-loco release is consistent across
+// transports.
+func (r *Router) Release(actor remotes.ThrottleActor, addr uint16) {
+	if r == nil || r.leaser == nil || addr == 0 {
+		return
+	}
+	r.leaser.Deselect(actor.UserID, actor.SessionID, addr)
+}
+
 // LocoSnapshot exposes the current merged loco state for gateway echoes.
 func (r *Router) LocoSnapshot(addr uint16) contract.LocoStateWire {
 	return r.locoSnapOrDefault(context.Background(), addr)

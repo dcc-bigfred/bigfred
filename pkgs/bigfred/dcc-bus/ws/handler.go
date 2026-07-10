@@ -136,6 +136,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		} else {
 			http.NotFound(w, r)
 		}
+	case "/admin/slots/release":
+		if s.slotsDiag != nil {
+			s.slotsDiag.ServeRelease(w, r)
+		} else {
+			http.NotFound(w, r)
+		}
 	case "/healthz":
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"status":"ok"}`))

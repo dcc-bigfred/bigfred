@@ -22,6 +22,11 @@ const (
 	slotReleaseRetryCount = 3
 	slotReleaseRetryGap   = 100 * time.Millisecond
 	releaseQueueSize      = 64
+	// slotReconcileMaxPerCycle bounds how many leased addresses a single
+	// ReconcileSlots pass probes on the LocoNet bus, so reconciliation never
+	// floods the bus. Go's randomized map iteration naturally rotates which
+	// addresses are sampled across cycles, so all leases are eventually covered.
+	slotReconcileMaxPerCycle = 16
 )
 
 type leaseKind uint8
@@ -660,18 +665,7 @@ func (l *Leaser) OnSlotReleased(addr commandstation.LocoAddr) {
 		return
 	}
 	external := !le.leaseHasBigFredHolderLocked()
-	for k := range le.holders {
-		if k.UserID != 0 {
-			l.perUser[k.UserID]--
-			if l.perUser[k.UserID] <= 0 {
-				delete(l.perUser, k.UserID)
-			}
-			l.removeUserAddrLocked(k.UserID, a16)
-		}
-	}
-	delete(l.leases, a16)
-	delete(l.releasePending, a16)
-	delete(l.releasing, a16)
+	l.dropLeaseBookkeepingLocked(a16)
 	l.notifyDiagLocked()
 	l.mu.Unlock()
 	if external {
@@ -679,6 +673,110 @@ func (l *Leaser) OnSlotReleased(addr commandstation.LocoAddr) {
 	} else {
 		l.metrics.RecordReleased(ReleaseSwitcherChange)
 	}
+}
+
+// SlotProber actively reports whether addr's slot is still IN_USE on the
+// command station. The LocoNet driver (commandstation.SlotReconciler) satisfies
+// this directly.
+type SlotProber interface {
+	SlotStatus(addr commandstation.LocoAddr) (inUse bool, known bool, err error)
+}
+
+// ReconcileSlots probes the command station for leases that currently occupy a
+// physical slot and drops (bookkeeping-only, no e-stop) those the station
+// confirms are no longer IN_USE. This reclaims orphaned "external" leases
+// (estop/control-path artifacts) and BigFred leases lost to missed bus events,
+// regardless of how the slot was allocated. Leases the station still reports
+// IN_USE are never touched (a live physical throttle keeps its slot).
+// Reserve-only bookings (acquiredAt zero) and in-flight acquires are skipped.
+//
+// To bound bus traffic it probes at most slotReconcileMaxPerCycle leased
+// addresses per call; Go's randomized map iteration rotates the sample so all
+// leases are eventually covered across successive cycles.
+func (l *Leaser) ReconcileSlots(prober SlotProber) {
+	if l == nil || prober == nil {
+		return
+	}
+	type cand struct {
+		addr       uint16
+		acquiredAt time.Time
+	}
+	l.mu.Lock()
+	cands := make([]cand, 0, slotReconcileMaxPerCycle)
+	for addr, le := range l.leases {
+		if le.acquiring || !le.leaseOccupiesSlotLocked() {
+			continue
+		}
+		cands = append(cands, cand{addr, le.acquiredAt})
+		if len(cands) >= slotReconcileMaxPerCycle {
+			break
+		}
+	}
+	l.mu.Unlock()
+
+	dropped := 0
+	for _, c := range cands {
+		inUse, known, err := prober.SlotStatus(commandstation.LocoAddr(c.addr))
+		if err != nil || !known || inUse {
+			continue
+		}
+		l.mu.Lock()
+		le, ok := l.leases[c.addr]
+		if !ok || !le.acquiredAt.Equal(c.acquiredAt) {
+			l.mu.Unlock()
+			continue
+		}
+		l.dropLeaseBookkeepingLocked(c.addr)
+		l.notifyDiagLocked()
+		l.mu.Unlock()
+		dropped++
+	}
+	for i := 0; i < dropped; i++ {
+		l.metrics.RecordReleased(ReleaseReconcile)
+	}
+}
+
+// ForceRelease unconditionally releases the slot lease for addr regardless of
+// holders — an admin action from the slots-diagnostics page to reclaim a stuck
+// slot (including an orphaned "external" lease) without waiting for a
+// reconciliation cycle. It e-stops the loco, releases the physical slot and
+// drops all bookkeeping. Returns true when a lease existed.
+func (l *Leaser) ForceRelease(addr uint16) bool {
+	if l == nil || addr == 0 {
+		return false
+	}
+	l.mu.Lock()
+	_, ok := l.leases[addr]
+	if !ok {
+		l.mu.Unlock()
+		return false
+	}
+	l.dropLeaseBookkeepingLocked(addr)
+	l.notifyDiagLocked()
+	l.mu.Unlock()
+	l.stopAndRelease(addr, ReleaseAdminManual)
+	return true
+}
+
+// dropLeaseBookkeepingLocked removes lease bookkeeping for addr. Caller must
+// hold l.mu and the lease must exist.
+func (l *Leaser) dropLeaseBookkeepingLocked(addr uint16) {
+	le := l.leases[addr]
+	if le == nil {
+		return
+	}
+	for k := range le.holders {
+		if k.UserID != 0 {
+			l.perUser[k.UserID]--
+			if l.perUser[k.UserID] <= 0 {
+				delete(l.perUser, k.UserID)
+			}
+			l.removeUserAddrLocked(k.UserID, addr)
+		}
+	}
+	delete(l.leases, addr)
+	delete(l.releasePending, addr)
+	delete(l.releasing, addr)
 }
 
 // DeselectDeferred drops one holder and, if it was the last BigFred holder,

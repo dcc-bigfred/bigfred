@@ -15,4 +15,6 @@ const (
 	ReleaseBootReconcile     ReleaseReason = "boot_reconcile"
 	ReleasePendingRetry      ReleaseReason = "release_pending_retry"
 	ReleaseGraceEvict        ReleaseReason = "grace_evict" // D20: budget pressure
+	ReleaseReconcile         ReleaseReason = "reconcile"   // slot no longer IN_USE on CS
+	ReleaseAdminManual       ReleaseReason = "admin_manual" // manual release from slots diag UI
 )

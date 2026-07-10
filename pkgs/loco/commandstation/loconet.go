@@ -981,6 +981,16 @@ func (l *LocoNet) acquireSlotWithHeld(addr LocoAddr) (slot byte, heldBefore bool
 	return slot, heldBefore, err
 }
 
+// acquireSlotWithHeldNoObserve is acquireSlotWithHeld without the SlotObserver
+// notification. EmergencyStop uses it so a transient stop of a loco with no
+// BigFred lease does not create a synthetic "external" lease in the leaser.
+func (l *LocoNet) acquireSlotWithHeldNoObserve(addr LocoAddr) (slot byte, heldBefore bool, err error) {
+	if slot, ok := l.getSlot(addr); ok && l.recentlyAcquired(addr) {
+		return slot, true, nil
+	}
+	return l.validateSlot(addr)
+}
+
 func (l *LocoNet) GetSpeed(addr LocoAddr) (speed uint8, forward bool, err error) {
 	l.reqMu.Lock()
 	defer l.reqMu.Unlock()
@@ -1398,6 +1408,28 @@ func (l *LocoNet) ReconcileBootSlots(roster map[LocoAddr]struct{}) error {
 		logrus.WithField("count", released).Info("loconet: boot slot reconciliation complete")
 	}
 	return nil
+}
+
+// SlotStatus implements commandstation.SlotReconciler. It reads the slot
+// currently mapped to addr and reports whether the command station still holds
+// it IN_USE. Returns known=false when the driver has no mapping for addr.
+func (l *LocoNet) SlotStatus(addr LocoAddr) (inUse bool, known bool, err error) {
+	slot, ok := l.getSlot(addr)
+	if !ok {
+		return false, false, nil
+	}
+	l.reqMu.Lock()
+	defer l.reqMu.Unlock()
+	l.beginSync()
+	defer l.endSync()
+	sd, err := l.querySlotLocked(slot, 0)
+	if err != nil {
+		return false, true, err
+	}
+	if LocoAddr(sd.Addr) != addr {
+		return false, true, nil
+	}
+	return sd.Stat1&lnSLOT_STA_MASK == lnSLOT_IN_USE, true, nil
 }
 
 // ReleaseSlot writes OPC_SLOT_STAT1 with COMMON status, relinquishing

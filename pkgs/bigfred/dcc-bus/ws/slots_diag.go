@@ -163,3 +163,33 @@ func (h *SlotsDiagHandler) sendSnapshot(ctx context.Context, conn *websocket.Con
 	}
 	return conn.Write(ctx, websocket.MessageText, data)
 }
+
+// ServeRelease handles POST /admin/slots/release with body {"addr":N}. It is
+// loopback-only (loco-server gates the admin role before proxying) and still
+// verifies the forwarded daemon token. Releases the slot lease for addr.
+func (h *SlotsDiagHandler) ServeRelease(w http.ResponseWriter, r *http.Request) {
+	if h == nil || h.leaser == nil {
+		http.NotFound(w, r)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "method_not_allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if h.verifier != nil {
+		if _, err := h.verifier.Verify(r.URL.Query().Get("token")); err != nil {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+	}
+	var body struct {
+		Addr uint16 `json:"addr"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Addr == 0 {
+		http.Error(w, "bad_request", http.StatusBadRequest)
+		return
+	}
+	released := h.leaser.ForceRelease(body.Addr)
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]bool{"released": released})
+}

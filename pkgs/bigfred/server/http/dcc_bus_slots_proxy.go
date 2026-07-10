@@ -14,20 +14,30 @@ import (
 )
 
 // DccBusSlotsProxy reverse-proxies the dcc-bus admin slot-diagnostic
-// WebSocket. Admin role is required; the daemon endpoint is loopback-only.
+// WebSocket and release action. Admin role is required; daemon endpoints are
+// loopback-only.
 type DccBusSlotsProxy struct {
 	auth   *cmd.Auth
 	dccBus *service.DccBusService
 }
 
 // NewDccBusSlotsProxy returns a handler for
-// `/api/v1/admin/dcc-bus/{commandStationId}/slots/ws`.
+// `/api/v1/admin/dcc-bus/{commandStationId}/slots/ws` and `/slots/release`.
 func NewDccBusSlotsProxy(auth *cmd.Auth, dccBus *service.DccBusService) *DccBusSlotsProxy {
 	return &DccBusSlotsProxy{auth: auth, dccBus: dccBus}
 }
 
-// ServeHTTP handles one upgrade attempt.
+// ServeHTTP handles one WebSocket upgrade attempt.
 func (p *DccBusSlotsProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	p.proxy(w, r, "/admin/slots/ws")
+}
+
+// ServeRelease reverse-proxies POST /admin/dcc-bus/{commandStationId}/slots/release.
+func (p *DccBusSlotsProxy) ServeRelease(w http.ResponseWriter, r *http.Request) {
+	p.proxy(w, r, "/admin/slots/release")
+}
+
+func (p *DccBusSlotsProxy) proxy(w http.ResponseWriter, r *http.Request, daemonPath string) {
 	token := readSessionToken(r)
 	if token == "" {
 		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
@@ -65,7 +75,7 @@ func (p *DccBusSlotsProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	rp.Director = func(req *http.Request) {
 		req.URL.Scheme = target.Scheme
 		req.URL.Host = target.Host
-		req.URL.Path = "/admin/slots/ws"
+		req.URL.Path = daemonPath
 		q := req.URL.Query()
 		q.Set("token", token)
 		req.URL.RawQuery = q.Encode()

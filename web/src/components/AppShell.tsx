@@ -18,6 +18,7 @@ import PeopleIcon from "@mui/icons-material/People";
 import MapIcon from "@mui/icons-material/Map";
 import AccountTreeIcon from "@mui/icons-material/AccountTree";
 import DirectionsRailwayIcon from "@mui/icons-material/DirectionsRailway";
+import ViewListIcon from "@mui/icons-material/ViewList";
 import HistoryIcon from "@mui/icons-material/History";
 import BugReportIcon from "@mui/icons-material/BugReport";
 import PersonIcon from "@mui/icons-material/Person";
@@ -127,6 +128,12 @@ function AppShellContent() {
         label: t("nav.administration.commandStations"),
         icon: <DirectionsRailwayIcon fontSize="small" />,
         onClick: () => navigate("/admin/command-stations"),
+      },
+      {
+        id: "slotsDiagnostics",
+        label: t("nav.administration.slotsDiagnostics"),
+        icon: <ViewListIcon fontSize="small" />,
+        onClick: () => navigate("/admin/dcc-bus/slots"),
       },
       {
         id: "diagnostics",

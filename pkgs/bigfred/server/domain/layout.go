@@ -26,7 +26,8 @@ const SystemLayoutName = "default"
 //     layout, including the system row. A locked layout is hidden from the
 //     unauthenticated login dropdown (GET /api/v1/layouts/login), but
 //     already-running sessions keep working until they close on their
-//     own.
+//     own. When every layout is locked the system row is still offered
+//     as a last-resort login target.
 //
 // The full §3a.1 entity carries `Signalmen`, `Interlockings` and
 // `CommandStations` association slices. These will be added together

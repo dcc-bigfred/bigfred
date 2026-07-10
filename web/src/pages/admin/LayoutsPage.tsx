@@ -211,6 +211,7 @@ export default function LayoutsPage() {
           adminPin: adminPin === "" ? undefined : adminPin,
           maxVehiclesPerUser: maxVehiclesInput,
         });
+      } else if (dialog.kind === "delete") {
         await remove.mutateAsync(dialog.target.id);
       } else if (dialog.kind === "lock") {
         await setLock.mutateAsync({ id: dialog.target.id, lock: dialog.lock });

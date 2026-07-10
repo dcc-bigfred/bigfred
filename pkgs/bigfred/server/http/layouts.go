@@ -26,8 +26,9 @@ func NewLayoutHandler(svc *cmd.Layout, auth *cmd.Auth, audit cmd.AuditPublisher)
 }
 
 // ListForLogin handles the unauthenticated `GET /api/v1/layouts/login`
-// endpoint. It returns every non-locked layout. The frontend reads
-// the response BEFORE the user submits the login form to populate the
+// endpoint. It returns every non-locked layout; when all layouts are
+// locked the system default is still included. The frontend reads the
+// response BEFORE the user submits the login form to populate the
 // layout dropdown.
 func (h *LayoutHandler) ListForLogin(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.svc.ListSelectable(r.Context())

@@ -91,9 +91,25 @@ func (s *Layout) ListAll(ctx context.Context) ([]domain.Layout, error) {
 }
 
 // ListSelectable returns the rows the login dropdown should offer:
-// every non-locked layout (§7a.1).
+// every non-locked layout (§7a.1). When every layout is locked the
+// system row is still returned so operators are not locked out of the
+// workshop default.
 func (s *Layout) ListSelectable(ctx context.Context) ([]domain.Layout, error) {
-	return s.layouts.ListSelectable(ctx)
+	rows, err := s.layouts.ListSelectable(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if len(rows) > 0 {
+		return rows, nil
+	}
+	system, err := s.layouts.FindSystem(ctx)
+	if err != nil {
+		if errors.Is(err, repo.ErrLayoutNotFound) {
+			return rows, nil
+		}
+		return nil, err
+	}
+	return []domain.Layout{system}, nil
 }
 
 // Get looks a layout up by id. Translates svcerrors.ErrLayoutNotFound from the
@@ -602,15 +618,27 @@ func (s *Layout) setInterlockings(ctx context.Context, layoutID, addedBy uint, i
 }
 
 // ValidateForLogin loads a layout by id and rejects locked rows with
-// svcerrors.ErrLayoutLocked. Used by AuthService.Login to fulfil §7a.1 steps
-// 2 + 3 without coupling AuthService to the Layouts repo directly.
+// svcerrors.ErrLayoutLocked. The system layout is accepted while locked
+// only when no other layout is selectable — the same fallback as
+// ListSelectable. Used by AuthService.Login to fulfil §7a.1 steps 2 + 3
+// without coupling AuthService to the Layouts repo directly.
 func (s *Layout) ValidateForLogin(ctx context.Context, id uint) (domain.Layout, error) {
 	layout, err := s.Get(ctx, id)
 	if err != nil {
 		return domain.Layout{}, err
 	}
-	if layout.Locked {
-		return domain.Layout{}, svcerrors.ErrLayoutLocked
+	if !layout.Locked {
+		return layout, nil
 	}
-	return layout, nil
+	if layout.IsSystem && s.noSelectableLayouts(ctx) {
+		return layout, nil
+	}
+	return domain.Layout{}, svcerrors.ErrLayoutLocked
+}
+
+// noSelectableLayouts reports whether the login dropdown would be
+// empty without the system-layout fallback.
+func (s *Layout) noSelectableLayouts(ctx context.Context) bool {
+	rows, err := s.layouts.ListSelectable(ctx)
+	return err == nil && len(rows) == 0
 }

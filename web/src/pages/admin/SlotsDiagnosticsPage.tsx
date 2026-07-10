@@ -3,9 +3,15 @@ import { Link as RouterLink, useSearchParams } from "react-router-dom";
 import {
   Alert,
   Box,
+  Button,
   Chip,
   CircularProgress,
   Container,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
   FormControl,
   InputLabel,
   LinearProgress,
@@ -25,6 +31,7 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { useTranslation } from "react-i18next";
 
 import { useCommandStationsCatalogue } from "../../api/command_stations";
+import { apiFetch } from "../../api/client";
 import { useWsConnection } from "../../hooks/useWsConnection";
 
 interface HolderInfo {
@@ -95,6 +102,24 @@ export default function SlotsDiagnosticsPage() {
   const [snapshot, setSnapshot] = useState<SlotsDiagnostic | null>(null);
   const [connected, setConnected] = useState(false);
   const [now, setNow] = useState(Date.now());
+  const [releaseAddr, setReleaseAddr] = useState<number | null>(null);
+  const [releasing, setReleasing] = useState(false);
+
+  const confirmRelease = useCallback(async () => {
+    if (releaseAddr == null || selectedId <= 0) {
+      return;
+    }
+    setReleasing(true);
+    try {
+      await apiFetch(`/api/v1/admin/dcc-bus/${selectedId}/slots/release`, {
+        method: "POST",
+        body: JSON.stringify({ addr: releaseAddr }),
+      });
+    } finally {
+      setReleasing(false);
+      setReleaseAddr(null);
+    }
+  }, [releaseAddr, selectedId]);
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 1000);
@@ -334,12 +359,15 @@ export default function SlotsDiagnosticsPage() {
                       <TableCell>{t("commandStation:admin.slotsDiag.holders")}</TableCell>
                       <TableCell>{t("commandStation:admin.slotsDiag.acquired")}</TableCell>
                       <TableCell>{t("commandStation:admin.slotsDiag.flags")}</TableCell>
+                      <TableCell align="right">
+                        {t("commandStation:admin.slotsDiag.actions")}
+                      </TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {(snapshot.leases ?? []).length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={5}>
+                        <TableCell colSpan={6}>
                           <Typography variant="body2" color="text.secondary">
                             {t("commandStation:admin.slotsDiag.noLeases")}
                           </Typography>
@@ -392,6 +420,16 @@ export default function SlotsDiagnosticsPage() {
                                 />
                               )}
                             </TableCell>
+                            <TableCell align="right">
+                              <Button
+                                size="small"
+                                color="error"
+                                variant="outlined"
+                                onClick={() => setReleaseAddr(le.addr)}
+                              >
+                                {t("commandStation:admin.slotsDiag.release")}
+                              </Button>
+                            </TableCell>
                           </TableRow>
                         );
                       })
@@ -403,6 +441,29 @@ export default function SlotsDiagnosticsPage() {
           </>
         )}
       </Stack>
+
+      <Dialog open={releaseAddr != null} onClose={() => setReleaseAddr(null)}>
+        <DialogTitle>{t("commandStation:admin.slotsDiag.releaseTitle")}</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            {t("commandStation:admin.slotsDiag.releaseConfirm", {
+              addr: releaseAddr ?? 0,
+            })}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setReleaseAddr(null)} disabled={releasing}>
+            {t("common:actions.cancel")}
+          </Button>
+          <Button
+            color="error"
+            onClick={() => void confirmRelease()}
+            disabled={releasing}
+          >
+            {t("commandStation:admin.slotsDiag.release")}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 }

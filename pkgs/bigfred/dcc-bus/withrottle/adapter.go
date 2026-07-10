@@ -199,6 +199,9 @@ func (a *Adapter) HandleRelease(ctx context.Context, client *Client, cmd MComman
 	})
 	for _, addr := range released {
 		a.server.registry.UnsubscribeLoco(client.Key, addr)
+		if a.drive != nil {
+			a.drive.Release(a.throttleActor(client), addr)
+		}
 	}
 	_ = ctx
 	if cmd.LocoKey == "*" {

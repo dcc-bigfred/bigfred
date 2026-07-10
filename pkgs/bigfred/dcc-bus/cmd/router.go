@@ -23,6 +23,11 @@ import (
 const (
 	// StateTTL is the Redis TTL applied to loco:state:* entries.
 	StateTTL = 5 * time.Minute
+	// slotReconcileInterval is how often the leaser is reconciled against the
+	// physical LocoNet slot table to reclaim orphaned/stale leases. Fixed in
+	// code (not admin-configurable); paced together with slotReconcileMaxPerCycle
+	// so bus traffic stays bounded.
+	slotReconcileInterval = 60 * time.Second
 )
 
 // Router orchestrates dcc-bus use cases. It is the only component that
@@ -400,6 +405,31 @@ func (r *Router) RunIdleSweep(ctx context.Context) {
 		case now := <-ticker.C:
 			r.leaser.SweepIdle(now)
 			r.leaser.SweepDeferred(now)
+		}
+	}
+}
+
+// RunSlotReconcile periodically reconciles the leaser against the physical
+// command-station slot table, dropping orphaned/stale leases the station no
+// longer reports IN_USE. Only runs for LocoNet stations that support slot
+// reconciliation (Z21 has no slot table). Interval and per-cycle probe budget
+// are fixed constants (slotReconcileInterval, slotReconcileMaxPerCycle).
+func (r *Router) RunSlotReconcile(ctx context.Context) {
+	if r == nil || r.leaser == nil {
+		return
+	}
+	reconciler, ok := station.AsSlotReconciler(r.station)
+	if !ok {
+		return
+	}
+	ticker := time.NewTicker(slotReconcileInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			r.leaser.ReconcileSlots(reconciler)
 		}
 	}
 }

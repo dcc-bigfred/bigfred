@@ -92,7 +92,11 @@
       "noLeases": "No active slot leases.",
       "singleKind": "Single",
       "trainKind": "Train {{id}}",
-      "releasePending": "Release pending"
+      "releasePending": "Release pending",
+      "actions": "Actions",
+      "release": "Release",
+      "releaseTitle": "Release slot?",
+      "releaseConfirm": "Release the slot for address {{addr}}? The locomotive will be emergency-stopped."
     }
   }
 }

@@ -258,6 +258,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 				if cfg.DccBus != nil {
 					slotsProxy := NewDccBusSlotsProxy(cfg.Auth, cfg.DccBus)
 					r.Get("/admin/dcc-bus/{commandStationId}/slots/ws", slotsProxy.ServeHTTP)
+					r.Post("/admin/dcc-bus/{commandStationId}/slots/release", slotsProxy.ServeRelease)
 				}
 			})
 		})

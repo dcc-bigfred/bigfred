@@ -569,3 +569,112 @@ func TestOnSlotInUse_suppressExternalSkipsSyntheticLease(t *testing.T) {
 		t.Fatalf("holder source = %q, want external", snap.Leases[0].Holders[0].Source)
 	}
 }
+
+type fakeProber struct {
+	status map[uint16]struct {
+		inUse bool
+		known bool
+		err   error
+	}
+	calls []uint16
+}
+
+func (p *fakeProber) SlotStatus(addr commandstation.LocoAddr) (bool, bool, error) {
+	p.calls = append(p.calls, uint16(addr))
+	s, ok := p.status[uint16(addr)]
+	if !ok {
+		return false, false, nil
+	}
+	return s.inUse, s.known, s.err
+}
+
+func TestReconcileSlots_dropsOrphanWhenNotInUse(t *testing.T) {
+	st := &fakeStation{}
+	l := newTestLeaser(st, 8, 80)
+	l.OnSlotInUse(commandstation.LocoAddr(42))
+	prober := &fakeProber{
+		status: map[uint16]struct {
+			inUse bool
+			known bool
+			err   error
+		}{42: {inUse: false, known: true}},
+	}
+	l.ReconcileSlots(prober)
+	if l.LeaseCount() != 0 {
+		t.Fatalf("leases = %d, want 0 after reconcile drop", l.LeaseCount())
+	}
+}
+
+func TestReconcileSlots_keepsWhenStillInUse(t *testing.T) {
+	st := &fakeStation{}
+	l := newTestLeaser(st, 8, 80)
+	l.OnSlotInUse(commandstation.LocoAddr(42))
+	prober := &fakeProber{
+		status: map[uint16]struct {
+			inUse bool
+			known bool
+			err   error
+		}{42: {inUse: true, known: true}},
+	}
+	l.ReconcileSlots(prober)
+	if l.LeaseCount() != 1 {
+		t.Fatalf("leases = %d, want 1 when CS still IN_USE", l.LeaseCount())
+	}
+}
+
+func TestReconcileSlots_respectsMaxPerCycle(t *testing.T) {
+	st := &fakeStation{}
+	l := newTestLeaser(st, 8, 80)
+	for i := uint16(1); i <= 20; i++ {
+		l.OnSlotInUse(commandstation.LocoAddr(i))
+	}
+	prober := &fakeProber{
+		status: make(map[uint16]struct {
+			inUse bool
+			known bool
+			err   error
+		}),
+	}
+	for i := uint16(1); i <= 20; i++ {
+		prober.status[i] = struct {
+			inUse bool
+			known bool
+			err   error
+		}{inUse: false, known: true}
+	}
+	l.ReconcileSlots(prober)
+	if len(prober.calls) > slotReconcileMaxPerCycle {
+		t.Fatalf("probes = %d, want at most %d", len(prober.calls), slotReconcileMaxPerCycle)
+	}
+}
+
+func TestForceRelease_dropsLeaseAndReleasesSlot(t *testing.T) {
+	st := &fakeStation{}
+	w := &fakeWriter{}
+	l := New(st, w, newFakeStore(), fakeHub{}, nil, Config{MaxPerUser: 8, MaxSlots: 80})
+	if _, err := l.Select(1, "s", "ws", 55); err != nil {
+		t.Fatal(err)
+	}
+	if !l.ForceRelease(55) {
+		t.Fatal("ForceRelease returned false")
+	}
+	if l.LeaseCount() != 0 {
+		t.Fatalf("leases = %d, want 0", l.LeaseCount())
+	}
+	st.mu.Lock()
+	n := len(st.released)
+	st.mu.Unlock()
+	if n != 1 || st.released[0] != 55 {
+		t.Fatalf("released = %v, want [55]", st.released)
+	}
+	if !w.estopBeforeRelease(55) {
+		t.Fatal("expected e-stop before release")
+	}
+}
+
+func TestForceRelease_unknownAddr(t *testing.T) {
+	l := newTestLeaser(&fakeStation{}, 8, 80)
+	if l.ForceRelease(99) {
+		t.Fatal("ForceRelease on missing addr should return false")
+	}
+}

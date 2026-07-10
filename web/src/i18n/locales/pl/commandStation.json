@@ -92,7 +92,11 @@
       "noLeases": "Brak aktywnych lease slotów.",
       "singleKind": "Pojedynczy",
       "trainKind": "Skład {{id}}",
-      "releasePending": "Zwolnienie oczekuje"
+      "releasePending": "Zwolnienie oczekuje",
+      "actions": "Akcje",
+      "release": "Zwolnij",
+      "releaseTitle": "Zwolnić slot?",
+      "releaseConfirm": "Zwolnić slot dla adresu {{addr}}? Lokomotywa zostanie awaryjnie zatrzymana."
     }
   }
 }

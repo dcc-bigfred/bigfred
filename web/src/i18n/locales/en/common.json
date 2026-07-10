@@ -42,6 +42,7 @@
       "parties": "Parties",
       "interlockings": "Interlockings",
       "commandStations": "Command stations",
+      "slotsDiagnostics": "Slot diagnostics",
       "diagnostics": "Diagnostics",
       "auditLog": "Audit log",
       "rentals": "Rentals"

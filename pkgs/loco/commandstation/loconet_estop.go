@@ -13,7 +13,9 @@ type EmergencyStopper interface {
 // acquires (e.g. daemon boot-stop of an idle roster loco) do not consume a
 // slot on the master.
 func (l *LocoNet) EmergencyStop(addr LocoAddr, forward bool) error {
-	slot, heldBefore, err := l.acquireSlotWithHeld(addr)
+	// No-observe: an estop of a loco that BigFred does not lease must not
+	// register a synthetic "external" slot lease (heldBefore keeps the slot).
+	slot, heldBefore, err := l.acquireSlotWithHeldNoObserve(addr)
 	if err != nil {
 		return err
 	}

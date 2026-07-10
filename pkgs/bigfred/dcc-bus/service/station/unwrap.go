@@ -68,6 +68,21 @@ func AsBootSlotReconciler(s commandstation.Station) (commandstation.BootSlotReco
 	return nil, false
 }
 
+// AsSlotReconciler returns the SlotReconciler behind optional wrappers.
+func AsSlotReconciler(s commandstation.Station) (commandstation.SlotReconciler, bool) {
+	for s != nil {
+		if sr, ok := s.(commandstation.SlotReconciler); ok {
+			return sr, true
+		}
+		u, ok := s.(innerStation)
+		if !ok {
+			return nil, false
+		}
+		s = u.Inner()
+	}
+	return nil, false
+}
+
 // AsSlotObservable returns the SlotObservable behind optional wrappers so the
 // leaser can subscribe to IN_USE/release events from the driver.
 func AsSlotObservable(s commandstation.Station) (commandstation.SlotObservable, bool) {

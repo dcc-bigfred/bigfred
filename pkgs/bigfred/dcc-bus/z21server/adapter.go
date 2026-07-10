@@ -223,7 +223,7 @@ func (a *Adapter) logDriveRejected(client *Client, addr uint16, action string) {
 }
 
 func (a *Adapter) HandleSetLocoDrive(ctx context.Context, client *Client, pkt []byte) {
-	addr, speed, forward, ok := parseSetLocoDrive(pkt)
+	addr, speed, forward, estop, ok := parseSetLocoDrive(pkt)
 	if !ok {
 		return
 	}
@@ -233,7 +233,14 @@ func (a *Adapter) HandleSetLocoDrive(ctx context.Context, client *Client, pkt []
 	}
 	a.server.registry.SetLastActiveLoco(client.Key, addr)
 	resp := NewResponder(a.server, client)
-	result := a.drive.SetSpeed(ctx, a.throttleActor(client), resp, contract.LocoSetSpeedWire{
+	actor := a.throttleActor(client)
+	if estop {
+		session := remotes.HandsetSession{ClientKey: client.Key, UserID: actor.UserID}
+		a.drive.ApplyHandsetPilotEStop(ctx, session, addr)
+		a.echoLocoState(ctx, resp, addr)
+		return
+	}
+	result := a.drive.SetSpeed(ctx, actor, resp, contract.LocoSetSpeedWire{
 		Address: addr,
 		Speed:   speed,
 		Forward: forward,

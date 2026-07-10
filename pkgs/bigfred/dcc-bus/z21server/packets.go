@@ -60,21 +60,22 @@ func parseLocoAddr(pkt []byte, offset int) (uint16, bool) {
 	return uint16(pkt[offset]&0x3F)<<8 | uint16(pkt[offset+1]), true
 }
 
-func parseSetLocoDrive(pkt []byte) (addr uint16, speed uint8, forward bool, ok bool) {
+func parseSetLocoDrive(pkt []byte) (addr uint16, speed uint8, forward bool, estop bool, ok bool) {
 	if len(pkt) < 10 {
-		return 0, 0, false, false
+		return 0, 0, false, false, false
 	}
 	_, header, okHdr := packetHeader(pkt)
 	if !okHdr || header != HeaderXBus || pkt[4] != 0xE4 || (pkt[5]&0xF0) != 0x10 {
-		return 0, 0, false, false
+		return 0, 0, false, false, false
 	}
 	addr, ok = parseLocoAddr(pkt, 6)
 	if !ok {
-		return 0, 0, false, false
+		return 0, 0, false, false, false
 	}
 	speedStepsProto := pkt[5] & 0x0F
+	estop = isDriveDB3EStop(speedStepsProto, pkt[8])
 	speed, forward = decodeDriveDB3(speedStepsProto, pkt[8])
-	return addr, speed, forward, true
+	return addr, speed, forward, estop, true
 }
 
 // funcSwitchType is the DB3 switch-type field of LAN_X_SET_LOCO_FUNCTION
@@ -158,6 +159,18 @@ func parseGetLocoInfo(pkt []byte) (addr uint16, ok bool) {
 		return 0, false
 	}
 	return parseLocoAddr(pkt, 6)
+}
+
+// isDriveDB3EStop reports whether the Z21 LAN_X_SET_LOCO_DRIVE speed byte
+// encodes an immediate emergency stop (V=1 in 14/128-step, VVVV=1 in 28-step).
+func isDriveDB3EStop(speedStepsProto, db3 byte) bool {
+	v := db3 & 0x7F
+	switch speedStepsProto {
+	case 0, 2:
+		return v&0x0F == 1
+	default:
+		return v == 1
+	}
 }
 
 func decodeDriveDB3(speedStepsProto, db3 byte) (speed uint8, forward bool) {

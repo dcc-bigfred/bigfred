@@ -340,7 +340,10 @@ func (s *Server) handlePacket(ctx context.Context, remote *net.UDPAddr, pkt []by
 		}
 		if isSetLocoDrive(header, pkt) {
 			handled = true
-			if addr, speed, forward, ok := parseSetLocoDrive(pkt); ok {
+			if addr, speed, forward, estop, ok := parseSetLocoDrive(pkt); ok {
+				if estop {
+					speed = 0
+				}
 				s.sendVirtualLoco(ctx, client, s.virtual.SetSpeed(client.Key, addr, speed, forward))
 			}
 			return

@@ -39,7 +39,7 @@
         "name": "Nazwa",
         "kind": "Typ",
         "connectionUri": "URI połączenia",
-        "connectionUriHelp": "np. udp://192.168.1.10:21105, serial:///dev/ttyUSB0:57600, tcp://192.168.1.20:1234",
+        "connectionUriHelp": "np. udp://192.168.1.10:21105, serial:///dev/ttyUSB0:57600, serial://autodetect:115200, tcp://192.168.1.20:1234",
         "speedSteps": "Kroki prędkości",
         "speedStepsHelp": "Rozdzielczość prędkości DCC przekazywana do dcc-bus. Domyślnie 128.",
         "pollIntervalMs": "Interwał odpytywania (ms)",

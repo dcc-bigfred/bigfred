@@ -86,7 +86,8 @@ func parseHostPort(uri, scheme string, defaultPort uint16) (string, uint16, erro
 //
 //   - serial:///dev/ttyUSB0:57600
 //   - /dev/ttyUSB0:57600
-//   - /dev/ttyUSB0          (baud defaults to 57600)
+//   - /dev/ttyUSB0             (baud defaults to 57600)
+//   - serial://autodetect:115200  (device resolved to first available port)
 func parseSerial(uri string) (string, int, error) {
 	s := strings.TrimSpace(uri)
 	if s == "" {

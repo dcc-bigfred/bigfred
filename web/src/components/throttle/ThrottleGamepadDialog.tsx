@@ -37,6 +37,8 @@ import {
   speedButtonStepSize,
   hasIdleCalibration,
   isGamepadSetupComplete,
+  gamepadButtonWouldConflict,
+  type GamepadButtonAssignment,
   type GamepadMapping,
   type GamepadSpeedSensitivity,
 } from "../../hooks/gamepadMapping";
@@ -65,6 +67,15 @@ interface ThrottleGamepadDialogProps {
 
 function buttonLabel(index: number): string {
   return `B${index}`;
+}
+
+function learnTargetToAssignment(
+  target: Exclude<LearnTarget, { kind: "axis" }>,
+): GamepadButtonAssignment {
+  if (target.kind === "fn") {
+    return { kind: "fn", num: target.num };
+  }
+  return target.kind;
 }
 
 function resolveInitialStep(
@@ -104,6 +115,10 @@ export default function ThrottleGamepadDialog({
     GAMEPAD_IDLE_LEARN_SECONDS,
   );
   const [idleError, setIdleError] = useState<string | null>(null);
+  const [learnError, setLearnError] = useState<{
+    button: number;
+    role: GamepadButtonAssignment;
+  } | null>(null);
   const learnBaselineRef = useRef<number[] | null>(null);
   const prevButtonsRef = useRef<boolean[]>([]);
   const idleMinRef = useRef<number | null>(null);
@@ -119,6 +134,7 @@ export default function ThrottleGamepadDialog({
     }
     setDraft(mapping);
     setLearn(null);
+    setLearnError(null);
     setIdleCollecting(false);
     setIdleSecondsLeft(GAMEPAD_IDLE_LEARN_SECONDS);
     setIdleError(null);
@@ -143,6 +159,26 @@ export default function ThrottleGamepadDialog({
 
   const updateDraft = useCallback((patch: Partial<GamepadMapping>) => {
     setDraft((prev) => ({ ...prev, ...patch }));
+  }, []);
+
+  const formatAssignmentRole = useCallback(
+    (role: GamepadButtonAssignment): string => {
+      if (role === "reverse") return t("gamepad.roleReverse");
+      if (role === "stop") return t("gamepad.roleStop");
+      if (role === "accelerate") return t("gamepad.roleAccelerate");
+      if (role === "decelerate") return t("gamepad.roleDecelerate");
+      if (role === "axisToggle") return t("gamepad.roleAxisToggle");
+      return t("gamepad.roleFunction", { n: role.num });
+    },
+    [t],
+  );
+
+  const startLearn = useCallback((target: LearnTarget) => {
+    setLearnError(null);
+    if (target.kind === "axis") {
+      learnBaselineRef.current = null;
+    }
+    setLearn(target);
   }, []);
 
   const finishIdleLearning = useCallback(() => {
@@ -263,9 +299,16 @@ export default function ThrottleGamepadDialog({
 
       if (step === "settings" && learn && learn.kind !== "axis") {
         const prev = prevButtonsRef.current;
+        const target = learnTargetToAssignment(learn);
         for (let i = 0; i < gp.buttons.length; i++) {
           const pressed = gp.buttons[i]?.pressed ?? false;
           if (pressed && !prev[i]) {
+            const conflict = gamepadButtonWouldConflict(draft, i, target);
+            if (conflict) {
+              setLearnError({ button: i, role: conflict });
+              setLearn(null);
+              break;
+            }
             if (learn.kind === "fn") {
               setDraft((current) => ({
                 ...current,
@@ -454,7 +497,7 @@ export default function ThrottleGamepadDialog({
           <Button
             size="small"
             variant={learn?.kind === "axisToggle" ? "contained" : "outlined"}
-            onClick={() => setLearn({ kind: "axisToggle" })}
+            onClick={() => startLearn({ kind: "axisToggle" })}
           >
             {draft.axisToggleButton != null
               ? t("gamepad.axisToggleAssigned", {
@@ -484,10 +527,7 @@ export default function ThrottleGamepadDialog({
               <Button
                 size="small"
                 variant={learn?.kind === "axis" ? "contained" : "outlined"}
-                onClick={() => {
-                  learnBaselineRef.current = null;
-                  setLearn({ kind: "axis" });
-                }}
+                onClick={() => startLearn({ kind: "axis" })}
               >
                 {t("gamepad.learnAxis")}
               </Button>
@@ -576,7 +616,7 @@ export default function ThrottleGamepadDialog({
           <Button
             size="small"
             variant={learn?.kind === "accelerate" ? "contained" : "outlined"}
-            onClick={() => setLearn({ kind: "accelerate" })}
+            onClick={() => startLearn({ kind: "accelerate" })}
           >
             {draft.accelerateButton != null
               ? t("gamepad.accelerateAssigned", {
@@ -595,7 +635,7 @@ export default function ThrottleGamepadDialog({
           <Button
             size="small"
             variant={learn?.kind === "decelerate" ? "contained" : "outlined"}
-            onClick={() => setLearn({ kind: "decelerate" })}
+            onClick={() => startLearn({ kind: "decelerate" })}
           >
             {draft.decelerateButton != null
               ? t("gamepad.decelerateAssigned", {
@@ -622,7 +662,7 @@ export default function ThrottleGamepadDialog({
           <Button
             size="small"
             variant={learn?.kind === "reverse" ? "contained" : "outlined"}
-            onClick={() => setLearn({ kind: "reverse" })}
+            onClick={() => startLearn({ kind: "reverse" })}
           >
             {draft.reverseButton != null
               ? t("gamepad.reverseAssigned", {
@@ -641,7 +681,7 @@ export default function ThrottleGamepadDialog({
           <Button
             size="small"
             variant={learn?.kind === "stop" ? "contained" : "outlined"}
-            onClick={() => setLearn({ kind: "stop" })}
+            onClick={() => startLearn({ kind: "stop" })}
           >
             {draft.stopButton != null
               ? t("gamepad.stopAssigned", {
@@ -688,7 +728,7 @@ export default function ThrottleGamepadDialog({
                   <Button
                     size="small"
                     variant={isLearning ? "contained" : "outlined"}
-                    onClick={() => setLearn({ kind: "fn", num: fn.num })}
+                    onClick={() => startLearn({ kind: "fn", num: fn.num })}
                   >
                     {assigned != null
                       ? t("gamepad.buttonAssigned", {
@@ -758,6 +798,14 @@ export default function ThrottleGamepadDialog({
           {learnHint && (
             <Typography variant="body2" color="primary">
               {learnHint}
+            </Typography>
+          )}
+          {learnError && (
+            <Typography variant="body2" color="error">
+              {t("gamepad.buttonConflict", {
+                button: buttonLabel(learnError.button),
+                role: formatAssignmentRole(learnError.role),
+              })}
             </Typography>
           )}
         </Stack>

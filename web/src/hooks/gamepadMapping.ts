@@ -44,6 +44,63 @@ export const DEFAULT_SPEED_BUTTON_STEPS = 20;
 export const MIN_SPEED_BUTTON_STEPS = 2;
 export const MAX_SPEED_BUTTON_STEPS = 20;
 
+export type GamepadButtonAssignment =
+  | "reverse"
+  | "stop"
+  | "accelerate"
+  | "decelerate"
+  | "axisToggle"
+  | { kind: "fn"; num: number };
+
+function isSameGamepadButtonAssignment(
+  a: GamepadButtonAssignment,
+  b: GamepadButtonAssignment,
+): boolean {
+  if (typeof a === "string" && typeof b === "string") {
+    return a === b;
+  }
+  if (
+    typeof a === "object" &&
+    typeof b === "object" &&
+    a.kind === "fn" &&
+    b.kind === "fn"
+  ) {
+    return a.num === b.num;
+  }
+  return false;
+}
+
+/** Which action currently owns a gamepad button index, if any. */
+export function findGamepadButtonAssignment(
+  mapping: GamepadMapping,
+  buttonIndex: number,
+): GamepadButtonAssignment | null {
+  if (mapping.reverseButton === buttonIndex) return "reverse";
+  if (mapping.stopButton === buttonIndex) return "stop";
+  if (mapping.accelerateButton === buttonIndex) return "accelerate";
+  if (mapping.decelerateButton === buttonIndex) return "decelerate";
+  if (mapping.axisToggleButton === buttonIndex) return "axisToggle";
+  for (const [fnStr, btn] of Object.entries(mapping.fnButtons)) {
+    const fn = Number(fnStr);
+    if (Number.isFinite(fn) && btn === buttonIndex) {
+      return { kind: "fn", num: fn };
+    }
+  }
+  return null;
+}
+
+/** Returns the conflicting assignment when buttonIndex is already mapped elsewhere. */
+export function gamepadButtonWouldConflict(
+  mapping: GamepadMapping,
+  buttonIndex: number,
+  target: GamepadButtonAssignment,
+): GamepadButtonAssignment | null {
+  const existing = findGamepadButtonAssignment(mapping, buttonIndex);
+  if (existing == null) return null;
+  if (isSameGamepadButtonAssignment(existing, target)) return null;
+  return existing;
+}
+
 export function defaultGamepadMapping(gamepadId: string): GamepadMapping {
   return {
     gamepadId,

@@ -1,6 +1,5 @@
 {
-  "title": "Diagnose",
-  "subtitle": "Schreibgeschützte Ansicht freigegebener supervisord-, Redis- und dcc-bus-Protokolldateien. Pfade werden serverseitig geprüft.",
+  "title": "Protokolle",
   "groupLabel": "Quelle",
   "fileLabel": "Datei",
   "tailLines": "Letzte Zeilen",

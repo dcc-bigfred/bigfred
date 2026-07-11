@@ -43,7 +43,7 @@
       "interlockings": "Stellwerke",
       "commandStations": "Zentralen",
       "slotsDiagnostics": "Slot-Diagnose",
-      "diagnostics": "Diagnose",
+      "logs": "Protokolle",
       "auditLog": "Audit-Protokoll",
       "rentals": "Ausleihen"
     },

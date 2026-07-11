@@ -1,6 +1,5 @@
 {
-  "title": "Diagnostics",
-  "subtitle": "Read-only view of whitelisted supervisord, Redis, and dcc-bus log files. Paths are validated on the server.",
+  "title": "Logs",
   "groupLabel": "Source",
   "fileLabel": "File",
   "tailLines": "Tail lines",

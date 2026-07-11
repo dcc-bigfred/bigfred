@@ -118,11 +118,8 @@ export default function DiagnosticsPage() {
 
   return (
     <Container maxWidth="lg" sx={{ py: 3 }}>
-      <Typography variant="h5" component="h1" gutterBottom>
+      <Typography variant="h5" component="h1" gutterBottom sx={{ mb: 3 }}>
         {t("title")}
-      </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        {t("subtitle")}
       </Typography>
 
       {sources.isLoading && (

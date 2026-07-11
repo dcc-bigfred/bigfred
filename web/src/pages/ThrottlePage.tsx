@@ -779,6 +779,14 @@ function ConnectedThrottle({
     if (selectedAddr == null) return;
     sendSpeedNow(selectedAddr, 0, forward);
   };
+  const handleAxisEnabledToggle = useCallback(() => {
+    setGamepadMapping((prev) => {
+      if (prev == null) return prev;
+      const next = { ...prev, axisEnabled: prev.axisEnabled === false };
+      saveGamepadMapping(next);
+      return next;
+    });
+  }, []);
 
   const gamepadDisabled =
     gamepadOpen ||
@@ -797,6 +805,7 @@ function ConnectedThrottle({
     onDirectionChange: handleDir,
     onFunctionToggle: handleFn,
     onStop: handleStop,
+    onAxisEnabledToggle: handleAxisEnabledToggle,
   });
 
   const handleLeaveConfirm = useCallback(async () => {

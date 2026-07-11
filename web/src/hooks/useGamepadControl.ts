@@ -14,6 +14,7 @@ interface GamepadControlHandlers {
   onDirectionChange: (forward: boolean) => void;
   onFunctionToggle: (fn: number) => void;
   onStop: () => void;
+  onAxisEnabledToggle?: () => void;
 }
 
 interface UseGamepadControlOptions extends GamepadControlHandlers {
@@ -37,6 +38,7 @@ export function useGamepadControl({
   onDirectionChange,
   onFunctionToggle,
   onStop,
+  onAxisEnabledToggle,
 }: UseGamepadControlOptions) {
   const mappingRef = useRef(mapping);
   const handlersRef = useRef({
@@ -44,6 +46,7 @@ export function useGamepadControl({
     onDirectionChange,
     onFunctionToggle,
     onStop,
+    onAxisEnabledToggle,
   });
   const maxSpeedRef = useRef(maxSpeed);
   const currentSpeedRef = useRef(currentSpeed);
@@ -60,6 +63,7 @@ export function useGamepadControl({
     onDirectionChange,
     onFunctionToggle,
     onStop,
+    onAxisEnabledToggle,
   };
   maxSpeedRef.current = maxSpeed;
   currentSpeedRef.current = currentSpeed;
@@ -187,6 +191,14 @@ export function useGamepadControl({
         !prev[active.reverseButton]
       ) {
         handlersRef.current.onDirectionChange(!forwardRef.current);
+      }
+
+      if (
+        active.axisToggleButton != null &&
+        pressed(active.axisToggleButton) &&
+        !prev[active.axisToggleButton]
+      ) {
+        handlersRef.current.onAxisEnabledToggle?.();
       }
 
       for (const [fnStr, btnIndex] of Object.entries(active.fnButtons)) {

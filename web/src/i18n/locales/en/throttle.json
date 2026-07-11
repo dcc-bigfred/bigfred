@@ -108,6 +108,8 @@
     "speedAxis": "Speed axis (throttle)",
     "axisEnabled": "Axis on",
     "axisDisabledHint": "Throttle axis disabled — use accelerate / decelerate buttons.",
+    "assignAxisToggle": "Assign axis toggle",
+    "axisToggleAssigned": "Axis toggle: {{button}}",
     "speedAxisValue": "Axis {{axis}}: {{value}} → speed {{speed}}",
     "learnAxis": "Learn axis",
     "learnAxisHint": "Move the stick or dial that should control speed.",

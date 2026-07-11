@@ -9,6 +9,8 @@ export interface GamepadMapping {
   invertAxis: boolean;
   /** When false, speed axis and sensitivity are ignored; buttons still work. */
   axisEnabled?: boolean;
+  /** Gamepad button that toggles axisEnabled at runtime. */
+  axisToggleButton?: number;
   /** Resting axis range learned while idle — values inside mean speed 0. */
   idleAxisMin?: number;
   idleAxisMax?: number;
@@ -84,6 +86,10 @@ export function loadGamepadMapping(gamepadId: string): GamepadMapping {
           : DEFAULT_SPEED_AXIS,
       invertAxis: parsed.invertAxis !== false,
       axisEnabled: parsed.axisEnabled !== false,
+      axisToggleButton:
+        typeof parsed.axisToggleButton === "number"
+          ? parsed.axisToggleButton
+          : undefined,
       idleAxisMin:
         typeof parsed.idleAxisMin === "number"
           ? parsed.idleAxisMin

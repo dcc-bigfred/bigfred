@@ -108,6 +108,8 @@
     "speedAxis": "Geschwindigkeitsachse (Regler)",
     "axisEnabled": "Achse an",
     "axisDisabledHint": "Achsensteuerung aus — Beschleunigen-/Verlangsamen-Tasten verwenden.",
+    "assignAxisToggle": "Achsen-Umschalter zuweisen",
+    "axisToggleAssigned": "Achsen-Umschalter: {{button}}",
     "speedAxisValue": "Achse {{axis}}: {{value}} → Geschwindigkeit {{speed}}",
     "learnAxis": "Achse zuweisen",
     "learnAxisHint": "Bewegen Sie den Stick oder das Rad für die Geschwindigkeit.",

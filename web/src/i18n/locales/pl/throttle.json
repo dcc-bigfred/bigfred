@@ -108,6 +108,8 @@
     "speedAxis": "Oś prędkości (wajcha)",
     "axisEnabled": "Oś włączona",
     "axisDisabledHint": "Sterowanie wajchą wyłączone — używaj przycisków przyspiesz / zwolnij.",
+    "assignAxisToggle": "Przypisz przełącznik osi",
+    "axisToggleAssigned": "Przełącznik osi: {{button}}",
     "speedAxisValue": "Oś {{axis}}: {{value}} → prędkość {{speed}}",
     "learnAxis": "Naucz oś",
     "learnAxisHint": "Przekręć pokrętło, które ma sterować prędkością.",

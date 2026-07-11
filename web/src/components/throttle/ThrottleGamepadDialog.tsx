@@ -49,7 +49,8 @@ type LearnTarget =
   | { kind: "reverse" }
   | { kind: "stop" }
   | { kind: "accelerate" }
-  | { kind: "decelerate" };
+  | { kind: "decelerate" }
+  | { kind: "axisToggle" };
 
 interface ThrottleGamepadDialogProps {
   open: boolean;
@@ -278,6 +279,8 @@ export default function ThrottleGamepadDialog({
               setDraft((current) => ({ ...current, accelerateButton: i }));
             } else if (learn.kind === "decelerate") {
               setDraft((current) => ({ ...current, decelerateButton: i }));
+            } else if (learn.kind === "axisToggle") {
+              setDraft((current) => ({ ...current, axisToggleButton: i }));
             }
             setLearn(null);
             break;
@@ -446,6 +449,27 @@ export default function ThrottleGamepadDialog({
             label={t("gamepad.axisEnabled")}
             sx={{ mr: 0 }}
           />
+        </Stack>
+        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 1 }}>
+          <Button
+            size="small"
+            variant={learn?.kind === "axisToggle" ? "contained" : "outlined"}
+            onClick={() => setLearn({ kind: "axisToggle" })}
+          >
+            {draft.axisToggleButton != null
+              ? t("gamepad.axisToggleAssigned", {
+                  button: buttonLabel(draft.axisToggleButton),
+                })
+              : t("gamepad.assignAxisToggle")}
+          </Button>
+          {draft.axisToggleButton != null && (
+            <Button
+              size="small"
+              onClick={() => updateDraft({ axisToggleButton: undefined })}
+            >
+              {t("gamepad.clear")}
+            </Button>
+          )}
         </Stack>
         {draft.axisEnabled !== false ? (
           <>

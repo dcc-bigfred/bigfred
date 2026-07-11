@@ -54,7 +54,8 @@ func (k CommandStationKind) IsLocoNet() bool {
 // `ConnectionURI` is a kind-specific URI parsed by the daemon at
 // boot time:
 //   - z21:            `udp://<host>:<port>`     (port defaults to 21105)
-//   - loconet_serial: `serial://<device>:<baud>` (e.g. `serial:///dev/ttyUSB0:57600`)
+//   - loconet_serial: `serial://<device>:<baud>` (e.g. `serial:///dev/ttyUSB0:57600`;
+//                     use `serial://autodetect:<baud>` to pick the first available port)
 //   - loconet_tcp:    `tcp://<host>:<port>`       (raw binary LocoNet; default)
 //                     `lbserver://<host>:<port>`  (ASCII LoconetOverTcp/LbServer)
 //

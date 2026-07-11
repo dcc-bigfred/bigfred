@@ -39,7 +39,7 @@
         "name": "Name",
         "kind": "Art",
         "connectionUri": "Verbindungs-URI",
-        "connectionUriHelp": "z. B. udp://192.168.1.10:21105, serial:///dev/ttyUSB0:57600, tcp://192.168.1.20:1234",
+        "connectionUriHelp": "z. B. udp://192.168.1.10:21105, serial:///dev/ttyUSB0:57600, serial://autodetect:115200, tcp://192.168.1.20:1234",
         "speedSteps": "Geschwindigkeitsstufen",
         "speedStepsHelp": "DCC-Geschwindigkeitsauflösung an dcc-bus. Standard 128.",
         "pollIntervalMs": "Abfrageintervall (ms)",

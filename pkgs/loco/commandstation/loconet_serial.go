@@ -3,6 +3,9 @@ package commandstation
 import (
 	"errors"
 	"fmt"
+	"os"
+	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -33,6 +36,87 @@ var (
 	errSerialNotConnected = errors.New("loconet serial: port not connected (reconnecting)")
 	errSerialWriteTimeout = fmt.Errorf("loconet serial: write timed out after %s (adapter/bus backpressure)", lnSerialWriteTimeout)
 )
+
+// SerialAutodetectDevice is the device sentinel that selects the first
+// available serial port at open time. Used by the `serial://autodetect:<baud>`
+// connection URI. Because the transport keeps this sentinel as t.device, the
+// port is re-resolved on every reconnect, so BigFred self-heals when the OS
+// renumbers the adapter (ttyUSB0 <-> ttyUSB1).
+const SerialAutodetectDevice = "autodetect"
+
+// listSerialPorts is overridable in tests. In production it enumerates the
+// system serial ports via go.bug.st/serial.
+var listSerialPorts = serial.GetPortsList
+
+// knownSerialSymlinks lists stable device paths created by udev rules on
+// BigFred OS. go.bug.st/serial.GetPortsList does not enumerate custom
+// symlinks like /dev/loconet-63120, so we merge them into the candidate
+// set when present. Keep in sync with bigfred-os/os/overlays/etc/udev/rules.d/.
+var knownSerialSymlinks = []string{
+	"/dev/loconet-63120", // 99-uhlenbrock-63120.rules (CP210x 10c4:ea60)
+}
+
+// serialDeviceExists is overridable in tests.
+var serialDeviceExists = func(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+// resolveSerialDevice picks the first available serial port. We expect a
+// single adapter to be present; autodetection only papers over unstable
+// device numbering. Stable udev symlinks (e.g. /dev/loconet-63120 on
+// BigFred OS) are preferred, then USB/ACM/cu.* adapters.
+func resolveSerialDevice() (string, error) {
+	ports, err := listSerialPorts()
+	if err != nil {
+		return "", fmt.Errorf("loconet serial: enumerate ports: %w", err)
+	}
+	candidates := append([]string(nil), ports...)
+	for _, link := range knownSerialSymlinks {
+		if !serialDeviceExists(link) {
+			continue
+		}
+		if !containsString(candidates, link) {
+			candidates = append(candidates, link)
+		}
+	}
+	if len(candidates) == 0 {
+		return "", errors.New("loconet serial: autodetect found no serial ports")
+	}
+	sort.Slice(candidates, func(i, j int) bool {
+		pi, pj := serialPortPriority(candidates[i]), serialPortPriority(candidates[j])
+		if pi != pj {
+			return pi < pj
+		}
+		return candidates[i] < candidates[j]
+	})
+	return candidates[0], nil
+}
+
+// serialPortPriority ranks likely LocoNet adapters ahead of other ports.
+func serialPortPriority(p string) int {
+	switch {
+	case strings.Contains(p, "loconet-63120"):
+		return 0
+	case strings.Contains(p, "ttyUSB"):
+		return 1
+	case strings.Contains(p, "ttyACM"):
+		return 2
+	case strings.Contains(p, "cu."), strings.Contains(p, "tty."):
+		return 3
+	default:
+		return 4
+	}
+}
+
+func containsString(ss []string, s string) bool {
+	for _, v := range ss {
+		if v == s {
+			return true
+		}
+	}
+	return false
+}
 
 type lnSerialTransport struct {
 	device   string
@@ -108,6 +192,18 @@ func newLnSerialTransport(device string, baudrate int, rxCh chan<- lnPacket) (*l
 }
 
 func openLnSerialPort(device string, baudrate int) (serial.Port, error) {
+	if device == SerialAutodetectDevice {
+		resolved, err := resolveSerialDevice()
+		if err != nil {
+			return nil, err
+		}
+		logrus.WithFields(logrus.Fields{
+			"autodetect": device,
+			"resolved":   resolved,
+		}).Info("loconet command station: autodetected serial port")
+		device = resolved
+	}
+
 	mode := &serial.Mode{
 		BaudRate: baudrate,
 		// LocoBuffer-USB behaves like a UART 8N1.

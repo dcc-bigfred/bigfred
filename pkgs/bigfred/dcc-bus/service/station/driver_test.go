@@ -46,4 +46,9 @@ func TestParseSerial(t *testing.T) {
 	if device != "/dev/ttyUSB0" || baud != 57600 {
 		t.Fatalf("device-only: got (%q, %d)", device, baud)
 	}
+
+	device, baud, _ = parseSerial("serial://autodetect:115200")
+	if device != "autodetect" || baud != 115200 {
+		t.Fatalf("autodetect: got (%q, %d)", device, baud)
+	}
 }

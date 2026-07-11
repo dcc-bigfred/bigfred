@@ -47,6 +47,7 @@ import {
   useUpdateRemoteSession,
   type RemoteClient,
 } from "../../api/remotes";
+import { formatZ21PairingCodeLines } from "../../utils/z21Pairing";
 
 type RemoteProtocol = typeof REMOTE_PROTOCOL_Z21 | typeof REMOTE_PROTOCOL_WITHROTTLE;
 
@@ -437,11 +438,19 @@ export default function RemotesPage() {
                     <Typography variant="subtitle1" fontWeight={600}>
                       {t("remotes:pending.title")}
                     </Typography>
-                    <Typography variant="h4" component="p" sx={{ my: 1 }}>
+                    <Typography
+                      variant="h4"
+                      component="p"
+                      sx={{ my: 1, whiteSpace: "pre-line", fontFamily: "monospace" }}
+                    >
                       {protocol === REMOTE_PROTOCOL_Z21 &&
                       pending.pairingCV3 != null &&
                       pending.pairingCV4 != null
-                        ? `CV3 = ${pending.pairingCV3} · CV4 = ${pending.pairingCV4}`
+                        ? formatZ21PairingCodeLines(
+                            pending.pairingCV3,
+                            pending.pairingCV4,
+                            t("remotes:pending.z21.or"),
+                          )
                         : pending.displayLabel}
                     </Typography>
                     <Typography

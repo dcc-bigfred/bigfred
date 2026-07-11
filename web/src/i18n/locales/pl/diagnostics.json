@@ -1,6 +1,5 @@
 {
-  "title": "Diagnostyka",
-  "subtitle": "Podgląd dozwolonych plików logów supervisord, Redis i dcc-bus. Ścieżki są weryfikowane na serwerze.",
+  "title": "Logi",
   "groupLabel": "Źródło",
   "fileLabel": "Plik",
   "tailLines": "Ostatnie linie",

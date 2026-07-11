@@ -1,6 +1,6 @@
 {
   "title": "Handsets",
-  "subtitle": "Pair a remote handset with BigFred and choose which locomotives you may drive.",
+  "subtitle": "Pair an external handset with BigFred",
   "alerts": {
     "noServer": "No command station on this layout has a handset server enabled. Ask an admin to turn one on under",
     "commandStationLink": "Command stations"
@@ -13,15 +13,15 @@
   },
   "fields": {
     "commandStation": "Command station",
-    "allowAllVehicles": "All vehicles I have permission to drive on this layout",
+    "allowAllVehicles": "All vehicles I am allowed to drive on this layout",
     "vehicles": "Allowed vehicles",
     "vehiclesPlaceholder": "Pick locomotives…",
-    "handsetBrakeSecs": "Time until trains are braked (s)",
-    "handsetBrakeSecsHint": "{{min}}–{{max}} seconds without handset communication with BigFred"
+    "handsetBrakeSecs": "Dead man's switch (s)",
+    "handsetBrakeSecsHint": "After how long without handset communication with BigFred does emergency braking activate? ({{min}}s - {{max}}s)"
   },
   "protocol": {
-    "z21": "Z21 app",
-    "withrottle": "WiThrottle / Engine Driver",
+    "z21": "ROCO Z21 (Multimaus)",
+    "withrottle": "WiFred",
     "pendingBadge": "Pending"
   },
   "status": {
@@ -30,7 +30,7 @@
     "clientKey": "Handset: {{key}}",
     "pairedAt": "Paired at {{time}}",
     "lastSeenAt": "Last seen {{time}}",
-    "keepaliveHint": "After {{seconds}} seconds without communication with BigFred, trains controlled by the handset are emergency-stopped"
+    "keepaliveHint": "After {{seconds}} seconds of the handset not communicating with BigFred, consists are braked"
   },
   "clients": {
     "empty": "No active handset connections.",
@@ -51,14 +51,17 @@
   },
   "pending": {
     "title": "Pairing code",
-    "expires": "Pairing code expires in {{seconds}} s"
+    "expires": "Pairing code expires in {{seconds}} s",
+    "z21": {
+      "or": "or"
+    }
   },
   "protocolPending": {
     "z21": {
-      "instructions": "Enter CV3 and CV4 in the Z21 app on any locomotive:\n• POM — programming on the main track\n• Programming track — service-mode CV access\n• Functions F0–F32 — digit by digit (F0–F9: one digit, F10–F32: two digits; e.g. code 122-145: F1 F2 F2 F1 F4 F5)"
+      "instructions": "Enter the code via function keys on the numeric keypad, or set CV3 and CV4 in programming mode on any locomotive. Values are not written to the real vehicle — pairing only."
     },
     "withrottle": {
-      "instructions": "In Engine Driver or WiThrottle:\n• Acquire the “Pair with BigFred” sentinel loco from the roster and press function keys F0–F9 for each digit (e.g. 1 2 2 1 4 5), or\n• Set Device Name (N) to the six-digit code without spaces."
+      "instructions": "Select the “Pair with BigFred” locomotive (address 3) from the loco list and press function keys F0–F9 for each digit (e.g. 1 2 2 1 4 5) to enter the pairing code on the temporary locomotive, or\n• Set your device name to the six-digit code without spaces."
     }
   },
   "actions": {

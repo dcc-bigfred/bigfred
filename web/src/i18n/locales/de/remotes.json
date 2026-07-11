@@ -1,39 +1,39 @@
 {
   "title": "Handgeräte",
-  "subtitle": "Koppeln Sie ein Handgerät mit BigFred und wählen Sie die Lokomotiven, die Sie fahren dürfen.",
+  "subtitle": "Koppeln Sie einen externen Piloten mit BigFred",
   "alerts": {
-    "noServer": "Keine Zentrale auf dieser Anlage hat einen Handgeräte-Server aktiviert. Bitte einen Administrator bitten, ihn unter",
+    "noServer": "Keine Zentrale auf dieser Anlage hat einen Piloten-Server aktiviert. Bitte einen Administrator bitten, ihn unter",
     "commandStationLink": "Zentralen"
   },
   "sections": {
     "status": "Status",
     "scope": "Fahrzeugumfang",
-    "clients": "Verbundene Handgeräte",
-    "protocol": "Handgerätetyp"
+    "clients": "Verbundene Piloten",
+    "protocol": "Pilotentyp"
   },
   "fields": {
     "commandStation": "Zentrale",
     "allowAllVehicles": "Alle Fahrzeuge, die ich auf dieser Anlage fahren darf",
     "vehicles": "Erlaubte Fahrzeuge",
     "vehiclesPlaceholder": "Lokomotiven wählen…",
-    "handsetBrakeSecs": "Zeit bis zum Bremsen der Züge (s)",
-    "handsetBrakeSecsHint": "{{min}}–{{max}} Sekunden ohne Kommunikation des Handgeräts mit BigFred"
+    "handsetBrakeSecs": "Totmannschalter (s)",
+    "handsetBrakeSecsHint": "Nach welcher Zeit ohne Verbindung des Piloten mit BigFred wird die Notbremsung aktiviert? ({{min}}s - {{max}}s)"
   },
   "protocol": {
-    "z21": "Z21-App",
-    "withrottle": "WiThrottle / Engine Driver",
+    "z21": "ROCO Z21 (Multimaus)",
+    "withrottle": "WiFred",
     "pendingBadge": "Ausstehend"
   },
   "status": {
     "paired": "Gekoppelt",
     "notPaired": "Nicht gekoppelt",
-    "clientKey": "Handgerät: {{key}}",
+    "clientKey": "Pilot: {{key}}",
     "pairedAt": "Gekoppelt am {{time}}",
-    "lastSeenAt": "Zuletzt gesehen {{time}}",
-    "keepaliveHint": "Nach {{seconds}} Sekunden ohne Kommunikation mit BigFred werden die vom Handgerät gesteuerten Züge notgebremst"
+    "lastSeenAt": "Zuletzt aktiv {{time}}",
+    "keepaliveHint": "Nach {{seconds}} Sekunden ohne Kommunikation des Piloten mit BigFred werden die Züge gebremst"
   },
   "clients": {
-    "empty": "Keine aktiven Handgeräte-Verbindungen.",
+    "empty": "Keine aktiven Piloten-Verbindungen.",
     "pairedYes": "Gekoppelt",
     "pairedNo": "Nicht gekoppelt",
     "idleBraked": "Gebremst (Leerlauf)",
@@ -43,7 +43,7 @@
       "endpoint": "IP:Port",
       "paired": "Kopplung",
       "user": "Benutzer",
-      "lastSeen": "Zuletzt gesehen",
+      "lastSeen": "Zuletzt aktiv",
       "connected": "Verbunden seit",
       "status": "Status",
       "actions": "Aktionen"
@@ -51,20 +51,23 @@
   },
   "pending": {
     "title": "Kopplungscode",
-    "expires": "Kopplungscode läuft ab in {{seconds}} s"
+    "expires": "Kopplungscode läuft ab in {{seconds}} s",
+    "z21": {
+      "or": "oder"
+    }
   },
   "protocolPending": {
     "z21": {
-      "instructions": "CV3 und CV4 in der Z21-App auf einer beliebigen Lokomotive eingeben:\n• POM — Programmierung auf dem Hauptgleis\n• Programmiergleis — Service-Modus CV\n• Funktionen F0–F32 — Ziffer für Ziffer (F0–F9: eine Ziffer, F10–F32: zwei Ziffern; z. B. Code 122-145: F1 F2 F2 F1 F4 F5)"
+      "instructions": "Code über Funktionstasten auf dem Ziffernblock eingeben oder CV3 und CV4 im Programmiermodus auf einer beliebigen Lokomotive setzen. Die Werte werden nicht auf dem Fahrzeug gespeichert — nur zur Kopplung."
     },
     "withrottle": {
-      "instructions": "In Engine Driver oder WiThrottle:\n• Sentinel-Lok „Pair with BigFred” aus dem Roster übernehmen und Funktionstasten F0–F9 für jede Ziffer drücken (z. B. 1 2 2 1 4 5), oder\n• Gerätename (N) auf den sechsstelligen Code ohne Leerzeichen setzen."
+      "instructions": "Wählen Sie die Lokomotive „Pair with BigFred” (Adresse 3) aus der Lokliste und drücken Sie für jede Ziffer die Funktionstasten F0–F9 (z. B. 1 2 2 1 4 5), um den Kopplungscode auf der temporären Lokomotive einzugeben, oder\n• Setzen Sie den Gerätenamen auf den sechsstelligen Code ohne Leerzeichen."
     }
   },
   "actions": {
     "generatePairing": "Kopplungscode erzeugen",
     "cancelPairing": "Kopplung abbrechen",
-    "removePairedHandset": "Gekoppeltes Handgerät entfernen",
-    "unpair": "Handgerät trennen"
+    "removePairedHandset": "Gekoppelten Piloten entfernen",
+    "unpair": "Pilot trennen"
   }
 }

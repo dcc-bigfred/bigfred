@@ -136,10 +136,10 @@ function AppShellContent() {
         onClick: () => navigate("/admin/dcc-bus/slots"),
       },
       {
-        id: "diagnostics",
-        label: t("nav.administration.diagnostics"),
+        id: "logs",
+        label: t("nav.administration.logs"),
         icon: <BugReportIcon fontSize="small" />,
-        onClick: () => navigate("/admin/diagnostics"),
+        onClick: () => navigate("/admin/logs"),
       },
       {
         id: "rentals",

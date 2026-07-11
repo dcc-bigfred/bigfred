@@ -41,6 +41,10 @@ interface HolderInfo {
   lastDriveAt: number;
 }
 
+function formatSlotSource(source: string): string {
+  return source === "withrottle" ? "WiFred" : source;
+}
+
 interface LeaseInfo {
   addr: number;
   kind: string;
@@ -288,7 +292,7 @@ export default function SlotsDiagnosticsPage() {
                   />
                   <Chip size="small" label={`ws: ${sourceCounts.ws}`} />
                   <Chip size="small" label={`z21: ${sourceCounts.z21}`} />
-                  <Chip size="small" label={`withrottle: ${sourceCounts.withrottle}`} />
+                  <Chip size="small" label={`WiFred: ${sourceCounts.withrottle}`} />
                 </Stack>
               </Stack>
             </Paper>
@@ -403,7 +407,7 @@ export default function SlotsDiagnosticsPage() {
                             <TableCell>
                               {holders.map((h) => (
                                 <Typography key={`${h.userId}-${h.session}`} variant="body2">
-                                  {h.userId} · {h.source} · {h.session} ·{" "}
+                                  {h.userId} · {formatSlotSource(h.source)} · {h.session} ·{" "}
                                   {h.source === "ws"
                                     ? "—"
                                     : formatRelative(h.lastDriveAt, now)}

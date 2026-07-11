@@ -10,7 +10,7 @@ import (
 const (
 	WithrottlePairingCodeLen      = 6
 	DefaultWithrottleInboundPort  = 12090
-	DefaultWithrottlePairingAddr  = 10239
+	DefaultWithrottlePairingAddr  = 3
 	DefaultWithrottleHeartbeatSecs = 10
 )
 
@@ -80,5 +80,9 @@ const WithrottleSentinelRosterName = "Pair with BigFred"
 
 // FormatWithrottleSentinelRosterLine builds RL1 for unpaired clients.
 func FormatWithrottleSentinelRosterLine(sentinelAddr uint16) string {
-	return fmt.Sprintf("RL1]\\[%s}|{%d}|{L", WithrottleSentinelRosterName, sentinelAddr)
+	addrType := "S"
+	if sentinelAddr >= 128 {
+		addrType = "L"
+	}
+	return fmt.Sprintf("RL1]\\[%s}|{%d}|{%s", WithrottleSentinelRosterName, sentinelAddr, addrType)
 }

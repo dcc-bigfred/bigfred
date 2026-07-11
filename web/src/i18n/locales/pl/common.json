@@ -43,7 +43,7 @@
       "interlockings": "Nastawnie",
       "commandStations": "Centralki",
       "slotsDiagnostics": "Diagnostyka slotów",
-      "diagnostics": "Diagnostyka",
+      "logs": "Logi",
       "auditLog": "Dziennik audytu",
       "rentals": "Wypożyczenia"
     },

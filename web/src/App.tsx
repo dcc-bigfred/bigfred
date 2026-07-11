@@ -92,10 +92,7 @@ const router = createBrowserRouter(
               path="/admin/dcc-bus/slots"
               element={<SlotsDiagnosticsAdminPage />}
             />
-            <Route
-              path="/admin/diagnostics"
-              element={<DiagnosticsAdminPage />}
-            />
+            <Route path="/admin/logs" element={<DiagnosticsAdminPage />} />
             <Route path="/admin/rentals" element={<AdminRentalsPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

@@ -35,3 +35,12 @@ func TestWithrottlePairingDisplayLabel(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 }
+
+func TestFormatWithrottleSentinelRosterLine(t *testing.T) {
+	if got := FormatWithrottleSentinelRosterLine(3); got != `RL1]\[Pair with BigFred}|{3}|{S` {
+		t.Fatalf("short sentinel: got %q", got)
+	}
+	if got := FormatWithrottleSentinelRosterLine(10239); got != `RL1]\[Pair with BigFred}|{10239}|{L` {
+		t.Fatalf("long sentinel: got %q", got)
+	}
+}

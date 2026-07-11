@@ -149,7 +149,7 @@ should rarely be invoked manually.`,
 	cmd.Flags().BoolVar(&f.EnableWithrottle, "enable-withrottle", false, "listen for inbound WiThrottle TCP connections")
 	cmd.Flags().StringVar(&f.WithrottleBind, "withrottle-bind", "0.0.0.0", "interface to bind the inbound WiThrottle TCP listener on")
 	cmd.Flags().Uint16Var(&f.WithrottlePort, "withrottle-port", 12090, "TCP port for inbound WiThrottle connections")
-	cmd.Flags().Uint16Var(&f.WithrottlePairingAddr, "withrottle-pairing-addr", 10239, "DCC address of the WiThrottle pairing sentinel loco")
+	cmd.Flags().Uint16Var(&f.WithrottlePairingAddr, "withrottle-pairing-addr", 3, "DCC address of the WiThrottle pairing sentinel loco")
 	cmd.Flags().Float64Var(&f.WithrottleHeartbeatSecs, "withrottle-heartbeat-secs", 10, "WiThrottle dead-man heartbeat window advertised to clients")
 	cmd.Flags().IntVar(&f.MaxVehiclesPerUser, FlagMaxVehiclesPerUser, 8, "per-user cap on driven vehicles (slot leases)")
 	cmd.Flags().IntVar(&f.MaxLoconetSlots, FlagMaxLoconetSlots, 80, "LocoNet slot budget for BigFred on this command station")

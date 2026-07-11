@@ -43,7 +43,7 @@
       "interlockings": "Interlockings",
       "commandStations": "Command stations",
       "slotsDiagnostics": "Slot diagnostics",
-      "diagnostics": "Diagnostics",
+      "logs": "Logs",
       "auditLog": "Audit log",
       "rentals": "Rentals"
     },

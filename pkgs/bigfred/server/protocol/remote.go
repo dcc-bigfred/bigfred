@@ -91,11 +91,11 @@ func ToRemotePairingResponse(req contract.RemotePendingWire) RemotePairingRespon
 	if req.Protocol == contract.RemoteProtocolZ21 {
 		out.PairingCV3 = req.PairingCV3
 		out.PairingCV4 = req.PairingCV4
-		out.Instructions = "Enter CV3 and CV4 via POM, programming track, or function keys F0–F32."
+		out.Instructions = "Enter the code via function keys on the numeric keypad, or set CV3 and CV4 in programming mode on any locomotive."
 	}
 	if req.Protocol == contract.RemoteProtocolWithrottle {
 		out.PairingCode = req.PairingCode
-		out.Instructions = "In Engine Driver: acquire the Pair with BigFred sentinel loco and press F-keys for each digit, or set Device Name (N) to the 6-digit code."
+		out.Instructions = "Select the “Pair with BigFred” locomotive (address 3) from the loco list and press function keys F0–F9 for each digit, or set your device name to the six-digit code without spaces."
 	}
 	return out
 }

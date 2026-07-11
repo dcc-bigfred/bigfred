@@ -105,7 +105,7 @@
   "lease_invalid_duration": "Lease duration must be between 1 minute and 24 hours.",
   "lease_target_not_drivable": "This vehicle or train cannot be leased.",
   "z21_server_disabled": "The Z21 handset server is disabled for this command station.",
-  "withrottle_server_disabled": "The WiThrottle server is disabled for this command station.",
+  "withrottle_server_disabled": "The WiFred server is disabled for this command station.",
   "remote_server_disabled": "No handset server is enabled for this command station.",
   "command_station_not_on_layout": "This command station is not attached to your layout.",
   "z21_vehicle_not_on_roster": "One of the selected vehicles is not on the layout roster.",

@@ -105,7 +105,7 @@
   "lease_invalid_duration": "Czas wypożyczenia musi wynosić od 1 minuty do 24 godzin.",
   "lease_target_not_drivable": "Tego pojazdu lub składu nie można wypożyczyć.",
   "z21_server_disabled": "Serwer pilota Z21 jest wyłączony dla tej centralki.",
-  "withrottle_server_disabled": "Serwer WiThrottle jest wyłączony dla tej centralki.",
+  "withrottle_server_disabled": "Serwer WiFred jest wyłączony dla tej centralki.",
   "remote_server_disabled": "Żaden serwer pilota nie jest włączony dla tej centralki.",
   "command_station_not_on_layout": "Ta centralka nie jest przypisana do Twojej makiety.",
   "z21_vehicle_not_on_roster": "Jeden z wybranych pojazdów nie jest na rosterze makiety.",

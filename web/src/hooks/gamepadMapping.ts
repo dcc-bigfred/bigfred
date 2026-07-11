@@ -33,9 +33,8 @@ export const GAMEPAD_SPEED_SENSITIVITY_DIVISORS: readonly [
   1.25, 1.5, 1.75, 2, 3,
 ] = [1.25, 1.5, 1.75, 2, 3];
 
+
 export const GAMEPAD_IDLE_LEARN_SECONDS = 10;
-/** Abort idle learning when the resting range grows beyond this width. */
-export const GAMEPAD_IDLE_MOVEMENT_THRESHOLD = 0.28;
 /** Expand detected idle range by this fraction on each side for a safety margin. */
 export const GAMEPAD_IDLE_MAX_BUFFER_RATIO = 0.15;
 
@@ -214,6 +213,13 @@ export function hasIdleCalibration(
     typeof mapping.idleAxisMin === "number" &&
     typeof mapping.idleAxisMax === "number"
   );
+}
+
+/** True after the user completed warning + idle setup and left joystick enabled. */
+export function isGamepadSetupComplete(
+  mapping: Pick<GamepadMapping, "enabled" | "idleAxisMin" | "idleAxisMax">,
+): boolean {
+  return mapping.enabled === true && hasIdleCalibration(mapping);
 }
 
 /** Expand the detected idle range by a safety margin on both sides. */

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  Alert,
   Box,
   Button,
   CircularProgress,
@@ -20,12 +21,12 @@ import SportsEsportsIcon from "@mui/icons-material/SportsEsports";
 import { useTranslation } from "react-i18next";
 
 import type { ThrottleCockpitFunction } from "./ThrottleCockpit";
+import GamepadAxisVisualizer from "./GamepadAxisVisualizer";
 import type { ConnectedGamepad } from "../../hooks/useGamepads";
 import {
   axisToSpeed,
   finalizeIdleAxisRange,
   GAMEPAD_IDLE_LEARN_SECONDS,
-  GAMEPAD_IDLE_MOVEMENT_THRESHOLD,
   GAMEPAD_SPEED_SENSITIVITY_DIVISORS,
   GAMEPAD_SPEED_SENSITIVITY_MAX,
   MAX_SPEED_BUTTON_STEPS,
@@ -35,11 +36,12 @@ import {
   parseSpeedButtonSteps,
   speedButtonStepSize,
   hasIdleCalibration,
+  isGamepadSetupComplete,
   type GamepadMapping,
   type GamepadSpeedSensitivity,
 } from "../../hooks/gamepadMapping";
 
-type SetupStep = "detect" | "idle" | "settings";
+type SetupStep = "warning" | "detect" | "idle" | "settings";
 
 type LearnTarget =
   | { kind: "axis" }
@@ -88,11 +90,14 @@ export default function ThrottleGamepadDialog({
   onConfirm,
 }: ThrottleGamepadDialogProps) {
   const { t } = useTranslation("throttle");
-  const [step, setStep] = useState<SetupStep>("detect");
+  const [step, setStep] = useState<SetupStep>("warning");
   const [draft, setDraft] = useState(mapping);
   const [learn, setLearn] = useState<LearnTarget | null>(null);
   const [previewSpeed, setPreviewSpeed] = useState(0);
   const [previewAxis, setPreviewAxis] = useState(0);
+  const [previewAxes, setPreviewAxes] = useState<number[]>([]);
+  const [idleLearnMin, setIdleLearnMin] = useState<number | null>(null);
+  const [idleLearnMax, setIdleLearnMax] = useState<number | null>(null);
   const [idleCollecting, setIdleCollecting] = useState(false);
   const [idleSecondsLeft, setIdleSecondsLeft] = useState(
     GAMEPAD_IDLE_LEARN_SECONDS,
@@ -102,9 +107,13 @@ export default function ThrottleGamepadDialog({
   const prevButtonsRef = useRef<boolean[]>([]);
   const idleMinRef = useRef<number | null>(null);
   const idleMaxRef = useRef<number | null>(null);
+  const wasOpenRef = useRef(false);
 
   useEffect(() => {
-    if (!open) {
+    const justOpened = open && !wasOpenRef.current;
+    wasOpenRef.current = open;
+
+    if (!open || !justOpened) {
       return;
     }
     setDraft(mapping);
@@ -114,8 +123,10 @@ export default function ThrottleGamepadDialog({
     setIdleError(null);
     idleMinRef.current = null;
     idleMaxRef.current = null;
-    setStep(resolveInitialStep(gamepads, mapping));
-  }, [open, mapping, gamepads]);
+    setIdleLearnMin(null);
+    setIdleLearnMax(null);
+    setStep(isGamepadSetupComplete(mapping) ? "settings" : "warning");
+  }, [open, mapping]);
 
   useEffect(() => {
     if (!open || step !== "detect" || gamepads.length === 0) {
@@ -145,6 +156,8 @@ export default function ThrottleGamepadDialog({
     }));
     setIdleCollecting(false);
     setIdleError(null);
+    setIdleLearnMin(null);
+    setIdleLearnMax(null);
     setStep("settings");
   }, []);
 
@@ -154,6 +167,8 @@ export default function ThrottleGamepadDialog({
     setIdleSecondsLeft(GAMEPAD_IDLE_LEARN_SECONDS);
     idleMinRef.current = null;
     idleMaxRef.current = null;
+    setIdleLearnMin(null);
+    setIdleLearnMax(null);
   }, []);
 
   const startIdleLearning = useCallback(() => {
@@ -162,6 +177,8 @@ export default function ThrottleGamepadDialog({
     setIdleSecondsLeft(GAMEPAD_IDLE_LEARN_SECONDS);
     idleMinRef.current = null;
     idleMaxRef.current = null;
+    setIdleLearnMin(null);
+    setIdleLearnMax(null);
   }, []);
 
   useEffect(() => {
@@ -200,6 +217,7 @@ export default function ThrottleGamepadDialog({
       }
 
       const axisValue = gp.axes[draft.speedAxis] ?? 0;
+      setPreviewAxes([...gp.axes]);
       setPreviewAxis(axisValue);
       setPreviewSpeed(axisToSpeed(axisValue, maxSpeed, draft));
 
@@ -210,13 +228,13 @@ export default function ThrottleGamepadDialog({
         } else if (idleMinRef.current == null || idleMaxRef.current == null) {
           idleMinRef.current = axisValue;
           idleMaxRef.current = axisValue;
+          setIdleLearnMin(axisValue);
+          setIdleLearnMax(axisValue);
         } else {
           idleMinRef.current = Math.min(idleMinRef.current, axisValue);
           idleMaxRef.current = Math.max(idleMaxRef.current, axisValue);
-          const spread = idleMaxRef.current - idleMinRef.current;
-          if (spread > GAMEPAD_IDLE_MOVEMENT_THRESHOLD) {
-            abortIdleLearning(t("gamepad.idleAbortedMovement"));
-          }
+          setIdleLearnMin(idleMinRef.current);
+          setIdleLearnMax(idleMaxRef.current);
         }
       }
 
@@ -312,6 +330,29 @@ export default function ThrottleGamepadDialog({
     return t("gamepad.learnButtonHint");
   })();
 
+  const acknowledgeWarning = useCallback(() => {
+    setStep(resolveInitialStep(gamepads, mapping));
+  }, [gamepads, mapping]);
+
+  const renderAxisVisualizer = (liveLearn: boolean) =>
+    activePad != null ? (
+      <GamepadAxisVisualizer
+        title={t("gamepad.axisVisualizerTitle")}
+        axes={previewAxes}
+        speedAxis={draft.speedAxis}
+        idleMin={draft.idleAxisMin}
+        idleMax={draft.idleAxisMax}
+        liveLearnMin={liveLearn ? idleLearnMin : null}
+        liveLearnMax={liveLearn ? idleLearnMax : null}
+      />
+    ) : null;
+
+  const renderWarningStep = () => (
+    <Alert severity="warning" sx={{ whiteSpace: "pre-line" }}>
+      {t("gamepad.safetyWarning")}
+    </Alert>
+  );
+
   const renderDetectStep = () => (
     <Stack spacing={2} alignItems="center" sx={{ py: 2 }}>
       <SportsEsportsIcon sx={{ fontSize: 48, opacity: 0.6 }} />
@@ -331,6 +372,8 @@ export default function ThrottleGamepadDialog({
           {activePad?.id ?? draft.gamepadId}
         </Typography>
       </Box>
+
+      {renderAxisVisualizer(idleCollecting)}
 
       {idleCollecting ? (
         <Stack spacing={1.5} alignItems="center" sx={{ py: 1 }}>
@@ -379,6 +422,8 @@ export default function ThrottleGamepadDialog({
           </Typography>
         )}
       </Box>
+
+      {draft.axisEnabled !== false && renderAxisVisualizer(false)}
 
       <Box>
         <Stack
@@ -681,6 +726,7 @@ export default function ThrottleGamepadDialog({
 
       <DialogContent dividers>
         <Stack spacing={2.5}>
+          {step === "warning" && renderWarningStep()}
           {step === "detect" && renderDetectStep()}
           {step === "idle" && renderIdleStep()}
           {step === "settings" && renderSettingsStep()}
@@ -695,6 +741,11 @@ export default function ThrottleGamepadDialog({
 
       <DialogActions>
         <Button onClick={onClose}>{t("gamepad.cancel")}</Button>
+        {step === "warning" && (
+          <Button variant="contained" onClick={acknowledgeWarning}>
+            {t("gamepad.safetyAcknowledge")}
+          </Button>
+        )}
         {step === "settings" && (
           <Button variant="contained" onClick={handleConfirm}>
             {t("gamepad.confirm")}

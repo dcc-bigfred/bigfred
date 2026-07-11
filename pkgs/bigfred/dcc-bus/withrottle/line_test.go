@@ -43,28 +43,28 @@ func TestBuildRosterLineAllowAll(t *testing.T) {
 }
 
 func TestBuildSentinelAcquireReply(t *testing.T) {
-	const addr uint16 = 10239
+	const addr uint16 = contract.DefaultWithrottlePairingAddr
 	lines := buildSentinelAcquireReply('0', addr)
 	if len(lines) < 14 {
 		t.Fatalf("expected at least 14 lines, got %d: %v", len(lines), lines)
 	}
-	wantLabels := "M0LL10239<;>]\\[F0]\\[F1]\\[F2]\\[F3]\\[F4]\\[F5]\\[F6]\\[F7]\\[F8]\\[F9"
+	wantLabels := "M0LS3<;>]\\[F0]\\[F1]\\[F2]\\[F3]\\[F4]\\[F5]\\[F6]\\[F7]\\[F8]\\[F9"
 	if lines[1] != wantLabels {
 		t.Fatalf("labels line:\n got %q\nwant %q", lines[1], wantLabels)
 	}
 	for fn := 0; fn <= 9; fn++ {
-		want := fmt.Sprintf("M0AL10239<;>F0%d", fn)
+		want := fmt.Sprintf("M0AS3<;>F0%d", fn)
 		if lines[2+fn] != want {
 			t.Fatalf("F0%d state: got %q want %q", fn, lines[2+fn], want)
 		}
 	}
-	if lines[12] != "M0AL10239<;>V0" {
+	if lines[12] != "M0AS3<;>V0" {
 		t.Fatalf("V0: %q", lines[12])
 	}
-	if lines[13] != "M0AL10239<;>R1" {
+	if lines[13] != "M0AS3<;>R1" {
 		t.Fatalf("R1: %q", lines[13])
 	}
-	if lines[14] != "M0AL10239<;>s1" {
+	if lines[14] != "M0AS3<;>s1" {
 		t.Fatalf("s1: %q", lines[14])
 	}
 }

@@ -118,6 +118,7 @@ func register(m *migrator.Migrator) {
 	m.Register(migrationVersion(20260707, 1), addCommandStationBootStopEnabledColumnUp, addCommandStationBootStopEnabledColumnDown)
 	m.Register(migrationVersion(20260708, 1), addDccFunctionMomentaryColumnsUp, addDccFunctionMomentaryColumnsDown)
 	m.Register(migrationVersion(20260709, 1), backfillMomentaryHornFunctionsUp, backfillMomentaryHornFunctionsDown)
+	m.Register(migrationVersion(20260711, 1), updateWithrottlePairingAddrDefaultUp, updateWithrottlePairingAddrDefaultDown)
 }
 
 // createCommandStationsUp installs the `command_stations` catalogue
@@ -828,7 +829,7 @@ func addCommandStationZ21InboundPortColumnDown(s *rel.Schema) {
 func addCommandStationWithrottleColumnsUp(s *rel.Schema) {
 	s.Exec(rel.Raw(`ALTER TABLE command_stations ADD COLUMN withrottle_server_enabled INTEGER NOT NULL DEFAULT 0`))
 	s.Exec(rel.Raw(`ALTER TABLE command_stations ADD COLUMN withrottle_inbound_port INTEGER NOT NULL DEFAULT 12090`))
-	s.Exec(rel.Raw(`ALTER TABLE command_stations ADD COLUMN withrottle_pairing_addr INTEGER NOT NULL DEFAULT 10239`))
+	s.Exec(rel.Raw(`ALTER TABLE command_stations ADD COLUMN withrottle_pairing_addr INTEGER NOT NULL DEFAULT 3`))
 	s.Exec(rel.Raw(`ALTER TABLE command_stations ADD COLUMN withrottle_heartbeat_secs REAL NOT NULL DEFAULT 10`))
 }
 
@@ -863,4 +864,13 @@ func addCommandStationBootStopEnabledColumnUp(s *rel.Schema) {
 
 func addCommandStationBootStopEnabledColumnDown(s *rel.Schema) {
 	// SQLite cannot DROP COLUMN in older schemas; leave columns in place.
+}
+
+// updateWithrottlePairingAddrDefaultUp moves rows still on the old sentinel default (10239) to 3.
+func updateWithrottlePairingAddrDefaultUp(s *rel.Schema) {
+	s.Exec(rel.Raw(`UPDATE command_stations SET withrottle_pairing_addr = 3 WHERE withrottle_pairing_addr = 10239`))
+}
+
+func updateWithrottlePairingAddrDefaultDown(s *rel.Schema) {
+	s.Exec(rel.Raw(`UPDATE command_stations SET withrottle_pairing_addr = 10239 WHERE withrottle_pairing_addr = 3`))
 }

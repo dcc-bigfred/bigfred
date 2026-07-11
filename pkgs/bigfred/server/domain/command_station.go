@@ -91,7 +91,7 @@ type CommandStation struct {
 	// Zero selects the default (12090).
 	WithrottleInboundPort uint `db:"withrottle_inbound_port"`
 	// WithrottlePairingAddr is the DCC address of the pairing sentinel loco.
-	// Zero selects the default (10239).
+	// Zero selects the default (3).
 	WithrottlePairingAddr uint `db:"withrottle_pairing_addr"`
 	// WithrottleHeartbeatSecs is the dead-man heartbeat window advertised to
 	// WiThrottle clients. Zero selects the default (10).
@@ -118,7 +118,7 @@ const (
 	DefaultCommandStationPollIntervalMs = 0
 	DefaultZ21InboundPort             = 21105
 	DefaultWithrottleInboundPort      = 12090
-	DefaultWithrottlePairingAddr      = 10239
+	DefaultWithrottlePairingAddr      = 3
 	DefaultWithrottleHeartbeatSecs    = 10
 	DefaultCommandStationMaxLoconetSlots = 80
 	DefaultCommandStationIdleTimeoutSecs = 60

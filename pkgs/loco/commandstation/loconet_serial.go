@@ -3,6 +3,7 @@ package commandstation
 import (
 	"errors"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -47,40 +48,74 @@ const SerialAutodetectDevice = "autodetect"
 // system serial ports via go.bug.st/serial.
 var listSerialPorts = serial.GetPortsList
 
+// knownSerialSymlinks lists stable device paths created by udev rules on
+// BigFred OS. go.bug.st/serial.GetPortsList does not enumerate custom
+// symlinks like /dev/loconet-63120, so we merge them into the candidate
+// set when present. Keep in sync with bigfred-os/os/overlays/etc/udev/rules.d/.
+var knownSerialSymlinks = []string{
+	"/dev/loconet-63120", // 99-uhlenbrock-63120.rules (CP210x 10c4:ea60)
+}
+
+// serialDeviceExists is overridable in tests.
+var serialDeviceExists = func(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
 // resolveSerialDevice picks the first available serial port. We expect a
 // single adapter to be present; autodetection only papers over unstable
-// device numbering. Ports are sorted deterministically and USB/ACM/cu.*
-// adapters are preferred over other entries.
+// device numbering. Stable udev symlinks (e.g. /dev/loconet-63120 on
+// BigFred OS) are preferred, then USB/ACM/cu.* adapters.
 func resolveSerialDevice() (string, error) {
 	ports, err := listSerialPorts()
 	if err != nil {
 		return "", fmt.Errorf("loconet serial: enumerate ports: %w", err)
 	}
-	if len(ports) == 0 {
+	candidates := append([]string(nil), ports...)
+	for _, link := range knownSerialSymlinks {
+		if !serialDeviceExists(link) {
+			continue
+		}
+		if !containsString(candidates, link) {
+			candidates = append(candidates, link)
+		}
+	}
+	if len(candidates) == 0 {
 		return "", errors.New("loconet serial: autodetect found no serial ports")
 	}
-	sort.Slice(ports, func(i, j int) bool {
-		pi, pj := serialPortPriority(ports[i]), serialPortPriority(ports[j])
+	sort.Slice(candidates, func(i, j int) bool {
+		pi, pj := serialPortPriority(candidates[i]), serialPortPriority(candidates[j])
 		if pi != pj {
 			return pi < pj
 		}
-		return ports[i] < ports[j]
+		return candidates[i] < candidates[j]
 	})
-	return ports[0], nil
+	return candidates[0], nil
 }
 
-// serialPortPriority ranks likely USB/serial adapters ahead of other ports.
+// serialPortPriority ranks likely LocoNet adapters ahead of other ports.
 func serialPortPriority(p string) int {
 	switch {
-	case strings.Contains(p, "ttyUSB"):
+	case strings.Contains(p, "loconet-63120"):
 		return 0
-	case strings.Contains(p, "ttyACM"):
+	case strings.Contains(p, "ttyUSB"):
 		return 1
-	case strings.Contains(p, "cu."), strings.Contains(p, "tty."):
+	case strings.Contains(p, "ttyACM"):
 		return 2
-	default:
+	case strings.Contains(p, "cu."), strings.Contains(p, "tty."):
 		return 3
+	default:
+		return 4
 	}
+}
+
+func containsString(ss []string, s string) bool {
+	for _, v := range ss {
+		if v == s {
+			return true
+		}
+	}
+	return false
 }
 
 type lnSerialTransport struct {

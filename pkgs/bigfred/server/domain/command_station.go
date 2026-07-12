@@ -105,7 +105,10 @@ type CommandStation struct {
 	// BootStopEnabled sends speed 0 to every roster locomotive once when
 	// dcc-bus starts (after the first non-empty allowed_vehicles snapshot).
 	BootStopEnabled bool `db:"boot_stop_enabled"`
-	CreatedAt       time.Time
+	// SingleVehicleControl stops the user's other moving vehicles (speed > 1)
+	// when they select or drive a different vehicle on this command station.
+	SingleVehicleControl bool `db:"single_vehicle_control"`
+	CreatedAt            time.Time
 	UpdatedAt       time.Time
 }
 

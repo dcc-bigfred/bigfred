@@ -85,6 +85,7 @@ type Config struct {
 	MaxLoconetSlots    int
 	IdleTimeoutSecs    uint
 	BootStopEnabled    bool
+	SingleVehicleControl bool
 }
 
 // Daemon is the assembled dcc-bus instance.
@@ -305,6 +306,7 @@ func New(ctx context.Context, log *logrus.Logger, cfg Config) (*Daemon, error) {
 		RemoteIdleTimeout:         remoteIdle,
 		RemoteIdleTimeoutDisabled: remoteIdleDisabled,
 		BootStopEnabled:           cfg.BootStopEnabled,
+		SingleVehicleControl:      cfg.SingleVehicleControl,
 		SlotMetrics:               slotMetrics,
 	})
 	if err != nil {

@@ -61,7 +61,9 @@
         "idleTimeoutSecs": "Limit bezczynności pilota (s)",
         "idleTimeoutSecsHelp": "Po tym czasie bez jazdy zdalny pilot (WlanMaus/Z21/WiFred) traci slot. 0 wyłącza zwalnianie po bezczynności. Domyślnie 60 s.",
         "bootStopEnabled": "Boot-stop wszystkich pojazdów",
-        "bootStopEnabledHelp": "Po włączeniu dcc-bus raz po starcie wysyła emergency stop do każdej lokomotywy dodanej w systemie"
+        "bootStopEnabledHelp": "Po włączeniu dcc-bus raz po starcie wysyła emergency stop do każdej lokomotywy dodanej w systemie",
+        "singleVehicleControl": "Tylko jeden pojazd może być sterowany w jednym czasie",
+        "singleVehicleControlHelp": "Gdy włączone, wybór lub jazda innym pojazdem/składem zatrzymuje pozostałe pojazdy użytkownika (prędkość > 1). Wypożyczone pojazdy nie są zatrzymywane."
       }
     },
     "empty": "Brak centralki do wyświetlenia.",

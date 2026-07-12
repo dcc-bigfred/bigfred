@@ -120,6 +120,7 @@ func register(m *migrator.Migrator) {
 	m.Register(migrationVersion(20260709, 1), backfillMomentaryHornFunctionsUp, backfillMomentaryHornFunctionsDown)
 	m.Register(migrationVersion(20260711, 1), updateWithrottlePairingAddrDefaultUp, updateWithrottlePairingAddrDefaultDown)
 	m.Register(migrationVersion(20260712, 1), addLayoutRadioChatEnabledColumnUp, addLayoutRadioChatEnabledColumnDown)
+	m.Register(migrationVersion(20260712, 2), addCommandStationSingleVehicleControlColumnUp, addCommandStationSingleVehicleControlColumnDown)
 }
 
 // createCommandStationsUp installs the `command_stations` catalogue
@@ -864,6 +865,16 @@ func addCommandStationBootStopEnabledColumnUp(s *rel.Schema) {
 }
 
 func addCommandStationBootStopEnabledColumnDown(s *rel.Schema) {
+	// SQLite cannot DROP COLUMN in older schemas; leave columns in place.
+}
+
+// addCommandStationSingleVehicleControlColumnUp enables per-station single-vehicle
+// control (stop the user's other moving vehicles when driving a different one).
+func addCommandStationSingleVehicleControlColumnUp(s *rel.Schema) {
+	s.Exec(rel.Raw(`ALTER TABLE command_stations ADD COLUMN single_vehicle_control INTEGER NOT NULL DEFAULT 0`))
+}
+
+func addCommandStationSingleVehicleControlColumnDown(s *rel.Schema) {
 	// SQLite cannot DROP COLUMN in older schemas; leave columns in place.
 }
 

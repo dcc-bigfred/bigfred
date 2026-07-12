@@ -61,7 +61,9 @@
         "idleTimeoutSecs": "Piloten-Leerlaufzeit (s)",
         "idleTimeoutSecsHelp": "Nach dieser Leerlaufzeit verliert ein Fernpilot (WlanMaus/Z21/WiFred) seinen Slot. 0 deaktiviert die Freigabe. Standard 60 s.",
         "bootStopEnabled": "Boot-Stop aller Fahrzeuge",
-        "bootStopEnabledHelp": "Wenn aktiviert, sendet dcc-bus nach dem Start einmal einen Notstopp an jedes im System angelegte Fahrzeug."
+        "bootStopEnabledHelp": "Wenn aktiviert, sendet dcc-bus nach dem Start einmal einen Notstopp an jedes im System angelegte Fahrzeug.",
+        "singleVehicleControl": "Nur ein Fahrzeug gleichzeitig steuerbar",
+        "singleVehicleControlHelp": "Wenn aktiviert, stoppt die Auswahl oder Fahrt eines anderen Fahrzeugs/Zugs die übrigen fahrenden Fahrzeuge des Benutzers (Geschwindigkeit > 1). Verliehene Fahrzeuge werden nicht gestoppt."
       }
     },
     "empty": "Keine Zentralen anzuzeigen.",

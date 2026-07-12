@@ -23,6 +23,7 @@ const (
 	FlagMaxLoconetSlots    = "max-loconet-slots"
 	FlagIdleTimeoutSecs    = "idle-timeout-secs"
 	FlagBootStopEnabled    = "enable-boot-stop"
+	FlagSingleVehicleControl = "enable-single-vehicle-control"
 )
 
 // AppendStationFlags appends command-station connection flags for cs.

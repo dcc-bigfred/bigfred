@@ -56,6 +56,7 @@ func (r *Router) HandleLocoSelect(ctx context.Context, actor Actor, resp Respond
 
 	res := OKResult()
 	res.EvictedAddr = evicted
+	r.enforceSingleVehicleControl(ctx, actor, p.Address)
 	return res
 }
 
@@ -110,6 +111,7 @@ func (r *Router) HandleTrainSelect(ctx context.Context, actor Actor, resp Respon
 		"trainId":   p.TrainID,
 		"addrs":     addrs,
 	}).Debug("dcc-bus train.select")
+	r.enforceSingleVehicleControl(ctx, actor, addrs...)
 	return OKResult()
 }
 

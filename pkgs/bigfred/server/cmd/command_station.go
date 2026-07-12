@@ -72,6 +72,7 @@ type CommandStationCreateInput struct {
 	MaxLoconetSlots         uint
 	IdleTimeoutSecs         uint
 	BootStopEnabled         bool
+	SingleVehicleControl    bool
 }
 
 func (s *CommandStation) Create(ctx context.Context, eff domain.EffectiveRoles, in CommandStationCreateInput) (domain.CommandStation, error) {
@@ -109,6 +110,7 @@ func (s *CommandStation) Create(ctx context.Context, eff domain.EffectiveRoles, 
 		Z21IPStickiness:  in.Z21IPStickiness,
 		WithrottleServerEnabled: in.WithrottleServerEnabled,
 		BootStopEnabled:         in.BootStopEnabled,
+		SingleVehicleControl:    in.SingleVehicleControl,
 		CreatedAt:        now,
 		UpdatedAt:        now,
 	}
@@ -138,6 +140,7 @@ type CommandStationUpdateInput struct {
 	MaxLoconetSlots         *uint
 	IdleTimeoutSecs         *uint
 	BootStopEnabled         *bool
+	SingleVehicleControl    *bool
 }
 
 func (s *CommandStation) Update(ctx context.Context, eff domain.EffectiveRoles, id uint, in CommandStationUpdateInput) (domain.CommandStation, error) {
@@ -215,6 +218,9 @@ func (s *CommandStation) Update(ctx context.Context, eff domain.EffectiveRoles, 
 	}
 	if in.BootStopEnabled != nil {
 		row.BootStopEnabled = *in.BootStopEnabled
+	}
+	if in.SingleVehicleControl != nil {
+		row.SingleVehicleControl = *in.SingleVehicleControl
 	}
 	if in.MaxLoconetSlots != nil || in.IdleTimeoutSecs != nil {
 		maxSlots := row.MaxLoconetSlots

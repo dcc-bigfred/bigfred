@@ -61,7 +61,9 @@
         "idleTimeoutSecs": "Handset idle timeout (s)",
         "idleTimeoutSecsHelp": "After this idle period a remote handset (WlanMaus/Z21/WiFred) loses its slot. 0 disables idle release. Default 60 s.",
         "bootStopEnabled": "Boot-stop all vehicles",
-        "bootStopEnabledHelp": "When enabled, dcc-bus sends emergency stop to every vehicle in the system once after start."
+        "bootStopEnabledHelp": "When enabled, dcc-bus sends emergency stop to every vehicle in the system once after start.",
+        "singleVehicleControl": "Only one vehicle can be controlled at a time",
+        "singleVehicleControlHelp": "When enabled, selecting or driving a different vehicle or consist stops the user's other moving vehicles (speed > 1). Lent-out vehicles are not stopped."
       }
     },
     "empty": "No command stations to show.",

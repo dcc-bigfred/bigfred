@@ -12,9 +12,12 @@ import {
   DialogContent,
   DialogContentText,
   DialogTitle,
+  FormControlLabel,
+  FormHelperText,
   IconButton,
   Paper,
   Stack,
+  Switch,
   Table,
   TableBody,
   TableCell,
@@ -98,6 +101,7 @@ export default function LayoutsPage() {
   const [maxVehiclesInput, setMaxVehiclesInput] = useState<number>(
     DEFAULT_LAYOUT_MAX_VEHICLES_PER_USER,
   );
+  const [radioChatInput, setRadioChatInput] = useState(true);
   const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -120,6 +124,7 @@ export default function LayoutsPage() {
     setSelectedCommandStations([]);
     setAdminPinInput("");
     setMaxVehiclesInput(DEFAULT_LAYOUT_MAX_VEHICLES_PER_USER);
+    setRadioChatInput(true);
     setActionError(null);
     create.reset();
     update.reset();
@@ -147,6 +152,7 @@ export default function LayoutsPage() {
     setSelectedCommandStations([]);
     setAdminPinInput("");
     setMaxVehiclesInput(DEFAULT_LAYOUT_MAX_VEHICLES_PER_USER);
+    setRadioChatInput(true);
     setActionError(null);
   };
 
@@ -160,6 +166,7 @@ export default function LayoutsPage() {
     setMaxVehiclesInput(
       target.maxVehiclesPerUser ?? DEFAULT_LAYOUT_MAX_VEHICLES_PER_USER,
     );
+    setRadioChatInput(target.radioChatEnabled ?? true);
     setActionError(null);
   };
 
@@ -196,6 +203,7 @@ export default function LayoutsPage() {
           commandStationIds,
           adminPin: adminPin === "" ? undefined : adminPin,
           maxVehiclesPerUser: maxVehiclesInput,
+          radioChatEnabled: radioChatInput,
         });
       } else if (dialog.kind === "edit") {
         const name = dialog.target.isSystem
@@ -210,6 +218,7 @@ export default function LayoutsPage() {
             : commandStationIds,
           adminPin: adminPin === "" ? undefined : adminPin,
           maxVehiclesPerUser: maxVehiclesInput,
+          radioChatEnabled: radioChatInput,
         });
       } else if (dialog.kind === "delete") {
         await remove.mutateAsync(dialog.target.id);
@@ -532,6 +541,20 @@ export default function LayoutsPage() {
               fullWidth
               required
             />
+
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={radioChatInput}
+                  onChange={(e) => setRadioChatInput(e.target.checked)}
+                />
+              }
+              label={t("layout:admin.fields.radioChatEnabled")}
+              slotProps={{ typography: { sx: { whiteSpace: "normal" } } }}
+            />
+            <FormHelperText sx={{ mt: -0.5, mb: 1 }}>
+              {t("layout:admin.fields.radioChatEnabledHelp")}
+            </FormHelperText>
 
             <TextField
               label={t("sudo:settings.pinLabel")}

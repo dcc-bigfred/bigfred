@@ -475,6 +475,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 			Store:         radioStore,
 			Hub:           hub,
 			Auth:          authSvc,
+			Layouts:       layouts,
 			Vehicles:      vehicles,
 			Trains:        trains,
 			IlkSessions:   interlockingSessions,

@@ -61,7 +61,9 @@
     },
     "fields": {
       "maxVehiclesPerUser": "Limit pojazdów na użytkownika",
-      "maxVehiclesPerUserHelp": "Maksymalna liczba jednocześnie prowadzonych loków na użytkownika (sloty + subskrypcje). Domyślnie 8."
+      "maxVehiclesPerUserHelp": "Maksymalna liczba jednocześnie prowadzonych loków na użytkownika (sloty + subskrypcje). Domyślnie 8.",
+      "radioChatEnabled": "Komunikaty radiowe",
+      "radioChatEnabledHelp": "Czat radiowy między maszynistami a nastawnią. Radiostop działa niezależnie od tego ustawienia."
     },
     "empty": "Brak makiet do wyświetlenia."
   }

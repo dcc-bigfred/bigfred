@@ -481,6 +481,8 @@ function InterlockingStaffedWorkArea({
 }) {
   const theme = useTheme();
   const narrow = useMediaQuery(theme.breakpoints.down("md"));
+  const me = useMe().data;
+  const radioChatEnabled = me?.radioChatEnabled ?? true;
   const { t } = useTranslation("interlocking");
   const { session } = useSocket();
   const stations = session?.availableCommandStations ?? [];
@@ -502,9 +504,12 @@ function InterlockingStaffedWorkArea({
     rejected: takeoverRejected,
     clearRejected: clearTakeoverRejected,
   } = useTakeoverSignalmanSession(layoutId);
-  const chatVisible = !narrow || tab === 0;
-  const rosterVisible = !narrow || tab === 1;
-  const announcementsVisible = !narrow || tab === 2;
+  const chatTabIndex = radioChatEnabled ? 0 : -1;
+  const rosterTabIndex = radioChatEnabled ? 1 : 0;
+  const announcementsTabIndex = radioChatEnabled ? 2 : 1;
+  const chatVisible = radioChatEnabled && (!narrow || tab === chatTabIndex);
+  const rosterVisible = !narrow || tab === rosterTabIndex;
+  const announcementsVisible = !narrow || tab === announcementsTabIndex;
   const radioInbound = useInterlockingRadioInbound(interlockingId, chatVisible);
 
   const panels = (
@@ -524,7 +529,10 @@ function InterlockingStaffedWorkArea({
       )}
       {rosterVisible && (
         <Box sx={{ flex: narrow ? undefined : 1, minWidth: 0, maxWidth: narrow ? undefined : 480 }}>
-          <InterlockingRosterPanel layoutId={layoutId} />
+          <InterlockingRosterPanel
+            layoutId={layoutId}
+            radioChatEnabled={radioChatEnabled}
+          />
         </Box>
       )}
       {announcementsVisible && (
@@ -546,8 +554,8 @@ function InterlockingStaffedWorkArea({
 
   return (
     <Stack spacing={2}>
-      {radioInbound.alertNode}
-      {radioInbound.overlay}
+      {radioChatEnabled && radioInbound.alertNode}
+      {radioChatEnabled && radioInbound.overlay}
       {takeoverRejected && (
         <AutoDismissAlert
           severity="warning"
@@ -578,17 +586,19 @@ function InterlockingStaffedWorkArea({
           onChange={(_, value: number) => setTab(value)}
           variant="fullWidth"
         >
-          <Tab
-            label={
-              <Badge
-                color="error"
-                badgeContent={radioInbound.unreadCount}
-                invisible={radioInbound.unreadCount === 0}
-              >
-                {t("view.panels.chat")}
-              </Badge>
-            }
-          />
+          {radioChatEnabled && (
+            <Tab
+              label={
+                <Badge
+                  color="error"
+                  badgeContent={radioInbound.unreadCount}
+                  invisible={radioInbound.unreadCount === 0}
+                >
+                  {t("view.panels.chat")}
+                </Badge>
+              }
+            />
+          )}
           <Tab label={t("view.panels.roster")} />
           <Tab label={t("view.panels.announcements")} />
         </Tabs>

@@ -12,6 +12,7 @@ type RadioConfig struct {
 	Store         *RadioStore
 	Hub           *ws.Hub
 	Auth          *cmd.Auth
+	Layouts       *repo.Layouts
 	Vehicles      *repo.Vehicles
 	Trains        *repo.Trains
 	IlkSessions   *repo.InterlockingSessions
@@ -33,6 +34,7 @@ func NewRadioService(cfg RadioConfig) *RadioService {
 		Store:         cfg.Store,
 		Hub:           hub,
 		Auth:          cfg.Auth,
+		Layouts:       cfg.Layouts,
 		Vehicles:      cfg.Vehicles,
 		Trains:        cfg.Trains,
 		IlkSessions:   cfg.IlkSessions,

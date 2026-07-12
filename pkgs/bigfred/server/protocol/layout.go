@@ -12,6 +12,7 @@ type LayoutResponse struct {
 	IsSystem           bool   `json:"isSystem"`
 	Locked             bool   `json:"locked"`
 	MaxVehiclesPerUser uint   `json:"maxVehiclesPerUser"`
+	RadioChatEnabled   bool   `json:"radioChatEnabled"`
 }
 
 // LoginLayoutResponse is the trimmed shape for GET /layouts/login.
@@ -29,6 +30,7 @@ func ToLayoutResponse(l domain.Layout) LayoutResponse {
 		IsSystem:           l.IsSystem,
 		Locked:             l.Locked,
 		MaxVehiclesPerUser: l.EffectiveMaxVehiclesPerUser(),
+		RadioChatEnabled:   l.EffectiveRadioChatEnabled(),
 	}
 }
 
@@ -43,11 +45,12 @@ func ToLoginLayoutResponse(l domain.Layout) LoginLayoutResponse {
 
 // LayoutCreateRequest is the POST /api/v1/layouts body.
 type LayoutCreateRequest struct {
-	Name                 string `json:"name"`
-	InterlockingIDs      []uint `json:"interlockingIds"`
-	CommandStationIDs    []uint `json:"commandStationIds"`
-	AdminPIN             string `json:"adminPin"`
-	MaxVehiclesPerUser   uint   `json:"maxVehiclesPerUser"`
+	Name               string `json:"name"`
+	InterlockingIDs    []uint `json:"interlockingIds"`
+	CommandStationIDs  []uint `json:"commandStationIds"`
+	AdminPIN           string `json:"adminPin"`
+	MaxVehiclesPerUser uint   `json:"maxVehiclesPerUser"`
+	RadioChatEnabled   *bool  `json:"radioChatEnabled"`
 }
 
 // ToCreateInput maps the HTTP body to cmd input.
@@ -59,16 +62,18 @@ func (r LayoutCreateRequest) ToCreateInput(createdBy uint) cmd.LayoutCreateInput
 		CommandStationIDs:  r.CommandStationIDs,
 		AdminPIN:           r.AdminPIN,
 		MaxVehiclesPerUser: r.MaxVehiclesPerUser,
+		RadioChatEnabled:   r.RadioChatEnabled,
 	}
 }
 
 // LayoutUpdateRequest is the PUT /api/v1/layouts/{id} body.
 type LayoutUpdateRequest struct {
-	Name                 string `json:"name"`
-	InterlockingIDs      []uint `json:"interlockingIds"`
-	CommandStationIDs    []uint `json:"commandStationIds"`
-	AdminPIN             string `json:"adminPin"`
-	MaxVehiclesPerUser   *uint  `json:"maxVehiclesPerUser"`
+	Name               string `json:"name"`
+	InterlockingIDs    []uint `json:"interlockingIds"`
+	CommandStationIDs  []uint `json:"commandStationIds"`
+	AdminPIN           string `json:"adminPin"`
+	MaxVehiclesPerUser *uint  `json:"maxVehiclesPerUser"`
+	RadioChatEnabled   *bool  `json:"radioChatEnabled"`
 }
 
 // SetLayoutCommandStationsRequest is the PUT body for command-station attachments.

@@ -145,3 +145,42 @@ func TestListSelectableHidesLockedSystemWhenOthersUnlocked(t *testing.T) {
 		t.Fatalf("expected ErrLayoutLocked for locked system when others unlocked, got %v", err)
 	}
 }
+
+func TestLayoutUpdateRadioChatEnabled(t *testing.T) {
+	bundle, cleanup := freshRepo(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	svc := freshLayoutSvc(t, ctx, bundle)
+	adminEff := domain.NewEffectiveRoles(domain.RoleAdmin)
+
+	cs := insertCommandStation(t, ctx, bundle.CommandStations, "Z21 Workshop")
+	row, err := svc.Create(ctx, adminEff, cmd.LayoutCreateInput{
+		Name:              "Radio Toggle",
+		CreatedBy:         1,
+		CommandStationIDs: []uint{cs.ID},
+		AdminPIN:          "1234",
+	})
+	if err != nil {
+		t.Fatalf("create layout: %v", err)
+	}
+	if !row.RadioChatEnabled {
+		t.Fatalf("expected radio chat enabled by default, got false")
+	}
+
+	disabled, err := svc.UpdateRadioChatEnabled(ctx, adminEff, row.ID, false)
+	if err != nil {
+		t.Fatalf("disable radio chat: %v", err)
+	}
+	if disabled.RadioChatEnabled {
+		t.Fatalf("expected radio chat disabled")
+	}
+
+	enabled, err := svc.UpdateRadioChatEnabled(ctx, adminEff, row.ID, true)
+	if err != nil {
+		t.Fatalf("enable radio chat: %v", err)
+	}
+	if !enabled.RadioChatEnabled {
+		t.Fatalf("expected radio chat enabled again")
+	}
+}

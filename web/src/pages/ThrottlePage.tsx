@@ -104,6 +104,7 @@ export default function ThrottlePage() {
     refreshSession,
   } = useSocket();
   const me = useMe().data;
+  const radioChatEnabled = me?.radioChatEnabled ?? true;
   const { t } = useTranslation(["throttle", "common", "errors"]);
 
   const layoutID = me?.layoutId ?? null;
@@ -299,8 +300,8 @@ export default function ThrottlePage() {
 
   return (
     <Box sx={pageSx}>
-      {driverRadio.alertNode}
-      {driverRadio.overlay}
+      {radioChatEnabled && driverRadio.alertNode}
+      {radioChatEnabled && driverRadio.overlay}
       <TakeoverDriverDialog
         pending={takeoverDriver.pending}
         onDismiss={takeoverDriver.dismissPending}
@@ -319,6 +320,7 @@ export default function ThrottlePage() {
               speedSteps={activeStation?.speedSteps ?? 128}
               onOpenSetup={openSetup}
               driverRadio={driverRadio}
+              radioChatEnabled={radioChatEnabled}
             />
           </DccBusProvider>
         ) : (
@@ -328,6 +330,7 @@ export default function ThrottlePage() {
               layoutID={layoutID}
               onOpenSetup={openSetup}
               driverRadio={driverRadio}
+              radioChatEnabled={radioChatEnabled}
             />
           </>
         )}
@@ -521,10 +524,12 @@ function IdleThrottle({
   layoutID,
   onOpenSetup,
   driverRadio,
+  radioChatEnabled,
 }: {
   layoutID: number;
   onOpenSetup: () => void;
   driverRadio: DriverRadioInbound;
+  radioChatEnabled: boolean;
 }) {
   const vehicles = useCockpitVehicles(layoutID);
   const trains = useCockpitTrains(layoutID);
@@ -545,6 +550,7 @@ function IdleThrottle({
     vehicleId: drive.vehicleId,
     vehicleName: drive.vehicleName,
     radio: driverRadio,
+    radioChatEnabled,
   });
 
   return (
@@ -577,11 +583,13 @@ function ConnectedThrottle({
   speedSteps: sessionSpeedSteps,
   onOpenSetup,
   driverRadio,
+  radioChatEnabled,
 }: {
   layoutID: number;
   speedSteps: number;
   onOpenSetup: () => void;
   driverRadio: DriverRadioInbound;
+  radioChatEnabled: boolean;
 }) {
   const me = useMe().data;
   useLeaseEvents();
@@ -836,6 +844,7 @@ function ConnectedThrottle({
     vehicleId: drive.vehicleId,
     vehicleName: drive.vehicleName ?? trainCtx.leadingName,
     radio: driverRadio,
+    radioChatEnabled,
   });
   const headerExtra = (
     <Stack direction="row" spacing={0.5} alignItems="center">

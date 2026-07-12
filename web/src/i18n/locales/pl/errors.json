@@ -34,6 +34,7 @@
   "command_station_idle_timeout_invalid": "Limit bezczynności pilota musi być między 0 a 3600 s.",
   "layout_max_vehicles_invalid": "Limit pojazdów na użytkownika musi być między 1 a 120.",
   "layout_max_vehicles_exceeds_slot_budget": "Limit pojazdów nie może przekraczać budżetu slotów LocoNet przypisanej centralce.",
+  "radio_chat_disabled": "Komunikaty radiowe są wyłączone na tej makiecie.",
   "layout_needs_at_least_one_command_station": "Makieta musi mieć przypisaną co najmniej jedną centralkę.",
   "default_layout_command_stations_immutable": "Przypisanie centralki do makiety systemowej jest wirtualne i nie może być zmieniane.",
   "layout_mismatch": "Żądanie dotyczy innej makiety niż sesja.",

@@ -26,6 +26,7 @@ export interface DriverRadioInbound {
 // pushes on the throttle page: sound, text alert and unread badge.
 export function useDriverRadioInbound(): DriverRadioInbound {
   const me = useMe().data;
+  const radioChatEnabled = me?.radioChatEnabled ?? true;
   const { subscribe } = useSocket();
   const { t } = useTranslation(["radio", "throttle"]);
   const playSound = useRadioInboundSound();
@@ -37,6 +38,9 @@ export function useDriverRadioInbound(): DriverRadioInbound {
   chatOpenRef.current = chatOpen;
 
   useEffect(() => {
+    if (!radioChatEnabled) {
+      return;
+    }
     return subscribe("radio.message", (payload) => {
       const msg = payload as RadioMessage;
       if (!me || !isInboundRadioForDriver(msg, me.id)) {
@@ -48,7 +52,7 @@ export function useDriverRadioInbound(): DriverRadioInbound {
       }
       setAlert(msg);
     });
-  }, [subscribe, me, playSound]);
+  }, [subscribe, me, playSound, radioChatEnabled]);
 
   const openChat = useCallback(() => {
     setChatOpen(true);
@@ -70,7 +74,7 @@ export function useDriverRadioInbound(): DriverRadioInbound {
   const replyAvailable =
     alert != null && driverReplyTargetFromInbound(alert) != null;
 
-  const alertNode: ReactNode = (
+  const alertNode: ReactNode = radioChatEnabled ? (
     <RadioInboundAlert
       message={alert}
       text={
@@ -82,9 +86,9 @@ export function useDriverRadioInbound(): DriverRadioInbound {
       replyLabel={t("throttle:radio.reply")}
       onReply={replyAvailable ? handleReply : undefined}
     />
-  );
+  ) : null;
 
-  const overlay: ReactNode = (
+  const overlay: ReactNode = radioChatEnabled ? (
     <>
       {chatOpen ? <ThrottleChatOverlay onClose={() => setChatOpen(false)} /> : null}
       {replyTarget ? (
@@ -99,7 +103,7 @@ export function useDriverRadioInbound(): DriverRadioInbound {
         />
       ) : null}
     </>
-  );
+  ) : null;
 
-  return { unreadCount, openChat, overlay, alertNode };
+  return { unreadCount: radioChatEnabled ? unreadCount : 0, openChat, overlay, alertNode };
 }

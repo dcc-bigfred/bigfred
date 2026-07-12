@@ -75,6 +75,7 @@ func (s *Layout) EnsureSystemLayout(ctx context.Context) (bool, error) {
 		Locked:       false,
 		CreatedBy:    0,
 		AdminPINHash: hash,
+		RadioChatEnabled: true,
 		CreatedAt:    now,
 		UpdatedAt:    now,
 	}
@@ -154,6 +155,8 @@ type LayoutCreateInput struct {
 	AdminPIN string
 	// MaxVehiclesPerUser caps driven vehicles per user. Zero selects default.
 	MaxVehiclesPerUser uint
+	// RadioChatEnabled enables walkie-talkie chat. Nil selects default (true).
+	RadioChatEnabled *bool
 }
 
 // Create inserts a brand-new non-system layout. Name uniqueness and
@@ -201,15 +204,20 @@ func (s *Layout) Create(ctx context.Context, eff domain.EffectiveRoles, in Layou
 	}
 
 	now := time.Now().UTC()
+	radioChatEnabled := true
+	if in.RadioChatEnabled != nil {
+		radioChatEnabled = *in.RadioChatEnabled
+	}
 	layout := domain.Layout{
-		Name:         name,
-		IsSystem:     false,
-		Locked:       false,
+		Name:               name,
+		IsSystem:           false,
+		Locked:             false,
 		CreatedBy:          in.CreatedBy,
 		AdminPINHash:       hash,
 		MaxVehiclesPerUser: maxVehicles,
+		RadioChatEnabled:   radioChatEnabled,
 		CreatedAt:          now,
-		UpdatedAt:    now,
+		UpdatedAt:          now,
 	}
 	if err := s.layouts.Insert(ctx, &layout); err != nil {
 		return domain.Layout{}, err
@@ -247,6 +255,23 @@ func (s *Layout) UpdateMaxVehiclesPerUser(ctx context.Context, eff domain.Effect
 		return domain.Layout{}, err
 	}
 	layout.MaxVehiclesPerUser = maxVehicles
+	layout.UpdatedAt = time.Now().UTC()
+	if err := s.layouts.Update(ctx, &layout); err != nil {
+		return domain.Layout{}, err
+	}
+	return layout, nil
+}
+
+// UpdateRadioChatEnabled toggles walkie-talkie chat for a layout.
+func (s *Layout) UpdateRadioChatEnabled(ctx context.Context, eff domain.EffectiveRoles, id uint, enabled bool) (domain.Layout, error) {
+	if err := s.checkManageLayouts(eff); err != nil {
+		return domain.Layout{}, err
+	}
+	layout, err := s.Get(ctx, id)
+	if err != nil {
+		return domain.Layout{}, err
+	}
+	layout.RadioChatEnabled = enabled
 	layout.UpdatedAt = time.Now().UTC()
 	if err := s.layouts.Update(ctx, &layout); err != nil {
 		return domain.Layout{}, err

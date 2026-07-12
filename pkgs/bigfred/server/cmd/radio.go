@@ -28,11 +28,16 @@ type RadioHubPort interface {
 	BroadcastRadioMessage(layoutID, userID uint, msg domain.RadioMessage)
 }
 
+type RadioLayoutsPort interface {
+	FindByID(ctx context.Context, id uint) (domain.Layout, error)
+}
+
 // Radio orchestrates walkie-talkie send, replay and fan-out.
 type Radio struct {
 	store         RadioStorePort
 	hub           RadioHubPort
 	auth          RadioAuthPort
+	layouts       RadioLayoutsPort
 	vehicles      *repo.Vehicles
 	trains        *repo.Trains
 	ilkSessions   *repo.InterlockingSessions
@@ -45,6 +50,7 @@ type RadioConfig struct {
 	Store         RadioStorePort
 	Hub           RadioHubPort
 	Auth          RadioAuthPort
+	Layouts       RadioLayoutsPort
 	Vehicles      *repo.Vehicles
 	Trains        *repo.Trains
 	IlkSessions   *repo.InterlockingSessions
@@ -57,6 +63,7 @@ func NewRadio(cfg RadioConfig) *Radio {
 		store:         cfg.Store,
 		hub:           cfg.Hub,
 		auth:          cfg.Auth,
+		layouts:       cfg.Layouts,
 		vehicles:      cfg.Vehicles,
 		trains:        cfg.Trains,
 		ilkSessions:   cfg.IlkSessions,
@@ -87,6 +94,9 @@ func (s *Radio) Send(ctx context.Context, in RadioSendInput) (domain.RadioMessag
 	}
 	note, err := domain.ValidateNote(in.Note)
 	if err != nil {
+		return domain.RadioMessage{}, err
+	}
+	if err := s.ensureRadioChatEnabled(ctx, in.LayoutID); err != nil {
 		return domain.RadioMessage{}, err
 	}
 
@@ -154,6 +164,9 @@ func (s *Radio) ReplayInterlocking(
 	if s.store == nil {
 		return nil, svcerrors.ErrRadioNotConfigured
 	}
+	if err := s.ensureRadioChatEnabled(ctx, layoutID); err != nil {
+		return nil, err
+	}
 	eff, err := s.effectiveRoles(ctx, callerUserID, layoutID)
 	if err != nil {
 		return nil, err
@@ -179,6 +192,9 @@ func (s *Radio) ReplayUser(
 ) ([]domain.RadioMessage, error) {
 	if s.store == nil {
 		return nil, svcerrors.ErrRadioNotConfigured
+	}
+	if err := s.ensureRadioChatEnabled(ctx, layoutID); err != nil {
+		return nil, err
 	}
 	if d := s.sec.CanReplayUser(); !d.Allowed {
 		return nil, errRadioDenied(d.Reason)
@@ -282,6 +298,20 @@ func (s *Radio) effectiveRoles(ctx context.Context, userID, layoutID uint) (doma
 	return s.auth.EffectiveForUserID(ctx, userID, layoutID)
 }
 
+func (s *Radio) ensureRadioChatEnabled(ctx context.Context, layoutID uint) error {
+	if s.layouts == nil {
+		return nil
+	}
+	layout, err := s.layouts.FindByID(ctx, layoutID)
+	if err != nil {
+		return err
+	}
+	if !layout.EffectiveRadioChatEnabled() {
+		return svcerrors.ErrRadioChatDisabled
+	}
+	return nil
+}
+
 type radioDeniedError struct{ code string }
 
 func (e radioDeniedError) Error() string { return e.code }
@@ -304,6 +334,8 @@ func RadioDeniedCode(err error) string {
 		return "radio_invalid_phrase"
 	case errors.Is(err, domain.ErrRadioNoteTooLong):
 		return "radio_note_too_long"
+	case errors.Is(err, svcerrors.ErrRadioChatDisabled):
+		return "radio_chat_disabled"
 	}
 	if err != nil {
 		return err.Error()

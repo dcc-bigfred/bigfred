@@ -22,6 +22,7 @@ export interface Layout {
   isSystem: boolean;
   locked: boolean;
   maxVehiclesPerUser: number;
+  radioChatEnabled: boolean;
 }
 
 const loginLayoutsQueryKey = ["layouts", "login"] as const;
@@ -71,6 +72,7 @@ export function useCreateLayout() {
       commandStationIds?: number[];
       adminPin?: string;
       maxVehiclesPerUser?: number;
+      radioChatEnabled?: boolean;
     }) =>
       apiFetch<Layout>("/api/v1/layouts", {
         method: "POST",
@@ -98,6 +100,7 @@ export function useUpdateLayout() {
       commandStationIds?: number[];
       adminPin?: string;
       maxVehiclesPerUser?: number;
+      radioChatEnabled?: boolean;
     }) => {
       const body: Record<string, unknown> = {
         name: args.name,
@@ -111,6 +114,9 @@ export function useUpdateLayout() {
       }
       if (args.maxVehiclesPerUser !== undefined) {
         body.maxVehiclesPerUser = args.maxVehiclesPerUser;
+      }
+      if (args.radioChatEnabled !== undefined) {
+        body.radioChatEnabled = args.radioChatEnabled;
       }
       return apiFetch<Layout>(`/api/v1/layouts/${args.id}`, {
         method: "PUT",

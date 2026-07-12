@@ -83,7 +83,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		MaxAge:           300,
 	}))
 
-	authH := NewAuthHandler(cfg.Auth, cfg.Sudo, cfg.Audit, cfg.SecureCookie, cfg.Metrics)
+	authH := NewAuthHandler(cfg.Auth, cfg.Layouts, cfg.Sudo, cfg.Audit, cfg.SecureCookie, cfg.Metrics)
 	layoutH := NewLayoutHandler(cfg.Layouts, cfg.Auth, cfg.Audit)
 	interlockingH := NewInterlockingHandler(cfg.Interlockings, cfg.Occupancy, cfg.Auth)
 	presenceH := NewPresenceHandler(cfg.Presence, cfg.DccBusLayoutSync)

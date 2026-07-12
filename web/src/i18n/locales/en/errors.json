@@ -33,6 +33,7 @@
   "command_station_idle_timeout_invalid": "Remote idle timeout must be between 0 and 3600 s.",
   "layout_max_vehicles_invalid": "Vehicles-per-user limit must be between 1 and 120.",
   "layout_max_vehicles_exceeds_slot_budget": "Vehicles-per-user limit cannot exceed the LocoNet slot budget on an attached command station.",
+  "radio_chat_disabled": "Radio messages are disabled on this layout.",
   "layout_needs_at_least_one_command_station": "A layout must have at least one command station attached.",
   "default_layout_command_stations_immutable": "The system layout's command-station attachment is virtual and cannot be changed.",
   "not_signalman": "You don't have signalman rights on this layout.",

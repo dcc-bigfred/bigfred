@@ -119,6 +119,7 @@ func register(m *migrator.Migrator) {
 	m.Register(migrationVersion(20260708, 1), addDccFunctionMomentaryColumnsUp, addDccFunctionMomentaryColumnsDown)
 	m.Register(migrationVersion(20260709, 1), backfillMomentaryHornFunctionsUp, backfillMomentaryHornFunctionsDown)
 	m.Register(migrationVersion(20260711, 1), updateWithrottlePairingAddrDefaultUp, updateWithrottlePairingAddrDefaultDown)
+	m.Register(migrationVersion(20260712, 1), addLayoutRadioChatEnabledColumnUp, addLayoutRadioChatEnabledColumnDown)
 }
 
 // createCommandStationsUp installs the `command_stations` catalogue
@@ -873,4 +874,13 @@ func updateWithrottlePairingAddrDefaultUp(s *rel.Schema) {
 
 func updateWithrottlePairingAddrDefaultDown(s *rel.Schema) {
 	s.Exec(rel.Raw(`UPDATE command_stations SET withrottle_pairing_addr = 10239 WHERE withrottle_pairing_addr = 3`))
+}
+
+// addLayoutRadioChatEnabledColumnUp toggles walkie-talkie chat per layout.
+func addLayoutRadioChatEnabledColumnUp(s *rel.Schema) {
+	s.Exec(rel.Raw(`ALTER TABLE layouts ADD COLUMN radio_chat_enabled INTEGER NOT NULL DEFAULT 1`))
+}
+
+func addLayoutRadioChatEnabledColumnDown(s *rel.Schema) {
+	// SQLite cannot DROP COLUMN in older schemas; leave columns in place.
 }

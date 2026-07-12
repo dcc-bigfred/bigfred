@@ -246,6 +246,7 @@ type updateRequest struct {
 	CommandStationIDs    []uint `json:"commandStationIds"`
 	AdminPIN             string `json:"adminPin"`
 	MaxVehiclesPerUser   *uint  `json:"maxVehiclesPerUser"`
+	RadioChatEnabled     *bool  `json:"radioChatEnabled"`
 }
 
 // Update handles `PUT /api/v1/layouts/{id}` (admin only). Renames
@@ -302,6 +303,14 @@ func (h *LayoutHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.MaxVehiclesPerUser != nil {
 		updated, err := h.svc.UpdateMaxVehiclesPerUser(r.Context(), eff, id, *req.MaxVehiclesPerUser)
+		if err != nil {
+			writeLayoutError(w, err)
+			return
+		}
+		layout = updated
+	}
+	if req.RadioChatEnabled != nil {
+		updated, err := h.svc.UpdateRadioChatEnabled(r.Context(), eff, id, *req.RadioChatEnabled)
 		if err != nil {
 			writeLayoutError(w, err)
 			return

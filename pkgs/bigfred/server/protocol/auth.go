@@ -30,10 +30,11 @@ type MeResponse struct {
 	Active         bool                   `json:"active"`
 	CreatedAt      time.Time              `json:"createdAt"`
 	UpdatedAt      time.Time              `json:"updatedAt"`
-	LayoutID       uint                   `json:"layoutId"`
-	LayoutName     string                 `json:"layoutName"`
-	LayoutIsSystem bool                   `json:"layoutIsSystem"`
-	Sudo           *SudoElevationResponse `json:"sudo"`
+	LayoutID           uint                   `json:"layoutId"`
+	LayoutName         string                 `json:"layoutName"`
+	LayoutIsSystem     bool                   `json:"layoutIsSystem"`
+	RadioChatEnabled   bool                   `json:"radioChatEnabled"`
+	Sudo               *SudoElevationResponse `json:"sudo"`
 }
 
 // UpdateProfileRequest is the PUT /api/v1/auth/me/profile body.

@@ -39,6 +39,7 @@ export interface CurrentUser {
   layoutId: number;
   layoutName: string;
   layoutIsSystem: boolean;
+  radioChatEnabled: boolean;
   /**
    * sudo carries the active admin elevation (§7a.7), or null when
    * none is live.

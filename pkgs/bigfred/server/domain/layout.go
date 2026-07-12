@@ -54,8 +54,11 @@ type Layout struct {
 	// MaxVehiclesPerUser caps concurrent driven vehicles per user session
 	// (slot leases + subscription cap). Zero selects the catalogue default.
 	MaxVehiclesPerUser uint `db:"max_vehicles_per_user"`
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
+	// RadioChatEnabled controls walkie-talkie phrase chat (driver↔signalman).
+	// Radio Stop is independent and always available. Defaults to true.
+	RadioChatEnabled bool `db:"radio_chat_enabled"`
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
 }
 
 const DefaultLayoutMaxVehiclesPerUser = 8
@@ -66,6 +69,11 @@ func (l Layout) EffectiveMaxVehiclesPerUser() uint {
 		return DefaultLayoutMaxVehiclesPerUser
 	}
 	return l.MaxVehiclesPerUser
+}
+
+// EffectiveRadioChatEnabled reports whether walkie-talkie chat is enabled.
+func (l Layout) EffectiveRadioChatEnabled() bool {
+	return l.RadioChatEnabled
 }
 
 // Table tells REL which physical table backs this struct.

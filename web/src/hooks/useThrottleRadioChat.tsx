@@ -10,6 +10,7 @@ interface ThrottleRadioHeaderArgs {
   vehicleId: string | null;
   vehicleName: string | null;
   radio: DriverRadioInbound;
+  radioChatEnabled: boolean;
 }
 
 // buildThrottleRadioHeader renders radio + chat icons for the cockpit bar.
@@ -18,7 +19,11 @@ export function buildThrottleRadioHeader({
   vehicleId,
   vehicleName,
   radio,
+  radioChatEnabled,
 }: ThrottleRadioHeaderArgs): ReactNode {
+  if (!radioChatEnabled) {
+    return null;
+  }
   return (
     <Stack direction="row" spacing={0.25} alignItems="center">
       <ThrottleRadioButton

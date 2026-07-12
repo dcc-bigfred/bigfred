@@ -21,6 +21,7 @@ import (
 // payload simply reports `sudo: null`.
 type AuthHandler struct {
 	auth    *cmd.Auth
+	layouts *cmd.Layout
 	sudo    *cmd.Sudo
 	audit   cmd.AuditPublisher
 	secure  bool // toggles the Secure cookie flag (off in dev over http://)
@@ -29,8 +30,8 @@ type AuthHandler struct {
 
 // NewAuthHandler returns an AuthHandler. `secureCookie` should be
 // true in any production deployment (HTTPS-only).
-func NewAuthHandler(auth *cmd.Auth, sudo *cmd.Sudo, audit cmd.AuditPublisher, secureCookie bool, m *metrics.Metrics) *AuthHandler {
-	return &AuthHandler{auth: auth, sudo: sudo, audit: audit, secure: secureCookie, metrics: m}
+func NewAuthHandler(auth *cmd.Auth, layouts *cmd.Layout, sudo *cmd.Sudo, audit cmd.AuditPublisher, secureCookie bool, m *metrics.Metrics) *AuthHandler {
+	return &AuthHandler{auth: auth, layouts: layouts, sudo: sudo, audit: audit, secure: secureCookie, metrics: m}
 }
 
 // Login validates credentials, mints a JWT and sets it as a Secure,
@@ -219,19 +220,26 @@ func (h *AuthHandler) buildMeResponse(r *http.Request, id cmd.Identity) protocol
 			}
 		}
 	}
+	layout := id.Layout
+	if h.layouts != nil {
+		if fresh, err := h.layouts.Get(r.Context(), id.Layout.ID); err == nil {
+			layout = fresh
+		}
+	}
 	return protocol.MeResponse{
-		ID:             id.User.ID,
-		Login:          id.User.Login,
-		Organization:   id.User.Organization,
-		Role:           id.User.Role,
-		EffectiveRole:  effectiveRole,
-		IsSignalman:    isSignalman,
-		Active:         id.User.Active,
-		CreatedAt:      id.User.CreatedAt,
-		UpdatedAt:      id.User.UpdatedAt,
-		LayoutID:       id.Layout.ID,
-		LayoutName:     id.Layout.Name,
-		LayoutIsSystem: id.Layout.IsSystem,
-		Sudo:           sudo,
+		ID:               id.User.ID,
+		Login:            id.User.Login,
+		Organization:     id.User.Organization,
+		Role:             id.User.Role,
+		EffectiveRole:    effectiveRole,
+		IsSignalman:      isSignalman,
+		Active:           id.User.Active,
+		CreatedAt:        id.User.CreatedAt,
+		UpdatedAt:        id.User.UpdatedAt,
+		LayoutID:         id.Layout.ID,
+		LayoutName:       id.Layout.Name,
+		LayoutIsSystem:   id.Layout.IsSystem,
+		RadioChatEnabled: layout.EffectiveRadioChatEnabled(),
+		Sudo:             sudo,
 	}
 }

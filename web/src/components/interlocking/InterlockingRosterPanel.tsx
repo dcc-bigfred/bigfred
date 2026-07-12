@@ -43,6 +43,7 @@ import RadioPhrasePickerDialog from "./RadioPhrasePickerDialog";
 
 interface InterlockingRosterPanelProps {
   layoutId: number;
+  radioChatEnabled?: boolean;
 }
 
 type RosterRow =
@@ -110,6 +111,7 @@ function trainRow(
 // client-side search filter and in-motion chips from dcc-bus state.
 export default function InterlockingRosterPanel({
   layoutId,
+  radioChatEnabled = true,
 }: InterlockingRosterPanelProps) {
   const { t } = useTranslation("interlocking");
   const { requestTakeover } = useTakeoverActions();
@@ -229,25 +231,27 @@ export default function InterlockingRosterPanel({
                   </TableCell>
                   <TableCell align="right">
                     <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                      <Tooltip title={t("view.roster.actions.radio")}>
-                        <IconButton
-                          size="small"
-                          aria-label={t("view.roster.actions.radio")}
-                          onClick={() =>
-                            setRadioTarget({
-                              to: { userId: row.ownerUserId },
-                              context:
-                                row.kind === "vehicle"
-                                  ? { vehicleId: row.entityId }
-                                  : { trainId: row.entityId },
-                              targetLabel: getUserName(row),
-                              contextLabel: row.name,
-                            })
-                          }
-                        >
-                          <SettingsInputAntennaIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
+                      {radioChatEnabled && (
+                        <Tooltip title={t("view.roster.actions.radio")}>
+                          <IconButton
+                            size="small"
+                            aria-label={t("view.roster.actions.radio")}
+                            onClick={() =>
+                              setRadioTarget({
+                                to: { userId: row.ownerUserId },
+                                context:
+                                  row.kind === "vehicle"
+                                    ? { vehicleId: row.entityId }
+                                    : { trainId: row.entityId },
+                                targetLabel: getUserName(row),
+                                contextLabel: row.name,
+                              })
+                            }
+                          >
+                            <SettingsInputAntennaIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
                       <Tooltip title={t("view.roster.actions.stopHint")}>
                         <IconButton
                           size="small"

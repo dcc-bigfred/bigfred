@@ -96,6 +96,8 @@ func writeRadioError(w http.ResponseWriter, err error) {
 	switch code {
 	case "not_signalman", "not_interlocking_occupant":
 		writeJSONError(w, http.StatusForbidden, code)
+	case "radio_chat_disabled":
+		writeJSONError(w, http.StatusForbidden, code)
 	case "radio_invalid_target", "radio_invalid_context", "radio_invalid_phrase", "radio_note_too_long":
 		writeJSONError(w, http.StatusUnprocessableEntity, code)
 	default:

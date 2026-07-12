@@ -28,6 +28,7 @@ export function useInterlockingRadioInbound(
   chatVisible: boolean,
 ): InterlockingRadioInbound {
   const me = useMe().data;
+  const radioChatEnabled = me?.radioChatEnabled ?? true;
   const { subscribe } = useSocket();
   const { t } = useTranslation(["radio", "interlocking"]);
   const playSound = useRadioInboundSound();
@@ -44,6 +45,9 @@ export function useInterlockingRadioInbound(
   }, [chatVisible]);
 
   useEffect(() => {
+    if (!radioChatEnabled) {
+      return;
+    }
     return subscribe("radio.message", (payload) => {
       const msg = payload as RadioMessage;
       if (!me || !isInboundRadioForInterlocking(msg, me.id, interlockingId)) {
@@ -55,7 +59,7 @@ export function useInterlockingRadioInbound(
       }
       setAlert(msg);
     });
-  }, [subscribe, me, interlockingId, playSound]);
+  }, [subscribe, me, interlockingId, playSound, radioChatEnabled]);
 
   const clearUnread = useCallback(() => setUnreadCount(0), []);
 
@@ -74,7 +78,7 @@ export function useInterlockingRadioInbound(
   const replyAvailable =
     alert != null && signalmanReplyTargetFromInbound(alert) != null;
 
-  const alertNode: ReactNode = (
+  const alertNode: ReactNode = radioChatEnabled ? (
     <RadioInboundAlert
       message={alert}
       text={
@@ -86,9 +90,10 @@ export function useInterlockingRadioInbound(
       replyLabel={t("interlocking:view.chat.reply")}
       onReply={replyAvailable ? handleReply : undefined}
     />
-  );
+  ) : null;
 
-  const overlay: ReactNode = replyTarget ? (
+  const overlay: ReactNode =
+    radioChatEnabled && replyTarget ? (
     <RadioPhrasePickerDialog
       open
       onClose={() => setReplyTarget(null)}
@@ -100,5 +105,10 @@ export function useInterlockingRadioInbound(
     />
   ) : null;
 
-  return { unreadCount, clearUnread, alertNode, overlay };
+  return {
+    unreadCount: radioChatEnabled ? unreadCount : 0,
+    clearUnread,
+    alertNode,
+    overlay,
+  };
 }

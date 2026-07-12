@@ -45,12 +45,12 @@ func ToLoginLayoutResponse(l domain.Layout) LoginLayoutResponse {
 
 // LayoutCreateRequest is the POST /api/v1/layouts body.
 type LayoutCreateRequest struct {
-	Name                 string `json:"name"`
-	InterlockingIDs      []uint `json:"interlockingIds"`
-	CommandStationIDs    []uint `json:"commandStationIds"`
-	AdminPIN             string `json:"adminPin"`
-	MaxVehiclesPerUser   uint   `json:"maxVehiclesPerUser"`
-	RadioChatEnabled     *bool  `json:"radioChatEnabled"`
+	Name               string `json:"name"`
+	InterlockingIDs    []uint `json:"interlockingIds"`
+	CommandStationIDs  []uint `json:"commandStationIds"`
+	AdminPIN           string `json:"adminPin"`
+	MaxVehiclesPerUser uint   `json:"maxVehiclesPerUser"`
+	RadioChatEnabled   *bool  `json:"radioChatEnabled"`
 }
 
 // ToCreateInput maps the HTTP body to cmd input.
@@ -68,12 +68,12 @@ func (r LayoutCreateRequest) ToCreateInput(createdBy uint) cmd.LayoutCreateInput
 
 // LayoutUpdateRequest is the PUT /api/v1/layouts/{id} body.
 type LayoutUpdateRequest struct {
-	Name                 string `json:"name"`
-	InterlockingIDs      []uint `json:"interlockingIds"`
-	CommandStationIDs    []uint `json:"commandStationIds"`
-	AdminPIN             string `json:"adminPin"`
-	MaxVehiclesPerUser   *uint  `json:"maxVehiclesPerUser"`
-	RadioChatEnabled     *bool  `json:"radioChatEnabled"`
+	Name               string `json:"name"`
+	InterlockingIDs    []uint `json:"interlockingIds"`
+	CommandStationIDs  []uint `json:"commandStationIds"`
+	AdminPIN           string `json:"adminPin"`
+	MaxVehiclesPerUser *uint  `json:"maxVehiclesPerUser"`
+	RadioChatEnabled   *bool  `json:"radioChatEnabled"`
 }
 
 // SetLayoutCommandStationsRequest is the PUT body for command-station attachments.

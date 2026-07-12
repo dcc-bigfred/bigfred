@@ -94,16 +94,16 @@ export function useInterlockingRadioInbound(
 
   const overlay: ReactNode =
     radioChatEnabled && replyTarget ? (
-    <RadioPhrasePickerDialog
-      open
-      onClose={() => setReplyTarget(null)}
-      to={replyTarget.to}
-      context={replyTarget.context}
-      side="signalman"
-      targetLabel={replyTarget.targetLabel}
-      contextLabel={replyTarget.contextLabel}
-    />
-  ) : null;
+      <RadioPhrasePickerDialog
+        open
+        onClose={() => setReplyTarget(null)}
+        to={replyTarget.to}
+        context={replyTarget.context}
+        side="signalman"
+        targetLabel={replyTarget.targetLabel}
+        contextLabel={replyTarget.contextLabel}
+      />
+    ) : null;
 
   return {
     unreadCount: radioChatEnabled ? unreadCount : 0,

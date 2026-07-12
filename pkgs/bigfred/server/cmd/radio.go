@@ -119,9 +119,9 @@ func (s *Radio) Send(ctx context.Context, in RadioSendInput) (domain.RadioMessag
 		FromLogin:        in.FromLogin,
 		FromOrganization: in.FromOrganization,
 		Phrase:           in.Phrase,
-		Note:        note,
-		ContextName: contextName,
-		SentAt:      time.Now().UTC(),
+		Note:             note,
+		ContextName:      contextName,
+		SentAt:           time.Now().UTC(),
 	}
 	if in.ToUserID != 0 {
 		id := in.ToUserID

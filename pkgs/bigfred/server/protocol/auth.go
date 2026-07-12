@@ -21,20 +21,20 @@ type SudoElevationResponse struct {
 
 // MeResponse is returned by GET /api/v1/auth/me and POST /auth/login.
 type MeResponse struct {
-	ID             uint                   `json:"id"`
-	Login          string                 `json:"login"`
-	Organization   string                 `json:"organization"`
-	Role           domain.Role            `json:"role"`
-	EffectiveRole  domain.Role            `json:"effectiveRole"`
-	IsSignalman    bool                   `json:"isSignalman"`
-	Active         bool                   `json:"active"`
-	CreatedAt      time.Time              `json:"createdAt"`
-	UpdatedAt      time.Time              `json:"updatedAt"`
-	LayoutID           uint                   `json:"layoutId"`
-	LayoutName         string                 `json:"layoutName"`
-	LayoutIsSystem     bool                   `json:"layoutIsSystem"`
-	RadioChatEnabled   bool                   `json:"radioChatEnabled"`
-	Sudo               *SudoElevationResponse `json:"sudo"`
+	ID               uint                   `json:"id"`
+	Login            string                 `json:"login"`
+	Organization     string                 `json:"organization"`
+	Role             domain.Role            `json:"role"`
+	EffectiveRole    domain.Role            `json:"effectiveRole"`
+	IsSignalman      bool                   `json:"isSignalman"`
+	Active           bool                   `json:"active"`
+	CreatedAt        time.Time              `json:"createdAt"`
+	UpdatedAt        time.Time              `json:"updatedAt"`
+	LayoutID         uint                   `json:"layoutId"`
+	LayoutName       string                 `json:"layoutName"`
+	LayoutIsSystem   bool                   `json:"layoutIsSystem"`
+	RadioChatEnabled bool                   `json:"radioChatEnabled"`
+	Sudo             *SudoElevationResponse `json:"sudo"`
 }
 
 // UpdateProfileRequest is the PUT /api/v1/auth/me/profile body.

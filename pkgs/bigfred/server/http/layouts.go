@@ -241,12 +241,12 @@ func (h *LayoutHandler) SetInterlockings(w http.ResponseWriter, r *http.Request)
 // MUST keep the existing digest. A non-empty value replaces the
 // digest after passing the digit / length policy.
 type updateRequest struct {
-	Name                 string `json:"name"`
-	InterlockingIDs      []uint `json:"interlockingIds"`
-	CommandStationIDs    []uint `json:"commandStationIds"`
-	AdminPIN             string `json:"adminPin"`
-	MaxVehiclesPerUser   *uint  `json:"maxVehiclesPerUser"`
-	RadioChatEnabled     *bool  `json:"radioChatEnabled"`
+	Name               string `json:"name"`
+	InterlockingIDs    []uint `json:"interlockingIds"`
+	CommandStationIDs  []uint `json:"commandStationIds"`
+	AdminPIN           string `json:"adminPin"`
+	MaxVehiclesPerUser *uint  `json:"maxVehiclesPerUser"`
+	RadioChatEnabled   *bool  `json:"radioChatEnabled"`
 }
 
 // Update handles `PUT /api/v1/layouts/{id}` (admin only). Renames

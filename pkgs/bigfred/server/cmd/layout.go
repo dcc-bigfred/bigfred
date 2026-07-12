@@ -70,14 +70,14 @@ func (s *Layout) EnsureSystemLayout(ctx context.Context) (bool, error) {
 
 	now := time.Now().UTC()
 	layout := domain.Layout{
-		Name:         domain.SystemLayoutName,
-		IsSystem:     true,
-		Locked:       false,
-		CreatedBy:    0,
-		AdminPINHash: hash,
+		Name:             domain.SystemLayoutName,
+		IsSystem:         true,
+		Locked:           false,
+		CreatedBy:        0,
+		AdminPINHash:     hash,
 		RadioChatEnabled: true,
-		CreatedAt:    now,
-		UpdatedAt:    now,
+		CreatedAt:        now,
+		UpdatedAt:        now,
 	}
 	if err := s.layouts.Insert(ctx, &layout); err != nil {
 		return false, err

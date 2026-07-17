@@ -48,6 +48,17 @@ func (r *Router) setLocoFunction(ctx context.Context, addr uint16, userID uint, 
 	}
 	previous, hadPrev := r.cache.Stage(addr, fn, on)
 	if err := r.station.SendFn(commandstation.MainTrackMode, commandstation.LocoAddr(addr), commandstation.FuncNum(fn), on); err != nil {
+		// Mirror SetSpeed: only revalidate+retry for transient slot-acquire
+		// failures. ErrSlotInUse cannot be stolen by retrying.
+		if !commandstation.IsSlotAcquireError(err) {
+			fields := r.stationLogFields()
+			fields["addr"] = addr
+			fields["function"] = fn
+			fields["on"] = on
+			r.log.WithError(err).WithFields(fields).Warn("dcc-bus command station SendFn failed")
+			r.cache.Rollback(addr, fn, previous, hadPrev)
+			return err
+		}
 		r.forceRevalidateSlot(addr)
 		if retryErr := r.station.SendFn(commandstation.MainTrackMode, commandstation.LocoAddr(addr), commandstation.FuncNum(fn), on); retryErr != nil {
 			fields := r.stationLogFields()

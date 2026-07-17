@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/keskad/loco/pkgs/bigfred/contract"
-	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/errors"
 	"github.com/keskad/loco/pkgs/bigfred/remotes"
 )
 
@@ -31,8 +30,9 @@ func (r *Router) HandleSetFunction(ctx context.Context, actor Actor, resp Respon
 		}
 	}
 	if err := r.setLocoFunction(ctx, p.Address, actor.UserID, p.Function, on, "throttle", origin); err != nil {
-		_ = resp.SendLocoError(ctx, p.Address, errors.CodeCommandStationError, err.Error())
-		return FailResult(errors.CodeCommandStationError)
+		code := locoCommandErrorCode(err)
+		_ = resp.SendLocoError(ctx, p.Address, code, err.Error())
+		return FailResult(code)
 	}
 	return OKResult()
 }

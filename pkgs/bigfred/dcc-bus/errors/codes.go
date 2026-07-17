@@ -15,6 +15,10 @@ const (
 	// CodeNoFreeSlot is returned when the command station's slot table is full.
 	CodeNoFreeSlot = "no_free_slot"
 
+	// CodeSlotInUse is returned when allocatePhysicalSlots is enabled and the
+	// loco is already IN_USE by another throttle (e.g. a physical FRED).
+	CodeSlotInUse = "slot_in_use"
+
 	// CodeBigFredSlotBudgetExceeded is returned when BigFred's max_loconet_slots
 	// budget is exhausted before a bus round-trip is attempted.
 	CodeBigFredSlotBudgetExceeded = "bigfred_slot_budget_exceeded"

@@ -37,6 +37,7 @@ import TrainFunctionAccordions, {
 } from "../components/throttle/TrainFunctionAccordions";
 import TrainMemberSettingsDialog from "../components/throttle/TrainMemberSettingsDialog";
 import ThrottleNavigationGuard from "../components/throttle/ThrottleNavigationGuard";
+import SlotInUseDialog from "../components/throttle/SlotInUseDialog";
 import ThrottleSetupDialog from "../components/throttle/ThrottleSetupDialog";
 import ThrottleGamepadDialog from "../components/throttle/ThrottleGamepadDialog";
 import CommandStationPicker from "../components/throttle/CommandStationPicker";
@@ -619,9 +620,11 @@ function ConnectedThrottle({
     status,
     states,
     lastError,
+    clearLastError,
     setSpeed,
     setTrainSpeed,
     setFunction,
+    stealSlot,
     speedSteps: busSpeedSteps,
     reconnecting: dccReconnecting,
   } = useDccBus();
@@ -898,6 +901,16 @@ function ConnectedThrottle({
         active={isMoving}
         onLeaveConfirm={handleLeaveConfirm}
       />
+      <SlotInUseDialog
+        open={lastError?.code === "slot_in_use"}
+        address={
+          lastError?.address && lastError.address > 0
+            ? lastError.address
+            : (selectedAddr ?? 0)
+        }
+        onDismiss={clearLastError}
+        onSteal={stealSlot}
+      />
       <TrainMemberSettingsDialog
         open={settingsMember != null}
         memberName={settingsMember?.name ?? ""}
@@ -980,7 +993,7 @@ function ConnectedThrottle({
         onStop={handleStop}
       />
 
-      {lastError && (
+      {lastError && lastError.code !== "slot_in_use" && (
         <Box
           sx={{
             position: "absolute",
@@ -994,13 +1007,13 @@ function ConnectedThrottle({
             "& .MuiAlert-root": { pointerEvents: "auto" },
           }}
         >
-          <AutoDismissAlert severity="warning" resetKey={lastError}>
+          <AutoDismissAlert severity="warning" resetKey={lastError.code}>
             {translateErrorCode(
               t as unknown as (
                 k: string,
                 opts?: { defaultValue?: string },
               ) => string,
-              lastError,
+              lastError.code,
               t("throttle:errors.command_station_disconnected"),
             )}
           </AutoDismissAlert>

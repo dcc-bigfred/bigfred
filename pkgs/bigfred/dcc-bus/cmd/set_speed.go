@@ -29,6 +29,9 @@ func (r *Router) HandleSetSpeed(ctx context.Context, actor Actor, resp Responder
 		_ = resp.SendLocoError(ctx, p.Address, code, err.Error())
 		return FailResult(code)
 	}
+	if p.Speed > 1 && !p.Emergency {
+		r.enforceSingleVehicleControl(ctx, actor, p.Address)
+	}
 	return OKResult()
 }
 

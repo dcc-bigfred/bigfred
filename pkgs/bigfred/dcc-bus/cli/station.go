@@ -23,6 +23,8 @@ const (
 	FlagMaxLoconetSlots    = "max-loconet-slots"
 	FlagIdleTimeoutSecs    = "idle-timeout-secs"
 	FlagBootStopEnabled    = "enable-boot-stop"
+	FlagSingleVehicleControl = "enable-single-vehicle-control"
+	FlagAllocatePhysicalSlots = "allocate-physical-slots"
 )
 
 // AppendStationFlags appends command-station connection flags for cs.
@@ -47,6 +49,7 @@ func AppendLeaseFlags(args []string, layout domain.Layout, cs domain.CommandStat
 	if cs.Kind.IsLocoNet() {
 		args = append(args,
 			"--"+FlagMaxLoconetSlots, strconv.FormatUint(uint64(cs.EffectiveMaxLoconetSlots()), 10),
+			"--"+FlagAllocatePhysicalSlots+"="+strconv.FormatBool(cs.EffectiveAllocatePhysicalSlots()),
 		)
 	}
 	return args

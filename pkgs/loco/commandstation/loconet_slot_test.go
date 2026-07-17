@@ -35,10 +35,26 @@ func (s *slotServerTransport) WritePacket(pkt []byte) error {
 	case lnOPC_LOCO_ADR:
 		addr := LocoAddr(pkt[2]&0x7F) | (LocoAddr(pkt[1]&0x7F) << 7)
 		s.rxCh <- buildSlotRead(slot, stat1, addr, speed, dirf, snd)
+	case lnOPC_SLOT_STAT1:
+		if len(pkt) >= 3 {
+			s.mu.Lock()
+			s.stat1 = pkt[2]
+			s.mu.Unlock()
+		}
 	case lnOPC_MOVE_SLOTS:
 		// NULL MOVE (src==dst): confirm by echoing the slot as IN_USE.
 		if pkt[1] == pkt[2] {
+			s.mu.Lock()
+			s.stat1 = lnSLOT_IN_USE
+			s.mu.Unlock()
 			s.rxCh <- buildSlotRead(pkt[1], lnSLOT_IN_USE, 0, 0, 0x20, 0)
+		}
+	case lnOPC_RQ_SL_DATA:
+		if len(pkt) >= 2 {
+			s.mu.Lock()
+			cur := s.stat1
+			s.mu.Unlock()
+			s.rxCh <- buildSlotRead(pkt[1], cur, 0, speed, dirf, snd)
 		}
 	}
 	return nil
@@ -114,10 +130,11 @@ func TestAcquireSlotRefreshesCacheFromBus(t *testing.T) {
 	l := newLocoNetBase()
 	l.minTxGap = 0
 	// dirf 0x20 (forward) + F1 (bit 0) on; snd has F5 (bit 0) on.
+	// Slot already IN_USE and owned by BigFred (seeded cache).
 	srv := &slotServerTransport{
 		rxCh:  l.rxCh,
 		slot:  6,
-		stat1: lnSLOT_IN_USE, // already in use → no NULL MOVE noise
+		stat1: lnSLOT_IN_USE,
 		speed: 73,
 		dirf:  0x20 | 0x01,
 		snd:   0x01,
@@ -128,6 +145,8 @@ func TestAcquireSlotRefreshesCacheFromBus(t *testing.T) {
 	t.Cleanup(func() { close(l.stop) })
 
 	const addr LocoAddr = 31
+	l.setSlot(addr, 6)
+
 	if err := l.AcquireSlot(addr); err != nil {
 		t.Fatalf("AcquireSlot: %v", err)
 	}
@@ -143,14 +162,66 @@ func TestAcquireSlotRefreshesCacheFromBus(t *testing.T) {
 	}
 }
 
-// An already IN_USE slot (e.g. owned by a physical FRED, or already by BigFred)
-// must not be stolen: no NULL MOVE is sent.
-func TestAcquireSlotSkipsNullMoveWhenInUse(t *testing.T) {
+// COMMON with 128-step decoder bits (STAT1 0x13) must acquire via NULL MOVE,
+// not return ErrSlotInUse — regression for the wrong D1/D0 status mask.
+func TestAcquireSlotTreatsCommon128StepAsAvailable(t *testing.T) {
+	l, srv := newSlotTestLoconet(5, lnSLOT_COMMON|0x03)
+	t.Cleanup(func() { close(l.stop) })
+
+	if err := l.AcquireSlot(31); err != nil {
+		t.Fatalf("AcquireSlot: %v (COMMON|128-step must not be ErrSlotInUse)", err)
+	}
+	if countOpcode(srv.txFrames(), lnOPC_MOVE_SLOTS) != 1 {
+		t.Fatalf("expected NULL MOVE for COMMON|128-step, got % X", srv.txFrames())
+	}
+}
+
+// With allocatePhysicalSlots enabled (default), an already IN_USE slot not
+// owned by BigFred must be refused — no NULL MOVE and no ownership cache.
+func TestAcquireSlotRejectsExternalInUse(t *testing.T) {
 	l, srv := newSlotTestLoconet(7, lnSLOT_IN_USE)
 	t.Cleanup(func() { close(l.stop) })
 
+	err := l.AcquireSlot(42)
+	if !errors.Is(err, ErrSlotInUse) {
+		t.Fatalf("AcquireSlot: %v, want ErrSlotInUse", err)
+	}
+	if _, ok := l.getSlot(42); ok {
+		t.Fatal("must not adopt an external IN_USE slot into ownership cache")
+	}
+	if countOpcode(srv.txFrames(), lnOPC_MOVE_SLOTS) != 0 {
+		t.Fatalf("must not NULL MOVE an already IN_USE slot")
+	}
+}
+
+// Revalidating a slot BigFred already owns succeeds without NULL MOVE even
+// when the command station reports IN_USE.
+func TestAcquireSlotAllowsOwnedInUse(t *testing.T) {
+	l, srv := newSlotTestLoconet(7, lnSLOT_IN_USE)
+	t.Cleanup(func() { close(l.stop) })
+	const addr LocoAddr = 42
+	l.setSlot(addr, 7)
+
+	if err := l.AcquireSlot(addr); err != nil {
+		t.Fatalf("AcquireSlot: %v", err)
+	}
+	if countOpcode(srv.txFrames(), lnOPC_MOVE_SLOTS) != 0 {
+		t.Fatalf("must not NULL MOVE an already IN_USE slot we own")
+	}
+}
+
+// Legacy piggyback: with allocatePhysicalSlots disabled, BigFred may drive a
+// slot already IN_USE by a physical FRED without stealing (no NULL MOVE).
+func TestAcquireSlotPiggybacksWhenAllocatePhysicalOff(t *testing.T) {
+	l, srv := newSlotTestLoconet(7, lnSLOT_IN_USE)
+	t.Cleanup(func() { close(l.stop) })
+	l.SetAllocatePhysicalSlots(false)
+
 	if err := l.AcquireSlot(42); err != nil {
 		t.Fatalf("AcquireSlot: %v", err)
+	}
+	if slot, ok := l.getSlot(42); !ok || slot != 7 {
+		t.Fatalf("cached slot = %d (ok=%v), want 7", slot, ok)
 	}
 	if countOpcode(srv.txFrames(), lnOPC_MOVE_SLOTS) != 0 {
 		t.Fatalf("must not NULL MOVE an already IN_USE slot")
@@ -300,5 +371,98 @@ func TestAcquireSlotIgnoresForeignSlotRead(t *testing.T) {
 	}
 	if slot, ok := l.getSlot(want); !ok || slot != 5 {
 		t.Fatalf("wanted slot for %d = %d (ok=%v), want 5", want, slot, ok)
+	}
+}
+
+// ReleaseSlot must write COMMON while preserving decoder-type bits from the
+// cached STAT1 (PE 1.0 §9.1). Bare 0x10 would force 28-step mode on the master.
+func TestReleaseSlotPreservesDecoderModeBits(t *testing.T) {
+	const dec128 = byte(0x03)
+	l, srv := newSlotTestLoconet(5, lnSLOT_COMMON|dec128)
+	t.Cleanup(func() { close(l.stop) })
+	const addr LocoAddr = 31
+
+	if err := l.AcquireSlot(addr); err != nil {
+		t.Fatalf("AcquireSlot: %v", err)
+	}
+	if got := l.getStat1(addr); got != (lnSLOT_COMMON | dec128) {
+		t.Fatalf("cached STAT1 = %#x, want %#x", got, lnSLOT_COMMON|dec128)
+	}
+
+	if err := l.ReleaseSlot(addr); err != nil {
+		t.Fatalf("ReleaseSlot: %v", err)
+	}
+	wantStat1 := lnSLOT_COMMON | dec128
+	got := lastStat1(srv.txFrames())
+	if got != wantStat1 {
+		t.Fatalf("OPC_SLOT_STAT1 byte = %#x, want %#x (COMMON|128-step)", got, wantStat1)
+	}
+	if _, ok := l.getSlot(addr); ok {
+		t.Fatal("slot cache should be cleared after release")
+	}
+}
+
+func lastStat1(frames [][]byte) byte {
+	last := byte(0xFF)
+	for _, f := range frames {
+		if len(f) >= 3 && f[0] == lnOPC_SLOT_STAT1 {
+			last = f[2]
+		}
+	}
+	return last
+}
+
+// StealSlot must stop, release foreign IN_USE to COMMON, then NULL MOVE and
+// adopt ownership — the explicit takeover path AcquireSlot refuses.
+func TestStealSlotClaimsExternalInUse(t *testing.T) {
+	const dec128 = byte(0x03)
+	l, srv := newSlotTestLoconet(7, lnSLOT_IN_USE|dec128)
+	t.Cleanup(func() { close(l.stop) })
+	const addr LocoAddr = 42
+
+	if err := l.StealSlot(addr); err != nil {
+		t.Fatalf("StealSlot: %v", err)
+	}
+	if slot, ok := l.getSlot(addr); !ok || slot != 7 {
+		t.Fatalf("cached slot = %d (ok=%v), want 7", slot, ok)
+	}
+	tx := srv.txFrames()
+	if countOpcode(tx, lnOPC_LOCO_SPD) < 1 {
+		t.Fatalf("expected estop SPD before release, got % X", tx)
+	}
+	if got := lastStat1(tx); got != (lnSLOT_COMMON | dec128) {
+		t.Fatalf("STAT1 = %#x, want COMMON|128-step %#x", got, lnSLOT_COMMON|dec128)
+	}
+	if countOpcode(tx, lnOPC_MOVE_SLOTS) != 1 {
+		t.Fatalf("expected one NULL MOVE after steal, got % X", tx)
+	}
+}
+
+// AcquireSlot must still refuse foreign IN_USE after StealSlot exists.
+func TestAcquireSlotStillRejectsExternalInUse(t *testing.T) {
+	l, srv := newSlotTestLoconet(7, lnSLOT_IN_USE)
+	t.Cleanup(func() { close(l.stop) })
+
+	if err := l.AcquireSlot(42); !errors.Is(err, ErrSlotInUse) {
+		t.Fatalf("AcquireSlot: %v, want ErrSlotInUse", err)
+	}
+	if countOpcode(srv.txFrames(), lnOPC_MOVE_SLOTS) != 0 {
+		t.Fatal("AcquireSlot must not NULL MOVE foreign IN_USE")
+	}
+}
+
+// StealSlot on a COMMON slot behaves like a normal acquire (NULL MOVE only).
+func TestStealSlotPromotesCommon(t *testing.T) {
+	l, srv := newSlotTestLoconet(5, lnSLOT_COMMON|0x03)
+	t.Cleanup(func() { close(l.stop) })
+
+	if err := l.StealSlot(31); err != nil {
+		t.Fatalf("StealSlot: %v", err)
+	}
+	if countOpcode(srv.txFrames(), lnOPC_SLOT_STAT1) != 0 {
+		t.Fatalf("COMMON steal must not write STAT1, got % X", srv.txFrames())
+	}
+	if countOpcode(srv.txFrames(), lnOPC_MOVE_SLOTS) != 1 {
+		t.Fatalf("expected NULL MOVE, got % X", srv.txFrames())
 	}
 }

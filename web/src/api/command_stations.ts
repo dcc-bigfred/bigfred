@@ -37,6 +37,8 @@ export interface CommandStation {
   maxLoconetSlots?: number;
   idleTimeoutSecs?: number;
   bootStopEnabled: boolean;
+  singleVehicleControl: boolean;
+  allocatePhysicalSlots?: boolean;
 }
 
 const commandStationsCatalogueQueryKey = [
@@ -70,6 +72,8 @@ export function useCreateCommandStation() {
       maxLoconetSlots?: number;
       idleTimeoutSecs?: number;
       bootStopEnabled?: boolean;
+      singleVehicleControl?: boolean;
+      allocatePhysicalSlots?: boolean;
     }) =>
       apiFetch<CommandStation>("/api/v1/command-stations", {
         method: "POST",
@@ -99,6 +103,8 @@ export function useUpdateCommandStation() {
       maxLoconetSlots?: number;
       idleTimeoutSecs?: number;
       bootStopEnabled?: boolean;
+      singleVehicleControl?: boolean;
+      allocatePhysicalSlots?: boolean;
     }) =>
       apiFetch<CommandStation>(`/api/v1/command-stations/${args.id}`, {
         method: "PUT",
@@ -116,6 +122,8 @@ export function useUpdateCommandStation() {
           maxLoconetSlots: args.maxLoconetSlots,
           idleTimeoutSecs: args.idleTimeoutSecs,
           bootStopEnabled: args.bootStopEnabled,
+          singleVehicleControl: args.singleVehicleControl,
+          allocatePhysicalSlots: args.allocatePhysicalSlots,
         }),
       }),
     onSuccess: () => {

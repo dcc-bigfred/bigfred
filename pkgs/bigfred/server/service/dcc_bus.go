@@ -439,6 +439,9 @@ func (d *DccBusService) buildProgramSpec(ctx context.Context, name string, layou
 	if cs.BootStopEnabled {
 		args = append(args, "--"+dccbuscli.FlagBootStopEnabled)
 	}
+	if cs.SingleVehicleControl {
+		args = append(args, "--"+dccbuscli.FlagSingleVehicleControl)
+	}
 	for _, origin := range d.cfg.AllowedOrigins {
 		args = append(args, "--allowed-origin", origin)
 	}

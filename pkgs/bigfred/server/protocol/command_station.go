@@ -20,6 +20,8 @@ type CommandStationResponse struct {
 	MaxLoconetSlots         uint                      `json:"maxLoconetSlots,omitempty"`
 	IdleTimeoutSecs         uint                      `json:"idleTimeoutSecs,omitempty"`
 	BootStopEnabled         bool                      `json:"bootStopEnabled"`
+	SingleVehicleControl    bool                      `json:"singleVehicleControl"`
+	AllocatePhysicalSlots   bool                      `json:"allocatePhysicalSlots"`
 }
 
 func ToCommandStationResponse(cs domain.CommandStation) CommandStationResponse {
@@ -36,10 +38,12 @@ func ToCommandStationResponse(cs domain.CommandStation) CommandStationResponse {
 		Z21IPStickiness:         cs.Z21IPStickiness,
 		WithrottleServerEnabled: cs.WithrottleServerEnabled,
 		BootStopEnabled:         cs.BootStopEnabled,
+		SingleVehicleControl:    cs.SingleVehicleControl,
 	}
 	if cs.Kind.IsLocoNet() {
 		resp.MaxLoconetSlots = cs.EffectiveMaxLoconetSlots()
 		resp.IdleTimeoutSecs = cs.IdleTimeoutSecs
+		resp.AllocatePhysicalSlots = cs.AllocatePhysicalSlots
 	}
 	return resp
 }
@@ -58,6 +62,8 @@ type CommandStationCreateRequest struct {
 	MaxLoconetSlots         uint                      `json:"maxLoconetSlots"`
 	IdleTimeoutSecs         uint                      `json:"idleTimeoutSecs"`
 	BootStopEnabled         bool                      `json:"bootStopEnabled"`
+	SingleVehicleControl    bool                      `json:"singleVehicleControl"`
+	AllocatePhysicalSlots   *bool                     `json:"allocatePhysicalSlots"`
 }
 
 func (r CommandStationCreateRequest) ToCreateInput() cmd.CommandStationCreateInput {
@@ -75,6 +81,8 @@ func (r CommandStationCreateRequest) ToCreateInput() cmd.CommandStationCreateInp
 		MaxLoconetSlots:         r.MaxLoconetSlots,
 		IdleTimeoutSecs:         r.IdleTimeoutSecs,
 		BootStopEnabled:         r.BootStopEnabled,
+		SingleVehicleControl:    r.SingleVehicleControl,
+		AllocatePhysicalSlots:   r.AllocatePhysicalSlots,
 	}
 }
 
@@ -92,6 +100,8 @@ type CommandStationUpdateRequest struct {
 	MaxLoconetSlots         *uint                      `json:"maxLoconetSlots"`
 	IdleTimeoutSecs         *uint                      `json:"idleTimeoutSecs"`
 	BootStopEnabled         *bool                      `json:"bootStopEnabled"`
+	SingleVehicleControl    *bool                      `json:"singleVehicleControl"`
+	AllocatePhysicalSlots   *bool                      `json:"allocatePhysicalSlots"`
 }
 
 func (r CommandStationUpdateRequest) ToUpdateInput() cmd.CommandStationUpdateInput {
@@ -109,5 +119,7 @@ func (r CommandStationUpdateRequest) ToUpdateInput() cmd.CommandStationUpdateInp
 		MaxLoconetSlots:         r.MaxLoconetSlots,
 		IdleTimeoutSecs:         r.IdleTimeoutSecs,
 		BootStopEnabled:         r.BootStopEnabled,
+		SingleVehicleControl:    r.SingleVehicleControl,
+		AllocatePhysicalSlots:   r.AllocatePhysicalSlots,
 	}
 }

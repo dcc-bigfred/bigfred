@@ -30,6 +30,8 @@ type Router interface {
 	HandleLocoSelect(ctx context.Context, sess *Session, payload protocol.LocoSelectPayload, requestID string) Outcome
 	// HandleLocoDeselect releases the drive-target slot when appropriate.
 	HandleLocoDeselect(ctx context.Context, sess *Session, payload protocol.LocoDeselectPayload, requestID string) Outcome
+	// HandleStealSlot claims a LocoNet slot held IN_USE by another throttle.
+	HandleStealSlot(ctx context.Context, sess *Session, payload protocol.LocoStealSlotPayload, requestID string) Outcome
 	// HandleTrainSelect leases slots for every powered train member.
 	HandleTrainSelect(ctx context.Context, sess *Session, payload protocol.TrainSelectPayload, requestID string) Outcome
 	// HandleSetSpeed handles a single throttle move.
@@ -328,6 +330,21 @@ func (s *Server) dispatch(ctx context.Context, sess *Session, env contract.Envel
 		}
 		s.dispatchAsync(ctx, sess, env, func() Outcome {
 			return s.router.HandleLocoDeselect(ctx, sess, p, env.ID)
+		})
+		return
+
+	case protocol.TypeLocoStealSlot:
+		var p protocol.LocoStealSlotPayload
+		if err := json.Unmarshal(env.Payload, &p); err != nil {
+			out = s.ackOrFail(ctx, sess, env.ID, false, errors.WsCodeBadPayload)
+			break
+		}
+		if !(validation.LocoStealSlot{}).Valid(p) {
+			out = s.ackOrFail(ctx, sess, env.ID, false, errors.WsCodeBadPayload)
+			break
+		}
+		s.dispatchAsync(ctx, sess, env, func() Outcome {
+			return s.router.HandleStealSlot(ctx, sess, p, env.ID)
 		})
 		return
 

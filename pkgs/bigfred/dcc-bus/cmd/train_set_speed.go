@@ -94,5 +94,8 @@ func (r *Router) HandleTrainSetSpeed(ctx context.Context, actor Actor, _ Respond
 		res.OK = false
 		res.Code = errors.CodePartialFailure
 	}
+	if p.Speed > 1 {
+		r.enforceSingleVehicleControl(ctx, actor, poweredTrainAddrs(train)...)
+	}
 	return res
 }

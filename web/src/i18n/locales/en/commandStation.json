@@ -58,10 +58,14 @@
         "withrottleServerDisableWarn": "Disabling the server stops new pairings. Active WiFred sessions stop working after the dcc-bus daemon restarts.",
         "maxLoconetSlots": "LocoNet slot budget",
         "maxLoconetSlotsHelp": "How many slots BigFred may lease on this command station; the rest stay free for physical throttles. Default 80.",
+        "allocatePhysicalSlots": "Allocate physical slots",
+        "allocatePhysicalSlotsHelp": "When on (default), BigFred claims exclusive IN_USE like a physical FRED — it cannot take a loco another throttle already drives, and a FRED cannot take one BigFred holds. When off, BigFred may share a slot already held by a FRED (legacy piggyback). Changing this restarts dcc-bus.",
         "idleTimeoutSecs": "Handset idle timeout (s)",
         "idleTimeoutSecsHelp": "After this idle period a remote handset (WlanMaus/Z21/WiFred) loses its slot. 0 disables idle release. Default 60 s.",
         "bootStopEnabled": "Boot-stop all vehicles",
-        "bootStopEnabledHelp": "When enabled, dcc-bus sends emergency stop to every vehicle in the system once after start."
+        "bootStopEnabledHelp": "When enabled, dcc-bus sends emergency stop to every vehicle in the system once after start.",
+        "singleVehicleControl": "Only one vehicle can be controlled at a time",
+        "singleVehicleControlHelp": "When enabled, selecting or driving a different vehicle or consist stops the user's other moving vehicles (speed > 1). Lent-out vehicles are not stopped."
       }
     },
     "empty": "No command stations to show.",

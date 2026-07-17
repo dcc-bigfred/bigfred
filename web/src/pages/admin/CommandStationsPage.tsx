@@ -99,6 +99,9 @@ export default function CommandStationsPage() {
     DEFAULT_COMMAND_STATION_IDLE_TIMEOUT_SECS,
   );
   const [bootStopEnabledInput, setBootStopEnabledInput] = useState(false);
+  const [singleVehicleControlInput, setSingleVehicleControlInput] = useState(false);
+  const [allocatePhysicalSlotsInput, setAllocatePhysicalSlotsInput] =
+    useState(true);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const closeDialog = () => {
@@ -116,6 +119,8 @@ export default function CommandStationsPage() {
     setMaxLoconetSlotsInput(DEFAULT_COMMAND_STATION_MAX_LOCONET_SLOTS);
     setIdleTimeoutSecsInput(DEFAULT_COMMAND_STATION_IDLE_TIMEOUT_SECS);
     setBootStopEnabledInput(false);
+    setSingleVehicleControlInput(false);
+    setAllocatePhysicalSlotsInput(true);
     setActionError(null);
     create.reset();
     update.reset();
@@ -146,6 +151,8 @@ export default function CommandStationsPage() {
     setMaxLoconetSlotsInput(DEFAULT_COMMAND_STATION_MAX_LOCONET_SLOTS);
     setIdleTimeoutSecsInput(DEFAULT_COMMAND_STATION_IDLE_TIMEOUT_SECS);
     setBootStopEnabledInput(false);
+    setSingleVehicleControlInput(false);
+    setAllocatePhysicalSlotsInput(true);
     setActionError(null);
   };
 
@@ -168,6 +175,8 @@ export default function CommandStationsPage() {
       target.idleTimeoutSecs ?? DEFAULT_COMMAND_STATION_IDLE_TIMEOUT_SECS,
     );
     setBootStopEnabledInput(target.bootStopEnabled);
+    setSingleVehicleControlInput(target.singleVehicleControl);
+    setAllocatePhysicalSlotsInput(target.allocatePhysicalSlots ?? true);
     setActionError(null);
   };
 
@@ -192,8 +201,12 @@ export default function CommandStationsPage() {
         withrottleServerEnabled: withrottleServerEnabledInput,
         idleTimeoutSecs: idleTimeoutSecsInput,
         bootStopEnabled: bootStopEnabledInput,
+        singleVehicleControl: singleVehicleControlInput,
         ...(isLoconetKind(kindInput)
-          ? { maxLoconetSlots: maxLoconetSlotsInput }
+          ? {
+              maxLoconetSlots: maxLoconetSlotsInput,
+              allocatePhysicalSlots: allocatePhysicalSlotsInput,
+            }
           : {}),
       };
       if (dialog.kind === "create") {
@@ -470,6 +483,28 @@ export default function CommandStationsPage() {
                 required
               />
             )}
+            {isLoconetKind(kindInput) && (
+              <>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={allocatePhysicalSlotsInput}
+                      onChange={(e) =>
+                        setAllocatePhysicalSlotsInput(e.target.checked)
+                      }
+                    />
+                  }
+                  label={t(
+                    "commandStation:admin.dialogs.fields.allocatePhysicalSlots",
+                  )}
+                />
+                <Typography variant="body2" color="text.secondary">
+                  {t(
+                    "commandStation:admin.dialogs.fields.allocatePhysicalSlotsHelp",
+                  )}
+                </Typography>
+              </>
+            )}
             <TextField
               label={t("commandStation:admin.dialogs.fields.idleTimeoutSecs")}
               type="number"
@@ -496,6 +531,20 @@ export default function CommandStationsPage() {
             />
             <Typography variant="body2" color="text.secondary">
               {t("commandStation:admin.dialogs.fields.bootStopEnabledHelp")}
+            </Typography>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={singleVehicleControlInput}
+                  onChange={(e) =>
+                    setSingleVehicleControlInput(e.target.checked)
+                  }
+                />
+              }
+              label={t("commandStation:admin.dialogs.fields.singleVehicleControl")}
+            />
+            <Typography variant="body2" color="text.secondary">
+              {t("commandStation:admin.dialogs.fields.singleVehicleControlHelp")}
             </Typography>
             <FormControlLabel
               control={

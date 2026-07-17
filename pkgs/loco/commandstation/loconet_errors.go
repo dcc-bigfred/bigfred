@@ -16,6 +16,11 @@ var (
 	// OPC_LONG_ACK code 0x00 (no free slot in the 120-slot table).
 	ErrNoFreeSlot = errors.New("loconet: command station has no free slot")
 
+	// ErrSlotInUse is returned when allocatePhysicalSlots is enabled and the
+	// command station reports the loco already IN_USE by another throttle
+	// (e.g. a physical FRED). BigFred must not piggyback or steal.
+	ErrSlotInUse = errors.New("loconet: slot already in use by another throttle")
+
 	// ErrBigFredSlotBudgetExceeded is returned when the SlotLeaser would exceed
 	// max_loconet_slots before calling AcquireSlot on the command station.
 	ErrBigFredSlotBudgetExceeded = errors.New("loconet: bigfred slot budget exceeded")
@@ -32,6 +37,8 @@ var (
 
 // IsSlotAcquireError reports whether err indicates a stale or missing slot
 // and warrants a forced slot revalidation before retrying a drive command.
+// ErrSlotInUse is intentionally excluded: retrying cannot steal an external
+// throttle's slot and must not be treated as a transient mapping failure.
 func IsSlotAcquireError(err error) bool {
 	if err == nil {
 		return false

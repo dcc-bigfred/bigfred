@@ -14,6 +14,14 @@ func (LocoSelect) Valid(p protocol.LocoSelectPayload) bool {
 	return p.Address != 0
 }
 
+// LocoStealSlot validates loco.stealSlot payloads.
+type LocoStealSlot struct{}
+
+// Valid reports whether the address is non-zero.
+func (LocoStealSlot) Valid(p protocol.LocoStealSlotPayload) bool {
+	return p.Address != 0
+}
+
 // LocoDeselect validates loco.deselect payloads.
 type LocoDeselect struct{}
 

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/keskad/loco/pkgs/bigfred/contract"
+	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/errors"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/slotlease"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/state"
 	"github.com/keskad/loco/pkgs/loco/commandstation"
@@ -21,7 +22,10 @@ func (s *observingSlotStubStation) SetSlotObserver(obs commandstation.SlotObserv
 	s.obs = obs
 }
 
-func (s *observingSlotStubStation) SendFn(_ commandstation.Mode, addr commandstation.LocoAddr, num commandstation.FuncNum, _ bool) error {
+func (s *observingSlotStubStation) SendFn(mode commandstation.Mode, addr commandstation.LocoAddr, num commandstation.FuncNum, toggle bool) error {
+	if s.SendFnFn != nil {
+		return s.SendFnFn(mode, addr, num, toggle)
+	}
 	if s.obs != nil && num <= 8 {
 		s.obs.OnSlotInUse(addr)
 	}
@@ -152,6 +156,43 @@ func TestHandleSetFunction_afterAdminRelease_staysWSNotExternal(t *testing.T) {
 	h := lease.Holders[0]
 	if h.UserID != 3 || h.Source != "ws" {
 		t.Fatalf("holder = %+v, want userID=3 source=ws (not external)", h)
+	}
+}
+
+func TestHandleSetFunction_mapsSlotInUseLikeSetSpeed(t *testing.T) {
+	t.Parallel()
+	rs, cleanup := testRedis(t)
+	defer cleanup()
+	st := &observingSlotStubStation{}
+	st.SendFnFn = func(commandstation.Mode, commandstation.LocoAddr, commandstation.FuncNum, bool) error {
+		return commandstation.ErrSlotInUse
+	}
+	r, err := NewRouter(context.Background(), Config{
+		Station:          st,
+		Hub:              &stubHub{},
+		Redis:            rs,
+		LayoutID:         1,
+		CommandStationID: 1,
+		SpeedSteps:       128,
+		AllowedVehicles: contract.AllowedVehicles{
+			LayoutID: 1,
+			Vehicles: []contract.AllowedVehicle{{Addr: 55, ControllerUserIDs: []uint{1}}},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	res := r.HandleSetFunction(context.Background(), Actor{UserID: 1, SessionID: "ws-1"}, &recordingResponder{}, contract.LocoSetFunctionWire{
+		Address:  55,
+		Function: 0,
+		On:       true,
+	}, "")
+	if res.OK {
+		t.Fatal("expected failure when slot is in use")
+	}
+	if res.Code != errors.CodeSlotInUse {
+		t.Fatalf("code = %q, want %q (not command_station_error)", res.Code, errors.CodeSlotInUse)
 	}
 }
 

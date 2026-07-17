@@ -10,6 +10,10 @@ var (
 	// ErrNoFreeSlot is returned when the command station has no free slot.
 	ErrNoFreeSlot = commandstation.ErrNoFreeSlot
 
+	// ErrSlotInUse is returned when allocatePhysicalSlots is on and another
+	// throttle already holds the loco IN_USE.
+	ErrSlotInUse = commandstation.ErrSlotInUse
+
 	// ErrBigFredSlotBudgetExceeded is returned when max_loconet_slots is exhausted.
 	ErrBigFredSlotBudgetExceeded = commandstation.ErrBigFredSlotBudgetExceeded
 

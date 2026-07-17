@@ -13,6 +13,8 @@ func locoCommandErrorCode(err error) string {
 		return errors.CodeSlotBusUnavailable
 	case stderrors.Is(err, commandstation.ErrNoFreeSlot):
 		return errors.CodeNoFreeSlot
+	case stderrors.Is(err, commandstation.ErrSlotInUse):
+		return errors.CodeSlotInUse
 	case stderrors.Is(err, commandstation.ErrBigFredSlotBudgetExceeded):
 		return errors.CodeBigFredSlotBudgetExceeded
 	default:

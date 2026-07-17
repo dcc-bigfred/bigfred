@@ -54,6 +54,13 @@
     "cancel": "Nein, bleiben",
     "confirm": "Ja"
   },
+  "slotInUse": {
+    "title": "Slot belegt",
+    "message": "Der Slot wird von einem physischen FRED gehalten.",
+    "hint": "Das Trennen eines physischen FREDs gibt den Slot nicht immer sofort frei. Stellen Sie sicher, dass niemand diese Adresse fährt.",
+    "ok": "OK",
+    "steal": "Slot übernehmen"
+  },
   "deadman": {
     "warning": "Leerlauf — automatischer Stopp in {{seconds}} s",
     "executed": "Notfallplan ausgeführt ({{action}})"
@@ -95,6 +102,7 @@
     "control_offline": "Steuerungsebene offline — Seite aktualisieren",
     "connection_error": "dcc-bus-WebSocket-Fehler (nicht die physische Zentrale) — Proxy/Netzwerk prüfen",
     "command_station_error": "Zentrale hat DCC-Befehl abgelehnt — dcc-bus-Protokolle prüfen",
+    "slot_in_use": "Lokomotive wird von einem anderen Fahrregler genutzt (z. B. physischer FRED)",
     "ack_timeout": "Server hat nicht rechtzeitig geantwortet — erneut versuchen",
     "train_not_on_layout": "Dieser Zug ist nicht auf der aktiven Anlage",
     "train_no_powered_members": "Dieser Zug hat keine angetriebenen Fahrzeuge",

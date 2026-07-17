@@ -85,6 +85,10 @@ type Config struct {
 	MaxLoconetSlots    int
 	IdleTimeoutSecs    uint
 	BootStopEnabled    bool
+	SingleVehicleControl bool
+	// AllocatePhysicalSlots enables PE 1.0 exclusive LocoNet slot allocation
+	// (default true). When false, BigFred may piggyback on IN_USE slots.
+	AllocatePhysicalSlots bool
 }
 
 // Daemon is the assembled dcc-bus instance.
@@ -189,6 +193,9 @@ func New(ctx context.Context, log *logrus.Logger, cfg Config) (*Daemon, error) {
 		}).Error("dcc-bus command station driver open failed")
 		_ = rds.Close()
 		return nil, fmt.Errorf("open command station: %w", err)
+	}
+	if psa, ok := station.AsPhysicalSlotAllocator(st); ok {
+		psa.SetAllocatePhysicalSlots(cfg.AllocatePhysicalSlots)
 	}
 
 	var metricsShutdown func(context.Context) error
@@ -305,6 +312,7 @@ func New(ctx context.Context, log *logrus.Logger, cfg Config) (*Daemon, error) {
 		RemoteIdleTimeout:         remoteIdle,
 		RemoteIdleTimeoutDisabled: remoteIdleDisabled,
 		BootStopEnabled:           cfg.BootStopEnabled,
+		SingleVehicleControl:      cfg.SingleVehicleControl,
 		SlotMetrics:               slotMetrics,
 	})
 	if err != nil {

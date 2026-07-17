@@ -74,6 +74,7 @@ type Router struct {
 	bootStopMu   sync.Mutex
 	bootStopDone bool
 	bootStopEnabled bool
+	singleVehicleControl bool
 }
 
 // Config carries the inputs Router needs at construction time.
@@ -97,6 +98,7 @@ type Config struct {
 	RemoteIdleTimeout         time.Duration
 	RemoteIdleTimeoutDisabled bool
 	BootStopEnabled           bool
+	SingleVehicleControl      bool
 	SlotMetrics               slotlease.Recorder
 }
 
@@ -133,6 +135,7 @@ func NewRouter(_ context.Context, cfg Config) (*Router, error) {
 		maxVehiclesPerUser: cfg.MaxVehiclesPerUser,
 		slotMetrics:        slotlease.RecorderOrNoop(cfg.SlotMetrics),
 		bootStopEnabled:    cfg.BootStopEnabled,
+		singleVehicleControl: cfg.SingleVehicleControl,
 	}
 	r.dcc.LogFields = r.stationLogFields
 	r.reconcileBootSlots(cfg)

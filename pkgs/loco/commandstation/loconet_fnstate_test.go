@@ -24,6 +24,7 @@ func TestObserveDoesNotClobberCommandedDirf(t *testing.T) {
 	t.Cleanup(func() { close(l.stop) })
 
 	const addr LocoAddr = 98
+	l.setSlot(addr, 5) // already owned — revalidate IN_USE without ErrSlotInUse
 	if _, err := l.acquireSlot(addr); err != nil {
 		t.Fatalf("acquireSlot: %v", err)
 	}
@@ -62,6 +63,7 @@ func TestAcquireSlotDebouncesReconnectStorm(t *testing.T) {
 	t.Cleanup(func() { close(l.stop) })
 
 	const addr LocoAddr = 98
+	l.setSlot(addr, 7)
 	if err := l.AcquireSlot(addr); err != nil {
 		t.Fatalf("AcquireSlot #1: %v", err)
 	}

@@ -126,16 +126,28 @@ const (
 	lnOPC_IDLE       = 0x85
 )
 
-// Slot status values (STAT1 bits 1..0, SL_STA field).
-// After OPC_LOCO_ADR the master returns COMMON; a NULL MOVE promotes
-// the slot to IN_USE so BigFred becomes the authoritative throttle.
+// Slot status values (STAT1 bits D5/D4 = SL_BUSY/SL_ACTIVE).
+// Digitrax PE 1.0 / JMRI LnConstants: LOCOSTAT_MASK = 0x30.
+// After OPC_LOCO_ADR the master typically returns COMMON; a NULL MOVE
+// promotes the slot to IN_USE so BigFred becomes the authoritative throttle.
+//
+// Do NOT use bits D1/D0 — those encode decoder speed-step mode (e.g. 128-step
+// is 0x03). Masking with 0x03 mis-reads COMMON|128-step (0x13) as IN_USE.
 const (
-	lnSLOT_FREE    = byte(0x00) // slot has no locomotive; completely empty
-	lnSLOT_COMMON  = byte(0x01) // loco address known, no active throttle (shareable)
-	lnSLOT_IDLE    = byte(0x02) // slot purged/idle
-	lnSLOT_IN_USE  = byte(0x03) // slot actively controlled by a throttle
-	lnSLOT_STA_MASK = byte(0x03)
+	lnSLOT_FREE     = byte(0x00) // D5=0 D4=0: no locomotive; empty
+	lnSLOT_COMMON   = byte(0x10) // D5=0 D4=1: loco known, no active throttle
+	lnSLOT_IDLE     = byte(0x20) // D5=1 D4=0: purged/idle, not refreshed
+	lnSLOT_IN_USE   = byte(0x30) // D5=1 D4=1: actively controlled by a throttle
+	lnSLOT_STA_MASK = byte(0x30)
 )
+
+// lnSlotToCommon builds a STAT1 byte for OPC_SLOT_STAT1 release: occupancy
+// becomes COMMON while decoder-type (D2–D0) and consist (D6/D3) bits from
+// prev are preserved. Writing bare lnSLOT_COMMON (0x10) would zero the
+// speed-step encoding and can change the master's DCC packet mode.
+func lnSlotToCommon(prev byte) byte {
+	return (prev &^ lnSLOT_STA_MASK) | lnSLOT_COMMON
+}
 
 // Immediate-packet and programming-track constants (see
 // docs/bigfred/protos/loconet.md §11, §16, §19.2).
@@ -230,7 +242,8 @@ func lnBuildMoveSlots(src, dst byte) []byte {
 
 // lnBuildSlotStat1 builds an OPC_SLOT_STAT1 packet that directly writes
 // the STAT1 byte of the given slot. This is fire-and-forget: the command
-// station does not reply. Use lnSLOT_COMMON to release BigFred's ownership.
+// station does not reply. Callers releasing ownership should pass
+// lnSlotToCommon(cachedStat1) so decoder-type bits are preserved.
 func lnBuildSlotStat1(slot, stat1 byte) []byte {
 	return lnAppendChecksum([]byte{lnOPC_SLOT_STAT1, slot & 0x7F, stat1 & 0x7F})
 }

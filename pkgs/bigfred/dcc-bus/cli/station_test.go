@@ -43,6 +43,14 @@ func TestAppendStationFlagsDefaultsTiming(t *testing.T) {
 	}
 }
 
+func TestAppendSingleVehicleControlFlag(t *testing.T) {
+	args := []string{"dcc-bus"}
+	args = append(args, "--"+FlagSingleVehicleControl)
+	if !contains(args, "--"+FlagSingleVehicleControl) {
+		t.Fatalf("missing single-vehicle flag in %v", args)
+	}
+}
+
 func stringsJoin(ss []string) string {
 	out := ""
 	for i, s := range ss {

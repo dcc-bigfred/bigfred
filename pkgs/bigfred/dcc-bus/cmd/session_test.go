@@ -26,6 +26,12 @@ func (s *slotStubStation) AcquireSlot(addr commandstation.LocoAddr) error {
 	return nil
 }
 func (s *slotStubStation) ForceAcquireSlot(commandstation.LocoAddr) error { return nil }
+func (s *slotStubStation) StealSlot(addr commandstation.LocoAddr) error {
+	s.mu.Lock()
+	s.acquired = append(s.acquired, uint16(addr))
+	s.mu.Unlock()
+	return nil
+}
 func (s *slotStubStation) DispatchSlot(commandstation.LocoAddr) error { return nil }
 func (s *slotStubStation) AcquireDispatched() (commandstation.LocoAddr, error) {
 	return 0, nil

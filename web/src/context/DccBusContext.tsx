@@ -37,6 +37,11 @@ export type DataPlaneStatus =
   | "closed"
   | "error";
 
+export type DccBusLocoError = {
+  code: string;
+  address?: number;
+};
+
 interface DccBusContextValue {
   status: DataPlaneStatus;
   reconnecting: boolean;
@@ -64,8 +69,10 @@ interface DccBusContextValue {
     fn: number,
     on: boolean,
   ) => Promise<{ ok: boolean; error?: string }>;
+  stealSlot: (address: number) => Promise<{ ok: boolean; error?: string }>;
   emergencyStop: (reason?: string) => Promise<{ ok: boolean; error?: string }>;
-  lastError: string | null;
+  lastError: DccBusLocoError | null;
+  clearLastError: () => void;
 }
 
 const DccBusContext = createContext<DccBusContextValue | null>(null);
@@ -104,7 +111,7 @@ export function DccBusProvider({
   const [pingIntervalMs, setPingIntervalMs] = useState(heartbeatSecs * 1_000);
   const [pingLatencyMs, setPingLatencyMs] = useState<number | null>(null);
   const [states, setStates] = useState<Map<number, LocoState>>(new Map());
-  const [lastError, setLastError] = useState<string | null>(null);
+  const [lastError, setLastError] = useState<DccBusLocoError | null>(null);
 
   const pending = useRef<
     Map<string, (ack: { ok: boolean; error?: string }) => void>
@@ -149,7 +156,7 @@ export function DccBusProvider({
 
   const handleError = useCallback(() => {
     setStatus("error");
-    setLastError("connection_error");
+    setLastError({ code: "connection_error" });
     console.warn("[dcc-bus] WebSocket error", { wsUrl });
   }, [wsUrl]);
 
@@ -208,7 +215,10 @@ export function DccBusProvider({
           detail?: string;
         };
         if (err?.code) {
-          setLastError(err.code);
+          setLastError({
+            code: err.code,
+            address: typeof err.address === "number" ? err.address : undefined,
+          });
           console.warn("[dcc-bus] loco.error", err);
         }
         break;
@@ -294,10 +304,17 @@ export function DccBusProvider({
       send("loco.setFunction", { address, function: fn, on }),
     [send],
   );
+  const stealSlot = useCallback(
+    (address: number) => send("loco.stealSlot", { address }),
+    [send],
+  );
   const emergencyStop = useCallback(
     (reason?: string) => send("system.estop", { reason: reason ?? "" }),
     [send],
   );
+  const clearLastError = useCallback(() => {
+    setLastError(null);
+  }, []);
 
   const value = useMemo<DccBusContextValue>(
     () => ({
@@ -313,8 +330,10 @@ export function DccBusProvider({
       setSpeed,
       setTrainSpeed,
       setFunction,
+      stealSlot,
       emergencyStop,
       lastError,
+      clearLastError,
     }),
     [
       status,
@@ -329,8 +348,10 @@ export function DccBusProvider({
       setSpeed,
       setTrainSpeed,
       setFunction,
+      stealSlot,
       emergencyStop,
       lastError,
+      clearLastError,
     ],
   );
 

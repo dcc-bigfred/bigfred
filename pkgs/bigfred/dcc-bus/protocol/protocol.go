@@ -70,6 +70,12 @@ type LocoSelectPayload struct {
 	Address uint16 `json:"address"`
 }
 
+// LocoStealSlotPayload requests an explicit takeover of a LocoNet slot
+// already IN_USE by another throttle (e.g. physical FRED).
+type LocoStealSlotPayload struct {
+	Address uint16 `json:"address"`
+}
+
 // LocoDeselectPayload clears the active drive target and releases the
 // slot when this session was the last driver.
 type LocoDeselectPayload struct {
@@ -150,6 +156,7 @@ const (
 	TypeLocoSubscribe     = "loco.subscribe"
 	TypeLocoSelect        = "loco.select"
 	TypeLocoDeselect      = "loco.deselect"
+	TypeLocoStealSlot     = "loco.stealSlot"
 	TypeTrainSelect       = "train.select"
 	TypeLocoSetSpeed      = "loco.setSpeed"
 	TypeTrainSetSpeed     = "train.setSpeed"

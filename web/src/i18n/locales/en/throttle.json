@@ -54,6 +54,13 @@
     "cancel": "No, stay",
     "confirm": "Yes"
   },
+  "slotInUse": {
+    "title": "Slot in use",
+    "message": "The slot is held by a physical FRED.",
+    "hint": "Disconnecting a physical FRED does not always free the slot immediately. Make sure nobody is driving this address.",
+    "ok": "OK",
+    "steal": "Take over slot"
+  },
   "deadman": {
     "warning": "Idle — auto stop in {{seconds}} s",
     "executed": "Emergency plan applied ({{action}})"
@@ -95,6 +102,7 @@
     "control_offline": "Control plane offline — refresh the page",
     "connection_error": "dcc-bus WebSocket error (not the physical command station) — check proxy/network",
     "command_station_error": "Command station rejected the DCC command — see dcc-bus logs",
+    "slot_in_use": "Locomotive is in use by another throttle (e.g. physical FRED)",
     "ack_timeout": "Server did not respond in time — try again",
     "train_not_on_layout": "This train is not on the active layout",
     "train_no_powered_members": "This train has no powered vehicles",

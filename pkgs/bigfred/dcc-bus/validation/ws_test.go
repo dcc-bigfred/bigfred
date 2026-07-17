@@ -108,6 +108,16 @@ func TestLocoSelectValid(t *testing.T) {
 	}
 }
 
+func TestLocoStealSlotValid(t *testing.T) {
+	v := validation.LocoStealSlot{}
+	if !v.Valid(protocol.LocoStealSlotPayload{Address: 3}) {
+		t.Fatal("expected non-zero address")
+	}
+	if v.Valid(protocol.LocoStealSlotPayload{}) {
+		t.Fatal("expected zero address to be invalid")
+	}
+}
+
 func TestTrainSelectValid(t *testing.T) {
 	v := validation.TrainSelect{}
 	if !v.Valid(protocol.TrainSelectPayload{TrainID: "T-1"}) {

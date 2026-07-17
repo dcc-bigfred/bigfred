@@ -31,6 +31,10 @@ func (a *RouterAdapter) HandleLocoDeselect(ctx context.Context, sess *Session, p
 	return deliver(ctx, sess, requestID, a.inner.HandleLocoDeselect(ctx, actor(sess), NewResponder(sess), payload, requestID))
 }
 
+func (a *RouterAdapter) HandleStealSlot(ctx context.Context, sess *Session, payload protocol.LocoStealSlotPayload, requestID string) Outcome {
+	return deliver(ctx, sess, requestID, a.inner.HandleStealSlot(ctx, actor(sess), NewResponder(sess), payload, requestID))
+}
+
 func (a *RouterAdapter) HandleTrainSelect(ctx context.Context, sess *Session, payload protocol.TrainSelectPayload, requestID string) Outcome {
 	return deliver(ctx, sess, requestID, a.inner.HandleTrainSelect(ctx, actor(sess), NewResponder(sess), payload, requestID))
 }

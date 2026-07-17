@@ -254,11 +254,12 @@ func TestProgTaskAndReply(t *testing.T) {
 }
 
 func TestParseSlotDataStat1(t *testing.T) {
-	// Build a slot read with STAT1=0x03 (IN_USE) and verify the field is parsed.
+	// STAT1 uses D5/D4 for occupancy; D2–D0 are decoder speed-step mode.
+	// 0x33 = IN_USE (0x30) | 128-step (0x03).
 	msg := []byte{
 		lnOPC_SL_RD_DATA, 0x0E,
 		0x05,       // slot
-		0x03,       // stat1: IN_USE
+		0x33,       // stat1: IN_USE + 128-step
 		0x07,       // adr lo
 		0x15,       // speed
 		0x20,       // dirf
@@ -273,11 +274,47 @@ func TestParseSlotDataStat1(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected parse ok for % X", pkt)
 	}
-	if sd.Stat1 != 0x03 {
-		t.Fatalf("Stat1: got 0x%02X, want 0x03", sd.Stat1)
+	if sd.Stat1 != 0x33 {
+		t.Fatalf("Stat1: got 0x%02X, want 0x33", sd.Stat1)
 	}
 	if sd.Stat1&lnSLOT_STA_MASK != lnSLOT_IN_USE {
-		t.Fatalf("SL_STA: got 0x%02X, want lnSLOT_IN_USE (0x03)", sd.Stat1&lnSLOT_STA_MASK)
+		t.Fatalf("SL_STA: got 0x%02X, want lnSLOT_IN_USE (0x30)", sd.Stat1&lnSLOT_STA_MASK)
+	}
+}
+
+// COMMON with 128-step mode is STAT1 0x13. Masking with the wrong low bits
+// (0x03) would mis-read that as IN_USE and reject every free 128-step loco.
+func TestSlotStatusMaskIgnoresDecoderModeBits(t *testing.T) {
+	const dec128 = byte(0x03) // D2–D0: 128-step
+	common128 := lnSLOT_COMMON | dec128
+	inUse128 := lnSLOT_IN_USE | dec128
+	if common128&lnSLOT_STA_MASK != lnSLOT_COMMON {
+		t.Fatalf("COMMON|128-step %#x masked to %#x, want COMMON %#x",
+			common128, common128&lnSLOT_STA_MASK, lnSLOT_COMMON)
+	}
+	if inUse128&lnSLOT_STA_MASK != lnSLOT_IN_USE {
+		t.Fatalf("IN_USE|128-step %#x masked to %#x, want IN_USE %#x",
+			inUse128, inUse128&lnSLOT_STA_MASK, lnSLOT_IN_USE)
+	}
+	if common128&lnSLOT_STA_MASK == lnSLOT_IN_USE {
+		t.Fatal("COMMON|128-step must not look like IN_USE")
+	}
+}
+
+func TestLnSlotToCommonPreservesDecoderBits(t *testing.T) {
+	const dec128 = byte(0x03)
+	got := lnSlotToCommon(lnSLOT_IN_USE | dec128)
+	if got != (lnSLOT_COMMON | dec128) {
+		t.Fatalf("lnSlotToCommon(IN_USE|128) = %#x, want %#x", got, lnSLOT_COMMON|dec128)
+	}
+	if lnSlotToCommon(0) != lnSLOT_COMMON {
+		t.Fatalf("lnSlotToCommon(0) = %#x, want bare COMMON", lnSlotToCommon(0))
+	}
+	// Consist mid (D6|D3) must survive release.
+	const consistMid = byte(0x40 | 0x08)
+	got = lnSlotToCommon(lnSLOT_IN_USE | consistMid | dec128)
+	if got != (lnSLOT_COMMON | consistMid | dec128) {
+		t.Fatalf("consist bits lost: got %#x", got)
 	}
 }
 

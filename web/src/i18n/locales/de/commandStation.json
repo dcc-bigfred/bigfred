@@ -58,6 +58,8 @@
         "withrottleServerDisableWarn": "Das Deaktivieren stoppt neue Kopplungen. Aktive WiFred-Sitzungen funktionieren nach einem dcc-bus-Neustart nicht mehr.",
         "maxLoconetSlots": "LocoNet-Slot-Budget",
         "maxLoconetSlotsHelp": "Wie viele Slots BigFred auf dieser Zentrale belegen darf; der Rest bleibt physischen FREDs vorbehalten. Standard 80.",
+        "allocatePhysicalSlots": "Physische Slots belegen",
+        "allocatePhysicalSlotsHelp": "Wenn aktiv (Standard), belegt BigFred Slots wie ein physischer FRED (exklusives IN_USE) — übernimmt keine Lok, die ein anderer Regler fährt, und ein FRED kann keine von BigFred gehaltene Lok nehmen. Wenn aus, darf BigFred einen bereits vom FRED belegten Slot mitnutzen (Legacy). Änderung startet dcc-bus neu.",
         "idleTimeoutSecs": "Piloten-Leerlaufzeit (s)",
         "idleTimeoutSecsHelp": "Nach dieser Leerlaufzeit verliert ein Fernpilot (WlanMaus/Z21/WiFred) seinen Slot. 0 deaktiviert die Freigabe. Standard 60 s.",
         "bootStopEnabled": "Boot-Stop aller Fahrzeuge",

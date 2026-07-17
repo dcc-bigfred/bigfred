@@ -21,6 +21,7 @@ type CommandStationResponse struct {
 	IdleTimeoutSecs         uint                      `json:"idleTimeoutSecs,omitempty"`
 	BootStopEnabled         bool                      `json:"bootStopEnabled"`
 	SingleVehicleControl    bool                      `json:"singleVehicleControl"`
+	AllocatePhysicalSlots   bool                      `json:"allocatePhysicalSlots"`
 }
 
 func ToCommandStationResponse(cs domain.CommandStation) CommandStationResponse {
@@ -42,6 +43,7 @@ func ToCommandStationResponse(cs domain.CommandStation) CommandStationResponse {
 	if cs.Kind.IsLocoNet() {
 		resp.MaxLoconetSlots = cs.EffectiveMaxLoconetSlots()
 		resp.IdleTimeoutSecs = cs.IdleTimeoutSecs
+		resp.AllocatePhysicalSlots = cs.AllocatePhysicalSlots
 	}
 	return resp
 }
@@ -61,6 +63,7 @@ type CommandStationCreateRequest struct {
 	IdleTimeoutSecs         uint                      `json:"idleTimeoutSecs"`
 	BootStopEnabled         bool                      `json:"bootStopEnabled"`
 	SingleVehicleControl    bool                      `json:"singleVehicleControl"`
+	AllocatePhysicalSlots   *bool                     `json:"allocatePhysicalSlots"`
 }
 
 func (r CommandStationCreateRequest) ToCreateInput() cmd.CommandStationCreateInput {
@@ -79,6 +82,7 @@ func (r CommandStationCreateRequest) ToCreateInput() cmd.CommandStationCreateInp
 		IdleTimeoutSecs:         r.IdleTimeoutSecs,
 		BootStopEnabled:         r.BootStopEnabled,
 		SingleVehicleControl:    r.SingleVehicleControl,
+		AllocatePhysicalSlots:   r.AllocatePhysicalSlots,
 	}
 }
 
@@ -97,6 +101,7 @@ type CommandStationUpdateRequest struct {
 	IdleTimeoutSecs         *uint                      `json:"idleTimeoutSecs"`
 	BootStopEnabled         *bool                      `json:"bootStopEnabled"`
 	SingleVehicleControl    *bool                      `json:"singleVehicleControl"`
+	AllocatePhysicalSlots   *bool                      `json:"allocatePhysicalSlots"`
 }
 
 func (r CommandStationUpdateRequest) ToUpdateInput() cmd.CommandStationUpdateInput {
@@ -115,5 +120,6 @@ func (r CommandStationUpdateRequest) ToUpdateInput() cmd.CommandStationUpdateInp
 		IdleTimeoutSecs:         r.IdleTimeoutSecs,
 		BootStopEnabled:         r.BootStopEnabled,
 		SingleVehicleControl:    r.SingleVehicleControl,
+		AllocatePhysicalSlots:   r.AllocatePhysicalSlots,
 	}
 }

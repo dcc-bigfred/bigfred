@@ -25,6 +25,8 @@ func leaseErrorCode(err error) string {
 		return buserrors.CodeVehicleCapExceeded
 	case stderrors.Is(err, commandstation.ErrNoFreeSlot):
 		return buserrors.CodeNoFreeSlot
+	case stderrors.Is(err, commandstation.ErrSlotInUse):
+		return buserrors.CodeSlotInUse
 	case stderrors.Is(err, commandstation.ErrBigFredSlotBudgetExceeded):
 		return buserrors.CodeBigFredSlotBudgetExceeded
 	default:

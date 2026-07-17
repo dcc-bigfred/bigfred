@@ -58,6 +58,8 @@
         "withrottleServerDisableWarn": "Wyłączenie serwera blokuje nowe parowania. Aktywne sesje WiFred przestaną działać po restarcie daemona dcc-bus.",
         "maxLoconetSlots": "Budżet slotów LocoNet",
         "maxLoconetSlotsHelp": "Ile slotów może zająć BigFred w tej centralce; pozostałe zostaną dla fizycznych FREDów. Domyślnie 80.",
+        "allocatePhysicalSlots": "Alokuj fizyczne sloty",
+        "allocatePhysicalSlotsHelp": "Gdy włączone (domyślnie), BigFred zajmuje slot jak fizyczny FRED (wyłączne IN_USE) — nie przejmie lokomotywy sterowanej innym manipulatorem, a FRED nie wejdzie na lokomotywę trzymaną przez BigFreda. Gdy wyłączone, BigFred może współdzielić slot już zajęty przez FRED-a (tryb legacy). Zmiana restartuje dcc-bus.",
         "idleTimeoutSecs": "Limit bezczynności pilota (s)",
         "idleTimeoutSecsHelp": "Po tym czasie bez jazdy zdalny pilot (WlanMaus/Z21/WiFred) traci slot. 0 wyłącza zwalnianie po bezczynności. Domyślnie 60 s.",
         "bootStopEnabled": "Boot-stop wszystkich pojazdów",

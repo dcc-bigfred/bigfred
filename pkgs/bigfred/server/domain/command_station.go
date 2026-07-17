@@ -108,8 +108,13 @@ type CommandStation struct {
 	// SingleVehicleControl stops the user's other moving vehicles (speed > 1)
 	// when they select or drive a different vehicle on this command station.
 	SingleVehicleControl bool `db:"single_vehicle_control"`
-	CreatedAt            time.Time
-	UpdatedAt       time.Time
+	// AllocatePhysicalSlots, when true (default), makes BigFred allocate
+	// LocoNet slots like a physical FRED (PE 1.0 exclusive IN_USE). When
+	// false, BigFred may piggyback on slots already IN_USE by another throttle.
+	// Meaningful only for LocoNet kinds.
+	AllocatePhysicalSlots bool `db:"allocate_physical_slots"`
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
 }
 
 // Table tells REL which physical table backs this struct.
@@ -209,6 +214,15 @@ func (cs CommandStation) EffectiveMaxLoconetSlots() uint {
 		return DefaultCommandStationMaxLoconetSlots
 	}
 	return cs.MaxLoconetSlots
+}
+
+// EffectiveAllocatePhysicalSlots returns whether exclusive PE 1.0 slot
+// allocation is enabled. Non-LocoNet stations always report false (N/A).
+func (cs CommandStation) EffectiveAllocatePhysicalSlots() bool {
+	if !cs.Kind.IsLocoNet() {
+		return false
+	}
+	return cs.AllocatePhysicalSlots
 }
 
 // LayoutCommandStation is the join row binding a CommandStation to a

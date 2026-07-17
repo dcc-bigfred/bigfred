@@ -121,6 +121,7 @@ func register(m *migrator.Migrator) {
 	m.Register(migrationVersion(20260711, 1), updateWithrottlePairingAddrDefaultUp, updateWithrottlePairingAddrDefaultDown)
 	m.Register(migrationVersion(20260712, 1), addLayoutRadioChatEnabledColumnUp, addLayoutRadioChatEnabledColumnDown)
 	m.Register(migrationVersion(20260712, 2), addCommandStationSingleVehicleControlColumnUp, addCommandStationSingleVehicleControlColumnDown)
+	m.Register(migrationVersion(20260716, 1), addCommandStationAllocatePhysicalSlotsColumnUp, addCommandStationAllocatePhysicalSlotsColumnDown)
 }
 
 // createCommandStationsUp installs the `command_stations` catalogue
@@ -875,6 +876,16 @@ func addCommandStationSingleVehicleControlColumnUp(s *rel.Schema) {
 }
 
 func addCommandStationSingleVehicleControlColumnDown(s *rel.Schema) {
+	// SQLite cannot DROP COLUMN in older schemas; leave columns in place.
+}
+
+// addCommandStationAllocatePhysicalSlotsColumnUp enables PE 1.0 exclusive
+// LocoNet slot allocation (default on — behave like a physical FRED).
+func addCommandStationAllocatePhysicalSlotsColumnUp(s *rel.Schema) {
+	s.Exec(rel.Raw(`ALTER TABLE command_stations ADD COLUMN allocate_physical_slots INTEGER NOT NULL DEFAULT 1`))
+}
+
+func addCommandStationAllocatePhysicalSlotsColumnDown(s *rel.Schema) {
 	// SQLite cannot DROP COLUMN in older schemas; leave columns in place.
 }
 

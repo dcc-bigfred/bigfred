@@ -73,6 +73,8 @@ type CommandStationCreateInput struct {
 	IdleTimeoutSecs         uint
 	BootStopEnabled         bool
 	SingleVehicleControl    bool
+	// AllocatePhysicalSlots nil means default true for LocoNet kinds.
+	AllocatePhysicalSlots *bool
 }
 
 func (s *CommandStation) Create(ctx context.Context, eff domain.EffectiveRoles, in CommandStationCreateInput) (domain.CommandStation, error) {
@@ -120,6 +122,7 @@ func (s *CommandStation) Create(ctx context.Context, eff domain.EffectiveRoles, 
 	if err := s.applySlotLeaseSettings(&row, in.MaxLoconetSlots, in.IdleTimeoutSecs); err != nil {
 		return domain.CommandStation{}, err
 	}
+	s.applyAllocatePhysicalSlots(&row, in.AllocatePhysicalSlots, true)
 	if err := s.stations.Insert(ctx, &row); err != nil {
 		return domain.CommandStation{}, err
 	}
@@ -141,6 +144,7 @@ type CommandStationUpdateInput struct {
 	IdleTimeoutSecs         *uint
 	BootStopEnabled         *bool
 	SingleVehicleControl    *bool
+	AllocatePhysicalSlots   *bool
 }
 
 func (s *CommandStation) Update(ctx context.Context, eff domain.EffectiveRoles, id uint, in CommandStationUpdateInput) (domain.CommandStation, error) {
@@ -221,6 +225,10 @@ func (s *CommandStation) Update(ctx context.Context, eff domain.EffectiveRoles, 
 	}
 	if in.SingleVehicleControl != nil {
 		row.SingleVehicleControl = *in.SingleVehicleControl
+	}
+	if in.AllocatePhysicalSlots != nil || in.Kind != nil {
+		// When kind changes to LocoNet without an explicit value, default ON.
+		s.applyAllocatePhysicalSlots(&row, in.AllocatePhysicalSlots, in.Kind != nil)
 	}
 	if in.MaxLoconetSlots != nil || in.IdleTimeoutSecs != nil {
 		maxSlots := row.MaxLoconetSlots
@@ -339,4 +347,21 @@ func (s *CommandStation) applySlotLeaseSettings(row *domain.CommandStation, maxS
 	row.MaxLoconetSlots = slots
 	row.IdleTimeoutSecs = idleSecs
 	return nil
+}
+
+// applyAllocatePhysicalSlots sets exclusive LocoNet slot allocation.
+// Non-LocoNet kinds always clear the flag. For LocoNet, override wins when
+// non-nil; otherwise setDefault applies the product default (true).
+func (s *CommandStation) applyAllocatePhysicalSlots(row *domain.CommandStation, override *bool, setDefault bool) {
+	if !row.Kind.IsLocoNet() {
+		row.AllocatePhysicalSlots = false
+		return
+	}
+	if override != nil {
+		row.AllocatePhysicalSlots = *override
+		return
+	}
+	if setDefault {
+		row.AllocatePhysicalSlots = true
+	}
 }

@@ -99,6 +99,38 @@ func AsSlotObservable(s commandstation.Station) (commandstation.SlotObservable, 
 	return nil, false
 }
 
+// AsPhysicalSlotAllocator returns the PhysicalSlotAllocator behind optional
+// wrappers so the daemon can configure exclusive vs piggyback slot mode.
+func AsPhysicalSlotAllocator(s commandstation.Station) (commandstation.PhysicalSlotAllocator, bool) {
+	for s != nil {
+		if psa, ok := s.(commandstation.PhysicalSlotAllocator); ok {
+			return psa, true
+		}
+		u, ok := s.(innerStation)
+		if !ok {
+			return nil, false
+		}
+		s = u.Inner()
+	}
+	return nil, false
+}
+
+// AsSlotStealer returns the SlotStealer behind optional wrappers so the
+// throttle can explicitly claim a foreign IN_USE slot.
+func AsSlotStealer(s commandstation.Station) (commandstation.SlotStealer, bool) {
+	for s != nil {
+		if ss, ok := s.(commandstation.SlotStealer); ok {
+			return ss, true
+		}
+		u, ok := s.(innerStation)
+		if !ok {
+			return nil, false
+		}
+		s = u.Inner()
+	}
+	return nil, false
+}
+
 // AsMetricsSource returns the MetricsSource behind optional wrappers, so the
 // telemetry layer can read driver counters even when the station is decorated.
 func AsMetricsSource(s commandstation.Station) (commandstation.MetricsSource, bool) {

@@ -33,6 +33,12 @@ flowchart LR
 
 **Subscribe without select does not occupy a slot** — view-only from store/Redis.
 
+Exclusive vs piggyback LocoNet acquisition (`allocatePhysicalSlots` on the
+command station, default on) is enforced in the **LocoNet driver**, not the
+leaser. When on, `AcquireSlot` returns `ErrSlotInUse` if another throttle
+already holds the loco; the leaser drops the holder on that error (same as
+`ErrNoFreeSlot`).
+
 ## Reserve vs Select
 
 | | `Reserve` | `Select` |

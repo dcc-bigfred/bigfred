@@ -58,6 +58,7 @@ type Flags struct {
 	IdleTimeoutSecs    uint
 	BootStopEnabled    bool
 	SingleVehicleControl bool
+	AllocatePhysicalSlots bool
 
 	AllowedOrigins []string
 }
@@ -117,6 +118,7 @@ should rarely be invoked manually.`,
 				IdleTimeoutSecs:        f.IdleTimeoutSecs,
 				BootStopEnabled:        f.BootStopEnabled,
 				SingleVehicleControl:   f.SingleVehicleControl,
+				AllocatePhysicalSlots:  f.AllocatePhysicalSlots,
 			}
 			d, err := dccbus.New(c.Context(), log, cfg)
 			if err != nil {
@@ -158,6 +160,7 @@ should rarely be invoked manually.`,
 	cmd.Flags().UintVar(&f.IdleTimeoutSecs, FlagIdleTimeoutSecs, 60, "remote-handset idle timeout before slot release (0 disables)")
 	cmd.Flags().BoolVar(&f.BootStopEnabled, FlagBootStopEnabled, false, "emergency-stop all roster locomotives once after daemon start")
 	cmd.Flags().BoolVar(&f.SingleVehicleControl, FlagSingleVehicleControl, false, "stop the user's other moving vehicles when driving a different one")
+	cmd.Flags().BoolVar(&f.AllocatePhysicalSlots, FlagAllocatePhysicalSlots, true, "allocate LocoNet slots like a physical FRED (exclusive IN_USE; disable to piggyback)")
 
 	return cmd
 }

@@ -34,8 +34,12 @@ type SlotManager interface {
 	// It reclaims a slot the master purged to COMMON or reassigned while the
 	// loco was idle, so control survives a client leaving and returning.
 	// Slots are owned per-locomotive, not per-session; the drive-permission
-	// layer is enforced separately by the caller. An already-IN_USE slot
-	// (e.g. held by a physical throttle) is left untouched.
+	// layer is enforced separately by the caller.
+	//
+	// When allocatePhysicalSlots is enabled (PE 1.0 exclusive mode), an
+	// already-IN_USE slot not owned by BigFred returns ErrSlotInUse.
+	// When disabled (legacy piggyback), an already-IN_USE slot is left
+	// untouched and BigFred may still drive it by slot number.
 	AcquireSlot(addr LocoAddr) error
 
 	// ForceAcquireSlot revalidates addr's slot against the command station,
@@ -103,6 +107,21 @@ type SlotObserver interface {
 // bus read loop starts emitting events.
 type SlotObservable interface {
 	SetSlotObserver(obs SlotObserver)
+}
+
+// PhysicalSlotAllocator is implemented by LocoNet drivers that can switch
+// between PE 1.0 exclusive slot allocation (like a physical FRED) and legacy
+// piggyback on already-IN_USE slots. Callers type-assert after Open.
+type PhysicalSlotAllocator interface {
+	SetAllocatePhysicalSlots(enabled bool)
+}
+
+// SlotStealer is an optional LocoNet capability for an explicit user-confirmed
+// takeover of a slot already IN_USE by another throttle (e.g. physical FRED).
+// Normal AcquireSlot still refuses foreign IN_USE when allocatePhysicalSlots
+// is enabled; StealSlot is the only path that releases then claims.
+type SlotStealer interface {
+	StealSlot(addr LocoAddr) error
 }
 
 // MetricsSource is an optional interface implemented by LocoNet drivers that

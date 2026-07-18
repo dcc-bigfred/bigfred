@@ -11,6 +11,7 @@ import (
 
 	"github.com/keskad/loco/pkgs/bigfred/contract"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/z21server"
+	"github.com/keskad/loco/pkgs/bigfred/mdns"
 )
 
 const (
@@ -66,8 +67,8 @@ func Run(ctx context.Context, cfg RunConfig, log logrus.FieldLogger, opts ...Run
 		opt(&o)
 	}
 
-	reg := NewRegistrar(log)
-	registrations := make([]RegisterInput, 0, len(cfg.Services))
+	reg := mdns.NewRegistrar(log)
+	registrations := make([]mdns.RegisterInput, 0, len(cfg.Services))
 	for _, svc := range cfg.Services {
 		in, err := registerInputForService(svc)
 		if err != nil {
@@ -119,10 +120,10 @@ func Run(ctx context.Context, cfg RunConfig, log logrus.FieldLogger, opts ...Run
 	return nil
 }
 
-func registerInputForService(svc ServiceConfig) (RegisterInput, error) {
+func registerInputForService(svc ServiceConfig) (mdns.RegisterInput, error) {
 	service := ServiceForProtocol(svc.Protocol)
 	if service == "" {
-		return RegisterInput{}, fmt.Errorf("discovery: unknown protocol %q", svc.Protocol)
+		return mdns.RegisterInput{}, fmt.Errorf("discovery: unknown protocol %q", svc.Protocol)
 	}
 	txt := map[string]string{
 		"layoutId":         strconv.FormatUint(uint64(svc.LayoutID), 10),
@@ -140,7 +141,7 @@ func registerInputForService(svc ServiceConfig) (RegisterInput, error) {
 	if instance == "" {
 		instance = InstanceName("", svc.CommandStationID)
 	}
-	return RegisterInput{
+	return mdns.RegisterInput{
 		Instance: instance,
 		Service:  service,
 		Port:     svc.Port,

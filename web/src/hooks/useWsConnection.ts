@@ -306,6 +306,14 @@ export function useWsConnection({
     // Android suspends background tabs and powers down WiFi, which kills
     // the socket and freezes the reconnect timer. Force an immediate retry
     // when the tab returns to the foreground or the network comes back.
+    // Also send an immediate keepalive ping when visibility/focus returns so
+    // a transient hidden state (WebView overlay) cannot cross the dcc-bus
+    // dead-man window (~6s) before the next setInterval tick.
+    const sendKeepalivePing = () => {
+      const socket = socketRef.current;
+      if (!socket || socket.readyState !== WebSocket.OPEN) return;
+      socket.send(buildPingFrameRef.current?.() ?? DEFAULT_PING_FRAME);
+    };
     const reconnectNow = () => {
       if (disposed) return;
       const socket = socketRef.current;
@@ -319,10 +327,16 @@ export function useWsConnection({
       connect();
     };
     const onVisible = () => {
-      if (document.visibilityState === "visible") reconnectNow();
+      if (document.visibilityState !== "visible") return;
+      reconnectNow();
+      sendKeepalivePing();
+    };
+    const onFocus = () => {
+      sendKeepalivePing();
     };
     window.addEventListener("online", reconnectNow);
     document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onFocus);
 
     connect();
 
@@ -330,6 +344,7 @@ export function useWsConnection({
       disposed = true;
       window.removeEventListener("online", reconnectNow);
       document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onFocus);
       clearReconnect();
       activeCleanup?.();
       // Notify the consumer even though socket handlers are already nulled

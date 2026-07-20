@@ -15,6 +15,11 @@ import i18n from "i18next";
 import LanguageDetector from "i18next-browser-languagedetector";
 import { initReactI18next } from "react-i18next";
 
+import {
+  getPreferredLocale,
+  isBigFredNativeMobileApp,
+} from "../native/bigfredNativeApp";
+
 import plCommon from "./locales/pl/common.json";
 import plAuth from "./locales/pl/auth.json";
 import plErrors from "./locales/pl/errors.json";
@@ -195,5 +200,28 @@ const syncDocumentLang = (lng: string) => {
 };
 syncDocumentLang(i18n.resolvedLanguage ?? i18n.language ?? "pl");
 i18n.on("languageChanged", syncDocumentLang);
+
+if (typeof window !== "undefined" && isBigFredNativeMobileApp()) {
+  window.__bigfredSetLocale = (lang: string) => {
+    const normalized = lang.trim().toLowerCase();
+    const supported = (SUPPORTED_LOCALES as readonly string[]).includes(normalized)
+      ? normalized
+      : "pl";
+    try {
+      localStorage.setItem(LOCALE_STORAGE_KEY, supported);
+    } catch {
+      // ignore quota / private-mode failures
+    }
+    void i18n.changeLanguage(supported);
+  };
+
+  const preferred = getPreferredLocale()?.toLowerCase();
+  if (preferred && (SUPPORTED_LOCALES as readonly string[]).includes(preferred)) {
+    const current = (i18n.resolvedLanguage ?? i18n.language ?? "pl").split("-")[0];
+    if (preferred !== current) {
+      void i18n.changeLanguage(preferred);
+    }
+  }
+}
 
 export default i18n;

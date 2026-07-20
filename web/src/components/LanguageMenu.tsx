@@ -16,10 +16,13 @@ import {
   SUPPORTED_LOCALES,
   type Locale,
 } from "../i18n";
+import { isBigFredNativeMobileApp } from "../native/bigfredNativeApp";
 
 // LanguageMenu renders the icon-button + dropdown that lets the user
 // switch the active locale at runtime. Per §7c.8 it lives inside
 // AppShell, next to the (future) user menu.
+//
+// Hidden inside the native mobile shell — app Settings own the locale.
 //
 // Implementation notes:
 //   * `i18n.changeLanguage(code)` re-renders every component that
@@ -38,6 +41,10 @@ interface LanguageMenuProps {
 export default function LanguageMenu({ menuAnchor = "right" }: LanguageMenuProps) {
   const { t, i18n } = useTranslation("common");
   const [anchor, setAnchor] = useState<null | HTMLElement>(null);
+
+  if (isBigFredNativeMobileApp()) {
+    return null;
+  }
 
   const active = (i18n.resolvedLanguage ?? i18n.language ?? "pl") as Locale;
 

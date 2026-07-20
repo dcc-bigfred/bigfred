@@ -1,4 +1,4 @@
-/** Detects the BigFred Android WebView shell and opens the native model picker. */
+/** Detects the BigFred native mobile shell and talks to the JS bridge. */
 
 export interface ModelPickPayload {
   vehicleNumber?: string | null;
@@ -8,21 +8,37 @@ export interface ModelPickPayload {
   epochs?: string[] | null;
 }
 
-interface BigFredAndroidBridge {
+interface BigFredNativeAppBridge {
   openModelPicker: () => void;
+  getPreferredLocale?: () => string;
 }
 
 declare global {
   interface Window {
-    BigFredAndroid?: BigFredAndroidBridge;
+    BigFredNativeApp?: BigFredNativeAppBridge;
     __bigfredOnModelPicked?: (payload: ModelPickPayload | null) => void;
+    __bigfredSetLocale?: (lang: string) => void;
   }
 }
 
-/** True when running inside the BigFred Android WebView (UA suffix). */
-export function isBigFredAndroid(): boolean {
+/** True when running inside the BigFred native mobile WebView (UA suffix). */
+export function isBigFredNativeMobileApp(): boolean {
   if (typeof navigator === "undefined") return false;
-  return /BigFredAndroid\//.test(navigator.userAgent);
+  return /BigFredNativeApp\//.test(navigator.userAgent);
+}
+
+/** Preferred locale from the native shell, or null if unavailable. */
+export function getPreferredLocale(): string | null {
+  const bridge = window.BigFredNativeApp;
+  if (typeof bridge?.getPreferredLocale !== "function") {
+    return null;
+  }
+  try {
+    const lang = bridge.getPreferredLocale()?.trim();
+    return lang || null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -30,7 +46,7 @@ export function isBigFredAndroid(): boolean {
  * model payload, or null if the user cancelled / bridge is unavailable.
  */
 export function openModelPicker(): Promise<ModelPickPayload | null> {
-  const bridge = window.BigFredAndroid;
+  const bridge = window.BigFredNativeApp;
   if (typeof bridge?.openModelPicker !== "function") {
     return Promise.resolve(null);
   }

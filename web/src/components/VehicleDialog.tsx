@@ -36,10 +36,10 @@ import {
   type VehicleKind,
 } from "../api/vehicles";
 import {
-  isBigFredAndroid,
+  isBigFredNativeMobileApp,
   openModelPicker,
   type ModelPickPayload,
-} from "../native/bigfredAndroid";
+} from "../native/bigfredNativeApp";
 
 interface Props {
   open: boolean;
@@ -83,7 +83,7 @@ function applyModelPick(
 export default function VehicleDialog({ open, vehicle, onClose }: Props) {
   const { t } = useTranslation(["vehicle", "errors", "common"]);
   const isEdit = !!vehicle;
-  const showFillFromCatalog = isBigFredAndroid();
+  const showFillFromCatalog = isBigFredNativeMobileApp();
 
   const [name, setName] = useState("");
   const [kind, setKind] = useState<VehicleKind>("loco");

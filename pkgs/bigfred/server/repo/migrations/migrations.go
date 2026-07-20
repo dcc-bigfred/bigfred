@@ -122,6 +122,7 @@ func register(m *migrator.Migrator) {
 	m.Register(migrationVersion(20260712, 1), addLayoutRadioChatEnabledColumnUp, addLayoutRadioChatEnabledColumnDown)
 	m.Register(migrationVersion(20260712, 2), addCommandStationSingleVehicleControlColumnUp, addCommandStationSingleVehicleControlColumnDown)
 	m.Register(migrationVersion(20260716, 1), addCommandStationAllocatePhysicalSlotsColumnUp, addCommandStationAllocatePhysicalSlotsColumnDown)
+	m.Register(migrationVersion(20260720, 1), addVehicleCatalogMetaColumnsUp, addVehicleCatalogMetaColumnsDown)
 }
 
 // createCommandStationsUp installs the `command_stations` catalogue
@@ -905,4 +906,24 @@ func addLayoutRadioChatEnabledColumnUp(s *rel.Schema) {
 
 func addLayoutRadioChatEnabledColumnDown(s *rel.Schema) {
 	// SQLite cannot DROP COLUMN in older schemas; leave columns in place.
+}
+
+// addVehicleCatalogMetaColumnsUp stores optional carrier / assignment /
+// revision / epoch metadata filled from the Android model catalogue.
+func addVehicleCatalogMetaColumnsUp(s *rel.Schema) {
+	s.AlterTable("vehicles", func(t *rel.AlterTable) {
+		t.String("carrier", rel.Default(""))
+		t.String("assignment", rel.Default(""))
+		t.Date("revision_date", rel.Required(false))
+		t.String("epoch", rel.Default(""))
+	})
+}
+
+func addVehicleCatalogMetaColumnsDown(s *rel.Schema) {
+	s.AlterTable("vehicles", func(t *rel.AlterTable) {
+		t.DropColumn("carrier")
+		t.DropColumn("assignment")
+		t.DropColumn("revision_date")
+		t.DropColumn("epoch")
+	})
 }

@@ -61,6 +61,10 @@ func VehicleHTTPStatus(err error) (status int, code string) {
 		return http.StatusUnprocessableEntity, CodeVehicleDccFunctionInvalid
 	case stderrors.Is(err, ErrVehicleDeadManSwitchInvalid):
 		return http.StatusUnprocessableEntity, CodeVehicleDeadManSwitchInvalid
+	case stderrors.Is(err, ErrVehicleEpochInvalid):
+		return http.StatusUnprocessableEntity, CodeVehicleEpochInvalid
+	case stderrors.Is(err, ErrVehicleRevisionDateInvalid):
+		return http.StatusUnprocessableEntity, CodeVehicleRevisionDateInvalid
 	default:
 		return http.StatusInternalServerError, "internal_error"
 	}

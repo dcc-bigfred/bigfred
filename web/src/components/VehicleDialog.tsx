@@ -1,16 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
+import AutoFixHighIcon from "@mui/icons-material/AutoFixHigh";
 import {
   Alert,
+  Box,
   Button,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   FormControlLabel,
+  IconButton,
   MenuItem,
   Stack,
   Switch,
   TextField,
+  Tooltip,
 } from "@mui/material";
 import { useTranslation } from "react-i18next";
 
@@ -21,19 +25,54 @@ import {
   DEFAULT_DEADMAN_SWITCH_OPTION,
   DEFAULT_EMERGENCY_LIGHTS_FUNCTION,
   DEFAULT_RP1_FUNCTION,
+  isVehicleEpoch,
   useCreateVehicle,
   useMyDCCPool,
   useUpdateVehicle,
+  VEHICLE_EPOCHS,
   VEHICLE_KINDS,
   type DeadManSwitchOption,
   type Vehicle,
   type VehicleKind,
 } from "../api/vehicles";
+import {
+  isBigFredAndroid,
+  openModelPicker,
+  type ModelPickPayload,
+} from "../native/bigfredAndroid";
 
 interface Props {
   open: boolean;
   vehicle?: Vehicle | null;
   onClose: () => void;
+}
+
+function applyModelPick(
+  payload: ModelPickPayload,
+  setters: {
+    setNumber: (v: string) => void;
+    setCarrier: (v: string) => void;
+    setAssignment: (v: string) => void;
+    setRevisionDate: (v: string) => void;
+    setEpoch: (v: string) => void;
+  },
+) {
+  const number = payload.vehicleNumber?.trim();
+  if (number) setters.setNumber(number);
+
+  const carrier = payload.carrier?.trim();
+  if (carrier) setters.setCarrier(carrier);
+
+  const assignment = payload.assignment?.trim();
+  if (assignment) setters.setAssignment(assignment);
+
+  const revision = payload.revisionDate?.trim();
+  if (revision) setters.setRevisionDate(revision);
+
+  const firstEpoch = payload.epochs?.find((e) => !!e?.trim())?.trim();
+  if (firstEpoch && isVehicleEpoch(firstEpoch)) {
+    setters.setEpoch(firstEpoch);
+  }
 }
 
 // VehicleDialog handles the add-and-edit dialog for a single vehicle.
@@ -44,10 +83,15 @@ interface Props {
 export default function VehicleDialog({ open, vehicle, onClose }: Props) {
   const { t } = useTranslation(["vehicle", "errors", "common"]);
   const isEdit = !!vehicle;
+  const showFillFromCatalog = isBigFredAndroid();
 
   const [name, setName] = useState("");
   const [kind, setKind] = useState<VehicleKind>("loco");
   const [number, setNumber] = useState("");
+  const [carrier, setCarrier] = useState("");
+  const [assignment, setAssignment] = useState("");
+  const [revisionDate, setRevisionDate] = useState("");
+  const [epoch, setEpoch] = useState("");
   const [dccEnabled, setDccEnabled] = useState(true);
   const [dccAddress, setDccAddress] = useState<string>("");
   const [rp1Function, setRp1Function] = useState(DEFAULT_RP1_FUNCTION);
@@ -56,6 +100,7 @@ export default function VehicleDialog({ open, vehicle, onClose }: Props) {
   );
   const [deadManSwitchOption, setDeadManSwitchOption] =
     useState<DeadManSwitchOption>(DEFAULT_DEADMAN_SWITCH_OPTION);
+  const [pickingModel, setPickingModel] = useState(false);
 
   const create = useCreateVehicle();
   const update = useUpdateVehicle();
@@ -67,6 +112,10 @@ export default function VehicleDialog({ open, vehicle, onClose }: Props) {
       setName(vehicle.name);
       setKind(vehicle.kind);
       setNumber(vehicle.number);
+      setCarrier(vehicle.carrier ?? "");
+      setAssignment(vehicle.assignment ?? "");
+      setRevisionDate(vehicle.revisionDate ?? "");
+      setEpoch(vehicle.epoch ?? "");
       setDccEnabled(vehicle.dccAddress != null);
       setDccAddress(vehicle.dccAddress != null ? String(vehicle.dccAddress) : "");
       setRp1Function(vehicle.rp1Function ?? DEFAULT_RP1_FUNCTION);
@@ -80,6 +129,10 @@ export default function VehicleDialog({ open, vehicle, onClose }: Props) {
       setName("");
       setKind("loco");
       setNumber("");
+      setCarrier("");
+      setAssignment("");
+      setRevisionDate("");
+      setEpoch("");
       setDccEnabled(true);
       setDccAddress("");
       setRp1Function(DEFAULT_RP1_FUNCTION);
@@ -101,12 +154,35 @@ export default function VehicleDialog({ open, vehicle, onClose }: Props) {
     return t("vehicle:dialog.fields.poolHint", { ranges });
   }, [pool.data, t]);
 
+  const onFillFromCatalog = async () => {
+    setPickingModel(true);
+    try {
+      const payload = await openModelPicker();
+      if (!payload) return;
+      applyModelPick(payload, {
+        setNumber,
+        setCarrier,
+        setAssignment,
+        setRevisionDate,
+        setEpoch,
+      });
+    } finally {
+      setPickingModel(false);
+    }
+  };
+
   const onSubmit = () => {
     const parsedAddr = dccEnabled ? Number(dccAddress) : null;
     const dccValue =
       dccEnabled && Number.isFinite(parsedAddr) && parsedAddr! > 0
         ? Math.trunc(parsedAddr!)
         : null;
+    const catalogMeta = {
+      carrier,
+      assignment,
+      revisionDate: revisionDate.trim() ? revisionDate.trim() : null,
+      epoch,
+    };
     if (isEdit && vehicle) {
       update.mutate({
         id: vehicle.id,
@@ -117,6 +193,7 @@ export default function VehicleDialog({ open, vehicle, onClose }: Props) {
         rp1Function,
         emergencyLightsFunction,
         deadManSwitchOption,
+        ...catalogMeta,
       });
     } else {
       create.mutate({
@@ -127,6 +204,7 @@ export default function VehicleDialog({ open, vehicle, onClose }: Props) {
         rp1Function,
         emergencyLightsFunction,
         deadManSwitchOption,
+        ...catalogMeta,
       });
     }
   };
@@ -159,8 +237,34 @@ export default function VehicleDialog({ open, vehicle, onClose }: Props) {
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
-      <DialogTitle>
-        {isEdit ? t("vehicle:dialog.edit.title") : t("vehicle:dialog.create.title")}
+      <DialogTitle
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 1,
+          pr: showFillFromCatalog ? 1 : undefined,
+        }}
+      >
+        <Box component="span" sx={{ flex: 1, minWidth: 0 }}>
+          {isEdit
+            ? t("vehicle:dialog.edit.title")
+            : t("vehicle:dialog.create.title")}
+        </Box>
+        {showFillFromCatalog && (
+          <Tooltip title={t("vehicle:dialog.fillFromCatalog")}>
+            <span>
+              <IconButton
+                edge="end"
+                onClick={() => void onFillFromCatalog()}
+                disabled={pickingModel || submitting}
+                aria-label={t("vehicle:dialog.fillFromCatalog")}
+              >
+                <AutoFixHighIcon />
+              </IconButton>
+            </span>
+          </Tooltip>
+        )}
       </DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
@@ -192,6 +296,42 @@ export default function VehicleDialog({ open, vehicle, onClose }: Props) {
             onChange={(e) => setNumber(e.target.value)}
             fullWidth
           />
+          <TextField
+            label={t("vehicle:dialog.fields.carrier")}
+            value={carrier}
+            onChange={(e) => setCarrier(e.target.value)}
+            fullWidth
+          />
+          <TextField
+            label={t("vehicle:dialog.fields.assignment")}
+            value={assignment}
+            onChange={(e) => setAssignment(e.target.value)}
+            fullWidth
+          />
+          <TextField
+            label={t("vehicle:dialog.fields.revisionDate")}
+            type="date"
+            value={revisionDate}
+            onChange={(e) => setRevisionDate(e.target.value)}
+            InputLabelProps={{ shrink: true }}
+            fullWidth
+          />
+          <TextField
+            select
+            label={t("vehicle:dialog.fields.epoch")}
+            value={epoch}
+            onChange={(e) => setEpoch(e.target.value)}
+            fullWidth
+          >
+            <MenuItem value="">
+              {t("vehicle:dialog.fields.epochNone")}
+            </MenuItem>
+            {VEHICLE_EPOCHS.map((e) => (
+              <MenuItem key={e} value={e}>
+                {e}
+              </MenuItem>
+            ))}
+          </TextField>
           <FormControlLabel
             control={
               <Switch

@@ -53,6 +53,65 @@ export interface Vehicle {
   rp1Function: number;
   emergencyLightsFunction: number;
   deadManSwitchOption: DeadManSwitchOption;
+  carrier: string;
+  assignment: string;
+  revisionDate: string | null;
+  epoch: string;
+}
+
+/** Polish modelling epochs (I…VIb), matching server domain.VehicleEpoch. */
+export type VehicleEpoch =
+  | ""
+  | "I"
+  | "Ia"
+  | "Ib"
+  | "II"
+  | "IIa"
+  | "IIb"
+  | "IIc"
+  | "III"
+  | "IIIa"
+  | "IIIb"
+  | "IIIc"
+  | "IV"
+  | "IVa"
+  | "IVb"
+  | "IVc"
+  | "V"
+  | "Va"
+  | "Vb"
+  | "Vc"
+  | "VI"
+  | "VIa"
+  | "VIb";
+
+export const VEHICLE_EPOCHS: Exclude<VehicleEpoch, "">[] = [
+  "I",
+  "Ia",
+  "Ib",
+  "II",
+  "IIa",
+  "IIb",
+  "IIc",
+  "III",
+  "IIIa",
+  "IIIb",
+  "IIIc",
+  "IV",
+  "IVa",
+  "IVb",
+  "IVc",
+  "V",
+  "Va",
+  "Vb",
+  "Vc",
+  "VI",
+  "VIa",
+  "VIb",
+];
+
+export function isVehicleEpoch(value: string): value is Exclude<VehicleEpoch, ""> {
+  return (VEHICLE_EPOCHS as string[]).includes(value);
 }
 
 export interface CatalogueVehicle extends Vehicle {
@@ -129,6 +188,10 @@ export interface VehicleCreateBody {
   rp1Function: number;
   emergencyLightsFunction: number;
   deadManSwitchOption: DeadManSwitchOption;
+  carrier: string;
+  assignment: string;
+  revisionDate: string | null;
+  epoch: string;
 }
 
 export function useCreateVehicle() {
@@ -145,6 +208,10 @@ export function useCreateVehicle() {
           rp1Function: body.rp1Function,
           emergencyLightsFunction: body.emergencyLightsFunction,
           deadManSwitchOption: body.deadManSwitchOption,
+          carrier: body.carrier,
+          assignment: body.assignment,
+          revisionDate: body.revisionDate,
+          epoch: body.epoch,
         }),
       }),
     onSuccess: () => {
@@ -167,13 +234,22 @@ export interface VehicleUpdateBody {
   rp1Function?: number;
   emergencyLightsFunction?: number;
   deadManSwitchOption?: DeadManSwitchOption;
+  carrier: string;
+  assignment: string;
+  revisionDate: string | null;
+  epoch: string;
 }
 
 export function useUpdateVehicle() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: VehicleUpdateBody) => {
-      const payload: Record<string, unknown> = {};
+      const payload: Record<string, unknown> = {
+        carrier: body.carrier,
+        assignment: body.assignment,
+        revisionDate: body.revisionDate,
+        epoch: body.epoch,
+      };
       if (body.name !== undefined) payload.name = body.name;
       if (body.kind !== undefined) payload.kind = body.kind;
       if (body.number !== undefined) payload.number = body.number;

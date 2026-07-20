@@ -148,6 +148,11 @@
       "name": "Nazwa",
       "kind": "Typ pojazdu",
       "number": "Numer (opcjonalnie)",
+      "carrier": "Przewoźnik",
+      "assignment": "Przydział",
+      "revisionDate": "Rewizja",
+      "epoch": "Epoka",
+      "epochNone": "—",
       "dccAddress": "Adres DCC (opcjonalnie)",
       "dccAddressHelp": "Pozostaw puste, aby utworzyć pojazd „dummy” – widoczny na makiecie, ale niesterowalny.",
       "poolHint": "Twoja pula adresów DCC: {{ranges}}",
@@ -157,6 +162,7 @@
       "deadManSwitchOption": "Dead Man's Switch",
       "dccFunction": "F{{fn}}"
     },
+    "fillFromCatalog": "Uzupełnij dane",
     "submitCreate": "Dodaj",
     "submitEdit": "Zapisz",
     "cancel": "Anuluj"

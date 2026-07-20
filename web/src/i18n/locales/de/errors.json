@@ -46,6 +46,8 @@
   "vehicle_in_use": "Dieses Fahrzeug ist Teil eines Zuges — zuerst lösen.",
   "vehicle_dcc_function_invalid": "Funktion im Bereich F0–F31 wählen.",
   "vehicle_deadman_switch_invalid": "Gültige Totmann-Schalter-Option wählen.",
+  "vehicle_epoch_invalid": "Bitte eine Epoche aus der Liste wählen.",
+  "vehicle_revision_date_invalid": "Revisionsdatum als JJJJ-MM-TT eingeben.",
   "dcc_address_taken": "Diese DCC-Adresse ist bereits vergeben.",
   "dcc_address_outside_pool": "Die DCC-Adresse liegt außerhalb Ihres Pools.",
   "dcc_pool_range_invalid": "Ungültiger DCC-Pool-Bereich (1–9999, „von“ darf „bis“ nicht überschreiten).",

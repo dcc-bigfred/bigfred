@@ -25,24 +25,24 @@ const DefaultTemplatePath = "/data/etc/loco-server.conf.defaults"
 
 // File holds settings from a KEY=value configuration file.
 type File struct {
-	HTTP            string
-	DB              string
-	JWTSecret       string
-	CorsOrigins     []string
-	SecureCookie    *bool
-	NoSupervisor    *bool
-	LogLevel        string
-	RedisBin        string
-	RedisBindAddr   string
-	RedisPort       *uint16
-	RedisDataDir    string
-	RedisAddr       string
-	RedisExternal   *bool
-	RedisAutoDetect *bool
-	RedisRDBSave    []string
-	RedisNoPersist  *bool
-	EnableTelemetry *bool
-	TelemetryConfig string
+	HTTP                   string
+	DB                     string
+	JWTSecret              string
+	CorsOrigins            []string
+	SecureCookie           *bool
+	NoSupervisor           *bool
+	LogLevel               string
+	RedisBin               string
+	RedisBindAddr          string
+	RedisPort              *uint16
+	RedisDataDir           string
+	RedisAddr              string
+	RedisExternal          *bool
+	RedisAutoDetect        *bool
+	RedisRDBSave           []string
+	RedisNoPersist         *bool
+	EnableTelemetry        *bool
+	TelemetryConfig        string
 	RemoteICMPIntervalSecs *uint
 }
 

@@ -69,6 +69,8 @@ func LoadProbeTargets(ctx context.Context, rdb *redis.Client) ([]ProbeTarget, er
 					LayoutID:         snap.LayoutID,
 					CommandStationID: snap.CommandStationID,
 				}
+				// When several clients share an IP (NAT), prefer the paired login.
+				// If multiple paired clients share an IP, the first seen wins.
 				prev, ok := byIP[keyIP]
 				if !ok || (prev.Login == "_" && cand.Login != "_") {
 					byIP[keyIP] = cand

@@ -66,15 +66,11 @@ func run(ctx context.Context, log *logrus.Logger, f flags, changed func(string) 
 	applyLogLevel(log, f, cfgFile, changed)
 
 	redisAddr := f.RedisAddr
-	if !changed("redis-addr") || redisAddr == "" {
-		if redisAddr == "" {
-			redisAddr = config.RedisDialAddr(cfgFile)
-		}
+	if redisAddr == "" {
+		redisAddr = config.RedisDialAddr(cfgFile)
 	}
 	interval := config.RemoteICMPInterval(cfgFile)
-	if changed("interval-secs") && f.IntervalSecs > 0 {
-		interval = time.Duration(f.IntervalSecs) * time.Second
-	} else if f.IntervalSecs > 0 {
+	if f.IntervalSecs > 0 {
 		interval = time.Duration(f.IntervalSecs) * time.Second
 	}
 
@@ -82,9 +78,6 @@ func run(ctx context.Context, log *logrus.Logger, f flags, changed func(string) 
 	otelEndpoint := f.OTLPEndpoint
 	if otelEndpoint == "" && enableTelemetry {
 		otelEndpoint = service.DefaultOTLPEndpoint
-	}
-	if changed("otel-endpoint") && f.OTLPEndpoint != "" {
-		otelEndpoint = f.OTLPEndpoint
 	}
 
 	var metrics *Metrics

@@ -24,10 +24,10 @@ type ProberConfig struct {
 
 // Prober periodically ICMP-pings handset IPs from Redis snapshots.
 type Prober struct {
-	cfg    ProberConfig
-	conn   *icmp.PacketConn
-	ident  int
-	seq    uint16
+	cfg   ProberConfig
+	conn  *icmp.PacketConn
+	ident int
+	seq   uint16
 }
 
 // NewProber opens an unprivileged ICMP socket (udp4 / IPPROTO_ICMP).
@@ -71,6 +71,9 @@ func (p *Prober) Run(ctx context.Context) error {
 }
 
 func (p *Prober) round(ctx context.Context) {
+	// Targets are probed sequentially; many timeouts can push a round past the
+	// configured interval. Fine for a handful of handsets; add bounded concurrency
+	// if client counts grow.
 	targets, err := LoadProbeTargets(ctx, p.cfg.Redis)
 	if err != nil {
 		p.cfg.Log.WithError(err).Warn("load probe targets")

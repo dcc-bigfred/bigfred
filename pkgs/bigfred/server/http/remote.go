@@ -129,6 +129,7 @@ func (h *RemoteHandler) StartPairing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	pending, err := h.svc.StartPairing(r.Context(), layoutID, csID, actor.User.ID, protocolName, cmd.RemoteStartPairingInput{
+		UserLogin:        actor.User.Login,
 		VehicleIDs:       req.VehicleIDs,
 		AllowAllVehicles: req.AllowAllVehicles,
 		HandsetBrakeSecs: req.HandsetBrakeSecs,

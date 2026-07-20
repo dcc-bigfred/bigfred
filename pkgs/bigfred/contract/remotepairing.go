@@ -104,6 +104,7 @@ type RemotePendingWire struct {
 	CommandStationID uint     `json:"commandStationId"`
 	Protocol         string   `json:"protocol"`
 	UserID           uint     `json:"userId"`
+	UserLogin        string   `json:"userLogin,omitempty"`
 	ReqID            string   `json:"reqId"`
 	DisplayLabel     string   `json:"displayLabel"`
 	VehicleIDs       []string `json:"vehicleIds"`
@@ -122,6 +123,7 @@ type RemotePendingWire struct {
 type RemoteSessionWire struct {
 	Protocol         string   `json:"protocol"`
 	UserID           uint     `json:"userId"`
+	UserLogin        string   `json:"userLogin,omitempty"`
 	VehicleIDs       []string `json:"vehicleIds"`
 	AllowedAddrs     []uint16 `json:"allowedAddrs"`
 	AllowAllVehicles bool     `json:"allowAllVehicles"`

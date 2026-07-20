@@ -482,6 +482,7 @@ func (c *Coordinator) BuildSnapshot() contract.RemoteClientsSnapshotWire {
 		}
 		if cl.Session != nil {
 			w.UserID = cl.Session.UserID
+			w.UserLogin = cl.Session.UserLogin
 			// Surface the sticky-session expiry so the admin UI can show
 			// when an IP-sticky handset will be evicted without activity.
 			// Non-sticky sessions omit the field (UI only renders it when

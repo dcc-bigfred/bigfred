@@ -54,6 +54,7 @@ type WithrottleRemoteStatus struct {
 
 // WithrottleRemoteStartPairingInput carries vehicle scope for a new pairing code.
 type WithrottleRemoteStartPairingInput struct {
+	UserLogin        string
 	VehicleIDs       []string
 	AllowAllVehicles bool
 	HandsetBrakeSecs uint
@@ -130,6 +131,7 @@ func (s *WithrottleRemote) StartPairing(ctx context.Context, layoutID, csID, use
 		LayoutID:         layoutID,
 		CommandStationID: csID,
 		UserID:           userID,
+		UserLogin:        in.UserLogin,
 		VehicleIDs:       vehicleIDs,
 		AllowedAddrs:     addrs,
 		AllowAllVehicles: in.AllowAllVehicles,

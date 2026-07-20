@@ -1,0 +1,251 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "Wi-Fi path quality from bigfred-remote-icmp: ICMP Echo RTT and timeout rate to active Z21/WiThrottle handset IPs. Labels: layout_id, command_station_id, protocol, user_login.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [
+    {
+      "asDropdown": false,
+      "icon": "external link",
+      "includeVars": true,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "dcc-bus (driver + WS)",
+      "type": "link",
+      "url": "/d/bigfred-dcc-bus/bigfred-dcc-bus"
+    }
+  ],
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 1,
+      "panels": [],
+      "title": "ICMP RTT",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "p50 / p95 ICMP Echo RTT by user.login and protocol.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "showPoints": "never"
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 10, "w": 16, "x": 0, "y": 1 },
+      "id": 2,
+      "options": {
+        "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.50, sum by (le, user_login, protocol) (rate(bigfred_remote_icmp_rtt_seconds_bucket{service_name=\"bigfred-remote-icmp\", layout_id=~\"$layout_id\", command_station_id=~\"$command_station_id\", user_login=~\"$user_login\", protocol=~\"$protocol\"}[$__rate_interval])))",
+          "legendFormat": "p50 {{user_login}} {{protocol}}",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum by (le, user_login, protocol) (rate(bigfred_remote_icmp_rtt_seconds_bucket{service_name=\"bigfred-remote-icmp\", layout_id=~\"$layout_id\", command_station_id=~\"$command_station_id\", user_login=~\"$user_login\", protocol=~\"$protocol\"}[$__rate_interval])))",
+          "legendFormat": "p95 {{user_login}} {{protocol}}",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "RTT p50 / p95",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Timeout rate / probe rate (approx packet loss on ICMP path).",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 5 },
+              { "color": "red", "value": 20 }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 5, "w": 8, "x": 16, "y": 1 },
+      "id": 3,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "100 * (sum(rate(bigfred_remote_icmp_timeouts_total{service_name=\"bigfred-remote-icmp\", layout_id=~\"$layout_id\", command_station_id=~\"$command_station_id\", user_login=~\"$user_login\", protocol=~\"$protocol\"}[$__rate_interval])) / clamp_min(sum(rate(bigfred_remote_icmp_probes_total{service_name=\"bigfred-remote-icmp\", layout_id=~\"$layout_id\", command_station_id=~\"$command_station_id\", user_login=~\"$user_login\", protocol=~\"$protocol\"}[$__rate_interval])), 1e-9))",
+          "legendFormat": "timeout %",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Timeout %",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Probe and timeout rates.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "showPoints": "never"
+          },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 5, "w": 8, "x": 16, "y": 6 },
+      "id": 4,
+      "options": {
+        "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "sum(rate(bigfred_remote_icmp_probes_total{service_name=\"bigfred-remote-icmp\", layout_id=~\"$layout_id\", command_station_id=~\"$command_station_id\", user_login=~\"$user_login\", protocol=~\"$protocol\"}[$__rate_interval]))",
+          "legendFormat": "probes/s",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "sum(rate(bigfred_remote_icmp_timeouts_total{service_name=\"bigfred-remote-icmp\", layout_id=~\"$layout_id\", command_station_id=~\"$command_station_id\", user_login=~\"$user_login\", protocol=~\"$protocol\"}[$__rate_interval]))",
+          "legendFormat": "timeouts/s",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "Probes / timeouts",
+      "type": "timeseries"
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["bigfred", "remote-icmp", "wifi"],
+  "templating": {
+    "list": [
+      {
+        "current": {},
+        "name": "datasource",
+        "query": "prometheus",
+        "type": "datasource"
+      },
+      {
+        "allValue": ".*",
+        "current": { "selected": true, "text": "All", "value": "$__all" },
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "definition": "label_values(bigfred_remote_icmp_probes_total{service_name=\"bigfred-remote-icmp\"}, layout_id)",
+        "includeAll": true,
+        "label": "Layout",
+        "multi": true,
+        "name": "layout_id",
+        "query": {
+          "query": "label_values(bigfred_remote_icmp_probes_total{service_name=\"bigfred-remote-icmp\"}, layout_id)",
+          "refId": "A"
+        },
+        "refresh": 2,
+        "type": "query"
+      },
+      {
+        "allValue": ".*",
+        "current": { "selected": true, "text": "All", "value": "$__all" },
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "definition": "label_values(bigfred_remote_icmp_probes_total{service_name=\"bigfred-remote-icmp\", layout_id=~\"$layout_id\"}, command_station_id)",
+        "includeAll": true,
+        "label": "Command station",
+        "multi": true,
+        "name": "command_station_id",
+        "query": {
+          "query": "label_values(bigfred_remote_icmp_probes_total{service_name=\"bigfred-remote-icmp\", layout_id=~\"$layout_id\"}, command_station_id)",
+          "refId": "A"
+        },
+        "refresh": 2,
+        "type": "query"
+      },
+      {
+        "allValue": ".*",
+        "current": { "selected": true, "text": "All", "value": "$__all" },
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "definition": "label_values(bigfred_remote_icmp_probes_total{service_name=\"bigfred-remote-icmp\"}, user_login)",
+        "includeAll": true,
+        "label": "User",
+        "multi": true,
+        "name": "user_login",
+        "query": {
+          "query": "label_values(bigfred_remote_icmp_probes_total{service_name=\"bigfred-remote-icmp\"}, user_login)",
+          "refId": "A"
+        },
+        "refresh": 2,
+        "type": "query"
+      },
+      {
+        "allValue": ".*",
+        "current": { "selected": true, "text": "All", "value": "$__all" },
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "definition": "label_values(bigfred_remote_icmp_probes_total{service_name=\"bigfred-remote-icmp\"}, protocol)",
+        "includeAll": true,
+        "label": "Protocol",
+        "multi": true,
+        "name": "protocol",
+        "query": {
+          "query": "label_values(bigfred_remote_icmp_probes_total{service_name=\"bigfred-remote-icmp\"}, protocol)",
+          "refId": "A"
+        },
+        "refresh": 2,
+        "type": "query"
+      }
+    ]
+  },
+  "time": { "from": "now-1h", "to": "now" },
+  "timezone": "browser",
+  "title": "BigFred / remote-icmp (Wi-Fi)",
+  "uid": "bigfred-remote-icmp",
+  "version": 1
+}

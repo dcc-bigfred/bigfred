@@ -31,11 +31,15 @@ func TestCreateAndPairViaCV3CV4(t *testing.T) {
 		LayoutID:         1,
 		CommandStationID: 2,
 		UserID:           9,
+		UserLogin:        "alice",
 		VehicleIDs:       []string{"V-1"},
 		AllowedAddrs:     []uint16{3},
 	})
 	if err != nil {
 		t.Fatalf("create: %v", err)
+	}
+	if req.UserLogin != "alice" {
+		t.Fatalf("pending UserLogin=%q", req.UserLogin)
 	}
 	if !contract.ValidPairingCV(req.PairingCV3) || !contract.ValidPairingCV(req.PairingCV4) {
 		t.Fatalf("invalid pair: %+v", req)
@@ -57,6 +61,9 @@ func TestCreateAndPairViaCV3CV4(t *testing.T) {
 	}
 	if active.ClientKey != clientKey || active.UserID != 9 {
 		t.Fatalf("active: %+v", active)
+	}
+	if active.UserLogin != "alice" {
+		t.Fatalf("active UserLogin=%q want alice", active.UserLogin)
 	}
 
 	_, ok, err = store.GetPendingByUser(ctx, 1, 2, 9)

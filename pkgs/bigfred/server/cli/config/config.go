@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
@@ -42,6 +43,7 @@ type File struct {
 	RedisNoPersist  *bool
 	EnableTelemetry *bool
 	TelemetryConfig string
+	RemoteICMPIntervalSecs *uint
 }
 
 // DefaultFile returns built-in defaults (mirrors loco-server CLI flag defaults).
@@ -158,6 +160,11 @@ func Parse(text string) File {
 			f.EnableTelemetry = &v
 		case "TELEMETRY_CONFIG", "TELEMETRYCONFIG":
 			f.TelemetryConfig = value
+		case "REMOTE_ICMP_INTERVAL_SECS", "REMOTEICMPINTERVALSECS":
+			if n, err := strconv.ParseUint(value, 10, 32); err == nil {
+				u := uint(n)
+				f.RemoteICMPIntervalSecs = &u
+			}
 		}
 	}
 	return f
@@ -214,6 +221,9 @@ REDIS_NO_PERSIST=false
 
 ENABLE_TELEMETRY=false
 TELEMETRY_CONFIG=%s
+
+# Interval between ICMP probes to handset IPs (bigfred-remote-icmp)
+REMOTE_ICMP_INTERVAL_SECS=30
 `, d.HTTP, d.DB, cors, d.LogLevel, d.RedisBin, d.RedisBindAddr, redisPort, d.TelemetryConfig)
 }
 
@@ -280,6 +290,9 @@ ENABLE_TELEMETRY=false
 
 # Alloy config file path (flag: --telemetry-config)
 TELEMETRY_CONFIG=%s
+
+# Interval between ICMP probes to active handset IPs by bigfred-remote-icmp (seconds)
+REMOTE_ICMP_INTERVAL_SECS=30
 `, DefaultPath, d.HTTP, d.DB, cors, d.LogLevel, d.RedisBin, d.RedisBindAddr, redisPort, d.TelemetryConfig)
 }
 
@@ -302,4 +315,29 @@ func parseBool(s string) bool {
 	default:
 		return false
 	}
+}
+
+// RedisDialAddr returns REDIS_ADDR, or REDIS_BIND:REDIS_PORT when empty.
+func RedisDialAddr(f File) string {
+	if strings.TrimSpace(f.RedisAddr) != "" {
+		return strings.TrimSpace(f.RedisAddr)
+	}
+	bind := f.RedisBindAddr
+	if bind == "" {
+		bind = "127.0.0.1"
+	}
+	port := uint16(6379)
+	if f.RedisPort != nil {
+		port = *f.RedisPort
+	}
+	return fmt.Sprintf("%s:%d", bind, port)
+}
+
+// RemoteICMPInterval returns the probe interval, defaulting to 30s.
+func RemoteICMPInterval(f File) time.Duration {
+	secs := uint(30)
+	if f.RemoteICMPIntervalSecs != nil && *f.RemoteICMPIntervalSecs > 0 {
+		secs = *f.RemoteICMPIntervalSecs
+	}
+	return time.Duration(secs) * time.Second
 }

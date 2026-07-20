@@ -62,6 +62,7 @@ type RemoteVehicleRef struct {
 
 // RemoteStartPairingInput carries vehicle scope for a new pairing code.
 type RemoteStartPairingInput struct {
+	UserLogin        string
 	VehicleIDs       []string
 	AllowAllVehicles bool
 	HandsetBrakeSecs uint
@@ -152,6 +153,7 @@ func (s *Remote) StartPairing(ctx context.Context, layoutID, csID, userID uint, 
 			return contract.RemotePendingWire{}, errors.New("remote service not configured")
 		}
 		req, err := s.z21.StartPairing(ctx, layoutID, csID, userID, Z21RemoteStartPairingInput{
+			UserLogin:        in.UserLogin,
 			VehicleIDs:       in.VehicleIDs,
 			AllowAllVehicles: in.AllowAllVehicles,
 			HandsetBrakeSecs: in.HandsetBrakeSecs,
@@ -165,6 +167,7 @@ func (s *Remote) StartPairing(ctx context.Context, layoutID, csID, userID uint, 
 			return contract.RemotePendingWire{}, errors.New("remote service not configured")
 		}
 		req, err := s.withrottle.StartPairing(ctx, layoutID, csID, userID, WithrottleRemoteStartPairingInput{
+			UserLogin:        in.UserLogin,
 			VehicleIDs:       in.VehicleIDs,
 			AllowAllVehicles: in.AllowAllVehicles,
 			HandsetBrakeSecs: in.HandsetBrakeSecs,

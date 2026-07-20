@@ -1,10 +1,13 @@
-.PHONY: all
+.PHONY: all build loco-build rb-build
 all: build
 
-build:
+build: loco-build rb-build server-build loadtest-build remote-icmp-build
+
+loco-build:
 	CGO_ENABLED=0 GOOS=linux go build -o bin/loco ./pkgs/loco
 	GOOS=windows GOARCH=amd64 go build -o bin/loco.exe ./pkgs/loco
 
+rb-build:
 	CGO_ENABLED=0 GOOS=linux go build -o bin/rb pkgs/rb/main.go
 	GOOS=windows GOARCH=amd64 go build -o bin/rb.exe pkgs/rb/main.go
 
@@ -23,9 +26,12 @@ server-telemetry:
 server-build:
 	CGO_ENABLED=0 GOOS=linux go build -o bin/loco-server ./pkgs/bigfred/server
 
-.PHONY: loadtest-build
+.PHONY: loadtest-build remote-icmp-build
 loadtest-build:
 	CGO_ENABLED=0 GOOS=linux go build -o bin/loco-server-load-test ./pkgs/bigfred/loadtest
+
+remote-icmp-build:
+	CGO_ENABLED=0 GOOS=linux go build -o bin/bigfred-remote-icmp ./pkgs/bigfred/remote-icmp
 
 # `build-prod` produces the single production binary: it builds the SPA
 # (web/dist) and embeds it into loco-server via go:embed (-tags prod), so

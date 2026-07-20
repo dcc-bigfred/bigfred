@@ -273,6 +273,7 @@ func (s *Store) CreateZ21PairingRequest(ctx context.Context, in CreateZ21Pairing
 			CommandStationID: in.CommandStationID,
 			Protocol:         contract.RemoteProtocolZ21,
 			UserID:           in.UserID,
+			UserLogin:        in.UserLogin,
 			ReqID:            reqID,
 			DisplayLabel:     contract.Z21PairingDisplayLabel(cv3, cv4),
 			VehicleIDs:       append([]string(nil), in.VehicleIDs...),
@@ -314,6 +315,7 @@ type CreateZ21PairingInput struct {
 	LayoutID         uint
 	CommandStationID uint
 	UserID           uint
+	UserLogin        string
 	VehicleIDs       []string
 	AllowedAddrs     []uint16
 	AllowAllVehicles bool
@@ -325,6 +327,7 @@ type CreateWithrottlePairingInput struct {
 	LayoutID         uint
 	CommandStationID uint
 	UserID           uint
+	UserLogin        string
 	VehicleIDs       []string
 	AllowedAddrs     []uint16
 	AllowAllVehicles bool
@@ -363,6 +366,7 @@ func (s *Store) CreateWithrottlePairingRequest(ctx context.Context, in CreateWit
 			CommandStationID: in.CommandStationID,
 			Protocol:         contract.RemoteProtocolWithrottle,
 			UserID:           in.UserID,
+			UserLogin:        in.UserLogin,
 			ReqID:            reqID,
 			DisplayLabel:     contract.WithrottlePairingDisplayLabel(code),
 			VehicleIDs:       append([]string(nil), in.VehicleIDs...),
@@ -492,6 +496,7 @@ func (s *Store) CompletePairing(ctx context.Context, layoutID, commandStationID 
 	active := contract.RemoteSessionWire{
 		Protocol:         req.Protocol,
 		UserID:           req.UserID,
+		UserLogin:        req.UserLogin,
 		VehicleIDs:       append([]string(nil), req.VehicleIDs...),
 		AllowedAddrs:     append([]uint16(nil), req.AllowedAddrs...),
 		AllowAllVehicles: req.AllowAllVehicles,

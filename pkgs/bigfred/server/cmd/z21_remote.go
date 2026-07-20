@@ -64,6 +64,7 @@ type Z21RemoteVehicleRef struct {
 
 // Z21RemoteStartPairingInput carries vehicle scope for a new pairing code.
 type Z21RemoteStartPairingInput struct {
+	UserLogin        string
 	VehicleIDs       []string
 	AllowAllVehicles bool
 	HandsetBrakeSecs uint
@@ -178,6 +179,7 @@ func (s *Z21Remote) StartPairing(ctx context.Context, layoutID, csID, userID uin
 		LayoutID:         layoutID,
 		CommandStationID: csID,
 		UserID:           userID,
+		UserLogin:        in.UserLogin,
 		VehicleIDs:       vehicleIDs,
 		AllowedAddrs:     addrs,
 		AllowAllVehicles: in.AllowAllVehicles,

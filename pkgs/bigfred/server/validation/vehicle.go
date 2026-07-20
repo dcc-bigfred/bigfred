@@ -3,6 +3,7 @@ package validation
 import (
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
 	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
@@ -38,18 +39,28 @@ func TrimVehicleNumber(raw string) string {
 
 // TrimVehicleCarrier trims and caps the optional carrier field.
 func TrimVehicleCarrier(raw string) string {
-	s := strings.TrimSpace(raw)
-	if len(s) > MaxVehicleCarrierLen {
-		s = s[:MaxVehicleCarrierLen]
-	}
-	return s
+	return truncateRunes(strings.TrimSpace(raw), MaxVehicleCarrierLen)
 }
 
 // TrimVehicleAssignment trims and caps the optional assignment field.
 func TrimVehicleAssignment(raw string) string {
-	s := strings.TrimSpace(raw)
-	if len(s) > MaxVehicleAssignmentLen {
-		s = s[:MaxVehicleAssignmentLen]
+	return truncateRunes(strings.TrimSpace(raw), MaxVehicleAssignmentLen)
+}
+
+// truncateRunes caps s to at most max runes without splitting a UTF-8 character.
+func truncateRunes(s string, max int) string {
+	if max <= 0 {
+		return ""
+	}
+	if utf8.RuneCountInString(s) <= max {
+		return s
+	}
+	n := 0
+	for i := range s {
+		if n == max {
+			return s[:i]
+		}
+		n++
 	}
 	return s
 }

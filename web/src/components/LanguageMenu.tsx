@@ -30,7 +30,12 @@ import {
 //   * Locale display labels live in `common.language.options.<code>`
 //     and are themselves translated, so a Polish user sees "Polski /
 //     Angielski" while an English user sees "Polish / English".
-export default function LanguageMenu() {
+interface LanguageMenuProps {
+  /** Horizontal alignment of the dropdown relative to the trigger button. */
+  menuAnchor?: "left" | "right";
+}
+
+export default function LanguageMenu({ menuAnchor = "right" }: LanguageMenuProps) {
   const { t, i18n } = useTranslation("common");
   const [anchor, setAnchor] = useState<null | HTMLElement>(null);
 
@@ -62,8 +67,8 @@ export default function LanguageMenu() {
         anchorEl={anchor}
         open={Boolean(anchor)}
         onClose={() => setAnchor(null)}
-        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-        transformOrigin={{ vertical: "top", horizontal: "right" }}
+        anchorOrigin={{ vertical: "bottom", horizontal: menuAnchor }}
+        transformOrigin={{ vertical: "top", horizontal: menuAnchor }}
       >
         {SUPPORTED_LOCALES.map((loc) => {
           const isActive = loc === active;

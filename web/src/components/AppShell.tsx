@@ -46,9 +46,9 @@ import Z21Icon from "./icons/Z21Icon";
 // screen. The post-login pages render inside its <Outlet/>.
 //
 // Layout, left → right inside the AppBar:
-//   [☰] [BigFred] ……spacer…… [layout chip] [⚡][⛶] [menus†] [🌐]
+//   [🌐] [BigFred] ……spacer…… [layout chip] [⚡][⛶] [menus†] [☰]
 //   † dropdown menus (My / Admin / Account) hide below `md`; the ☰
-//   drawer is always available when logged in.
+//   drawer slides in from the right when logged in.
 //
 // Throttle is a persistent top-bar link (not inside the My dropdown).
 // The dropdowns use TopBarMenu for account-level / admin-level actions.
@@ -332,19 +332,9 @@ function AppShellContent() {
             "& .MuiSvgIcon-fontSizeSmall": { fontSize: 24 },
           }}
         >
-          {me && (
-            <IconButton
-              color="inherit"
-              edge="start"
-              aria-label={t("nav.openMenu")}
-              onClick={() => setMobileNavOpen(true)}
-              sx={{ mr: 1 }}
-            >
-              <MenuIcon />
-            </IconButton>
-          )}
+          <LanguageMenu menuAnchor="left" />
 
-          <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+          <Box sx={{ flexGrow: 1, minWidth: 0, ml: 1 }}>
             {!hideAppTitle && (
               <Typography
                 variant="h6"
@@ -439,7 +429,16 @@ function AppShellContent() {
               />
             )}
 
-            <LanguageMenu />
+            {me && (
+              <IconButton
+                color="inherit"
+                edge="end"
+                aria-label={t("nav.openMenu")}
+                onClick={() => setMobileNavOpen(true)}
+              >
+                <MenuIcon />
+              </IconButton>
+            )}
           </Stack>
         </Toolbar>
       </AppBar>

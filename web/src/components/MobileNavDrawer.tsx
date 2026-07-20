@@ -44,7 +44,7 @@ export default function MobileNavDrawer({
 }: MobileNavDrawerProps) {
   return (
     <Drawer
-      anchor="left"
+      anchor="right"
       open={open}
       onClose={onClose}
       ModalProps={{ keepMounted: true }}
@@ -60,17 +60,16 @@ export default function MobileNavDrawer({
           gap: 1,
         }}
       >
-        <Typography variant="h6" component="span" noWrap sx={{ flex: 1 }}>
-          {title}
-        </Typography>
         <IconButton
-          edge="end"
+          edge="start"
           aria-label={closeLabel}
           onClick={onClose}
-          sx={{ ml: "auto" }}
         >
           <CloseIcon />
         </IconButton>
+        <Typography variant="h6" component="span" noWrap sx={{ flex: 1 }}>
+          {title}
+        </Typography>
       </Toolbar>
 
       {identityLine && (

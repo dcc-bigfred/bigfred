@@ -2,14 +2,18 @@ package validation
 
 import (
 	"strings"
+	"time"
+	"unicode/utf8"
 
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
 	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
 )
 
 const (
-	MaxVehicleNameLen   = 64
-	MaxVehicleNumberLen = 32
+	MaxVehicleNameLen       = 64
+	MaxVehicleNumberLen     = 32
+	MaxVehicleCarrierLen    = 64
+	MaxVehicleAssignmentLen = 128
 )
 
 // SanitiseVehicleName trims whitespace and enforces a non-empty name.
@@ -31,6 +35,68 @@ func TrimVehicleNumber(raw string) string {
 		number = number[:MaxVehicleNumberLen]
 	}
 	return number
+}
+
+// TrimVehicleCarrier trims and caps the optional carrier field.
+func TrimVehicleCarrier(raw string) string {
+	return truncateRunes(strings.TrimSpace(raw), MaxVehicleCarrierLen)
+}
+
+// TrimVehicleAssignment trims and caps the optional assignment field.
+func TrimVehicleAssignment(raw string) string {
+	return truncateRunes(strings.TrimSpace(raw), MaxVehicleAssignmentLen)
+}
+
+// truncateRunes caps s to at most max runes without splitting a UTF-8 character.
+func truncateRunes(s string, max int) string {
+	if max <= 0 {
+		return ""
+	}
+	if utf8.RuneCountInString(s) <= max {
+		return s
+	}
+	n := 0
+	for i := range s {
+		if n == max {
+			return s[:i]
+		}
+		n++
+	}
+	return s
+}
+
+// ParseVehicleEpoch validates an optional epoch code. Empty is allowed.
+func ParseVehicleEpoch(raw string) (domain.VehicleEpoch, error) {
+	e := domain.VehicleEpoch(strings.TrimSpace(raw))
+	if !e.IsValid() {
+		return "", svcerrors.ErrVehicleEpochInvalid
+	}
+	return e, nil
+}
+
+// ParseVehicleRevisionDate parses YYYY-MM-DD or empty/nil into a date-only UTC time.
+func ParseVehicleRevisionDate(raw *string) (*time.Time, error) {
+	if raw == nil {
+		return nil, nil
+	}
+	s := strings.TrimSpace(*raw)
+	if s == "" {
+		return nil, nil
+	}
+	t, err := time.ParseInLocation("2006-01-02", s, time.UTC)
+	if err != nil {
+		return nil, svcerrors.ErrVehicleRevisionDateInvalid
+	}
+	return &t, nil
+}
+
+// FormatVehicleRevisionDate formats a stored date as YYYY-MM-DD, or nil.
+func FormatVehicleRevisionDate(t *time.Time) *string {
+	if t == nil {
+		return nil
+	}
+	s := t.UTC().Format("2006-01-02")
+	return &s
 }
 
 // ResolveVehicleDeadManFields applies defaults and validates optional

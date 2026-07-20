@@ -46,6 +46,8 @@
   "vehicle_in_use": "Pojazd jest w składzie – najpierw go odłącz.",
   "vehicle_dcc_function_invalid": "Wybierz funkcję z zakresu F0–F31.",
   "vehicle_deadman_switch_invalid": "Wybierz prawidłową opcję Dead Man's Switch.",
+  "vehicle_epoch_invalid": "Wybierz epokę z listy.",
+  "vehicle_revision_date_invalid": "Podaj datę rewizji w formacie RRRR-MM-DD.",
   "dcc_address_taken": "Ten adres DCC jest już zajęty.",
   "dcc_address_outside_pool": "Adres DCC nie należy do twojej puli.",
   "dcc_pool_range_invalid": "Nieprawidłowy zakres puli adresów DCC (od 1 do 9999, wartość „od” nie może być większa niż „do”).",

@@ -293,3 +293,161 @@ func TestVehicleNonOwnerDriverCannotMutateOthersVehicle(t *testing.T) {
 		t.Fatalf("expected ErrVehicleNotOwned on delete, got %v", err)
 	}
 }
+
+func TestVehicleCreateStoresCatalogMetadata(t *testing.T) {
+	bundle, cleanup := freshRepo(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	user := insertUser(t, ctx, bundle.Users, "driver", domain.RoleDriver)
+
+	pool := cmd.NewDCCPool(bundle.Pool)
+	svc := cmd.NewVehicle(bundle.Vehicles, pool, bundle.TrainMembers, bundle.LayoutVehicles, bundle.Users)
+
+	revision := "2020-05-15"
+	v, err := svc.Create(ctx, cmd.VehicleCreateInput{
+		OwnerUserID:  user.ID,
+		Name:         "ET22",
+		Kind:         domain.VehicleKindLoco,
+		Carrier:      " PKP ",
+		Assignment:   " Cargo ",
+		Epoch:        "IIIa",
+		RevisionDate: &revision,
+	})
+	if err != nil {
+		t.Fatalf("create with catalog metadata: %v", err)
+	}
+	if v.Carrier != "PKP" {
+		t.Fatalf("carrier = %q, want %q", v.Carrier, "PKP")
+	}
+	if v.Assignment != "Cargo" {
+		t.Fatalf("assignment = %q, want %q", v.Assignment, "Cargo")
+	}
+	if v.Epoch != domain.VehicleEpochIIIa {
+		t.Fatalf("epoch = %q, want %q", v.Epoch, domain.VehicleEpochIIIa)
+	}
+	if v.RevisionDate == nil {
+		t.Fatal("expected revision date to be set")
+	}
+	if v.RevisionDate.UTC().Format("2006-01-02") != revision {
+		t.Fatalf("revision date = %q, want %q", v.RevisionDate.UTC().Format("2006-01-02"), revision)
+	}
+}
+
+func TestVehicleCreateRejectsInvalidEpoch(t *testing.T) {
+	bundle, cleanup := freshRepo(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	user := insertUser(t, ctx, bundle.Users, "driver", domain.RoleDriver)
+
+	pool := cmd.NewDCCPool(bundle.Pool)
+	svc := cmd.NewVehicle(bundle.Vehicles, pool, bundle.TrainMembers, bundle.LayoutVehicles, bundle.Users)
+
+	_, err := svc.Create(ctx, cmd.VehicleCreateInput{
+		OwnerUserID: user.ID,
+		Name:        "Loco",
+		Kind:        domain.VehicleKindLoco,
+		Epoch:       "VII",
+	})
+	if !errors.Is(err, svcerrors.ErrVehicleEpochInvalid) {
+		t.Fatalf("expected ErrVehicleEpochInvalid, got %v", err)
+	}
+}
+
+func TestVehicleCreateRejectsInvalidRevisionDate(t *testing.T) {
+	bundle, cleanup := freshRepo(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	user := insertUser(t, ctx, bundle.Users, "driver", domain.RoleDriver)
+
+	pool := cmd.NewDCCPool(bundle.Pool)
+	svc := cmd.NewVehicle(bundle.Vehicles, pool, bundle.TrainMembers, bundle.LayoutVehicles, bundle.Users)
+
+	bad := "not-a-date"
+	_, err := svc.Create(ctx, cmd.VehicleCreateInput{
+		OwnerUserID:  user.ID,
+		Name:         "Loco",
+		Kind:         domain.VehicleKindLoco,
+		RevisionDate: &bad,
+	})
+	if !errors.Is(err, svcerrors.ErrVehicleRevisionDateInvalid) {
+		t.Fatalf("expected ErrVehicleRevisionDateInvalid, got %v", err)
+	}
+}
+
+func TestVehicleUpdateAlwaysOverwritesCatalogMetadata(t *testing.T) {
+	bundle, cleanup := freshRepo(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	user := insertUser(t, ctx, bundle.Users, "driver", domain.RoleDriver)
+
+	pool := cmd.NewDCCPool(bundle.Pool)
+	svc := cmd.NewVehicle(bundle.Vehicles, pool, bundle.TrainMembers, bundle.LayoutVehicles, bundle.Users)
+
+	revision := "2019-01-01"
+	v, err := svc.Create(ctx, cmd.VehicleCreateInput{
+		OwnerUserID:  user.ID,
+		Name:         "ET22",
+		Kind:         domain.VehicleKindLoco,
+		Carrier:      "PKP",
+		Assignment:   "Cargo",
+		Epoch:        "IV",
+		RevisionDate: &revision,
+	})
+	if err != nil {
+		t.Fatalf("create vehicle: %v", err)
+	}
+
+	driverEff := domain.NewEffectiveRoles(domain.RoleDriver)
+	newName := "ET22-1175"
+	newRevision := "2021-06-01"
+	updated, err := svc.Update(ctx, user.ID, v.ID, driverEff, cmd.VehicleUpdateInput{
+		Name:         &newName,
+		Carrier:      "IC",
+		Assignment:   "Pasażerski",
+		Epoch:        "V",
+		RevisionDate: &newRevision,
+	})
+	if err != nil {
+		t.Fatalf("update catalog metadata: %v", err)
+	}
+	if updated.Name != newName {
+		t.Fatalf("name = %q, want %q", updated.Name, newName)
+	}
+	if updated.Carrier != "IC" {
+		t.Fatalf("carrier = %q, want %q", updated.Carrier, "IC")
+	}
+	if updated.Assignment != "Pasażerski" {
+		t.Fatalf("assignment = %q, want %q", updated.Assignment, "Pasażerski")
+	}
+	if updated.Epoch != domain.VehicleEpochV {
+		t.Fatalf("epoch = %q, want %q", updated.Epoch, domain.VehicleEpochV)
+	}
+	if updated.RevisionDate == nil || updated.RevisionDate.UTC().Format("2006-01-02") != newRevision {
+		t.Fatalf("revision date = %v, want %q", updated.RevisionDate, newRevision)
+	}
+
+	// Every update applies catalog fields — a name-only patch with zero values clears them.
+	renamed := "Renamed"
+	cleared, err := svc.Update(ctx, user.ID, v.ID, driverEff, cmd.VehicleUpdateInput{
+		Name: &renamed,
+	})
+	if err != nil {
+		t.Fatalf("name-only update: %v", err)
+	}
+	if cleared.Carrier != "" {
+		t.Fatalf("carrier = %q, want empty after overwrite", cleared.Carrier)
+	}
+	if cleared.Assignment != "" {
+		t.Fatalf("assignment = %q, want empty after overwrite", cleared.Assignment)
+	}
+	if cleared.Epoch != domain.VehicleEpochNone {
+		t.Fatalf("epoch = %q, want empty after overwrite", cleared.Epoch)
+	}
+	if cleared.RevisionDate != nil {
+		t.Fatalf("revision date = %v, want nil after overwrite", cleared.RevisionDate)
+	}
+}

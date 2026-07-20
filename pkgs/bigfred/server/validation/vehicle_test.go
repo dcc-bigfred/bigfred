@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
 	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
@@ -34,6 +35,21 @@ func TestTrimVehicleNumber(t *testing.T) {
 	got := validation.TrimVehicleNumber(long)
 	if len(got) != validation.MaxVehicleNumberLen {
 		t.Fatalf("len = %d", len(got))
+	}
+}
+
+func TestTrimVehicleCarrierTruncatesByRunes(t *testing.T) {
+	if got := validation.TrimVehicleCarrier("  PKP Cargo  "); got != "PKP Cargo" {
+		t.Fatalf("got %q", got)
+	}
+	// Multi-byte Polish letters must not be split mid-character.
+	long := strings.Repeat("ż", validation.MaxVehicleCarrierLen+5)
+	got := validation.TrimVehicleCarrier(long)
+	if utf8.RuneCountInString(got) != validation.MaxVehicleCarrierLen {
+		t.Fatalf("rune count = %d, want %d", utf8.RuneCountInString(got), validation.MaxVehicleCarrierLen)
+	}
+	if !utf8.ValidString(got) {
+		t.Fatal("truncated carrier is not valid UTF-8")
 	}
 }
 

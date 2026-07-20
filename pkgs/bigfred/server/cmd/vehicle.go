@@ -125,6 +125,11 @@ type VehicleCreateInput struct {
 	Rp1Function             *uint8
 	EmergencyLightsFunction *uint8
 	DeadManSwitchOption     *domain.DeadManSwitchOption
+
+	Carrier      string
+	Assignment   string
+	Epoch        string
+	RevisionDate *string // YYYY-MM-DD or nil/empty
 }
 
 // Create registers a new vehicle owned by the caller.
@@ -138,6 +143,16 @@ func (v *Vehicle) Create(ctx context.Context, in VehicleCreateInput) (domain.Veh
 	}
 
 	number := validation.TrimVehicleNumber(in.Number)
+	carrier := validation.TrimVehicleCarrier(in.Carrier)
+	assignment := validation.TrimVehicleAssignment(in.Assignment)
+	epoch, err := validation.ParseVehicleEpoch(in.Epoch)
+	if err != nil {
+		return domain.Vehicle{}, err
+	}
+	revisionDate, err := validation.ParseVehicleRevisionDate(in.RevisionDate)
+	if err != nil {
+		return domain.Vehicle{}, err
+	}
 
 	if in.DCCAddress != nil {
 		if err := v.checkDCCAddress(ctx, in.OwnerUserID, *in.DCCAddress, ""); err != nil {
@@ -168,6 +183,10 @@ func (v *Vehicle) Create(ctx context.Context, in VehicleCreateInput) (domain.Veh
 			Rp1Function:             rp1Fn,
 			EmergencyLightsFunction: emergFn,
 			DeadManSwitchOption:     dmsOpt,
+			Carrier:                 carrier,
+			Assignment:              assignment,
+			RevisionDate:            revisionDate,
+			Epoch:                   epoch,
 			CreatedAt:               now,
 			UpdatedAt:               now,
 		}
@@ -193,6 +212,13 @@ type VehicleUpdateInput struct {
 	Rp1Function             *uint8
 	EmergencyLightsFunction *uint8
 	DeadManSwitchOption     *domain.DeadManSwitchOption
+
+	// Catalogue metadata — always applied when the dialog submits
+	// (frontend always sends these keys).
+	Carrier      string
+	Assignment   string
+	Epoch        string
+	RevisionDate *string // YYYY-MM-DD or nil/empty to clear
 
 	// DCCAddress carries a tri-state via IsSet/Value:
 	//   - IsSet == false           → leave the column alone;
@@ -263,6 +289,19 @@ func (v *Vehicle) Update(ctx context.Context, actorID uint, vehicleID domain.Veh
 		}
 		row.DeadManSwitchOption = *in.DeadManSwitchOption
 	}
+
+	row.Carrier = validation.TrimVehicleCarrier(in.Carrier)
+	row.Assignment = validation.TrimVehicleAssignment(in.Assignment)
+	epoch, err := validation.ParseVehicleEpoch(in.Epoch)
+	if err != nil {
+		return domain.Vehicle{}, err
+	}
+	row.Epoch = epoch
+	revisionDate, err := validation.ParseVehicleRevisionDate(in.RevisionDate)
+	if err != nil {
+		return domain.Vehicle{}, err
+	}
+	row.RevisionDate = revisionDate
 
 	row.UpdatedAt = time.Now().UTC()
 	if err := v.vehicles.Update(ctx, &row); err != nil {

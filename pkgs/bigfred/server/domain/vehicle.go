@@ -75,6 +75,61 @@ func (o DeadManSwitchOption) IsValid() bool {
 // IsValidDccFunctionNum reports whether n is a legal F0..F31 index.
 func IsValidDccFunctionNum(n uint8) bool { return n <= 31 }
 
+// VehicleEpoch is a Polish modelling-epoch code (I…VIb), including
+// bare majors and lettered subdivisions. Empty means unset.
+type VehicleEpoch string
+
+const (
+	VehicleEpochNone VehicleEpoch = ""
+	VehicleEpochI    VehicleEpoch = "I"
+	VehicleEpochIa   VehicleEpoch = "Ia"
+	VehicleEpochIb   VehicleEpoch = "Ib"
+	VehicleEpochII   VehicleEpoch = "II"
+	VehicleEpochIIa  VehicleEpoch = "IIa"
+	VehicleEpochIIb  VehicleEpoch = "IIb"
+	VehicleEpochIIc  VehicleEpoch = "IIc"
+	VehicleEpochIII  VehicleEpoch = "III"
+	VehicleEpochIIIa VehicleEpoch = "IIIa"
+	VehicleEpochIIIb VehicleEpoch = "IIIb"
+	VehicleEpochIIIc VehicleEpoch = "IIIc"
+	VehicleEpochIV   VehicleEpoch = "IV"
+	VehicleEpochIVa  VehicleEpoch = "IVa"
+	VehicleEpochIVb  VehicleEpoch = "IVb"
+	VehicleEpochIVc  VehicleEpoch = "IVc"
+	VehicleEpochV    VehicleEpoch = "V"
+	VehicleEpochVa   VehicleEpoch = "Va"
+	VehicleEpochVb   VehicleEpoch = "Vb"
+	VehicleEpochVc   VehicleEpoch = "Vc"
+	VehicleEpochVI   VehicleEpoch = "VI"
+	VehicleEpochVIa  VehicleEpoch = "VIa"
+	VehicleEpochVIb  VehicleEpoch = "VIb"
+)
+
+// VehicleEpochs returns the closed catalogue in chronological order.
+func VehicleEpochs() []VehicleEpoch {
+	return []VehicleEpoch{
+		VehicleEpochI, VehicleEpochIa, VehicleEpochIb,
+		VehicleEpochII, VehicleEpochIIa, VehicleEpochIIb, VehicleEpochIIc,
+		VehicleEpochIII, VehicleEpochIIIa, VehicleEpochIIIb, VehicleEpochIIIc,
+		VehicleEpochIV, VehicleEpochIVa, VehicleEpochIVb, VehicleEpochIVc,
+		VehicleEpochV, VehicleEpochVa, VehicleEpochVb, VehicleEpochVc,
+		VehicleEpochVI, VehicleEpochVIa, VehicleEpochVIb,
+	}
+}
+
+// IsValid reports whether e is empty (unset) or a catalogue entry.
+func (e VehicleEpoch) IsValid() bool {
+	if e == VehicleEpochNone {
+		return true
+	}
+	for _, v := range VehicleEpochs() {
+		if e == v {
+			return true
+		}
+	}
+	return false
+}
+
 // Vehicle is one rail vehicle the system tracks (§3a.1).
 //
 // DCCAddress is OPTIONAL:
@@ -109,6 +164,12 @@ type Vehicle struct {
 	Rp1Function             uint8               `db:"rp1_function"`
 	EmergencyLightsFunction uint8               `db:"emergency_lights_function"`
 	DeadManSwitchOption     DeadManSwitchOption `db:"deadman_switch_option"`
+
+	// Optional catalogue metadata (carrier / assignment / revision / epoch).
+	Carrier      string     `db:"carrier"`
+	Assignment   string     `db:"assignment"`
+	RevisionDate *time.Time `db:"revision_date"`
+	Epoch        VehicleEpoch `db:"epoch"`
 
 	CreatedAt time.Time `db:"created_at"`
 	UpdatedAt time.Time `db:"updated_at"`

@@ -146,6 +146,11 @@
       "name": "Name",
       "kind": "Fahrzeugart",
       "number": "Nummer (optional)",
+      "carrier": "Betreiber",
+      "assignment": "Zuordnung",
+      "revisionDate": "Revision",
+      "epoch": "Epoche",
+      "epochNone": "—",
       "dccAddress": "DCC-Adresse (optional)",
       "dccAddressHelp": "Leer lassen für ein Dummy-Fahrzeug – auf der Anlage sichtbar, aber nicht steuerbar.",
       "poolHint": "Ihr DCC-Pool: {{ranges}}",
@@ -155,6 +160,7 @@
       "deadManSwitchOption": "Totmann-Schalter",
       "dccFunction": "F{{fn}}"
     },
+    "fillFromCatalog": "Daten ergänzen",
     "submitCreate": "Hinzufügen",
     "submitEdit": "Speichern",
     "cancel": "Abbrechen"

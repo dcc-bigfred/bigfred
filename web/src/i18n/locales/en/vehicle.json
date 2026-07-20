@@ -146,6 +146,11 @@
       "name": "Name",
       "kind": "Vehicle kind",
       "number": "Number (optional)",
+      "carrier": "Carrier",
+      "assignment": "Assignment",
+      "revisionDate": "Revision",
+      "epoch": "Epoch",
+      "epochNone": "—",
       "dccAddress": "DCC address (optional)",
       "dccAddressHelp": "Leave empty to create a dummy vehicle – visible on the layout but not steerable.",
       "poolHint": "Your DCC pool: {{ranges}}",
@@ -155,6 +160,7 @@
       "deadManSwitchOption": "Dead Man's Switch",
       "dccFunction": "F{{fn}}"
     },
+    "fillFromCatalog": "Fill from catalog",
     "submitCreate": "Add",
     "submitEdit": "Save",
     "cancel": "Cancel"

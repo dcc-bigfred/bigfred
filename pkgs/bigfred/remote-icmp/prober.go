@@ -111,11 +111,17 @@ func (p *Prober) round(ctx context.Context) {
 func (p *Prober) ping(ctx context.Context, ip net.IP) (time.Duration, error) {
 	p.seq++
 	seq := p.seq
+	// Linux SOCK_DGRAM/IPPROTO_ICMP (udp4) overwrites Echo ID with the
+	// socket's assigned "port"; matching os.Getpid() rejects every reply.
+	ident := p.ident
+	if la, ok := p.conn.LocalAddr().(*net.UDPAddr); ok && la.Port != 0 {
+		ident = la.Port
+	}
 	msg := icmp.Message{
 		Type: ipv4.ICMPTypeEcho,
 		Code: 0,
 		Body: &icmp.Echo{
-			ID:   p.ident,
+			ID:   ident,
 			Seq:  int(seq),
 			Data: []byte("bigfred-remote-icmp"),
 		},
@@ -157,7 +163,8 @@ func (p *Prober) ping(ctx context.Context, ip net.IP) (time.Duration, error) {
 		if !ok || rm.Type != ipv4.ICMPTypeEchoReply {
 			continue
 		}
-		if echo.ID != p.ident || echo.Seq != int(seq) {
+		// ID is owned by the kernel for unprivileged sockets; match seq (+ peer).
+		if echo.Seq != int(seq) {
 			continue
 		}
 		return time.Since(start), nil

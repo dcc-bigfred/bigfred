@@ -42,5 +42,8 @@ export default defineConfig({
   build: {
     outDir: "dist",
     sourcemap: true,
+    // Baseline for older Android System WebViews (Motorola G5 / Chrome ~87 era).
+    // Avoids emitting syntax that those engines cannot parse.
+    target: "chrome87",
   },
 });

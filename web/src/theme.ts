@@ -16,4 +16,22 @@ export const theme = createTheme({
       'Roboto, system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif',
   },
   shape: { borderRadius: 8 },
+  components: {
+    MuiCssBaseline: {
+      styleOverrides: {
+        // Reduce subpixel / blur artifacts on older Android WebViews
+        // (e.g. white speckles on small text over dark gradients).
+        html: {
+          WebkitFontSmoothing: "antialiased",
+          MozOsxFontSmoothing: "grayscale",
+          textRendering: "optimizeLegibility",
+        },
+        body: {
+          WebkitFontSmoothing: "antialiased",
+          MozOsxFontSmoothing: "grayscale",
+          textRendering: "optimizeLegibility",
+        },
+      },
+    },
+  },
 });

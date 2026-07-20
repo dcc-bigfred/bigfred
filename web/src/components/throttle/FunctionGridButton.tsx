@@ -1,3 +1,4 @@
+import { memo, useCallback } from "react";
 import { Box, Typography } from "@mui/material";
 
 import { FunctionIconGlyph } from "../functions/FunctionIconGlyph";
@@ -14,31 +15,38 @@ import {
 interface FunctionGridButtonProps {
   /** DCC function index label, e.g. `F0`, `F6`. */
   fnCode: string;
+  /** DCC function number passed to onToggle. */
+  fnNum: number;
   label: string;
   icon: string;
   active: boolean;
   disabled?: boolean;
-  onClick: () => void;
+  onToggle: (fn: number) => void;
 }
 
 // FunctionGridButton is one DCC function cell in the throttle cockpit.
-export default function FunctionGridButton({
+function FunctionGridButton({
   fnCode,
+  fnNum,
   label,
   icon,
   active,
   disabled,
-  onClick,
+  onToggle,
 }: FunctionGridButtonProps) {
   const top = active ? cockpit.btnActiveTop : cockpit.btnTop;
   const bottom = active ? cockpit.btnActiveBottom : cockpit.btnBottom;
+
+  const handleClick = useCallback(() => {
+    onToggle(fnNum);
+  }, [onToggle, fnNum]);
 
   return (
     <Box
       component="button"
       type="button"
       disabled={disabled}
-      onClick={onClick}
+      onClick={handleClick}
       aria-pressed={active}
       aria-label={`${fnCode} ${label}`}
       title={`${fnCode} — ${label}`}
@@ -64,8 +72,12 @@ export default function FunctionGridButton({
         alignItems: "center",
         justifyContent: "flex-end",
         overflow: "hidden",
+        // Prefer solid overlay over filter:brightness — cheaper on old GPUs.
         "&:hover:not(:disabled)": {
-          filter: "brightness(1.06)",
+          background: `linear-gradient(145deg, ${top} 0%, ${bottom} 100%)`,
+          boxShadow: active
+            ? "inset 0 2px 8px rgba(255,255,255,0.28), 0 2px 6px rgba(0,0,0,0.4)"
+            : "inset 0 1px 0 rgba(255,255,255,0.22), 0 2px 4px rgba(0,0,0,0.35)",
         },
       }}
     >
@@ -82,7 +94,9 @@ export default function FunctionGridButton({
           fontSize: FUNCTION_BUTTON_NUM_FONT_SIZE_PX,
           lineHeight: 1,
           letterSpacing: "0.02em",
-          textShadow: "0 1px 2px rgba(0,0,0,0.75)",
+          // Hard 1px offset (no blur) — blurred text-shadow causes white
+          // speckles on older Android WebViews over dark gradients.
+          textShadow: "0 1px 0 rgba(0,0,0,0.9)",
           pointerEvents: "none",
           userSelect: "none",
         }}
@@ -93,14 +107,14 @@ export default function FunctionGridButton({
         sx={{
           position: "absolute",
           top: FUNCTION_BUTTON_ICON_TOP_PX,
-          left: "50%",
-          transform: "translateX(-50%)",
+          // left+right + flex centering avoids translateX(-50%) subpixel text/icon artifacts.
+          left: 0,
+          right: 0,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          filter: active
-            ? "drop-shadow(0 0 6px rgba(232, 240, 252, 0.45))"
-            : "none",
+          // Soft glow via opacity bump instead of filter:drop-shadow (GPU-heavy / speckles).
+          opacity: active ? 1 : undefined,
         }}
       >
         <FunctionIconGlyph
@@ -126,7 +140,7 @@ export default function FunctionGridButton({
           textOverflow: "ellipsis",
           whiteSpace: "nowrap",
           px: 0.25,
-          textShadow: "0 1px 2px rgba(0,0,0,0.6)",
+          textShadow: "0 1px 0 rgba(0,0,0,0.85)",
         }}
       >
         {label}
@@ -134,3 +148,5 @@ export default function FunctionGridButton({
     </Box>
   );
 }
+
+export default memo(FunctionGridButton);

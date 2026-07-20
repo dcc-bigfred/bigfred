@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { memo, useCallback, useMemo, useState, type ReactNode } from "react";
 import {
   Box,
   CircularProgress,
@@ -87,7 +87,7 @@ function targetKey(target: ThrottleTarget | null): string {
     : `t:${target.trainId}`;
 }
 
-export default function ThrottleCockpit({
+function ThrottleCockpit({
   layoutId,
   onOpenSetup,
   vehicles,
@@ -356,11 +356,12 @@ export default function ThrottleCockpit({
                 <FunctionGridButton
                   key={fn.num}
                   fnCode={t("fnLabel", { n: fn.num })}
+                  fnNum={fn.num}
                   label={fn.label}
                   icon={fn.icon}
                   active={Boolean(functions[fn.num])}
                   disabled={disabled || !hasSelection}
-                  onClick={() => onFunctionToggle(fn.num)}
+                  onToggle={onFunctionToggle}
                 />
               ))}
             </Box>
@@ -519,3 +520,5 @@ export default function ThrottleCockpit({
     </Box>
   );
 }
+
+export default memo(ThrottleCockpit);

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -13,13 +14,14 @@ import (
 	"golang.org/x/net/ipv4"
 )
 
-// ProberConfig tunes the ICMP probe loop.
+// ProberConfig tunes the ICMP probe and Redis target-refresh loops.
 type ProberConfig struct {
-	Redis    *redis.Client
-	Interval time.Duration
-	Timeout  time.Duration
-	Metrics  *Metrics
-	Log      *logrus.Logger
+	Redis           *redis.Client
+	PingInterval    time.Duration
+	TargetsInterval time.Duration
+	Timeout         time.Duration
+	Metrics         *Metrics
+	Log             *logrus.Logger
 }
 
 // Prober periodically ICMP-pings handset IPs from Redis snapshots.
@@ -28,12 +30,18 @@ type Prober struct {
 	conn  *icmp.PacketConn
 	ident int
 	seq   uint16
+
+	mu      sync.RWMutex
+	targets []ProbeTarget
 }
 
 // NewProber opens an unprivileged ICMP socket (udp4 / IPPROTO_ICMP).
 func NewProber(cfg ProberConfig) (*Prober, error) {
-	if cfg.Interval <= 0 {
-		cfg.Interval = 30 * time.Second
+	if cfg.PingInterval <= 0 {
+		cfg.PingInterval = 30 * time.Second
+	}
+	if cfg.TargetsInterval <= 0 {
+		cfg.TargetsInterval = 10 * time.Second
 	}
 	if cfg.Timeout <= 0 {
 		cfg.Timeout = 2 * time.Second
@@ -52,33 +60,49 @@ func NewProber(cfg ProberConfig) (*Prober, error) {
 	}, nil
 }
 
-// Run probes until ctx is cancelled.
+// Run refreshes Redis targets and probes until ctx is cancelled.
 func (p *Prober) Run(ctx context.Context) error {
 	defer func() { _ = p.conn.Close() }()
 
-	ticker := time.NewTicker(p.cfg.Interval)
-	defer ticker.Stop()
+	targetsTicker := time.NewTicker(p.cfg.TargetsInterval)
+	defer targetsTicker.Stop()
+	pingTicker := time.NewTicker(p.cfg.PingInterval)
+	defer pingTicker.Stop()
 
-	p.round(ctx)
+	p.refreshTargets(ctx)
+	p.probeRound(ctx)
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
-		case <-ticker.C:
-			p.round(ctx)
+		case <-targetsTicker.C:
+			p.refreshTargets(ctx)
+		case <-pingTicker.C:
+			p.probeRound(ctx)
 		}
 	}
 }
 
-func (p *Prober) round(ctx context.Context) {
-	// Targets are probed sequentially; many timeouts can push a round past the
-	// configured interval. Fine for a handful of handsets; add bounded concurrency
-	// if client counts grow.
+func (p *Prober) refreshTargets(ctx context.Context) {
 	targets, err := LoadProbeTargets(ctx, p.cfg.Redis)
 	if err != nil {
 		p.cfg.Log.WithError(err).Warn("load probe targets")
 		return
 	}
+	p.mu.Lock()
+	p.targets = targets
+	p.mu.Unlock()
+	p.cfg.Log.WithField("count", len(targets)).Debug("probe targets refreshed")
+}
+
+func (p *Prober) probeRound(ctx context.Context) {
+	// Targets are probed sequentially; many timeouts can push a round past the
+	// configured interval. Fine for a handful of handsets; add bounded concurrency
+	// if client counts grow.
+	p.mu.RLock()
+	targets := append([]ProbeTarget(nil), p.targets...)
+	p.mu.RUnlock()
+
 	if len(targets) == 0 {
 		p.cfg.Log.Debug("no handset IPs to probe")
 		return

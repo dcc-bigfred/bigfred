@@ -62,11 +62,16 @@ func (m *Metrics) attrs(t ProbeTarget) []attribute.KeyValue {
 	if proto == "" {
 		proto = "_"
 	}
+	ip := "_"
+	if t.IP != nil {
+		ip = t.IP.String()
+	}
 	return []attribute.KeyValue{
 		attribute.Int("layout.id", int(t.LayoutID)),
 		attribute.Int("command_station.id", int(t.CommandStationID)),
 		attribute.String("protocol", proto),
 		attribute.String("user.login", login),
+		attribute.String("client.ip", ip),
 	}
 }
 

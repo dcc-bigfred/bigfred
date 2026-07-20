@@ -25,12 +25,13 @@ import (
 )
 
 type flags struct {
-	ConfigPath   string
-	RedisAddr    string
-	OTLPEndpoint string
-	IntervalSecs uint
-	ProbeTimeout time.Duration
-	LogLevel     string
+	ConfigPath      string
+	RedisAddr       string
+	OTLPEndpoint    string
+	PingInterval    time.Duration
+	TargetsInterval time.Duration
+	ProbeTimeout    time.Duration
+	LogLevel        string
 }
 
 func main() {
@@ -51,7 +52,8 @@ func main() {
 	cmd.Flags().StringVar(&f.ConfigPath, "config", config.DefaultPath, "shared loco-server.conf path")
 	cmd.Flags().StringVar(&f.RedisAddr, "redis-addr", "", "redis host:port (overrides conf)")
 	cmd.Flags().StringVar(&f.OTLPEndpoint, "otel-endpoint", "", "OTLP/gRPC endpoint (overrides conf; empty uses Alloy default when telemetry enabled)")
-	cmd.Flags().UintVar(&f.IntervalSecs, "interval-secs", 0, "probe interval seconds (0 = conf/default 30)")
+	cmd.Flags().DurationVar(&f.PingInterval, "ping-interval", 0, "ICMP probe interval (0 = conf/default 30s)")
+	cmd.Flags().DurationVar(&f.TargetsInterval, "targets-interval", 0, "Redis target list refresh interval (0 = conf/default 10s)")
 	cmd.Flags().DurationVar(&f.ProbeTimeout, "probe-timeout", 2*time.Second, "per-target ICMP timeout")
 	cmd.Flags().StringVar(&f.LogLevel, "log-level", "", "logrus level (overrides conf)")
 
@@ -69,9 +71,13 @@ func run(ctx context.Context, log *logrus.Logger, f flags, changed func(string) 
 	if redisAddr == "" {
 		redisAddr = config.RedisDialAddr(cfgFile)
 	}
-	interval := config.RemoteICMPInterval(cfgFile)
-	if f.IntervalSecs > 0 {
-		interval = time.Duration(f.IntervalSecs) * time.Second
+	pingInterval := config.RemoteICMPInterval(cfgFile)
+	if f.PingInterval > 0 {
+		pingInterval = f.PingInterval
+	}
+	targetsInterval := config.RemoteICMPTargetsInterval(cfgFile)
+	if f.TargetsInterval > 0 {
+		targetsInterval = f.TargetsInterval
 	}
 
 	enableTelemetry := cfgFile.EnableTelemetry != nil && *cfgFile.EnableTelemetry
@@ -104,20 +110,22 @@ func run(ctx context.Context, log *logrus.Logger, f flags, changed func(string) 
 	}
 
 	prober, err := NewProber(ProberConfig{
-		Redis:    rdb,
-		Interval: interval,
-		Timeout:  f.ProbeTimeout,
-		Metrics:  metrics,
-		Log:      log,
+		Redis:           rdb,
+		PingInterval:    pingInterval,
+		TargetsInterval: targetsInterval,
+		Timeout:         f.ProbeTimeout,
+		Metrics:         metrics,
+		Log:             log,
 	})
 	if err != nil {
 		return err
 	}
 	log.WithFields(logrus.Fields{
-		"redis":    redisAddr,
-		"interval": interval.String(),
-		"timeout":  f.ProbeTimeout.String(),
-		"config":   f.ConfigPath,
+		"redis":            redisAddr,
+		"ping_interval":    pingInterval.String(),
+		"targets_interval": targetsInterval.String(),
+		"timeout":          f.ProbeTimeout.String(),
+		"config":           f.ConfigPath,
 	}).Info("remote-icmp starting")
 	return prober.Run(ctx)
 }

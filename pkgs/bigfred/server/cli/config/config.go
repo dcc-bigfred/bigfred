@@ -25,25 +25,26 @@ const DefaultTemplatePath = "/data/etc/loco-server.conf.defaults"
 
 // File holds settings from a KEY=value configuration file.
 type File struct {
-	HTTP                   string
-	DB                     string
-	JWTSecret              string
-	CorsOrigins            []string
-	SecureCookie           *bool
-	NoSupervisor           *bool
-	LogLevel               string
-	RedisBin               string
-	RedisBindAddr          string
-	RedisPort              *uint16
-	RedisDataDir           string
-	RedisAddr              string
-	RedisExternal          *bool
-	RedisAutoDetect        *bool
-	RedisRDBSave           []string
-	RedisNoPersist         *bool
-	EnableTelemetry        *bool
-	TelemetryConfig        string
-	RemoteICMPIntervalSecs *uint
+	HTTP                          string
+	DB                            string
+	JWTSecret                     string
+	CorsOrigins                   []string
+	SecureCookie                  *bool
+	NoSupervisor                  *bool
+	LogLevel                      string
+	RedisBin                      string
+	RedisBindAddr                 string
+	RedisPort                     *uint16
+	RedisDataDir                  string
+	RedisAddr                     string
+	RedisExternal                 *bool
+	RedisAutoDetect               *bool
+	RedisRDBSave                  []string
+	RedisNoPersist                *bool
+	EnableTelemetry               *bool
+	TelemetryConfig               string
+	RemoteICMPIntervalSecs        *uint
+	RemoteICMPTargetsIntervalSecs *uint
 }
 
 // DefaultFile returns built-in defaults (mirrors loco-server CLI flag defaults).
@@ -165,6 +166,11 @@ func Parse(text string) File {
 				u := uint(n)
 				f.RemoteICMPIntervalSecs = &u
 			}
+		case "REMOTE_ICMP_TARGETS_INTERVAL_SECS", "REMOTEICMPTARGETSINTERVALSECS":
+			if n, err := strconv.ParseUint(value, 10, 32); err == nil {
+				u := uint(n)
+				f.RemoteICMPTargetsIntervalSecs = &u
+			}
 		}
 	}
 	return f
@@ -224,6 +230,8 @@ TELEMETRY_CONFIG=%s
 
 # Interval between ICMP probes to handset IPs (bigfred-remote-icmp)
 REMOTE_ICMP_INTERVAL_SECS=30
+# How often bigfred-remote-icmp refreshes the handset IP list from Redis
+REMOTE_ICMP_TARGETS_INTERVAL_SECS=10
 `, d.HTTP, d.DB, cors, d.LogLevel, d.RedisBin, d.RedisBindAddr, redisPort, d.TelemetryConfig)
 }
 
@@ -293,6 +301,8 @@ TELEMETRY_CONFIG=%s
 
 # Interval between ICMP probes to active handset IPs by bigfred-remote-icmp (seconds)
 REMOTE_ICMP_INTERVAL_SECS=30
+# How often bigfred-remote-icmp refreshes the handset IP list from Redis (seconds)
+REMOTE_ICMP_TARGETS_INTERVAL_SECS=10
 `, DefaultPath, d.HTTP, d.DB, cors, d.LogLevel, d.RedisBin, d.RedisBindAddr, redisPort, d.TelemetryConfig)
 }
 
@@ -333,11 +343,20 @@ func RedisDialAddr(f File) string {
 	return fmt.Sprintf("%s:%d", bind, port)
 }
 
-// RemoteICMPInterval returns the probe interval, defaulting to 30s.
+// RemoteICMPInterval returns the ICMP probe interval, defaulting to 30s.
 func RemoteICMPInterval(f File) time.Duration {
 	secs := uint(30)
 	if f.RemoteICMPIntervalSecs != nil && *f.RemoteICMPIntervalSecs > 0 {
 		secs = *f.RemoteICMPIntervalSecs
+	}
+	return time.Duration(secs) * time.Second
+}
+
+// RemoteICMPTargetsInterval returns how often to refresh handset IPs from Redis, defaulting to 10s.
+func RemoteICMPTargetsInterval(f File) time.Duration {
+	secs := uint(10)
+	if f.RemoteICMPTargetsIntervalSecs != nil && *f.RemoteICMPTargetsIntervalSecs > 0 {
+		secs = *f.RemoteICMPTargetsIntervalSecs
 	}
 	return time.Duration(secs) * time.Second
 }

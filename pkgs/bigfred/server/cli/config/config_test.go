@@ -30,6 +30,7 @@ REDIS_NO_PERSIST=true
 ENABLE_TELEMETRY=true
 TELEMETRY_CONFIG=/custom/alloy.conf
 REMOTE_ICMP_INTERVAL_SECS=15
+REMOTE_ICMP_TARGETS_INTERVAL_SECS=8
 `
 	got := Parse(text)
 	if got.HTTP != "0.0.0.0:9090" {
@@ -89,6 +90,9 @@ REMOTE_ICMP_INTERVAL_SECS=15
 	if got.RemoteICMPIntervalSecs == nil || *got.RemoteICMPIntervalSecs != 15 {
 		t.Fatalf("RemoteICMPIntervalSecs = %v", got.RemoteICMPIntervalSecs)
 	}
+	if got.RemoteICMPTargetsIntervalSecs == nil || *got.RemoteICMPTargetsIntervalSecs != 8 {
+		t.Fatalf("RemoteICMPTargetsIntervalSecs = %v", got.RemoteICMPTargetsIntervalSecs)
+	}
 }
 
 func TestLoadOrCreateCreatesFile(t *testing.T) {
@@ -132,7 +136,8 @@ func TestWriteDefaultsReference(t *testing.T) {
 	text := string(data)
 	for _, key := range []string{
 		"JWT_SECRET=", "REDIS_DATA_DIR=", "REDIS_ADDR=", "REDIS_RDB_SAVE=",
-		"ENABLE_TELEMETRY=", "TELEMETRY_CONFIG=", "REMOTE_ICMP_INTERVAL_SECS=", "reference only",
+		"ENABLE_TELEMETRY=", "TELEMETRY_CONFIG=", "REMOTE_ICMP_INTERVAL_SECS=",
+		"REMOTE_ICMP_TARGETS_INTERVAL_SECS=", "reference only",
 	} {
 		if !strings.Contains(text, key) {
 			t.Fatalf("defaults reference missing %q in:\n%s", key, text)

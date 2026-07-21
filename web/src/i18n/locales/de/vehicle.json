@@ -21,6 +21,7 @@
     "intro": "Verwalten Sie Ihre Fahrzeuge. Fahrzeuge können zu <trainsLink>Zügen</trainsLink> zusammengefasst werden. Damit ein Fahrzeug auf der Anlage fährt, fügen Sie es mit der Schaltfläche <addBtn>„Zur Anlage hinzufügen“</addBtn> hier als Einzelfahrzeug hinzu oder auf der <trainsLink>Zugseite</trainsLink> als Teil eines Zuges, der als Ganzes zur Anlage hinzugefügt wurde.",
     "empty": "Sie haben noch keine Fahrzeuge.",
     "addButton": "Fahrzeug hinzufügen",
+    "refreshButton": "Liste aktualisieren",
     "columns": {
       "name": "Name",
       "kind": "Art",

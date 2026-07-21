@@ -117,10 +117,15 @@ func (v *Vehicle) ListCatalogue(ctx context.Context, layoutID uint) ([]VehicleCa
 // representable end-to-end.
 type VehicleCreateInput struct {
 	OwnerUserID uint
-	Name        string
-	Kind        domain.VehicleKind
-	Number      string
-	DCCAddress  *uint16
+	// ExternalID/Source identify rows synced from an integrating client
+	// (e.g. the Android catalogue). Zero values keep the local semantics.
+	ExternalID *string
+	Source     domain.EntitySource
+
+	Name       string
+	Kind       domain.VehicleKind
+	Number     string
+	DCCAddress *uint16
 
 	Rp1Function             *uint8
 	EmergencyLightsFunction *uint8
@@ -167,6 +172,10 @@ func (v *Vehicle) Create(ctx context.Context, in VehicleCreateInput) (domain.Veh
 	}
 
 	now := time.Now().UTC()
+	source := in.Source
+	if source == "" {
+		source = domain.EntitySourceLocal
+	}
 	for attempt := 0; attempt < domain.MaxCatalogueIDRetries; attempt++ {
 		id, err := domain.NewVehicleID()
 		if err != nil {
@@ -174,7 +183,8 @@ func (v *Vehicle) Create(ctx context.Context, in VehicleCreateInput) (domain.Veh
 		}
 		row := domain.Vehicle{
 			ID:                      id,
-			Source:                  domain.EntitySourceLocal,
+			ExternalID:              in.ExternalID,
+			Source:                  source,
 			DCCAddress:              in.DCCAddress,
 			OwnerUserID:             in.OwnerUserID,
 			Name:                    name,
@@ -330,6 +340,65 @@ func (v *Vehicle) Delete(ctx context.Context, actorID uint, vehicleID domain.Veh
 		return domain.Vehicle{}, err
 	}
 	return row, nil
+}
+
+// toUpdateInput projects a full create payload onto the tri-state update
+// input, marking every field as "set". The sync client always sends the
+// complete vehicle, mirroring the web dialog's always-overwrite semantics.
+func (in VehicleCreateInput) toUpdateInput() VehicleUpdateInput {
+	kind := in.Kind
+	return VehicleUpdateInput{
+		Name:                    &in.Name,
+		Kind:                    &kind,
+		Number:                  &in.Number,
+		Rp1Function:             in.Rp1Function,
+		EmergencyLightsFunction: in.EmergencyLightsFunction,
+		DeadManSwitchOption:     in.DeadManSwitchOption,
+		Carrier:                 in.Carrier,
+		Assignment:              in.Assignment,
+		Epoch:                   in.Epoch,
+		RevisionDate:            in.RevisionDate,
+		DCCAddress:              VehicleAddressPatch{IsSet: true, Value: in.DCCAddress},
+	}
+}
+
+// UpsertByExternalID creates or overwrites the vehicle identified by a
+// globally-unique external id. Ownership is enforced on the update path so
+// a client cannot clobber another user's row. Returns created == true when
+// a new row was inserted.
+func (v *Vehicle) UpsertByExternalID(ctx context.Context, actorID uint, eff domain.EffectiveRoles, externalID string, in VehicleCreateInput) (domain.Vehicle, bool, error) {
+	in.OwnerUserID = actorID
+	in.ExternalID = &externalID
+	if in.Source == "" {
+		in.Source = domain.EntitySourceAndroidCatalog
+	}
+
+	existing, err := v.vehicles.FindByExternalID(ctx, externalID)
+	if err != nil {
+		if errors.Is(err, repo.ErrVehicleNotFound) {
+			row, cerr := v.Create(ctx, in)
+			return row, true, cerr
+		}
+		return domain.Vehicle{}, false, err
+	}
+	if err := v.checkVehicleMutate(eff, actorID, existing.OwnerUserID); err != nil {
+		return domain.Vehicle{}, false, err
+	}
+	row, err := v.Update(ctx, actorID, existing.ID, eff, in.toUpdateInput())
+	return row, false, err
+}
+
+// DeleteByExternalID removes the vehicle identified by external id, reusing
+// Delete for the ownership + train-reference guards.
+func (v *Vehicle) DeleteByExternalID(ctx context.Context, actorID uint, eff domain.EffectiveRoles, externalID string) (domain.Vehicle, error) {
+	existing, err := v.vehicles.FindByExternalID(ctx, externalID)
+	if err != nil {
+		if errors.Is(err, repo.ErrVehicleNotFound) {
+			return domain.Vehicle{}, svcerrors.ErrVehicleNotFound
+		}
+		return domain.Vehicle{}, err
+	}
+	return v.Delete(ctx, actorID, existing.ID, eff)
 }
 
 func (v *Vehicle) checkVehicleMutate(eff domain.EffectiveRoles, actorID, ownerUserID uint) error {

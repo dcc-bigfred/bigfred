@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/go-chi/chi/v5"
+
 	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
 	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
 	"github.com/keskad/loco/pkgs/bigfred/server/protocol"
@@ -153,6 +155,75 @@ func (h *VehicleHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.layoutVehicles.PurgeVehicle(r.Context(), vehicleID); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// UpsertByExternalID handles PUT /api/v1/vehicles/by-external-id/{externalId}.
+// Creates the vehicle when the external id is unknown, otherwise overwrites
+// the caller's row. Mirrors Update wiring (auth + broadcast).
+func (h *VehicleHandler) UpsertByExternalID(w http.ResponseWriter, r *http.Request) {
+	externalID := chi.URLParam(r, "externalId")
+	if externalID == "" {
+		writeJSONError(w, http.StatusBadRequest, "invalid_id")
+		return
+	}
+	actor, ok := IdentityFromContext(r.Context())
+	if !ok {
+		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	var req protocol.VehicleCreateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid_body")
+		return
+	}
+	eff, err := h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	row, created, err := h.svc.UpsertByExternalID(r.Context(), actor.User.ID, eff, externalID, req.ToCreateInput(actor.User.ID))
+	if err != nil {
+		writeVehicleError(w, err)
+		return
+	}
+	if err := h.layoutVehicles.BroadcastVehicleUpdated(r.Context(), row.ID); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if created {
+		w.WriteHeader(http.StatusCreated)
+	}
+	_ = json.NewEncoder(w).Encode(protocol.ToVehicleResponse(row))
+}
+
+// DeleteByExternalID handles DELETE /api/v1/vehicles/by-external-id/{externalId}.
+func (h *VehicleHandler) DeleteByExternalID(w http.ResponseWriter, r *http.Request) {
+	externalID := chi.URLParam(r, "externalId")
+	if externalID == "" {
+		writeJSONError(w, http.StatusBadRequest, "invalid_id")
+		return
+	}
+	actor, ok := IdentityFromContext(r.Context())
+	if !ok {
+		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	eff, err := h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	row, err := h.svc.DeleteByExternalID(r.Context(), actor.User.ID, eff, externalID)
+	if err != nil {
+		writeVehicleError(w, err)
+		return
+	}
+	if err := h.layoutVehicles.PurgeVehicle(r.Context(), row.ID); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 		return
 	}

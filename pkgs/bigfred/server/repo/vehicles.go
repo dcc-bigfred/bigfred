@@ -49,6 +49,21 @@ func (v *Vehicles) FindByDCCAddress(ctx context.Context, addr uint16) (domain.Ve
 	return row, nil
 }
 
+// FindByExternalID looks up a vehicle by its globally-unique external id
+// (assigned by an integrating client such as the Android catalogue).
+// Rows created inside BigFred (ExternalID == NULL) are not locatable here.
+func (v *Vehicles) FindByExternalID(ctx context.Context, externalID string) (domain.Vehicle, error) {
+	var row domain.Vehicle
+	err := v.repo.Find(ctx, &row, where.Eq("external_id", externalID))
+	if err != nil {
+		if errors.Is(err, rel.ErrNotFound) {
+			return domain.Vehicle{}, ErrVehicleNotFound
+		}
+		return domain.Vehicle{}, err
+	}
+	return row, nil
+}
+
 // CountByOwner returns how many vehicles are owned by the user. Used
 // by the user-deletion guard so an admin cannot delete a driver that
 // still has vehicles in the catalogue.

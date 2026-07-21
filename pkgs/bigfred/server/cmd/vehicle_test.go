@@ -451,3 +451,126 @@ func TestVehicleUpdateAlwaysOverwritesCatalogMetadata(t *testing.T) {
 		t.Fatalf("revision date = %v, want nil after overwrite", cleared.RevisionDate)
 	}
 }
+
+func TestVehicleUpsertByExternalIDCreatesThenOverwrites(t *testing.T) {
+	bundle, cleanup := freshRepo(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	user := insertUser(t, ctx, bundle.Users, "driver", domain.RoleDriver)
+	pool := cmd.NewDCCPool(bundle.Pool)
+	svc := cmd.NewVehicle(bundle.Vehicles, pool, bundle.TrainMembers, bundle.LayoutVehicles, bundle.Users)
+	driverEff := domain.NewEffectiveRoles(domain.RoleDriver)
+
+	created, wasNew, err := svc.UpsertByExternalID(ctx, user.ID, driverEff, "ext-1", cmd.VehicleCreateInput{
+		Name:     "Lok",
+		Kind:     domain.VehicleKindLoco,
+		Carrier:  "PKP",
+		Number:   "ET22",
+	})
+	if err != nil {
+		t.Fatalf("upsert create: %v", err)
+	}
+	if !wasNew {
+		t.Fatal("expected created=true on first upsert")
+	}
+	if created.Source != domain.EntitySourceAndroidCatalog {
+		t.Fatalf("source = %q, want %q", created.Source, domain.EntitySourceAndroidCatalog)
+	}
+	if created.ExternalID == nil || *created.ExternalID != "ext-1" {
+		t.Fatalf("external_id = %v, want ext-1", created.ExternalID)
+	}
+	if created.Carrier != "PKP" {
+		t.Fatalf("carrier = %q, want PKP", created.Carrier)
+	}
+
+	updated, wasNew2, err := svc.UpsertByExternalID(ctx, user.ID, driverEff, "ext-1", cmd.VehicleCreateInput{
+		Name: "Lok 2",
+		Kind: domain.VehicleKindLoco,
+	})
+	if err != nil {
+		t.Fatalf("upsert overwrite: %v", err)
+	}
+	if wasNew2 {
+		t.Fatal("expected created=false on second upsert")
+	}
+	if updated.ID != created.ID {
+		t.Fatalf("id = %s, want %s", updated.ID, created.ID)
+	}
+	if updated.Name != "Lok 2" {
+		t.Fatalf("name = %q, want Lok 2", updated.Name)
+	}
+	if updated.Carrier != "" {
+		t.Fatalf("carrier = %q, want empty after overwrite", updated.Carrier)
+	}
+}
+
+func TestVehicleUpsertByExternalIDRejectsOtherOwner(t *testing.T) {
+	bundle, cleanup := freshRepo(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	owner := insertUser(t, ctx, bundle.Users, "owner", domain.RoleDriver)
+	other := insertUser(t, ctx, bundle.Users, "other", domain.RoleDriver)
+	pool := cmd.NewDCCPool(bundle.Pool)
+	svc := cmd.NewVehicle(bundle.Vehicles, pool, bundle.TrainMembers, bundle.LayoutVehicles, bundle.Users)
+	driverEff := domain.NewEffectiveRoles(domain.RoleDriver)
+
+	_, _, err := svc.UpsertByExternalID(ctx, owner.ID, driverEff, "ext-owned", cmd.VehicleCreateInput{
+		Name: "Owned",
+		Kind: domain.VehicleKindLoco,
+	})
+	if err != nil {
+		t.Fatalf("owner upsert: %v", err)
+	}
+
+	_, _, err = svc.UpsertByExternalID(ctx, other.ID, driverEff, "ext-owned", cmd.VehicleCreateInput{
+		Name: "Hijack",
+		Kind: domain.VehicleKindLoco,
+	})
+	if !errors.Is(err, svcerrors.ErrVehicleNotOwned) {
+		t.Fatalf("expected ErrVehicleNotOwned on upsert, got %v", err)
+	}
+
+	_, err = svc.DeleteByExternalID(ctx, other.ID, driverEff, "ext-owned")
+	if !errors.Is(err, svcerrors.ErrVehicleNotOwned) {
+		t.Fatalf("expected ErrVehicleNotOwned on delete, got %v", err)
+	}
+}
+
+func TestVehicleDeleteByExternalID(t *testing.T) {
+	bundle, cleanup := freshRepo(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	user := insertUser(t, ctx, bundle.Users, "driver", domain.RoleDriver)
+	pool := cmd.NewDCCPool(bundle.Pool)
+	svc := cmd.NewVehicle(bundle.Vehicles, pool, bundle.TrainMembers, bundle.LayoutVehicles, bundle.Users)
+	driverEff := domain.NewEffectiveRoles(domain.RoleDriver)
+
+	_, _, err := svc.UpsertByExternalID(ctx, user.ID, driverEff, "ext-del", cmd.VehicleCreateInput{
+		Name: "To delete",
+		Kind: domain.VehicleKindWagon,
+	})
+	if err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+
+	deleted, err := svc.DeleteByExternalID(ctx, user.ID, driverEff, "ext-del")
+	if err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+	if deleted.Name != "To delete" {
+		t.Fatalf("deleted name = %q", deleted.Name)
+	}
+
+	_, err = svc.DeleteByExternalID(ctx, user.ID, driverEff, "ext-del")
+	if !errors.Is(err, svcerrors.ErrVehicleNotFound) {
+		t.Fatalf("expected ErrVehicleNotFound, got %v", err)
+	}
+
+	_, err = svc.DeleteByExternalID(ctx, user.ID, driverEff, "nope")
+	if !errors.Is(err, svcerrors.ErrVehicleNotFound) {
+		t.Fatalf("expected ErrVehicleNotFound for missing id, got %v", err)
+	}
+}

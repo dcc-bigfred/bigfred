@@ -21,6 +21,7 @@
     "intro": "Zarządzaj swoimi pojazdami. Pojazdy mogą się łączyć w <trainsLink>składy</trainsLink>. Aby pojazd mógł jeździć na makiecie, musi zostać do niej dodany przyciskiem <addBtn>„Dodaj do makiety”</addBtn> tutaj jako samodzielny pojazd lub na <trainsLink>stronie składów</trainsLink> jako uczestnik składu, który został dodany do makiety jako skład.",
     "empty": "Nie masz jeszcze żadnych pojazdów.",
     "addButton": "Dodaj pojazd",
+    "refreshButton": "Odśwież listę",
     "columns": {
       "name": "Nazwa",
       "kind": "Typ",

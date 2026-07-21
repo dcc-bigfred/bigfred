@@ -14,9 +14,10 @@ type TrainID string
 type EntitySource string
 
 const (
-	EntitySourceLocal EntitySource = "local"
-	vehicleIDPrefix                  = "V-"
-	trainIDPrefix                    = "T-"
+	EntitySourceLocal          EntitySource = "local"
+	EntitySourceAndroidCatalog EntitySource = "android_catalog"
+	vehicleIDPrefix                          = "V-"
+	trainIDPrefix                            = "T-"
 )
 
 // String returns the wire/database representation.

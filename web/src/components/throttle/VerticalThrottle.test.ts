@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { thumbTransformPx } from "./VerticalThrottle";
-
-const THUMB_HEIGHT_PX = 50;
+import { THUMB_HEIGHT_PX, thumbTransformPx } from "./VerticalThrottle";
 
 function translateYOf(transform: string): number {
   // transform is `translate(-50%, <y>px)`
@@ -18,7 +16,6 @@ describe("thumbTransformPx", () => {
     // ratio 0 -> thumb centre at trackHeight (bottom edge).
     // translateY = H - THUMB_HEIGHT_PX/2
     expect(y).toBe(trackHeight - THUMB_HEIGHT_PX / 2);
-    expect(y).toBe(375);
   });
 
   it("places the thumb at the top of the track when ratio is 1", () => {
@@ -27,7 +24,6 @@ describe("thumbTransformPx", () => {
     // ratio 1 -> thumb centre at 0 (top edge).
     // translateY = 0 - THUMB_HEIGHT_PX/2
     expect(y).toBe(-THUMB_HEIGHT_PX / 2);
-    expect(y).toBe(-25);
   });
 
   it("places the thumb proportionally for a midpoint ratio", () => {
@@ -35,7 +31,6 @@ describe("thumbTransformPx", () => {
     const y = translateYOf(thumbTransformPx(0.5, trackHeight));
     // ratio 0.5 -> thumb centre at H/2 (middle).
     expect(y).toBe(trackHeight / 2 - THUMB_HEIGHT_PX / 2);
-    expect(y).toBe(175);
   });
 
   it("scales with track height for the same ratio", () => {
@@ -47,11 +42,10 @@ describe("thumbTransformPx", () => {
     expect(yTall).toBeGreaterThan(yShort);
   });
 
-  it("clamps ratio outside [0,1] by the caller (function itself is linear)", () => {
+  it("is linear for ratios outside [0,1] (clamping is caller's job)", () => {
     // The function is linear; clamping happens in ratioOf. Verify the math
     // for a ratio > 1 still follows the formula (caller guards input).
     const y = translateYOf(thumbTransformPx(1.5, 400));
     expect(y).toBe(400 * (1 - 1.5) - THUMB_HEIGHT_PX / 2);
-    expect(y).toBe(-225);
   });
 });

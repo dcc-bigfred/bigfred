@@ -11,7 +11,7 @@ import { Box } from "@mui/material";
 import { cockpit } from "./throttleCockpitTheme";
 
 /** Thumb height in px — must match the thumb Box height below. */
-const THUMB_HEIGHT_PX = 50;
+export const THUMB_HEIGHT_PX = 50;
 
 interface VerticalThrottleProps {
   value: number;

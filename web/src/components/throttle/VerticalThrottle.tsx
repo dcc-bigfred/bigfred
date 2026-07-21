@@ -24,12 +24,18 @@ function ratioOf(value: number, max: number): number {
   return max > 0 ? Math.min(1, Math.max(0, value / max)) : 0;
 }
 
-/** Map ratio (0 = bottom / stop, 1 = top / full) to a compositor-friendly transform. */
-function thumbTransform(ratio: number): string {
-  // top:0 + translateY: at ratio 0 the thumb sits at the bottom edge (centered on it),
-  // at ratio 1 it sits at the top edge. The -50% centres the thumb on the track point.
-  const pctFromTop = (1 - ratio) * 100;
-  return `translate(-50%, calc(${pctFromTop}% - 50%))`;
+/**
+ * Map ratio (0 = bottom / stop, 1 = top / full) to a compositor-friendly
+ * transform. translateY must be in px based on track height — CSS % in
+ * translate refers to the thumb's own size, not the track.
+ *
+ * With top:0, the thumb's natural centre is at THUMB_HEIGHT_PX/2.
+ * Target centre is H * (1 - ratio). So:
+ *   translateY = H * (1 - ratio) - THUMB_HEIGHT_PX / 2
+ */
+function thumbTransformPx(ratio: number, trackHeight: number): string {
+  const y = trackHeight * (1 - ratio) - THUMB_HEIGHT_PX / 2;
+  return `translate(-50%, ${y}px)`;
 }
 
 // VerticalThrottle is a custom vertical speed lever (bottom = 0).
@@ -44,6 +50,7 @@ function VerticalThrottle({
 }: VerticalThrottleProps) {
   const trackRef = useRef<HTMLDivElement>(null);
   const thumbRef = useRef<HTMLDivElement>(null);
+  const valueRef = useRef(value);
   const maxRef = useRef(max);
   const onChangeRef = useRef(onChange);
   const disabledRef = useRef(disabled);
@@ -53,16 +60,22 @@ function VerticalThrottle({
   const rafRef = useRef<number | null>(null);
   const cleanupDragRef = useRef<(() => void) | null>(null);
 
+  valueRef.current = value;
   maxRef.current = max;
   onChangeRef.current = onChange;
   disabledRef.current = disabled;
 
   const applyThumb = useCallback((ratio: number) => {
     const thumb = thumbRef.current;
-    if (!thumb) return;
+    const track = trackRef.current;
+    if (!thumb || !track) return;
+    const h = track.getBoundingClientRect().height;
+    // Before layout (or collapsed flex), skip — ResizeObserver / next
+    // layout effect will re-apply once the track has a real height.
+    if (h <= 0) return;
     // Imperative only — keep transform out of React/MUI sx so re-renders
     // (prop sync while dragging) cannot overwrite the live drag position.
-    thumb.style.transform = thumbTransform(ratio);
+    thumb.style.transform = thumbTransformPx(ratio, h);
   }, []);
 
   // Initial + non-drag sync from props (server echo / external stop).
@@ -71,6 +84,19 @@ function VerticalThrottle({
     applyThumb(ratioOf(value, max));
     lastCommittedRef.current = value;
   }, [value, max, applyThumb]);
+
+  // Pixel positions do not auto-follow track size the way % bottom did —
+  // re-apply when the track is resized (rotation, chrome show/hide).
+  useEffect(() => {
+    const track = trackRef.current;
+    if (!track || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      if (draggingRef.current) return;
+      applyThumb(ratioOf(valueRef.current, maxRef.current));
+    });
+    observer.observe(track);
+    return () => observer.disconnect();
+  }, [applyThumb]);
 
   const flushPending = useCallback(() => {
     rafRef.current = null;

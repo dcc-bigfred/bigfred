@@ -1,9 +1,20 @@
 import { useMemo, useState } from "react";
+import AddIcon from "@mui/icons-material/Add";
+import EditIcon from "@mui/icons-material/Edit";
+import TuneIcon from "@mui/icons-material/Tune";
+import DeleteIcon from "@mui/icons-material/Delete";
+import HandshakeIcon from "@mui/icons-material/Handshake";
+import RefreshIcon from "@mui/icons-material/Refresh";
+import { useNavigate } from "react-router-dom";
+import PlaylistAddIcon from "@mui/icons-material/PlaylistAdd";
+import RemoveCircleOutlineIcon from "@mui/icons-material/RemoveCircleOutline";
+import { useTranslation } from "react-i18next";
 import {
   Alert,
   Box,
   Button,
   Chip,
+  CircularProgress,
   IconButton,
   Paper,
   Stack,
@@ -16,15 +27,6 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import AddIcon from "@mui/icons-material/Add";
-import EditIcon from "@mui/icons-material/Edit";
-import TuneIcon from "@mui/icons-material/Tune";
-import DeleteIcon from "@mui/icons-material/Delete";
-import HandshakeIcon from "@mui/icons-material/Handshake";
-import { useNavigate } from "react-router-dom";
-import PlaylistAddIcon from "@mui/icons-material/PlaylistAdd";
-import RemoveCircleOutlineIcon from "@mui/icons-material/RemoveCircleOutline";
-import { useTranslation } from "react-i18next";
 
 import { useMe } from "../api/auth";
 import { ApiError } from "../api/client";
@@ -65,6 +67,15 @@ export default function MyVehiclesCatalogue({ layoutId }: Props) {
   const grantedLeases = useGrantedLeases();
 
   const isAdmin = hasEffectiveAdmin(me);
+  const isRefreshing =
+    (vehicles.isFetching && !vehicles.isLoading) ||
+    (layoutVehicles.isFetching && !layoutVehicles.isLoading);
+
+  const refreshList = () => {
+    void vehicles.refetch();
+    void layoutVehicles.refetch();
+    void grantedLeases.refetch();
+  };
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
@@ -135,6 +146,20 @@ export default function MyVehiclesCatalogue({ layoutId }: Props) {
           <Typography variant="h6" sx={{ flexGrow: 1 }}>
             {t("vehicle:list.title")}
           </Typography>
+          <Button
+            variant="outlined"
+            startIcon={
+              isRefreshing ? (
+                <CircularProgress size={16} color="inherit" />
+              ) : (
+                <RefreshIcon />
+              )
+            }
+            onClick={refreshList}
+            disabled={isRefreshing}
+          >
+            {t("vehicle:list.refreshButton")}
+          </Button>
           <Button
             startIcon={<AddIcon />}
             variant="contained"

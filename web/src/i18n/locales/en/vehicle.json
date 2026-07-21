@@ -21,6 +21,7 @@
     "intro": "Manage your vehicles. Vehicles can be combined into <trainsLink>trains</trainsLink>. For a vehicle to run on the layout, add it with the <addBtn>“Add to layout”</addBtn> button here as a standalone vehicle, or on the <trainsLink>trains page</trainsLink> as part of a train that has been added to the layout as a whole.",
     "empty": "You don't have any vehicles yet.",
     "addButton": "Add vehicle",
+    "refreshButton": "Refresh list",
     "columns": {
       "name": "Name",
       "kind": "Kind",

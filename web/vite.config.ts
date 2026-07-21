@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
@@ -42,5 +43,12 @@ export default defineConfig({
   build: {
     outDir: "dist",
     sourcemap: true,
+    // Baseline for older Android System WebViews (Motorola G5 / Chrome ~87 era).
+    // Avoids emitting syntax that those engines cannot parse.
+    target: "chrome87",
+  },
+  test: {
+    environment: "node",
+    include: ["src/**/*.test.{ts,tsx}"],
   },
 });

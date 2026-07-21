@@ -209,11 +209,12 @@ function TrainPoweredMemberAccordion({
             <FunctionGridButton
               key={fn.num}
               fnCode={t("fnLabel", { n: fn.num })}
+              fnNum={fn.num}
               label={fn.label}
               icon={fn.icon}
               active={Boolean(functionStates[fn.num])}
               disabled={disabled}
-              onClick={() => onFunctionToggle(fn.num)}
+              onToggle={onFunctionToggle}
             />
           ))}
         </Box>

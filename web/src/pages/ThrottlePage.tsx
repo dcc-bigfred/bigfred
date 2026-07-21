@@ -750,46 +750,99 @@ function ConnectedThrottle({
     gamepads[0]?.index ??
     null;
 
-  const handleSpeed = (next: number) => {
-    const clamped = Math.min(next, throttleMaxSpeed);
-    if (isTrainMode) {
+  // Keep volatile drive context in refs so speed/fn handlers stay referentially
+  // stable across pointermove-driven re-renders (VerticalThrottle / gamepad).
+  const driveCtxRef = useRef({
+    isTrainMode,
+    selectedTarget,
+    selectedAddr,
+    witnessAddr,
+    throttleMaxSpeed,
+    forward,
+    cockpitSpeed,
+    functions,
+    trainMembers: trainCtx.members,
+    states,
+  });
+  driveCtxRef.current = {
+    isTrainMode,
+    selectedTarget,
+    selectedAddr,
+    witnessAddr,
+    throttleMaxSpeed,
+    forward,
+    cockpitSpeed,
+    functions,
+    trainMembers: trainCtx.members,
+    states,
+  };
+
+  const handleSpeed = useCallback(
+    (next: number) => {
+      const ctx = driveCtxRef.current;
+      const clamped = Math.min(next, ctx.throttleMaxSpeed);
+      if (ctx.isTrainMode && ctx.selectedTarget?.kind === "train") {
+        noteUserSpeed(clamped);
+        queueTrainSpeed(ctx.selectedTarget.trainId, clamped, ctx.forward);
+        return;
+      }
+      if (ctx.selectedAddr == null) return;
       noteUserSpeed(clamped);
-      queueTrainSpeed(selectedTarget.trainId, clamped, forward);
-      return;
-    }
-    if (selectedAddr == null) return;
-    noteUserSpeed(clamped);
-    queueSpeed(selectedAddr, clamped, forward);
-  };
-  const handleDir = (fwd: boolean) => {
-    if (isTrainMode) {
-      sendTrainSpeedNow(selectedTarget.trainId, cockpitSpeed, fwd);
-      return;
-    }
-    if (selectedAddr == null) return;
-    sendSpeedNow(selectedAddr, cockpitSpeed, fwd);
-  };
-  const handleFn = (n: number) => {
-    const fnAddr = isTrainMode ? witnessAddr : selectedAddr;
-    if (fnAddr == null) return;
-    sendFunction(fnAddr, n, !(functions[n] ?? false));
-  };
-  const handleTrainFn = (memberId: number, fn: number) => {
-    const member = trainCtx.members.find((m) => m.memberId === memberId);
-    if (!member || member.dccAddress == null) return;
-    const memberState = states.get(member.dccAddress);
-    const memberFns = memberState?.functions ?? [];
-    sendFunction(member.dccAddress, fn, !(memberFns[fn] ?? false));
-  };
-  const handleStop = () => {
+      queueSpeed(ctx.selectedAddr, clamped, ctx.forward);
+    },
+    [noteUserSpeed, queueSpeed, queueTrainSpeed],
+  );
+
+  const handleDir = useCallback(
+    (fwd: boolean) => {
+      const ctx = driveCtxRef.current;
+      if (ctx.isTrainMode && ctx.selectedTarget?.kind === "train") {
+        sendTrainSpeedNow(
+          ctx.selectedTarget.trainId,
+          ctx.cockpitSpeed,
+          fwd,
+        );
+        return;
+      }
+      if (ctx.selectedAddr == null) return;
+      sendSpeedNow(ctx.selectedAddr, ctx.cockpitSpeed, fwd);
+    },
+    [sendSpeedNow, sendTrainSpeedNow],
+  );
+
+  const handleFn = useCallback(
+    (n: number) => {
+      const ctx = driveCtxRef.current;
+      const fnAddr = ctx.isTrainMode ? ctx.witnessAddr : ctx.selectedAddr;
+      if (fnAddr == null) return;
+      sendFunction(fnAddr, n, !(ctx.functions[n] ?? false));
+    },
+    [sendFunction],
+  );
+
+  const handleTrainFn = useCallback(
+    (memberId: number, fn: number) => {
+      const ctx = driveCtxRef.current;
+      const member = ctx.trainMembers.find((m) => m.memberId === memberId);
+      if (!member || member.dccAddress == null) return;
+      const memberState = ctx.states.get(member.dccAddress);
+      const memberFns = memberState?.functions ?? [];
+      sendFunction(member.dccAddress, fn, !(memberFns[fn] ?? false));
+    },
+    [sendFunction],
+  );
+
+  const handleStop = useCallback(() => {
+    const ctx = driveCtxRef.current;
     noteUserSpeed(0);
-    if (isTrainMode) {
-      sendTrainSpeedNow(selectedTarget.trainId, 0, forward);
+    if (ctx.isTrainMode && ctx.selectedTarget?.kind === "train") {
+      sendTrainSpeedNow(ctx.selectedTarget.trainId, 0, ctx.forward);
       return;
     }
-    if (selectedAddr == null) return;
-    sendSpeedNow(selectedAddr, 0, forward);
-  };
+    if (ctx.selectedAddr == null) return;
+    sendSpeedNow(ctx.selectedAddr, 0, ctx.forward);
+  }, [noteUserSpeed, sendSpeedNow, sendTrainSpeedNow]);
+
   const handleAxisEnabledToggle = useCallback(() => {
     setGamepadMapping((prev) => {
       if (prev == null) return prev;

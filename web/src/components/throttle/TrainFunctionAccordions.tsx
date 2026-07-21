@@ -15,12 +15,8 @@ import { useTranslation } from "react-i18next";
 import { useVehicleFunctions } from "../../api/functions";
 import type { LocoState } from "../../context/DccBusContext";
 import type { ThrottleCockpitFunction } from "./ThrottleCockpit";
-import FunctionGridButton from "./FunctionGridButton";
-import {
-  cockpit,
-  FUNCTION_BUTTON_GRID_GAP_PX,
-  FUNCTION_BUTTON_SIZE_PX,
-} from "./throttleCockpitTheme";
+import FunctionButtonsPanel from "./FunctionButtonsPanel";
+import { cockpit } from "./throttleCockpitTheme";
 
 export interface TrainAccordionMember {
   memberId: number;
@@ -40,6 +36,7 @@ export interface TrainFunctionAccordionsProps {
   onFunctionToggle: (memberId: number, fn: number) => void;
   onOpenSettings: (memberId: number) => void;
   showMultiplierCog: boolean;
+  functionsAsList?: boolean;
   disabled?: boolean;
 }
 
@@ -98,6 +95,7 @@ function TrainPoweredMemberAccordion({
   onFunctionToggle,
   onOpenSettings,
   showMultiplierCog,
+  functionsAsList,
   disabled,
 }: {
   member: TrainAccordionMember & { dccAddress: number };
@@ -107,6 +105,7 @@ function TrainPoweredMemberAccordion({
   onFunctionToggle: (fn: number) => void;
   onOpenSettings: () => void;
   showMultiplierCog: boolean;
+  functionsAsList: boolean;
   disabled: boolean;
 }) {
   const { t } = useTranslation("throttle");
@@ -196,28 +195,13 @@ function TrainPoweredMemberAccordion({
           bgcolor: "rgb(12, 24, 41)",
         }}
       >
-        <Box
-          sx={{
-            display: "grid",
-            width: "100%",
-            gridTemplateColumns: `repeat(auto-fill, ${FUNCTION_BUTTON_SIZE_PX}px)`,
-            gap: `${FUNCTION_BUTTON_GRID_GAP_PX}px`,
-            justifyContent: "start",
-          }}
-        >
-          {functions.map((fn) => (
-            <FunctionGridButton
-              key={fn.num}
-              fnCode={t("fnLabel", { n: fn.num })}
-              fnNum={fn.num}
-              label={fn.label}
-              icon={fn.icon}
-              active={Boolean(functionStates[fn.num])}
-              disabled={disabled}
-              onToggle={onFunctionToggle}
-            />
-          ))}
-        </Box>
+        <FunctionButtonsPanel
+          functions={functions}
+          asList={functionsAsList}
+          isActive={(fnNum) => Boolean(functionStates[fnNum])}
+          onToggle={onFunctionToggle}
+          disabled={disabled}
+        />
       </AccordionDetails>
     </Accordion>
   );
@@ -231,6 +215,7 @@ export default function TrainFunctionAccordions({
   onFunctionToggle,
   onOpenSettings,
   showMultiplierCog,
+  functionsAsList = false,
   disabled = false,
 }: TrainFunctionAccordionsProps) {
   return (
@@ -249,6 +234,7 @@ export default function TrainFunctionAccordions({
             onFunctionToggle={(fn) => onFunctionToggle(member.memberId, fn)}
             onOpenSettings={() => onOpenSettings(member.memberId)}
             showMultiplierCog={showMultiplierCog}
+            functionsAsList={functionsAsList}
             disabled={disabled}
           />
         );

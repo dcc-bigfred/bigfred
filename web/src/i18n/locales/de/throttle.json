@@ -2,7 +2,8 @@
   "title": "Regler",
   "setup": {
     "open": "Reglereinstellungen",
-    "close": "Schließen"
+    "close": "Schließen",
+    "functionsAsList": "Funktionen als Liste anzeigen"
   },
   "editFunctions": "Funktionen bearbeiten",
   "fullscreen": {

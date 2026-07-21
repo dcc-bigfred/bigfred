@@ -27,6 +27,7 @@ import ThrottleCockpit from "../throttle/ThrottleCockpit";
 import { useDebouncedSpeedSend } from "../../hooks/useDebouncedSpeedSend";
 import { useKeyedRetryingSend } from "../../hooks/useRetryingSend";
 import { useThrottleSpeedOverride } from "../../hooks/useThrottleSpeedOverride";
+import { useThrottleFunctionsListView } from "../../hooks/useThrottleFunctionsListView";
 
 interface TakeoverThrottleOverlayProps {
   layoutId: number;
@@ -126,6 +127,7 @@ function TakeoverOverlayBody({
   const functions = state?.functions ?? [];
   const maxSpeed = maxSpeedValue(busSpeedSteps ?? 128);
   const canClose = speed === 0;
+  const { functionsAsList } = useThrottleFunctionsListView();
 
   const fnList = useVehicleFunctions(
     grant.target === "vehicle" ? grant.targetId : "",
@@ -249,6 +251,7 @@ function TakeoverOverlayBody({
             forward={forward}
             functions={functions}
             configuredFunctions={configuredFunctions}
+            functionsAsList={functionsAsList}
             onSpeedChange={(next) => {
               noteUserSpeed(next);
               queueSpeed(drive.dccAddress, next, forward);

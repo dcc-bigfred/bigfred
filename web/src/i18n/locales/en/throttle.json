@@ -2,7 +2,8 @@
   "title": "Throttle",
   "setup": {
     "open": "Throttle settings",
-    "close": "Close"
+    "close": "Close",
+    "functionsAsList": "Show functions as a list"
   },
   "editFunctions": "Edit functions",
   "fullscreen": {

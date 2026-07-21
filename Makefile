@@ -61,7 +61,13 @@ run-prod: build-prod
 #   make web-dev HOST=192.168.0.86
 HOST ?= localhost
 
-.PHONY: web-install web-dev web-build
+# Rasterize src/icons/*.svg → src/icons/png/*.png (70x70, gitignored).
+# Also runs automatically via the Vite plugin on `vite` / `vite build`.
+# Needs: rsvg-convert (librsvg), e.g. pacman -S librsvg / apt install librsvg2-bin.
+.PHONY: web-icons web-install web-dev web-build
+web-icons:
+	cd web && python3 scripts/rasterize_function_icons.py
+
 web-install:
 	cd web && npm install
 

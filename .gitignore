@@ -11,5 +11,6 @@ bin/*
 /bigfred.db-shm
 /web/node_modules
 /web/dist
+/web/src/icons/png/
 /.tmp
 /backup-*.txt

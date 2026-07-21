@@ -22,12 +22,10 @@ import { useNavigate } from "react-router-dom";
 import type { ThrottleTarget } from "../../hooks/useThrottleTargetSelection";
 import {
   cockpit,
-  FUNCTION_BUTTON_GRID_GAP_PX,
-  FUNCTION_BUTTON_SIZE_PX,
   THROTTLE_PANEL_WIDTH_PX,
 } from "./throttleCockpitTheme";
 import RadioStopButton from "./RadioStopButton";
-import FunctionGridButton from "./FunctionGridButton";
+import FunctionButtonsPanel from "./FunctionButtonsPanel";
 import VerticalThrottle from "./VerticalThrottle";
 
 export interface ThrottleCockpitFunction {
@@ -65,6 +63,8 @@ export interface ThrottleCockpitProps {
   configuredFunctions: ThrottleCockpitFunction[];
   /** Replaces the flat function grid (train accordion mode). */
   functionPanel?: ReactNode;
+  /** When true, render configured functions as a compact list instead of a grid. */
+  functionsAsList?: boolean;
   disabled?: boolean;
   /** When true, settings icon shows a reconnect spinner instead. */
   connectionLost?: boolean;
@@ -102,6 +102,7 @@ function ThrottleCockpit({
   functions,
   configuredFunctions,
   functionPanel,
+  functionsAsList = false,
   disabled = false,
   connectionLost = false,
   commandRetrying = false,
@@ -343,28 +344,13 @@ function ThrottleCockpit({
           }}
         >
           {functionPanel ?? (
-            <Box
-              sx={{
-                display: "grid",
-                width: "100%",
-                gridTemplateColumns: `repeat(auto-fill, ${FUNCTION_BUTTON_SIZE_PX}px)`,
-                gap: `${FUNCTION_BUTTON_GRID_GAP_PX}px`,
-                justifyContent: "start",
-              }}
-            >
-              {configuredFunctions.map((fn) => (
-                <FunctionGridButton
-                  key={fn.num}
-                  fnCode={t("fnLabel", { n: fn.num })}
-                  fnNum={fn.num}
-                  label={fn.label}
-                  icon={fn.icon}
-                  active={Boolean(functions[fn.num])}
-                  disabled={disabled || !hasSelection}
-                  onToggle={onFunctionToggle}
-                />
-              ))}
-            </Box>
+            <FunctionButtonsPanel
+              functions={configuredFunctions}
+              asList={functionsAsList}
+              isActive={(fnNum) => Boolean(functions[fnNum])}
+              onToggle={onFunctionToggle}
+              disabled={disabled || !hasSelection}
+            />
           )}
         </Box>
 
@@ -524,5 +510,5 @@ function ThrottleCockpit({
 // memo still helps outside of drag (e.g. IdleThrottle, or when only unrelated
 // parent state changes): during an active drag `speed` changes every frame so
 // this memo cannot skip those renders — the real drag-path win comes from
-// memoizing FunctionGridButton, whose props stay stable across the drag.
+// memoizing FunctionButtonsPanel cells, whose props stay stable across the drag.
 export default memo(ThrottleCockpit);

@@ -3,6 +3,27 @@ loco
 
 CLI utility to work with DCC equpied locomotives and wagons.
 
+BigFred SPA (`web/`)
+--------------------
+
+The React frontend rasterizes function icons (`web/src/icons/*.svg` →
+`web/src/icons/png/*.png`, gitignored) during `vite` / `vite build` via a
+Vite plugin. Requires **`rsvg-convert`** from librsvg:
+
+```bash
+# Arch / Manjaro
+pacman -S librsvg
+
+# Debian / Ubuntu
+apt install librsvg2-bin
+```
+
+You can also run rasterization manually:
+
+```bash
+make web-icons
+```
+
 Setup
 -----
 

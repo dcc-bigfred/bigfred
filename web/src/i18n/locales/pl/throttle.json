@@ -2,7 +2,8 @@
   "title": "Sterowanie",
   "setup": {
     "open": "Ustawienia sterowania",
-    "close": "Zamknij"
+    "close": "Zamknij",
+    "functionsAsList": "Pokaż widok funkcji jako listę"
   },
   "editFunctions": "Edytuj funkcje",
   "fullscreen": {

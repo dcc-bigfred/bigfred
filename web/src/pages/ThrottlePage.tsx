@@ -3,7 +3,9 @@ import {
   Alert,
   Box,
   Button,
+  Checkbox,
   Chip,
+  FormControlLabel,
   Stack,
   Typography,
 } from "@mui/material";
@@ -59,6 +61,7 @@ import {
   useThrottleTargetSelection,
   type ThrottleTarget,
 } from "../hooks/useThrottleTargetSelection";
+import { useThrottleFunctionsListView } from "../hooks/useThrottleFunctionsListView";
 import { useTrainAccordionExpanded } from "../hooks/useTrainAccordionExpanded";
 import { useDriverRadioInbound } from "../hooks/useDriverRadioInbound";
 import { buildThrottleRadioHeader } from "../hooks/useThrottleRadioChat";
@@ -127,6 +130,7 @@ export default function ThrottlePage() {
   const [retryTick, setRetryTick] = useState(0);
   const [setupOpen, setSetupOpen] = useState(false);
   const spawnGenRef = useRef(0);
+  const { functionsAsList, setFunctionsAsList } = useThrottleFunctionsListView();
 
   const activeStation = useMemo(
     () => stations.find((s) => s.id === selectedCS),
@@ -273,6 +277,15 @@ export default function ThrottlePage() {
 
   const setupDialog = (
     <ThrottleSetupDialog open={setupOpen} onClose={closeSetup}>
+      <FormControlLabel
+        control={
+          <Checkbox
+            checked={functionsAsList}
+            onChange={(ev) => setFunctionsAsList(ev.target.checked)}
+          />
+        }
+        label={t("throttle:setup.functionsAsList")}
+      />
       {setupPanel}
       <SetupDataPlaneSection />
     </ThrottleSetupDialog>
@@ -322,6 +335,7 @@ export default function ThrottlePage() {
               onOpenSetup={openSetup}
               driverRadio={driverRadio}
               radioChatEnabled={radioChatEnabled}
+              functionsAsList={functionsAsList}
             />
           </DccBusProvider>
         ) : (
@@ -332,6 +346,7 @@ export default function ThrottlePage() {
               onOpenSetup={openSetup}
               driverRadio={driverRadio}
               radioChatEnabled={radioChatEnabled}
+              functionsAsList={functionsAsList}
             />
           </>
         )}
@@ -526,11 +541,13 @@ function IdleThrottle({
   onOpenSetup,
   driverRadio,
   radioChatEnabled,
+  functionsAsList,
 }: {
   layoutID: number;
   onOpenSetup: () => void;
   driverRadio: DriverRadioInbound;
   radioChatEnabled: boolean;
+  functionsAsList: boolean;
 }) {
   const vehicles = useCockpitVehicles(layoutID);
   const trains = useCockpitTrains(layoutID);
@@ -568,6 +585,7 @@ function IdleThrottle({
         forward
         functions={[]}
         configuredFunctions={configuredFunctions}
+        functionsAsList={functionsAsList}
         disabled
         headerExtra={headerExtra}
         onSpeedChange={() => {}}
@@ -585,12 +603,14 @@ function ConnectedThrottle({
   onOpenSetup,
   driverRadio,
   radioChatEnabled,
+  functionsAsList,
 }: {
   layoutID: number;
   speedSteps: number;
   onOpenSetup: () => void;
   driverRadio: DriverRadioInbound;
   radioChatEnabled: boolean;
+  functionsAsList: boolean;
 }) {
   const me = useMe().data;
   useLeaseEvents();
@@ -936,6 +956,7 @@ function ConnectedThrottle({
       onFunctionToggle={handleTrainFn}
       onOpenSettings={setSettingsMemberId}
       showMultiplierCog={trainCtx.train?.ownerId === me?.id}
+      functionsAsList={functionsAsList}
       disabled={trainMemberDccAddresses(trainCtx.members).length === 0}
     />
   ) : undefined;
@@ -1036,6 +1057,7 @@ function ConnectedThrottle({
         functions={functions}
         configuredFunctions={configuredFunctions}
         functionPanel={trainAccordion}
+        functionsAsList={functionsAsList}
         disabled={witnessAddr == null}
         connectionLost={connectionLost}
         commandRetrying={commandRetrying}

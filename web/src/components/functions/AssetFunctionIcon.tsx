@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 
-/** Rasterises an SVG from `web/src/icons/<slug>.svg` (full-colour artwork). */
+/** Renders a PNG from `web/src/icons/png/<slug>.png` (rasterized function artwork). */
 export default function AssetFunctionIcon({
   src,
   size = 24,

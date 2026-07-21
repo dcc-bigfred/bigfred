@@ -12,6 +12,10 @@ export const FUNCTION_BUTTON_NUM_FONT_SIZE_PX = 10;
 export const FUNCTION_BUTTON_NUM_INSET_PX = 4;
 /** Horizontal and vertical gap between function grid cells (Throttle cockpit). */
 export const FUNCTION_BUTTON_GRID_GAP_PX = 6;
+/** Icon size inside a function list row (Throttle cockpit). */
+export const FUNCTION_LIST_ICON_PX = 28;
+/** Vertical gap between function list rows (Throttle cockpit). */
+export const FUNCTION_LIST_ROW_GAP_PX = 4;
 /** Fixed width of the speed / throttle column (always on the right). */
 export const THROTTLE_PANEL_WIDTH_PX = 128;
 

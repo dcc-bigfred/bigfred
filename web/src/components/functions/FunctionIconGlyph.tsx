@@ -6,9 +6,6 @@ import {
 } from "../../icons/functionIconAssets";
 import { cockpit } from "../throttle/throttleCockpitTheme";
 import AssetFunctionIcon from "./AssetFunctionIcon";
-import ArtworkFunctionGlyph, {
-  hasArtworkFunctionGlyph,
-} from "./ArtworkFunctionGlyph";
 import UnknownFunctionGlyph from "./UnknownFunctionGlyph";
 
 /** Slugs from GET /api/v1/function-icons (§3a.8). */
@@ -478,17 +475,11 @@ export function isKnownFunctionIcon(slug: string): boolean {
   if (slug === "unspecified") {
     return true;
   }
-  return (
-    slug in GLYPHS || hasArtworkFunctionGlyph(slug) || hasFunctionIconAsset(slug)
-  );
+  return slug in GLYPHS || hasFunctionIconAsset(slug);
 }
 
 function isUnknownFunctionIcon(slug: string): boolean {
-  if (
-    slug === "unspecified" ||
-    hasArtworkFunctionGlyph(slug) ||
-    hasFunctionIconAsset(slug)
-  ) {
+  if (slug === "unspecified" || hasFunctionIconAsset(slug)) {
     return false;
   }
   return !(slug in GLYPHS);
@@ -510,18 +501,6 @@ export function FunctionIconGlyph({
   className?: string;
 }) {
   const dimmed = variant === "cockpit" && !active;
-
-  if (hasArtworkFunctionGlyph(slug)) {
-    return (
-      <ArtworkFunctionGlyph
-        slug={slug}
-        size={size}
-        dimmed={dimmed}
-        style={style}
-        className={className}
-      />
-    );
-  }
 
   const assetUrl = functionIconAssetUrl(slug);
 

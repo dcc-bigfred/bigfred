@@ -2,6 +2,8 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
+import { rasterizeFunctionIconsPlugin } from "./scripts/vite-plugin-rasterize-function-icons";
+
 // During development the React app lives on :5173 (Vite's dev server)
 // and the Go API on :8080. We could either:
 //   (a) enable CORS on the backend and call http://localhost:8080
@@ -24,7 +26,7 @@ declare const process: { env: Record<string, string | undefined> };
 const devHost = process.env.HOST || "localhost";
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [rasterizeFunctionIconsPlugin(), react()],
   server: {
     host: devHost,
     port: 5173,

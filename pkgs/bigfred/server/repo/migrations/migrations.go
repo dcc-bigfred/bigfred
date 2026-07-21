@@ -123,6 +123,7 @@ func register(m *migrator.Migrator) {
 	m.Register(migrationVersion(20260712, 2), addCommandStationSingleVehicleControlColumnUp, addCommandStationSingleVehicleControlColumnDown)
 	m.Register(migrationVersion(20260716, 1), addCommandStationAllocatePhysicalSlotsColumnUp, addCommandStationAllocatePhysicalSlotsColumnDown)
 	m.Register(migrationVersion(20260720, 1), addVehicleCatalogMetaColumnsUp, addVehicleCatalogMetaColumnsDown)
+	m.Register(migrationVersion(20260721, 1), replaceVehicleExternalIDUniqueIndexUp, replaceVehicleExternalIDUniqueIndexDown)
 }
 
 // createCommandStationsUp installs the `command_stations` catalogue
@@ -926,4 +927,17 @@ func addVehicleCatalogMetaColumnsDown(s *rel.Schema) {
 		t.DropColumn("revision_date")
 		t.DropColumn("epoch")
 	})
+}
+
+// replaceVehicleExternalIDUniqueIndexUp makes external_id globally unique
+// (previously unique per (source, external_id)). An external client owns a
+// single row per external id regardless of source.
+func replaceVehicleExternalIDUniqueIndexUp(s *rel.Schema) {
+	s.Exec(rel.Raw(`DROP INDEX IF EXISTS vehicles_unique_external_source`))
+	s.Exec(rel.Raw(`CREATE UNIQUE INDEX vehicles_unique_external_id ON vehicles(external_id) WHERE external_id IS NOT NULL`))
+}
+
+func replaceVehicleExternalIDUniqueIndexDown(s *rel.Schema) {
+	s.Exec(rel.Raw(`DROP INDEX IF EXISTS vehicles_unique_external_id`))
+	s.Exec(rel.Raw(`CREATE UNIQUE INDEX vehicles_unique_external_source ON vehicles(source, external_id) WHERE external_id IS NOT NULL`))
 }

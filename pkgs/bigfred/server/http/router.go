@@ -142,6 +142,8 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			r.Get("/vehicles", vehicleH.List)
 			r.Get("/vehicles/catalogue", vehicleH.ListCatalogue)
 			r.Post("/vehicles", vehicleH.Create)
+			r.Put("/vehicles/by-external-id/{externalId}", vehicleH.UpsertByExternalID)
+			r.Delete("/vehicles/by-external-id/{externalId}", vehicleH.DeleteByExternalID)
 			r.Put("/vehicles/{id}", vehicleH.Update)
 			r.Delete("/vehicles/{id}", vehicleH.Delete)
 

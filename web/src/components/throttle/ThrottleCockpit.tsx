@@ -521,4 +521,8 @@ function ThrottleCockpit({
   );
 }
 
+// memo still helps outside of drag (e.g. IdleThrottle, or when only unrelated
+// parent state changes): during an active drag `speed` changes every frame so
+// this memo cannot skip those renders — the real drag-path win comes from
+// memoizing FunctionGridButton, whose props stay stable across the drag.
 export default memo(ThrottleCockpit);

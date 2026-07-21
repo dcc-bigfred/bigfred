@@ -9,7 +9,9 @@
     "build": "tsc -b && vite build && npm run check:offline",
     "check:offline": "node scripts/check-offline-bundle.mjs dist",
     "preview": "vite preview",
-    "lint": "tsc -b --noEmit"
+    "lint": "tsc -b --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@emotion/react": "^11.13.5",
@@ -31,6 +33,7 @@
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",
     "typescript": "^5.6.3",
-    "vite": "^5.4.11"
+    "vite": "^5.4.11",
+    "vitest": "^2.1.8"
   }
 }

@@ -32,8 +32,10 @@ function ratioOf(value: number, max: number): number {
  * With top:0, the thumb's natural centre is at THUMB_HEIGHT_PX/2.
  * Target centre is H * (1 - ratio). So:
  *   translateY = H * (1 - ratio) - THUMB_HEIGHT_PX / 2
+ *
+ * Exported for unit tests (0 -> bottom, 1 -> top, midpoints proportional).
  */
-function thumbTransformPx(ratio: number, trackHeight: number): string {
+export function thumbTransformPx(ratio: number, trackHeight: number): string {
   const y = trackHeight * (1 - ratio) - THUMB_HEIGHT_PX / 2;
   return `translate(-50%, ${y}px)`;
 }
@@ -59,44 +61,55 @@ function VerticalThrottle({
   const pendingValueRef = useRef<number | null>(null);
   const rafRef = useRef<number | null>(null);
   const cleanupDragRef = useRef<(() => void) | null>(null);
+  // Cached track geometry — updated by ResizeObserver and refreshed at the
+  // start of each drag. Reading it avoids getBoundingClientRect() on every
+  // pointermove (a layout-triggering call in the drag hot path).
+  const trackGeomRef = useRef<{ top: number; height: number } | null>(null);
 
   valueRef.current = value;
   maxRef.current = max;
   onChangeRef.current = onChange;
   disabledRef.current = disabled;
 
+  const refreshTrackGeom = useCallback(() => {
+    const track = trackRef.current;
+    if (!track) return;
+    const rect = track.getBoundingClientRect();
+    if (rect.height <= 0) return;
+    trackGeomRef.current = { top: rect.top, height: rect.height };
+  }, []);
+
   const applyThumb = useCallback((ratio: number) => {
     const thumb = thumbRef.current;
-    const track = trackRef.current;
-    if (!thumb || !track) return;
-    const h = track.getBoundingClientRect().height;
-    // Before layout (or collapsed flex), skip — ResizeObserver / next
-    // layout effect will re-apply once the track has a real height.
-    if (h <= 0) return;
+    const geom = trackGeomRef.current;
+    if (!thumb || !geom) return;
     // Imperative only — keep transform out of React/MUI sx so re-renders
     // (prop sync while dragging) cannot overwrite the live drag position.
-    thumb.style.transform = thumbTransformPx(ratio, h);
+    thumb.style.transform = thumbTransformPx(ratio, geom.height);
   }, []);
 
   // Initial + non-drag sync from props (server echo / external stop).
   useLayoutEffect(() => {
     if (draggingRef.current) return;
+    refreshTrackGeom();
     applyThumb(ratioOf(value, max));
     lastCommittedRef.current = value;
-  }, [value, max, applyThumb]);
+  }, [value, max, applyThumb, refreshTrackGeom]);
 
-  // Pixel positions do not auto-follow track size the way % bottom did —
-  // re-apply when the track is resized (rotation, chrome show/hide).
+  // Keep cached track geometry fresh and re-apply the thumb position when
+  // the track is resized (rotation, chrome show/hide). Pixel positions do
+  // not auto-follow track size the way % bottom did.
   useEffect(() => {
     const track = trackRef.current;
     if (!track || typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(() => {
+      refreshTrackGeom();
       if (draggingRef.current) return;
       applyThumb(ratioOf(valueRef.current, maxRef.current));
     });
     observer.observe(track);
     return () => observer.disconnect();
-  }, [applyThumb]);
+  }, [applyThumb, refreshTrackGeom]);
 
   const flushPending = useCallback(() => {
     rafRef.current = null;
@@ -118,12 +131,10 @@ function VerticalThrottle({
   );
 
   const valueFromClientY = useCallback((clientY: number) => {
-    const track = trackRef.current;
+    const geom = trackGeomRef.current;
     const maxV = maxRef.current;
-    if (!track || maxV <= 0) return 0;
-    const rect = track.getBoundingClientRect();
-    if (rect.height <= 0) return 0;
-    const rel = 1 - (clientY - rect.top) / rect.height;
+    if (!geom || maxV <= 0) return 0;
+    const rel = 1 - (clientY - geom.top) / geom.height;
     const clamped = Math.min(1, Math.max(0, rel));
     return Math.round(clamped * maxV);
   }, []);
@@ -149,6 +160,8 @@ function VerticalThrottle({
       if (disabledRef.current) return;
 
       draggingRef.current = true;
+      // Refresh geometry once at drag start so pointermove never reads layout.
+      refreshTrackGeom();
       const next = valueFromClientY(clientY);
       applyThumb(ratioOf(next, maxRef.current));
       scheduleCommit(next);
@@ -175,7 +188,7 @@ function VerticalThrottle({
         window.removeEventListener("pointercancel", onCancel);
       };
     },
-    [applyThumb, endDrag, scheduleCommit, valueFromClientY],
+    [applyThumb, endDrag, refreshTrackGeom, scheduleCommit, valueFromClientY],
   );
 
   useEffect(

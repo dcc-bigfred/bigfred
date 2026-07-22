@@ -28,6 +28,7 @@ import { useDebouncedSpeedSend } from "../../hooks/useDebouncedSpeedSend";
 import { useKeyedRetryingSend } from "../../hooks/useRetryingSend";
 import { useThrottleSpeedOverride } from "../../hooks/useThrottleSpeedOverride";
 import { useThrottleFunctionsListView } from "../../hooks/useThrottleFunctionsListView";
+import { useThrottleHardwareKeys } from "../../hooks/useThrottleHardwareKeys";
 
 interface TakeoverThrottleOverlayProps {
   layoutId: number;
@@ -177,6 +178,22 @@ function TakeoverOverlayBody({
     }
   };
 
+  const handleTakeoverSpeed = useCallback(
+    (next: number) => {
+      if (!drive) return;
+      noteUserSpeed(next);
+      queueSpeed(drive.dccAddress, next, forward);
+    },
+    [drive, noteUserSpeed, queueSpeed, forward],
+  );
+
+  useThrottleHardwareKeys({
+    maxSpeed,
+    currentSpeed: cockpitSpeed,
+    onSpeed: handleTakeoverSpeed,
+    disabled: drive == null,
+  });
+
   const handleDialogClose = (
     _: object,
     reason: "backdropClick" | "escapeKeyDown",
@@ -252,10 +269,7 @@ function TakeoverOverlayBody({
             functions={functions}
             configuredFunctions={configuredFunctions}
             functionsAsList={functionsAsList}
-            onSpeedChange={(next) => {
-              noteUserSpeed(next);
-              queueSpeed(drive.dccAddress, next, forward);
-            }}
+            onSpeedChange={handleTakeoverSpeed}
             onDirectionChange={(fwd) => {
               sendSpeedNow(drive.dccAddress, cockpitSpeed, fwd);
             }}

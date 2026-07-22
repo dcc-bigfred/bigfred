@@ -18,6 +18,8 @@ declare global {
     BigFredNativeApp?: BigFredNativeAppBridge;
     __bigfredOnModelPicked?: (payload: ModelPickPayload | null) => void;
     __bigfredSetLocale?: (lang: string) => void;
+    /** Native volume hardware keys: +1 faster, -1 slower. Registered by throttle pages. */
+    __bigfredThrottleHardwareKeys?: (direction: number) => void;
   }
 }
 

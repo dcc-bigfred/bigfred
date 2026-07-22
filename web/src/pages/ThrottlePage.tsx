@@ -46,6 +46,7 @@ import CommandStationPicker from "../components/throttle/CommandStationPicker";
 import { useDebouncedSpeedSend } from "../hooks/useDebouncedSpeedSend";
 import { useGamepads } from "../hooks/useGamepads";
 import { useGamepadControl } from "../hooks/useGamepadControl";
+import { useThrottleHardwareKeys } from "../hooks/useThrottleHardwareKeys";
 import {
   defaultGamepadMapping,
   loadGamepadMapping,
@@ -890,6 +891,17 @@ function ConnectedThrottle({
     onFunctionToggle: handleFn,
     onStop: handleStop,
     onAxisEnabledToggle: handleAxisEnabledToggle,
+  });
+
+  const hardwareKeysDisabled = isTrainMode
+    ? trainMemberDccAddresses(trainCtx.members).length === 0
+    : witnessAddr == null;
+
+  useThrottleHardwareKeys({
+    maxSpeed: throttleMaxSpeed,
+    currentSpeed: cockpitSpeed,
+    onSpeed: handleSpeed,
+    disabled: hardwareKeysDisabled,
   });
 
   const handleLeaveConfirm = useCallback(async () => {

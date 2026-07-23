@@ -4,6 +4,7 @@ import { Box, Typography } from "@mui/material";
 import { FunctionIconGlyph } from "../functions/FunctionIconGlyph";
 import {
   cockpit,
+  cockpitFunctionSurface,
   COCKPIT_FUNCTION_ICON_PX,
   FUNCTION_BUTTON_ICON_TOP_PX,
   FUNCTION_BUTTON_LABEL_FONT_SIZE_PX,
@@ -34,8 +35,7 @@ function FunctionGridButton({
   disabled,
   onToggle,
 }: FunctionGridButtonProps) {
-  const top = active ? cockpit.btnActiveTop : cockpit.btnTop;
-  const bottom = active ? cockpit.btnActiveBottom : cockpit.btnBottom;
+  const surface = cockpitFunctionSurface(active, Boolean(disabled));
 
   const handleClick = useCallback(() => {
     onToggle(fnNum);
@@ -59,25 +59,20 @@ function FunctionGridButton({
         flexShrink: 0,
         p: 0.5,
         boxSizing: "border-box",
-        border: `1px solid ${active ? cockpit.borderBright : cockpit.border}`,
+        border: surface.border,
         borderRadius: 1.5,
         cursor: disabled ? "not-allowed" : "pointer",
-        background: `linear-gradient(145deg, ${top} 0%, ${bottom} 100%)`,
-        boxShadow: active
-          ? "inset 0 2px 8px rgba(255,255,255,0.2), 0 2px 6px rgba(0,0,0,0.4)"
-          : "inset 0 1px 0 rgba(255,255,255,0.15), 0 2px 4px rgba(0,0,0,0.35)",
-        opacity: disabled ? 0.45 : 1,
+        bgcolor: surface.bgcolor,
+        boxShadow: "none",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "flex-end",
         overflow: "hidden",
-        // Prefer solid overlay over filter:brightness — cheaper on old GPUs.
+        // Solid color bump — no filter:brightness / white inset (old WebView speckles).
         "&:hover:not(:disabled)": {
-          background: `linear-gradient(145deg, ${top} 0%, ${bottom} 100%)`,
-          boxShadow: active
-            ? "inset 0 2px 8px rgba(255,255,255,0.28), 0 2px 6px rgba(0,0,0,0.4)"
-            : "inset 0 1px 0 rgba(255,255,255,0.22), 0 2px 4px rgba(0,0,0,0.35)",
+          bgcolor: active ? cockpit.fnFillActiveHover : cockpit.fnFillHover,
+          border: `1px solid ${active ? cockpit.fnBorderActive : cockpit.fnBorder}`,
         },
       }}
     >
@@ -89,14 +84,11 @@ function FunctionGridButton({
           top: FUNCTION_BUTTON_NUM_INSET_PX,
           left: FUNCTION_BUTTON_NUM_INSET_PX,
           zIndex: 2,
-          color: cockpit.textMuted,
+          color: disabled ? cockpit.textDisabled : cockpit.textMuted,
           fontWeight: 700,
           fontSize: FUNCTION_BUTTON_NUM_FONT_SIZE_PX,
           lineHeight: 1,
           letterSpacing: "0.02em",
-          // Hard 1px offset (no blur) — blurred text-shadow causes white
-          // speckles on older Android WebViews over dark gradients.
-          textShadow: "0 1px 0 rgba(0,0,0,0.9)",
           pointerEvents: "none",
           userSelect: "none",
         }}
@@ -113,15 +105,13 @@ function FunctionGridButton({
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          // Soft glow via opacity bump instead of filter:drop-shadow (GPU-heavy / speckles).
-          opacity: active ? 1 : undefined,
         }}
       >
         <FunctionIconGlyph
           slug={icon}
           size={COCKPIT_FUNCTION_ICON_PX}
           variant="cockpit"
-          active={active}
+          active={active && !disabled}
         />
       </Box>
       <Typography
@@ -130,7 +120,7 @@ function FunctionGridButton({
         sx={{
           position: "relative",
           zIndex: 1,
-          color: cockpit.text,
+          color: disabled ? cockpit.textDisabled : cockpit.text,
           fontWeight: 600,
           fontSize: FUNCTION_BUTTON_LABEL_FONT_SIZE_PX,
           lineHeight: 1.15,
@@ -140,7 +130,6 @@ function FunctionGridButton({
           textOverflow: "ellipsis",
           whiteSpace: "nowrap",
           px: 0.25,
-          textShadow: "0 1px 0 rgba(0,0,0,0.85)",
         }}
       >
         {label}

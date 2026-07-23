@@ -4,6 +4,7 @@ import { Box, Typography } from "@mui/material";
 import { FunctionIconGlyph } from "../functions/FunctionIconGlyph";
 import {
   cockpit,
+  cockpitFunctionSurface,
   FUNCTION_LIST_ICON_PX,
 } from "./throttleCockpitTheme";
 
@@ -29,9 +30,8 @@ function FunctionListRow({
   disabled,
   onToggle,
 }: FunctionListRowProps) {
-  const top = active ? cockpit.btnActiveTop : cockpit.btnTop;
-  const bottom = active ? cockpit.btnActiveBottom : cockpit.btnBottom;
   const text = `${fnCode}: ${label}`;
+  const surface = cockpitFunctionSurface(active, Boolean(disabled));
 
   const handleClick = useCallback(() => {
     onToggle(fnNum);
@@ -55,37 +55,32 @@ function FunctionListRow({
         px: 1,
         py: 0.5,
         boxSizing: "border-box",
-        border: `1px solid ${active ? cockpit.borderBright : cockpit.border}`,
-        borderRadius: 1,
+        border: surface.border,
+        borderRadius: 0.5,
         cursor: disabled ? "not-allowed" : "pointer",
-        background: `linear-gradient(145deg, ${top} 0%, ${bottom} 100%)`,
-        boxShadow: active
-          ? "inset 0 1px 4px rgba(255,255,255,0.18), 0 1px 3px rgba(0,0,0,0.35)"
-          : "inset 0 1px 0 rgba(255,255,255,0.12), 0 1px 2px rgba(0,0,0,0.3)",
-        opacity: disabled ? 0.45 : 1,
+        bgcolor: surface.bgcolor,
+        boxShadow: "none",
         textAlign: "left",
-        overflow: "hidden",
       }}
     >
       <FunctionIconGlyph
         slug={icon}
         size={FUNCTION_LIST_ICON_PX}
         variant="cockpit"
-        active={active}
+        active={active && !disabled}
       />
       <Typography
         component="span"
         sx={{
           flex: 1,
           minWidth: 0,
-          color: cockpit.text,
+          color: disabled ? cockpit.textDisabled : cockpit.text,
           fontWeight: 600,
           fontSize: 13,
           lineHeight: 1.2,
           overflow: "hidden",
           textOverflow: "ellipsis",
           whiteSpace: "nowrap",
-          textShadow: "0 1px 0 rgba(0,0,0,0.85)",
         }}
       >
         {text}

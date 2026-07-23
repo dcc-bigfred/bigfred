@@ -25,13 +25,25 @@ export const cockpit = {
   header: "#0c1829",
   border: "rgba(120, 160, 210, 0.35)",
   borderBright: "rgba(180, 210, 255, 0.5)",
+  /** Opaque borders for function cells — avoid rgba fringe on old WebViews. */
+  fnBorder: "#4a6a8a",
+  fnBorderActive: "#7aa3cc",
+  fnBorderDisabled: "#2a3d55",
   text: "#e8f0fc",
   textMuted: "rgba(232, 240, 252, 0.65)",
+  /** Opaque muted text for disabled function labels (no opacity compositing). */
+  textDisabled: "#6a7d96",
   accent: "#e8b923",
   btnTop: "#3d6a9e",
   btnBottom: "#1e3d66",
   btnActiveTop: "#5a8fd4",
   btnActiveBottom: "#2a5080",
+  /** Solid fills for function cells (flat; no gradient compositing). */
+  fnFill: "#1e3d66",
+  fnFillActive: "#3d6a9e",
+  fnFillHover: "#2a5080",
+  fnFillActiveHover: "#4a7ab0",
+  fnFillDisabled: "#152a45",
   track: "#0a1220",
   trackHighlight: "rgba(140, 190, 255, 0.35)",
   thumb: "#1a1a1a",
@@ -40,9 +52,60 @@ export const cockpit = {
     "linear-gradient(to top, #1b5e20 0%, #7cb342 25%, #fdd835 55%, #fb8c00 78%, #e53935 100%)",
 } as const;
 
-/** Same fill as a function cell on the Throttle page (for editors / pickers). */
+/** Solid fill matching Throttle function cells (editors / pickers / buttons). */
+export function cockpitFunctionButtonFill(active = false): string {
+  return active ? cockpit.fnFillActive : cockpit.fnFill;
+}
+
+/**
+ * Thin cockpit-coloured scrollbar for the functions panel (list + tiles share one scroller).
+ * Opaque hex only — avoid rgba / inset shadows on old Android WebViews.
+ */
+export const cockpitScrollbarSx = {
+  scrollbarWidth: "thin" as const,
+  scrollbarColor: `${cockpit.fnBorder} ${cockpit.track}`,
+  "&::-webkit-scrollbar": {
+    width: 8,
+    height: 8,
+  },
+  "&::-webkit-scrollbar-track": {
+    backgroundColor: cockpit.track,
+  },
+  "&::-webkit-scrollbar-thumb": {
+    backgroundColor: cockpit.fnBorder,
+    borderRadius: 4,
+    border: `2px solid ${cockpit.track}`,
+    backgroundClip: "padding-box",
+  },
+  "&::-webkit-scrollbar-thumb:hover": {
+    backgroundColor: cockpit.fnBorderActive,
+  },
+  "&::-webkit-scrollbar-corner": {
+    backgroundColor: cockpit.track,
+  },
+} as const;
+
+/**
+ * Flat surface styles for function tiles/rows.
+ * Solid fill + opaque border; no gradient / box-shadow (old Android WebView speckles).
+ */
+export function cockpitFunctionSurface(
+  active = false,
+  disabled = false,
+): { bgcolor: string; border: string } {
+  if (disabled) {
+    return {
+      bgcolor: cockpit.fnFillDisabled,
+      border: `1px solid ${cockpit.fnBorderDisabled}`,
+    };
+  }
+  return {
+    bgcolor: cockpitFunctionButtonFill(active),
+    border: `1px solid ${active ? cockpit.fnBorderActive : cockpit.fnBorder}`,
+  };
+}
+
+/** @deprecated Use cockpitFunctionButtonFill — kept for any remaining call sites. */
 export function cockpitFunctionButtonGradient(active = false): string {
-  const top = active ? cockpit.btnActiveTop : cockpit.btnTop;
-  const bottom = active ? cockpit.btnActiveBottom : cockpit.btnBottom;
-  return `linear-gradient(145deg, ${top} 0%, ${bottom} 100%)`;
+  return cockpitFunctionButtonFill(active);
 }

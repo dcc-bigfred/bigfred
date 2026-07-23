@@ -45,7 +45,7 @@ import {
 } from "../../api/functions";
 import {
   cockpit,
-  cockpitFunctionButtonGradient,
+  cockpitFunctionButtonFill,
 } from "../throttle/throttleCockpitTheme";
 import {
   FunctionIconVisual,
@@ -56,10 +56,10 @@ type IconOption = { slug: string; label: string };
 
 const iconPickerInputSx = {
   "& .MuiOutlinedInput-root": {
-    background: cockpitFunctionButtonGradient(),
+    bgcolor: cockpitFunctionButtonFill(),
     color: cockpit.text,
-    "& fieldset": { borderColor: cockpit.border },
-    "&:hover fieldset": { borderColor: cockpit.borderBright },
+    "& fieldset": { borderColor: cockpit.fnBorder },
+    "&:hover fieldset": { borderColor: cockpit.fnBorderActive },
     "&.Mui-focused fieldset": { borderColor: cockpit.borderBright },
   },
   "& .MuiInputLabel-root": { color: cockpit.textMuted },
@@ -515,12 +515,12 @@ export default function FunctionListEditor({
                     px: 1.5,
                     py: 1,
                     color: cockpit.text,
-                    background: cockpitFunctionButtonGradient(
+                    bgcolor: cockpitFunctionButtonFill(
                       optionProps["aria-selected"] === true,
                     ),
-                    borderBottom: `1px solid ${cockpit.border}`,
+                    borderBottom: `1px solid ${cockpit.fnBorder}`,
                     "&.Mui-focused": {
-                      background: cockpitFunctionButtonGradient(true),
+                      bgcolor: cockpitFunctionButtonFill(true),
                     },
                   }}
                 >

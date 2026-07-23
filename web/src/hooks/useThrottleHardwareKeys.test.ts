@@ -16,4 +16,12 @@ describe("applyThrottleHardwareKeyStep", () => {
   it("ignores zero direction", () => {
     expect(applyThrottleHardwareKeyStep(0, 42, 127)).toBe(42);
   });
+
+  it("accumulates consecutive steps without waiting for React", () => {
+    let speed = 0;
+    speed = applyThrottleHardwareKeyStep(1, speed, 127);
+    speed = applyThrottleHardwareKeyStep(1, speed, 127);
+    speed = applyThrottleHardwareKeyStep(1, speed, 127);
+    expect(speed).toBe(18);
+  });
 });

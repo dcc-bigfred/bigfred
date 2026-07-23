@@ -1,12 +1,20 @@
+import { setThrottleHardwareKeysActive } from "../native/bigfredNativeApp";
+
 export type ThrottleHardwareKeyHandler = (direction: number) => void;
 
 const hardwareKeysStack: ThrottleHardwareKeyHandler[] = [];
 
 function installTop(): void {
-  window.__bigfredThrottleHardwareKeys =
-    hardwareKeysStack.length > 0
-      ? (direction) => hardwareKeysStack[hardwareKeysStack.length - 1]!(direction)
+  const active = hardwareKeysStack.length > 0;
+  if (typeof window !== "undefined") {
+    window.__bigfredThrottleHardwareKeys = active
+      ? (direction) =>
+          hardwareKeysStack[hardwareKeysStack.length - 1]!(direction)
       : undefined;
+  }
+  // Tell the Android shell to consume volume keys only while a throttle
+  // surface has a handler registered (Throttle page / takeover overlay).
+  setThrottleHardwareKeysActive(active);
 }
 
 /** Push a handler; top of stack receives native volume key events. */

@@ -12,6 +12,10 @@ beforeEach(() => {
     // @ts-expect-error test shim
     globalThis.window = globalThis;
   }
+  window.BigFredNativeApp = {
+    openModelPicker: () => {},
+    setThrottleHardwareKeysActive: vi.fn(),
+  };
 });
 
 afterEach(() => {
@@ -50,5 +54,18 @@ describe("throttleHardwareKeysRegistry", () => {
     popThrottleHardwareKeysHandler(handler);
 
     expect(window.__bigfredThrottleHardwareKeys).toBeUndefined();
+  });
+
+  it("notifies the native shell when the stack becomes active or empty", () => {
+    const notify = window.BigFredNativeApp!.setThrottleHardwareKeysActive as ReturnType<
+      typeof vi.fn
+    >;
+    const handler = vi.fn();
+
+    pushThrottleHardwareKeysHandler(handler);
+    expect(notify).toHaveBeenLastCalledWith(true);
+
+    popThrottleHardwareKeysHandler(handler);
+    expect(notify).toHaveBeenLastCalledWith(false);
   });
 });

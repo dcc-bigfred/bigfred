@@ -43,7 +43,7 @@ export const cockpit = {
   fnFillActive: "#3d6a9e",
   fnFillHover: "#2a5080",
   fnFillActiveHover: "#4a7ab0",
-  fnFillDisabled: "#152a45",
+  fnFillDisabled: "#1a3248",
   track: "#0a1220",
   trackHighlight: "rgba(140, 190, 255, 0.35)",
   thumb: "#1a1a1a",

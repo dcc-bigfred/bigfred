@@ -11,6 +11,8 @@ export interface ModelPickPayload {
 interface BigFredNativeAppBridge {
   openModelPicker: () => void;
   getPreferredLocale?: () => string;
+  /** Tell the shell to consume volume keys only while a throttle surface is active. */
+  setThrottleHardwareKeysActive?: (active: boolean) => void;
 }
 
 declare global {
@@ -18,6 +20,8 @@ declare global {
     BigFredNativeApp?: BigFredNativeAppBridge;
     __bigfredOnModelPicked?: (payload: ModelPickPayload | null) => void;
     __bigfredSetLocale?: (lang: string) => void;
+    /** Native volume hardware keys: +1 faster, -1 slower. Registered by throttle pages. */
+    __bigfredThrottleHardwareKeys?: (direction: number) => void;
   }
 }
 
@@ -62,4 +66,20 @@ export function openModelPicker(): Promise<ModelPickPayload | null> {
       resolve(null);
     }
   });
+}
+
+/**
+ * Ask the Android shell to (un)claim volume keys for throttle control.
+ * No-op outside the native WebView.
+ */
+export function setThrottleHardwareKeysActive(active: boolean): void {
+  const bridge = window.BigFredNativeApp;
+  if (typeof bridge?.setThrottleHardwareKeysActive !== "function") {
+    return;
+  }
+  try {
+    bridge.setThrottleHardwareKeysActive(active);
+  } catch {
+    // Ignore bridge failures — volume keys simply keep system behaviour.
+  }
 }

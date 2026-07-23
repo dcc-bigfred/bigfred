@@ -22,6 +22,7 @@ import { useNavigate } from "react-router-dom";
 import type { ThrottleTarget } from "../../hooks/useThrottleTargetSelection";
 import {
   cockpit,
+  cockpitScrollbarSx,
   THROTTLE_PANEL_WIDTH_PX,
 } from "./throttleCockpitTheme";
 import RadioStopButton from "./RadioStopButton";
@@ -341,6 +342,7 @@ function ThrottleCockpit({
             WebkitOverflowScrolling: "touch",
             p: 1.25,
             bgcolor: cockpit.bgPanel,
+            ...cockpitScrollbarSx,
           }}
         >
           {functionPanel ?? (

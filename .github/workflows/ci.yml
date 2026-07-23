@@ -40,6 +40,9 @@ jobs:
         working-directory: web
         run: npm ci --no-audit --no-fund
 
+      - name: Install rsvg-convert (function icon rasterization)
+        run: sudo apt-get update && sudo apt-get install -y librsvg2-bin
+
       - name: Run web tests
         working-directory: web
         run: npm test

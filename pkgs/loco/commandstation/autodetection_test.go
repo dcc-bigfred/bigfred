@@ -127,17 +127,67 @@ func TestZ21AutodetectionFullScan(t *testing.T) {
 }
 
 func TestMultiAutodetection(t *testing.T) {
+	started := make(chan struct{}, 2)
+	release := make(chan struct{})
 	a := MultiAutodetection{
-		stubAutodetect{{Name: "a", URI: "udp://1"}},
-		stubAutodetect{{Name: "b", URI: "tcp://2"}},
+		stubAutodetectParallel{name: "a", uri: "udp://1", started: started, release: release},
+		stubAutodetectParallel{name: "b", uri: "tcp://2", started: started, release: release},
 	}
-	got, err := a.Scan(context.Background())
-	if err != nil {
+
+	done := make(chan []DetectedConnection, 1)
+	errCh := make(chan error, 1)
+	go func() {
+		got, err := a.Scan(context.Background())
+		if err != nil {
+			errCh <- err
+			return
+		}
+		done <- got
+	}()
+
+	// Both scanners must start before either finishes (parallelism).
+	for i := 0; i < 2; i++ {
+		select {
+		case <-started:
+		case <-time.After(2 * time.Second):
+			t.Fatal("scanners did not start in parallel")
+		}
+	}
+	close(release)
+
+	select {
+	case got := <-done:
+		if len(got) != 2 {
+			t.Fatalf("got %d", len(got))
+		}
+		if got[0].Name != "a" || got[1].Name != "b" {
+			t.Fatalf("order not preserved: %+v", got)
+		}
+	case err := <-errCh:
 		t.Fatal(err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("Scan timed out")
 	}
-	if len(got) != 2 {
-		t.Fatalf("got %d", len(got))
+}
+
+type stubAutodetectParallel struct {
+	name, uri   string
+	started     chan<- struct{}
+	release     <-chan struct{}
+}
+
+func (s stubAutodetectParallel) Scan(ctx context.Context) ([]DetectedConnection, error) {
+	select {
+	case s.started <- struct{}{}:
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
+	select {
+	case <-s.release:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	return []DetectedConnection{{Name: s.name, URI: s.uri}}, nil
 }
 
 type stubAutodetect []DetectedConnection

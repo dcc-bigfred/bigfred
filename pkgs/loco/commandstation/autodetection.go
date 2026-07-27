@@ -22,24 +22,43 @@ type Autodetection interface {
 	Scan(ctx context.Context) ([]DetectedConnection, error)
 }
 
-// MultiAutodetection runs several Autodetection implementations and
-// concatenates their results. A failure in one scanner aborts the rest.
+// MultiAutodetection runs several Autodetection implementations in parallel
+// and concatenates their results in slice order. The first scanner error
+// cancels the others and is returned.
 type MultiAutodetection []Autodetection
 
 func (m MultiAutodetection) Scan(ctx context.Context) ([]DetectedConnection, error) {
-	out := make([]DetectedConnection, 0)
-	for _, a := range m {
+	type result struct {
+		got []DetectedConnection
+		err error
+	}
+	results := make([]result, len(m))
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	var wg sync.WaitGroup
+	for i, a := range m {
 		if a == nil {
 			continue
 		}
-		if err := ctx.Err(); err != nil {
-			return nil, err
+		wg.Add(1)
+		go func(i int, a Autodetection) {
+			defer wg.Done()
+			got, err := a.Scan(ctx)
+			results[i] = result{got: got, err: err}
+			if err != nil {
+				cancel()
+			}
+		}(i, a)
+	}
+	wg.Wait()
+
+	out := make([]DetectedConnection, 0)
+	for _, r := range results {
+		if r.err != nil {
+			return nil, r.err
 		}
-		got, err := a.Scan(ctx)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, got...)
+		out = append(out, r.got...)
 	}
 	return out, nil
 }

@@ -8,8 +8,8 @@ import (
 )
 
 const (
-	z21DefaultPort   = 21105
-	z21DefaultOctet  = 111
+	z21DefaultPort  = 21105
+	z21DefaultOctet = 111
 )
 
 // LAN_GET_SERIAL_NUMBER request used as a lightweight Z21 reachability probe.
@@ -23,9 +23,12 @@ type Z21Autodetection struct {
 	ProbeTimeout time.Duration
 }
 
-func (a Z21Autodetection) Scan(ctx context.Context) ([]DetectedConnection, error) {
+func (a Z21Autodetection) Scan(ctx context.Context, emit EmitFunc) error {
 	if a.SubnetPrefix == "" {
-		return nil, nil
+		return nil
+	}
+	if emit == nil {
+		emit = func(DetectedConnection) error { return nil }
 	}
 	timeout := a.ProbeTimeout
 	if timeout <= 0 {
@@ -38,19 +41,15 @@ func (a Z21Autodetection) Scan(ctx context.Context) ([]DetectedConnection, error
 
 	preferred := fmt.Sprintf("%s.%d", a.SubnetPrefix, z21DefaultOctet)
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return scanContextError(ctx)
 	}
 	if err := probe(ctx, fmt.Sprintf("%s:%d", preferred, z21DefaultPort), z21SerialNumberProbe); err == nil {
-		return []DetectedConnection{{
+		return emit(DetectedConnection{
 			Name: fmt.Sprintf("Z21 %s:%d", preferred, z21DefaultPort),
 			URI:  fmt.Sprintf("udp://%s:%d", preferred, z21DefaultPort),
-		}}, nil
+		})
 	}
 
-	type hit struct {
-		host string
-	}
-	hits := make(chan hit, 255)
 	jobs := make(chan string)
 	var wg sync.WaitGroup
 	workers := defaultLANWorkers
@@ -66,10 +65,10 @@ func (a Z21Autodetection) Scan(ctx context.Context) ([]DetectedConnection, error
 				if err := probe(ctx, addr, z21SerialNumberProbe); err != nil {
 					continue
 				}
-				select {
-				case hits <- hit{host: host}:
-				case <-ctx.Done():
-				}
+				_ = emit(DetectedConnection{
+					Name: fmt.Sprintf("Z21 %s:%d", host, z21DefaultPort),
+					URI:  fmt.Sprintf("udp://%s:%d", host, z21DefaultPort),
+				})
 			}
 		}()
 	}
@@ -86,20 +85,6 @@ func (a Z21Autodetection) Scan(ctx context.Context) ([]DetectedConnection, error
 		}
 	}()
 
-	go func() {
-		wg.Wait()
-		close(hits)
-	}()
-
-	out := make([]DetectedConnection, 0)
-	for h := range hits {
-		out = append(out, DetectedConnection{
-			Name: fmt.Sprintf("Z21 %s:%d", h.host, z21DefaultPort),
-			URI:  fmt.Sprintf("udp://%s:%d", h.host, z21DefaultPort),
-		})
-	}
-	if err := ctx.Err(); err != nil && len(out) == 0 {
-		return nil, err
-	}
-	return out, nil
+	wg.Wait()
+	return scanContextError(ctx)
 }

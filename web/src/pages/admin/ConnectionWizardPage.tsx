@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Box,
@@ -37,15 +37,16 @@ import {
   DEFAULT_COMMAND_STATION_MAX_LOCONET_SLOTS,
   DEFAULT_COMMAND_STATION_POLL_INTERVAL_MS,
   DEFAULT_COMMAND_STATION_SPEED_STEPS,
+  commandStationScanWsUrl,
   isSerialAutodetectUri,
   kindFromConnectionUri,
   layoutCommandStationsQueryKey,
   useCreateCommandStation,
-  useScanCommandStations,
   useSetLayoutCommandStations,
   type CommandStation,
   type DetectedConnection,
   type CommandStationKind,
+  type ScanWsFrame,
 } from "../../api/command_stations";
 
 function isLoconetKind(kind: CommandStationKind): boolean {
@@ -62,8 +63,12 @@ export default function ConnectionWizardPage() {
   const create = useCreateCommandStation();
   const setLayoutStations = useSetLayoutCommandStations();
 
-  const [scanEnabled, setScanEnabled] = useState(true);
-  const scan = useScanCommandStations(scanEnabled);
+  const [scanGeneration, setScanGeneration] = useState(0);
+  const [scanning, setScanning] = useState(false);
+  const [rows, setRows] = useState<DetectedConnection[]>([]);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const socketRef = useRef<WebSocket | null>(null);
+  const scanCancelledRef = useRef(false);
 
   const [stepIndex, setStepIndex] = useState(0);
   const [selected, setSelected] = useState<DetectedConnection | null>(null);
@@ -98,21 +103,106 @@ export default function ConnectionWizardPage() {
     }
   }, [stepIndex, steps.length]);
 
+  // One-shot WebSocket scan — do not use useWsConnection (auto-reconnect).
+  useEffect(() => {
+    let disposed = false;
+    scanCancelledRef.current = false;
+    setScanning(true);
+    setScanError(null);
+    setRows([]);
+
+    const socket = new WebSocket(commandStationScanWsUrl());
+    socketRef.current = socket;
+
+    socket.onmessage = (ev) => {
+      if (disposed) return;
+      let msg: ScanWsFrame;
+      try {
+        msg = JSON.parse(String(ev.data)) as ScanWsFrame;
+      } catch {
+        return;
+      }
+      if (msg.type === "connection" && msg.uri) {
+        setRows((prev) => {
+          if (prev.some((r) => r.uri === msg.uri)) return prev;
+          return [...prev, { name: msg.name, uri: msg.uri }];
+        });
+        return;
+      }
+      if (msg.type === "error") {
+        const detail = (msg.detail ?? "").trim();
+        if (detail === "scan already running") {
+          setScanError(t("commandStation:admin.wizard.scanAlreadyRunning"));
+        } else if (detail) {
+          setScanError(
+            `${t("errors:scan_failed")}\n${detail}`,
+          );
+        } else {
+          setScanError(t("errors:scan_failed"));
+        }
+        return;
+      }
+      if (msg.type === "done") {
+        setScanning(false);
+      }
+    };
+
+    socket.onerror = () => {
+      if (disposed || scanCancelledRef.current) return;
+      setScanError((prev) => prev ?? t("errors:scan_failed"));
+    };
+
+    socket.onclose = () => {
+      if (disposed) return;
+      setScanning(false);
+      if (socketRef.current === socket) socketRef.current = null;
+    };
+
+    return () => {
+      disposed = true;
+      socket.onopen = null;
+      socket.onmessage = null;
+      socket.onerror = null;
+      socket.onclose = null;
+      if (
+        socket.readyState === WebSocket.OPEN ||
+        socket.readyState === WebSocket.CONNECTING
+      ) {
+        socket.close();
+      }
+      if (socketRef.current === socket) socketRef.current = null;
+    };
+  }, [scanGeneration, t]);
+
   const translateError = (err: unknown): string => {
     if (err instanceof ApiError) {
-      return t([`errors:${err.code}`, `errors:http_${err.status}`], {
-        defaultValue: err.message,
-      });
+      const localised = t(`errors:${err.code}` as const, { defaultValue: "" });
+      if (localised) return localised;
+      return t("errors:unknown", { code: err.code });
     }
     if (err instanceof Error) return err.message;
-    return t("errors:unknown");
+    return t("errors:network");
+  };
+
+  const cancelScan = () => {
+    if (!scanning) return;
+    scanCancelledRef.current = true;
+    const socket = socketRef.current;
+    if (
+      socket &&
+      (socket.readyState === WebSocket.OPEN ||
+        socket.readyState === WebSocket.CONNECTING)
+    ) {
+      socket.close();
+    }
+    setScanning(false);
   };
 
   const rescan = () => {
+    if (scanning) return;
     setSelected(null);
     setNameInput("");
-    setScanEnabled(true);
-    void qc.invalidateQueries({ queryKey: ["command-stations", "scan"] });
+    setScanGeneration((g) => g + 1);
   };
 
   const selectRow = (row: DetectedConnection) => {
@@ -191,7 +281,6 @@ export default function ConnectionWizardPage() {
   };
 
   const submitting = create.isPending || setLayoutStations.isPending;
-  const rows = scan.data ?? [];
 
   const stepLabel = (id: WizardStepId) =>
     t(`commandStation:admin.wizard.steps.${id}.label`);
@@ -240,29 +329,45 @@ export default function ConnectionWizardPage() {
             <Typography variant="body2" color="text.secondary">
               {t(`commandStation:admin.wizard.steps.${activeStep}.instruction`)}
             </Typography>
+            {activeStep === "layout" && (
+              <Alert severity="warning">
+                {t("commandStation:admin.wizard.steps.layout.warning")}
+              </Alert>
+            )}
 
             {activeStep === "select" && (
               <>
-                <Stack direction="row" spacing={2} alignItems="center">
+                <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
                   <Button
                     variant="outlined"
                     onClick={rescan}
-                    disabled={scan.isFetching}
+                    disabled={scanning}
                   >
                     {t("commandStation:admin.wizard.rescan")}
                   </Button>
-                  {scan.isFetching && (
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      <CircularProgress size={20} />
-                      <Typography variant="body2" color="text.secondary">
-                        {t("commandStation:admin.wizard.scanning")}
-                      </Typography>
-                    </Stack>
+                  {scanning && (
+                    <>
+                      <Button
+                        variant="outlined"
+                        color="inherit"
+                        onClick={cancelScan}
+                      >
+                        {t("commandStation:admin.wizard.stopScan")}
+                      </Button>
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <CircularProgress size={20} />
+                        <Typography variant="body2" color="text.secondary">
+                          {t("commandStation:admin.wizard.scanning")}
+                        </Typography>
+                      </Stack>
+                    </>
                   )}
                 </Stack>
 
-                {scan.isError && (
-                  <Alert severity="error">{translateError(scan.error)}</Alert>
+                {scanError && (
+                  <Alert severity="error" sx={{ whiteSpace: "pre-wrap" }}>
+                    {scanError}
+                  </Alert>
                 )}
 
                 {selected && isSerialAutodetectUri(selected.uri) && (
@@ -271,11 +376,13 @@ export default function ConnectionWizardPage() {
                   </Alert>
                 )}
 
-                {!scan.isFetching && !scan.isError && rows.length === 0 ? (
+                {!scanning && rows.length === 0 && !scanError ? (
                   <Typography variant="body2" color="text.secondary">
                     {t("commandStation:admin.wizard.empty")}
                   </Typography>
-                ) : (
+                ) : null}
+
+                {(rows.length > 0 || scanning) && (
                   <TableContainer>
                     <Table size="small">
                       <TableHead>
@@ -391,24 +498,17 @@ export default function ConnectionWizardPage() {
             )}
 
             {activeStep === "slots" && (
-              <>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={allocatePhysicalSlots}
-                      onChange={(_, v) => setAllocatePhysicalSlots(v)}
-                    />
-                  }
-                  label={t(
-                    "commandStation:admin.dialogs.fields.allocatePhysicalSlots",
-                  )}
-                />
-                <FormHelperText sx={{ mt: -1, ml: 4 }}>
-                  {t(
-                    "commandStation:admin.dialogs.fields.allocatePhysicalSlotsHelp",
-                  )}
-                </FormHelperText>
-              </>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={allocatePhysicalSlots}
+                    onChange={(_, v) => setAllocatePhysicalSlots(v)}
+                  />
+                }
+                label={t(
+                  "commandStation:admin.dialogs.fields.allocatePhysicalSlots",
+                )}
+              />
             )}
 
             {activeStep === "layout" && (
@@ -476,7 +576,7 @@ export default function ConnectionWizardPage() {
             <Button
               variant="contained"
               onClick={goNext}
-              disabled={!canNext() || submitting || scan.isFetching}
+              disabled={!canNext() || submitting || scanning}
             >
               {stepIndex >= steps.length - 1
                 ? t("commandStation:admin.wizard.finish")

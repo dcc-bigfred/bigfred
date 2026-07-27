@@ -2,6 +2,7 @@ package commandstation
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"sync"
@@ -15,52 +16,56 @@ type DetectedConnection struct {
 	URI  string `json:"uri"`
 }
 
+// EmitFunc is called for each discovered connection as soon as it is found.
+// Returning a non-nil error aborts the scanner that invoked it.
+type EmitFunc func(DetectedConnection) error
+
 // Autodetection discovers available command-station connections for a
 // single transport family (serial, LocoNet TCP, Z21, …). Callers compose
 // multiple implementations when scanning everything.
 type Autodetection interface {
-	Scan(ctx context.Context) ([]DetectedConnection, error)
+	Scan(ctx context.Context, emit EmitFunc) error
 }
 
 // MultiAutodetection runs several Autodetection implementations in parallel
-// and concatenates their results in slice order. The first scanner error
-// cancels the others and is returned.
+// and forwards each hit through emit. Individual scanner errors do not
+// cancel siblings; all errors are joined and returned after every scanner
+// finishes. Partial results already emitted are kept.
 type MultiAutodetection []Autodetection
 
-func (m MultiAutodetection) Scan(ctx context.Context) ([]DetectedConnection, error) {
-	type result struct {
-		got []DetectedConnection
-		err error
+func (m MultiAutodetection) Scan(ctx context.Context, emit EmitFunc) error {
+	if emit == nil {
+		emit = func(DetectedConnection) error { return nil }
 	}
-	results := make([]result, len(m))
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
 
-	var wg sync.WaitGroup
-	for i, a := range m {
+	var (
+		emitMu sync.Mutex
+		errMu  sync.Mutex
+		errs   []error
+		wg     sync.WaitGroup
+	)
+	safeEmit := func(c DetectedConnection) error {
+		emitMu.Lock()
+		defer emitMu.Unlock()
+		return emit(c)
+	}
+
+	for _, a := range m {
 		if a == nil {
 			continue
 		}
 		wg.Add(1)
-		go func(i int, a Autodetection) {
+		go func(a Autodetection) {
 			defer wg.Done()
-			got, err := a.Scan(ctx)
-			results[i] = result{got: got, err: err}
-			if err != nil {
-				cancel()
+			if err := a.Scan(ctx, safeEmit); err != nil {
+				errMu.Lock()
+				errs = append(errs, err)
+				errMu.Unlock()
 			}
-		}(i, a)
+		}(a)
 	}
 	wg.Wait()
-
-	out := make([]DetectedConnection, 0)
-	for _, r := range results {
-		if r.err != nil {
-			return nil, r.err
-		}
-		out = append(out, r.got...)
-	}
-	return out, nil
+	return errors.Join(errs...)
 }
 
 // TCPDialer opens a TCP connection to address (host:port). Overridable in tests.
@@ -85,9 +90,9 @@ func defaultUDPProber(timeout time.Duration) UDPProber {
 			return err
 		}
 		defer conn.Close()
-		deadline, ok := ctx.Deadline()
-		if !ok {
-			deadline = time.Now().Add(timeout)
+		deadline := time.Now().Add(timeout)
+		if d, ok := ctx.Deadline(); ok && d.Before(deadline) {
+			deadline = d
 		}
 		_ = conn.SetDeadline(deadline)
 		if _, err := conn.Write(payload); err != nil {
@@ -100,12 +105,14 @@ func defaultUDPProber(timeout time.Duration) UDPProber {
 }
 
 const (
-	defaultLANDialTimeout = 200 * time.Millisecond
-	defaultLANWorkers     = 32
+	defaultLANDialTimeout = 1 * time.Second
+	defaultLANWorkers     = 20
 )
 
 // scanTCPHosts probes hostPrefix.1–255 for openTCP ports in parallel.
 // onOpen is called for each successful dial (hostIP, port).
+// context.DeadlineExceeded is treated as a normal end of the scan window
+// (returns nil), not as a scanner failure.
 func scanTCPHosts(
 	ctx context.Context,
 	hostPrefix string,
@@ -146,7 +153,7 @@ func scanTCPHosts(
 		}()
 	}
 
-	loop:
+loop:
 	for i := 1; i <= 255; i++ {
 		host := fmt.Sprintf("%s.%d", hostPrefix, i)
 		for _, port := range ports {
@@ -159,5 +166,13 @@ func scanTCPHosts(
 	}
 	close(jobs)
 	wg.Wait()
-	return ctx.Err()
+	return scanContextError(ctx)
+}
+
+func scanContextError(ctx context.Context) error {
+	err := ctx.Err()
+	if err == nil || errors.Is(err, context.DeadlineExceeded) {
+		return nil
+	}
+	return err
 }

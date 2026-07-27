@@ -3,7 +3,6 @@ package commandstation
 import (
 	"context"
 	"fmt"
-	"sync"
 	"time"
 )
 
@@ -21,9 +20,12 @@ type LocoNetTCPAutodetection struct {
 	DialTimeout  time.Duration
 }
 
-func (a LocoNetTCPAutodetection) Scan(ctx context.Context) ([]DetectedConnection, error) {
+func (a LocoNetTCPAutodetection) Scan(ctx context.Context, emit EmitFunc) error {
 	if a.SubnetPrefix == "" {
-		return nil, nil
+		return nil
+	}
+	if emit == nil {
+		emit = func(DetectedConnection) error { return nil }
 	}
 	timeout := a.DialTimeout
 	if timeout <= 0 {
@@ -34,28 +36,22 @@ func (a LocoNetTCPAutodetection) Scan(ctx context.Context) ([]DetectedConnection
 		dial = defaultTCPDialer(timeout)
 	}
 
-	var (
-		mu  sync.Mutex
-		out []DetectedConnection
-	)
-	err := scanTCPHosts(ctx, a.SubnetPrefix, []int{locoNetTCPBinaryPort, locoNetTCPASCIIPort}, dial, func(host string, port int) {
-		mu.Lock()
-		defer mu.Unlock()
+	return scanTCPHosts(ctx, a.SubnetPrefix, []int{locoNetTCPBinaryPort, locoNetTCPASCIIPort}, dial, func(host string, port int) {
+		var c DetectedConnection
 		switch port {
 		case locoNetTCPBinaryPort:
-			out = append(out, DetectedConnection{
+			c = DetectedConnection{
 				Name: fmt.Sprintf("LocoNet TCP Binary %s:%d", host, port),
 				URI:  fmt.Sprintf("tcp://%s:%d", host, port),
-			})
+			}
 		case locoNetTCPASCIIPort:
-			out = append(out, DetectedConnection{
+			c = DetectedConnection{
 				Name: fmt.Sprintf("LocoNet TCP ASCII %s:%d", host, port),
 				URI:  fmt.Sprintf("lbserver://%s:%d", host, port),
-			})
+			}
+		default:
+			return
 		}
+		_ = emit(c)
 	})
-	if err != nil && len(out) == 0 {
-		return nil, err
-	}
-	return out, nil
 }

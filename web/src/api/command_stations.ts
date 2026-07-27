@@ -194,13 +194,12 @@ export function isSerialAutodetectUri(uri: string): boolean {
   return /^serial:\/\/autodetect(?::|$)/i.test(uri);
 }
 
-export function useScanCommandStations(enabled: boolean) {
-  return useQuery({
-    queryKey: ["command-stations", "scan"] as const,
-    queryFn: () =>
-      apiFetch<DetectedConnection[]>("/api/v1/command-stations/scan"),
-    enabled,
-    staleTime: 0,
-    retry: false,
-  });
+export function commandStationScanWsUrl(): string {
+  const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${proto}//${window.location.host}/api/v1/command-stations/scan/ws`;
 }
+
+export type ScanWsFrame =
+  | { type: "connection"; name: string; uri: string }
+  | { type: "error"; detail?: string }
+  | { type: "done" };

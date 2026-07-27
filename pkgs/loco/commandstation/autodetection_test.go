@@ -5,9 +5,24 @@ import (
 	"errors"
 	"net"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
+
+func collectScan(ctx context.Context, a Autodetection) ([]DetectedConnection, error) {
+	var (
+		mu  sync.Mutex
+		out []DetectedConnection
+	)
+	err := a.Scan(ctx, func(c DetectedConnection) error {
+		mu.Lock()
+		out = append(out, c)
+		mu.Unlock()
+		return nil
+	})
+	return out, err
+}
 
 func TestLocoNetSerialAutodetection(t *testing.T) {
 	origList := listSerialPorts
@@ -22,7 +37,7 @@ func TestLocoNetSerialAutodetection(t *testing.T) {
 	}
 	serialDeviceExists = func(string) bool { return false }
 
-	got, err := (LocoNetSerialAutodetection{}).Scan(context.Background())
+	got, err := collectScan(context.Background(), LocoNetSerialAutodetection{})
 	if err != nil {
 		t.Fatalf("Scan: %v", err)
 	}
@@ -62,10 +77,10 @@ func TestLocoNetTCPAutodetection(t *testing.T) {
 		return c1, nil
 	}
 
-	got, err := (LocoNetTCPAutodetection{
+	got, err := collectScan(context.Background(), LocoNetTCPAutodetection{
 		SubnetPrefix: "192.168.0",
 		Dial:         dial,
-	}).Scan(context.Background())
+	})
 	if err != nil {
 		t.Fatalf("Scan: %v", err)
 	}
@@ -90,10 +105,10 @@ func TestZ21AutodetectionPreferredHost(t *testing.T) {
 		}
 		return errors.New("no reply")
 	}
-	got, err := (Z21Autodetection{
+	got, err := collectScan(context.Background(), Z21Autodetection{
 		SubnetPrefix: "10.0.0",
 		Probe:        probe,
-	}).Scan(context.Background())
+	})
 	if err != nil {
 		t.Fatalf("Scan: %v", err)
 	}
@@ -114,10 +129,10 @@ func TestZ21AutodetectionFullScan(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	got, err := (Z21Autodetection{
+	got, err := collectScan(ctx, Z21Autodetection{
 		SubnetPrefix: "10.0.0",
 		Probe:        probe,
-	}).Scan(ctx)
+	})
 	if err != nil {
 		t.Fatalf("Scan: %v", err)
 	}
@@ -126,7 +141,7 @@ func TestZ21AutodetectionFullScan(t *testing.T) {
 	}
 }
 
-func TestMultiAutodetection(t *testing.T) {
+func TestMultiAutodetectionParallel(t *testing.T) {
 	started := make(chan struct{}, 2)
 	release := make(chan struct{})
 	a := MultiAutodetection{
@@ -137,7 +152,7 @@ func TestMultiAutodetection(t *testing.T) {
 	done := make(chan []DetectedConnection, 1)
 	errCh := make(chan error, 1)
 	go func() {
-		got, err := a.Scan(context.Background())
+		got, err := collectScan(context.Background(), a)
 		if err != nil {
 			errCh <- err
 			return
@@ -145,7 +160,6 @@ func TestMultiAutodetection(t *testing.T) {
 		done <- got
 	}()
 
-	// Both scanners must start before either finishes (parallelism).
 	for i := 0; i < 2; i++ {
 		select {
 		case <-started:
@@ -160,8 +174,12 @@ func TestMultiAutodetection(t *testing.T) {
 		if len(got) != 2 {
 			t.Fatalf("got %d", len(got))
 		}
-		if got[0].Name != "a" || got[1].Name != "b" {
-			t.Fatalf("order not preserved: %+v", got)
+		names := map[string]bool{}
+		for _, c := range got {
+			names[c.Name] = true
+		}
+		if !names["a"] || !names["b"] {
+			t.Fatalf("missing names: %+v", got)
 		}
 	case err := <-errCh:
 		t.Fatal(err)
@@ -170,30 +188,92 @@ func TestMultiAutodetection(t *testing.T) {
 	}
 }
 
-type stubAutodetectParallel struct {
-	name, uri   string
-	started     chan<- struct{}
-	release     <-chan struct{}
+func TestMultiAutodetectionSoftFail(t *testing.T) {
+	a := MultiAutodetection{
+		stubAutodetectFail{err: errors.New("boom")},
+		stubAutodetect{DetectedConnection{Name: "ok", URI: "udp://1"}},
+	}
+	got, err := collectScan(context.Background(), a)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "boom") {
+		t.Fatalf("error = %v", err)
+	}
+	if len(got) != 1 || got[0].Name != "ok" {
+		t.Fatalf("partial results: %+v", got)
+	}
 }
 
-func (s stubAutodetectParallel) Scan(ctx context.Context) ([]DetectedConnection, error) {
+func TestDefaultUDPProberRespectsPerProbeTimeout(t *testing.T) {
+	pc, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pc.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	probe := defaultUDPProber(200 * time.Millisecond)
+	start := time.Now()
+	err = probe(ctx, pc.LocalAddr().String(), []byte{0x04, 0x00, 0x10, 0x00})
+	elapsed := time.Since(start)
+	if err == nil {
+		t.Fatal("expected timeout/read error")
+	}
+	if elapsed > 2*time.Second {
+		t.Fatalf("probe took %v; expected ~200ms despite 30s ctx deadline", elapsed)
+	}
+}
+
+func TestScanTCPHostsDeadlineNotError(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	dial := func(context.Context, string) (net.Conn, error) {
+		return nil, errors.New("refused")
+	}
+	err := scanTCPHosts(ctx, "10.255.255", []int{9}, dial, func(string, int) {})
+	if err != nil {
+		t.Fatalf("DeadlineExceeded must not be a scanner error: %v", err)
+	}
+}
+
+type stubAutodetectParallel struct {
+	name, uri string
+	started   chan<- struct{}
+	release   <-chan struct{}
+}
+
+func (s stubAutodetectParallel) Scan(ctx context.Context, emit EmitFunc) error {
 	select {
 	case s.started <- struct{}{}:
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return ctx.Err()
 	}
 	select {
 	case <-s.release:
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return ctx.Err()
 	}
-	return []DetectedConnection{{Name: s.name, URI: s.uri}}, nil
+	return emit(DetectedConnection{Name: s.name, URI: s.uri})
 }
 
 type stubAutodetect []DetectedConnection
 
-func (s stubAutodetect) Scan(context.Context) ([]DetectedConnection, error) {
-	return append([]DetectedConnection(nil), s...), nil
+func (s stubAutodetect) Scan(_ context.Context, emit EmitFunc) error {
+	for _, c := range s {
+		if err := emit(c); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+type stubAutodetectFail struct{ err error }
+
+func (s stubAutodetectFail) Scan(context.Context, EmitFunc) error {
+	return s.err
 }
 
 func TestResolveSerialDeviceUsesCandidates(t *testing.T) {

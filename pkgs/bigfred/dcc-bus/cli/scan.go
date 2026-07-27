@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -20,8 +21,10 @@ func newScanCommand(log *logrus.Logger) *cobra.Command {
 	return &cobra.Command{
 		Use:   "scan",
 		Short: "Discover command-station connection URIs on serial ports and the local LAN",
-		Long: `One-shot discovery tool. Prints a JSON array of {name,uri} objects to
-stdout. Logs go to stderr. Used by loco-server's admin scan API.`,
+		Long: `One-shot discovery tool. Prints one JSON object {name,uri} per line
+(NDJSON) to stdout as connections are found. Logs go to stderr. Used by
+loco-server's admin scan WebSocket. Exit code 1 when a scanner fails;
+context deadline (scan window) is not treated as failure.`,
 		RunE: func(c *cobra.Command, _ []string) error {
 			return runScan(c.Context(), log)
 		},
@@ -50,16 +53,20 @@ func runScan(parent context.Context, log *logrus.Logger) error {
 		)
 	}
 
-	results, err := scanners.Scan(ctx)
-	if err != nil {
-		return fmt.Errorf("dcc-bus scan: %w", err)
-	}
-	if results == nil {
-		results = []commandstation.DetectedConnection{}
-	}
 	enc := json.NewEncoder(os.Stdout)
-	if err := enc.Encode(results); err != nil {
-		return fmt.Errorf("dcc-bus scan: encode: %w", err)
+	scanErr := scanners.Scan(ctx, func(c commandstation.DetectedConnection) error {
+		if err := enc.Encode(c); err != nil {
+			return fmt.Errorf("dcc-bus scan: encode: %w", err)
+		}
+		_ = os.Stdout.Sync()
+		return nil
+	})
+	if scanErr == nil {
+		return nil
 	}
-	return nil
+	if errors.Is(scanErr, context.DeadlineExceeded) {
+		return nil
+	}
+	log.WithError(scanErr).Error("dcc-bus scan: scanner error")
+	return fmt.Errorf("dcc-bus scan: %w", scanErr)
 }

@@ -15,9 +15,61 @@
     "z21ServerOn": "Z21 server on",
     "actions": {
       "create": "New command station",
+      "wizard": "Add with wizard",
       "edit": "Edit",
       "delete": "Delete",
       "slotsDiag": "Slot diagnostics"
+    },
+    "wizard": {
+      "title": "Connection wizard",
+      "lead": "The wizard discovers available command stations and walks you through basic setup. Advanced settings (timing, speed steps) can be changed later on the command-station list.",
+      "back": "Command stations",
+      "cancel": "Cancel",
+      "backStep": "Back",
+      "next": "Next",
+      "finish": "Finish",
+      "rescan": "Scan again",
+      "scanning": "Scanning… this may take up to about a minute",
+      "empty": "No command stations found. Check power, USB cable / network, and scan again.",
+      "autodetectWarning": "This connection uses dynamic device detection on every server and computer restart. The port number may change, or detection may eventually fail (for example if a second USB adapter appears). Prefer a concrete device path when available.",
+      "attachCurrentLayout": "Attach to current layout ({{name}})",
+      "skipHint": "Turn the switch off to add the station to the catalogue only and attach it later when editing a layout.",
+      "yes": "yes",
+      "no": "no",
+      "summary": "{{name}} · {{kind}} · {{uri}} · remotes: {{remotes}} · boot-stop: {{bootStop}}",
+      "columns": {
+        "name": "Name",
+        "kind": "Kind",
+        "uri": "URI"
+      },
+      "steps": {
+        "select": {
+          "label": "Select",
+          "title": "Detected connections",
+          "instruction": "BigFred scans the local network and serial ports for possible command-station connections. If you are unsure about baud rate or address, pick the most familiar option — you can change it later."
+        },
+        "remotes": {
+          "label": "Handsets",
+          "title": "Z21 and WiFred handsets",
+          "instruction": "Enable control from WiFred/LongFred and ROCO WlanMaus/Z21 handsets."
+        },
+        "bootstop": {
+          "label": "Boot-stop",
+          "title": "Boot-stop",
+          "instruction": "Boot-stop is a one-shot emergency stop of all layout vehicles right after dcc-bus starts. Useful when you do not want locomotives to resume their previous speed after a restart.",
+          "alert": "With boot-stop enabled, every BigFred / dcc-bus restart will emergency-stop vehicles."
+        },
+        "slots": {
+          "label": "Slots",
+          "title": "LocoNet slot allocation",
+          "instruction": "When enabled, BigFred claims a slot like a physical FRED and will not take a locomotive driven by another throttle. On by default. You can disable this if you do not use other wired throttles."
+        },
+        "layout": {
+          "label": "Layout",
+          "title": "Attach to layout",
+          "instruction": "The station is added to the system catalogue. You can attach it to the current layout now or skip and do it later in layout edit. Note: a layout should only have the 1–2 stations that are actually used. Do not attach stations that are not connected, to avoid overloading the system."
+        }
+      }
     },
     "kind": {
       "z21": "Z21 (UDP)",

@@ -96,6 +96,9 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	userH := NewUserHandler(cfg.Users, cfg.Auth, cfg.Audit)
 	sudoH := NewSudoHandler(cfg.Sudo, cfg.Auth, cfg.Users, cfg.Presence)
 	commandStationH := NewCommandStationHandler(cfg.CommandStations, cfg.Auth, cfg.Audit)
+	if cfg.DccBus != nil {
+		commandStationH.SetExecutable(cfg.DccBus.Executable())
+	}
 	diagnosticsH := NewDiagnosticsHandler(cfg.Diagnostics)
 	radioH := NewRadioHandler(cfg.Radio)
 	auditH := NewAuditHandler(cfg.Audit)
@@ -235,6 +238,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 				r.Put("/layouts/{id}/command-stations", layoutH.SetCommandStations)
 
 				r.Get("/command-stations/catalogue", commandStationH.ListCatalogue)
+				r.Get("/command-stations/scan", commandStationH.Scan)
 				r.Post("/command-stations", commandStationH.Create)
 				r.Put("/command-stations/{id}", commandStationH.Update)
 				r.Delete("/command-stations/{id}", commandStationH.Delete)

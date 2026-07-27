@@ -31,10 +31,11 @@ import {
   Typography,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
+import AutoFixHighIcon from "@mui/icons-material/AutoFixHigh";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import MonitorHeartIcon from "@mui/icons-material/MonitorHeart";
-import { Link as RouterLink } from "react-router-dom";
+import { Link as RouterLink, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
 import { ApiError } from "../../api/client";
@@ -61,6 +62,7 @@ function isLoconetKind(kind: CommandStationKind): boolean {
 
 export default function CommandStationsPage() {
   const { t } = useTranslation(["commandStation", "common", "errors"]);
+  const navigate = useNavigate();
   const list = useCommandStationsCatalogue();
   const create = useCreateCommandStation();
   const update = useUpdateCommandStation();
@@ -242,14 +244,24 @@ export default function CommandStationsPage() {
               {t("commandStation:admin.subtitle")}
             </Typography>
           </Box>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={openCreate}
-            disabled={submitting}
-          >
-            {t("commandStation:admin.actions.create")}
-          </Button>
+          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+            <Button
+              variant="outlined"
+              startIcon={<AutoFixHighIcon />}
+              onClick={() => navigate("/admin/command-stations/wizard")}
+              disabled={submitting}
+            >
+              {t("commandStation:admin.actions.wizard")}
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={openCreate}
+              disabled={submitting}
+            >
+              {t("commandStation:admin.actions.create")}
+            </Button>
+          </Stack>
         </Stack>
 
         {list.isError && (

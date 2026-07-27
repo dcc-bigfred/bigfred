@@ -7,19 +7,27 @@ import (
 	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
 	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
 	"github.com/keskad/loco/pkgs/bigfred/server/protocol"
+	"github.com/keskad/loco/pkgs/bigfred/server/service"
 )
 
 // CommandStationHandler bundles REST endpoints for the command-station
 // catalogue.
 type CommandStationHandler struct {
-	svc   *cmd.CommandStation
-	auth  *cmd.Auth
-	audit cmd.AuditPublisher
+	svc        *cmd.CommandStation
+	auth       *cmd.Auth
+	audit      cmd.AuditPublisher
+	executable string
 }
 
 // NewCommandStationHandler returns a CommandStationHandler.
 func NewCommandStationHandler(svc *cmd.CommandStation, auth *cmd.Auth, audit cmd.AuditPublisher) *CommandStationHandler {
 	return &CommandStationHandler{svc: svc, auth: auth, audit: audit}
+}
+
+// SetExecutable sets the loco-server binary path used by Scan
+// (`dcc-bus scan`). Empty resolves via os.Executable at call time.
+func (h *CommandStationHandler) SetExecutable(path string) {
+	h.executable = path
 }
 
 // ListCatalogue handles GET /api/v1/command-stations/catalogue (admin).
@@ -32,6 +40,18 @@ func (h *CommandStationHandler) ListCatalogue(w http.ResponseWriter, r *http.Req
 	out := make([]protocol.CommandStationResponse, 0, len(rows))
 	for _, row := range rows {
 		out = append(out, protocol.ToCommandStationResponse(row))
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(out)
+}
+
+// Scan handles GET /api/v1/command-stations/scan (admin). Spawns
+// `dcc-bus scan` and returns the discovered connection list.
+func (h *CommandStationHandler) Scan(w http.ResponseWriter, r *http.Request) {
+	out, err := service.ScanCommandStations(r.Context(), h.executable)
+	if err != nil {
+		writeJSONError(w, http.StatusBadGateway, "scan_failed")
+		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(out)

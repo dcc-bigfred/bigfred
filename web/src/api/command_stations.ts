@@ -177,3 +177,30 @@ export function useSetLayoutCommandStations() {
     },
   });
 }
+
+export interface DetectedConnection {
+  name: string;
+  uri: string;
+}
+
+export function kindFromConnectionUri(uri: string): CommandStationKind {
+  const lower = uri.toLowerCase();
+  if (lower.startsWith("serial://")) return "loconet_serial";
+  if (lower.startsWith("udp://")) return "z21";
+  return "loconet_tcp";
+}
+
+export function isSerialAutodetectUri(uri: string): boolean {
+  return /^serial:\/\/autodetect(?::|$)/i.test(uri);
+}
+
+export function useScanCommandStations(enabled: boolean) {
+  return useQuery({
+    queryKey: ["command-stations", "scan"] as const,
+    queryFn: () =>
+      apiFetch<DetectedConnection[]>("/api/v1/command-stations/scan"),
+    enabled,
+    staleTime: 0,
+    retry: false,
+  });
+}

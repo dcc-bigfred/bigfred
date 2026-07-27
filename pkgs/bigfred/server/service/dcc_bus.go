@@ -335,6 +335,9 @@ func (d *DccBusService) PublishCommand(ctx context.Context, layoutID, commandSta
 // (false, dev only).
 func (d *DccBusService) ProxyEnabled() bool { return d.cfg.ProxyEnabled }
 
+// Executable returns the loco-server binary path used to spawn dcc-bus.
+func (d *DccBusService) Executable() string { return d.cfg.Executable }
+
 // allocatePortLocked picks the next free port from the pool. Caller
 // MUST NOT hold the mutex.
 func (d *DccBusService) allocatePortLocked(layoutID, commandStationID uint) (uint16, error) {

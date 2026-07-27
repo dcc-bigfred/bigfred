@@ -15,9 +15,61 @@
     "z21ServerOn": "Z21-Server an",
     "actions": {
       "create": "Neue Zentrale",
+      "wizard": "Mit Assistent hinzufügen",
       "edit": "Bearbeiten",
       "delete": "Löschen",
       "slotsDiag": "Slot-Diagnose"
+    },
+    "wizard": {
+      "title": "Verbindungsassistent",
+      "lead": "Der Assistent erkennt verfügbare Zentralen und führt dich durch die Grundeinstellung. Erweiterte Einstellungen (Zeiten, Fahrstufen) kannst du später in der Zentralenliste ändern.",
+      "back": "Zentralen",
+      "cancel": "Abbrechen",
+      "backStep": "Zurück",
+      "next": "Weiter",
+      "finish": "Fertig",
+      "rescan": "Erneut scannen",
+      "scanning": "Scannen… das kann etwa eine Minute dauern",
+      "empty": "Keine Zentrale gefunden. Strom, USB-Kabel / Netzwerk prüfen und erneut scannen.",
+      "autodetectWarning": "Diese Verbindung nutzt dynamische Geräteerkennung bei jedem Neustart von Server und Computer. Die Portnummer kann sich ändern oder die Erkennung irgendwann fehlschlagen (z. B. bei einem zweiten USB-Adapter). Bevorzuge einen konkreten Gerätepfad, wenn verfügbar.",
+      "attachCurrentLayout": "An aktuelle Anlage anhängen ({{name}})",
+      "skipHint": "Schalter aus: nur zum Katalog hinzufügen und später in der Anlagenbearbeitung zuweisen.",
+      "yes": "ja",
+      "no": "nein",
+      "summary": "{{name}} · {{kind}} · {{uri}} · Handregler: {{remotes}} · Boot-Stop: {{bootStop}}",
+      "columns": {
+        "name": "Name",
+        "kind": "Typ",
+        "uri": "URI"
+      },
+      "steps": {
+        "select": {
+          "label": "Auswahl",
+          "title": "Gefundene Verbindungen",
+          "instruction": "BigFred scannt das lokale Netz und serielle Ports nach möglichen Zentralenverbindungen. Bei Unsicherheit zu Baudrate oder Adresse die vertrauteste Option wählen — später änderbar."
+        },
+        "remotes": {
+          "label": "Handregler",
+          "title": "Z21- und WiFred-Handregler",
+          "instruction": "Steuerung mit WiFred/LongFred sowie ROCO WlanMaus/Z21 aktivieren."
+        },
+        "bootstop": {
+          "label": "Boot-Stop",
+          "title": "Boot-Stop",
+          "instruction": "Boot-Stop ist ein einmaliger Notstopp aller Anlagenfahrzeuge direkt nach dem Start von dcc-bus. Nützlich, wenn Loks nach einem Neustart nicht mit der alten Geschwindigkeit weiterfahren sollen.",
+          "alert": "Mit aktivem Boot-Stop erhalten Fahrzeuge bei jedem Neustart von BigFred / dcc-bus einen Notstopp."
+        },
+        "slots": {
+          "label": "Slots",
+          "title": "LocoNet-Slot-Zuweisung",
+          "instruction": "Wenn aktiv, belegt BigFred einen Slot wie ein physischer FRED und übernimmt keine von einem anderen Regler geführte Lok. Standard: an. Abschalten, wenn keine anderen kabelgebundenen Regler genutzt werden."
+        },
+        "layout": {
+          "label": "Anlage",
+          "title": "An Anlage anhängen",
+          "instruction": "Die Zentrale kommt in den Systemkatalog. Du kannst sie jetzt der aktuellen Anlage zuweisen oder überspringen und später in der Anlagenbearbeitung zuordnen. Hinweis: Eine Anlage sollte nur 1–2 tatsächlich genutzte Zentralen haben. Nicht angeschlossene Zentralen nicht zuweisen, um das System nicht zu überlasten."
+        }
+      }
     },
     "kind": {
       "z21": "Z21 (UDP)",

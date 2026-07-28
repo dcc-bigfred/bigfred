@@ -162,6 +162,8 @@ should rarely be invoked manually.`,
 	cmd.Flags().BoolVar(&f.SingleVehicleControl, FlagSingleVehicleControl, false, "stop the user's other moving vehicles when driving a different one")
 	cmd.Flags().BoolVar(&f.AllocatePhysicalSlots, FlagAllocatePhysicalSlots, true, "allocate LocoNet slots like a physical FRED (exclusive IN_USE; disable to piggyback)")
 
+	cmd.AddCommand(newScanCommand(log))
+
 	return cmd
 }
 

@@ -12,14 +12,28 @@ import (
 // CommandStationHandler bundles REST endpoints for the command-station
 // catalogue.
 type CommandStationHandler struct {
-	svc   *cmd.CommandStation
-	auth  *cmd.Auth
-	audit cmd.AuditPublisher
+	svc            *cmd.CommandStation
+	auth           *cmd.Auth
+	audit          cmd.AuditPublisher
+	executable     string
+	allowedOrigins []string
 }
 
 // NewCommandStationHandler returns a CommandStationHandler.
 func NewCommandStationHandler(svc *cmd.CommandStation, auth *cmd.Auth, audit cmd.AuditPublisher) *CommandStationHandler {
 	return &CommandStationHandler{svc: svc, auth: auth, audit: audit}
+}
+
+// SetExecutable sets the loco-server binary path used by ScanWS
+// (`dcc-bus scan`). Empty resolves via os.Executable at call time.
+func (h *CommandStationHandler) SetExecutable(path string) {
+	h.executable = path
+}
+
+// SetAllowedOrigins configures WebSocket OriginPatterns for ScanWS.
+// Empty means Accept with InsecureSkipVerify (local/dev).
+func (h *CommandStationHandler) SetAllowedOrigins(origins []string) {
+	h.allowedOrigins = origins
 }
 
 // ListCatalogue handles GET /api/v1/command-stations/catalogue (admin).

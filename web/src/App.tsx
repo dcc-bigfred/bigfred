@@ -28,6 +28,7 @@ import ChangePinPage from "./pages/ChangePinPage";
 import LayoutsAdminPage from "./pages/admin/LayoutsPage";
 import InterlockingsAdminPage from "./pages/admin/InterlockingsPage";
 import CommandStationsAdminPage from "./pages/admin/CommandStationsPage";
+import ConnectionWizardAdminPage from "./pages/admin/ConnectionWizardPage";
 import SlotsDiagnosticsAdminPage from "./pages/admin/SlotsDiagnosticsPage";
 import DiagnosticsAdminPage from "./pages/admin/DiagnosticsPage";
 import AdminRentalsPage from "./pages/admin/AdminRentalsPage";
@@ -87,6 +88,10 @@ const router = createBrowserRouter(
             <Route
               path="/admin/command-stations"
               element={<CommandStationsAdminPage />}
+            />
+            <Route
+              path="/admin/command-stations/wizard"
+              element={<ConnectionWizardAdminPage />}
             />
             <Route
               path="/admin/dcc-bus/slots"

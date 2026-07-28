@@ -62,14 +62,12 @@ var serialDeviceExists = func(path string) bool {
 	return err == nil
 }
 
-// resolveSerialDevice picks the first available serial port. We expect a
-// single adapter to be present; autodetection only papers over unstable
-// device numbering. Stable udev symlinks (e.g. /dev/loconet-63120 on
-// BigFred OS) are preferred, then USB/ACM/cu.* adapters.
-func resolveSerialDevice() (string, error) {
+// listSerialCandidates returns available serial ports ranked for LocoNet
+// adapters (udev symlinks first, then USB/ACM). Empty slice when none found.
+func listSerialCandidates() ([]string, error) {
 	ports, err := listSerialPorts()
 	if err != nil {
-		return "", fmt.Errorf("loconet serial: enumerate ports: %w", err)
+		return nil, fmt.Errorf("loconet serial: enumerate ports: %w", err)
 	}
 	candidates := append([]string(nil), ports...)
 	for _, link := range knownSerialSymlinks {
@@ -80,9 +78,6 @@ func resolveSerialDevice() (string, error) {
 			candidates = append(candidates, link)
 		}
 	}
-	if len(candidates) == 0 {
-		return "", errors.New("loconet serial: autodetect found no serial ports")
-	}
 	sort.Slice(candidates, func(i, j int) bool {
 		pi, pj := serialPortPriority(candidates[i]), serialPortPriority(candidates[j])
 		if pi != pj {
@@ -90,6 +85,21 @@ func resolveSerialDevice() (string, error) {
 		}
 		return candidates[i] < candidates[j]
 	})
+	return candidates, nil
+}
+
+// resolveSerialDevice picks the first available serial port. We expect a
+// single adapter to be present; autodetection only papers over unstable
+// device numbering. Stable udev symlinks (e.g. /dev/loconet-63120 on
+// BigFred OS) are preferred, then USB/ACM/cu.* adapters.
+func resolveSerialDevice() (string, error) {
+	candidates, err := listSerialCandidates()
+	if err != nil {
+		return "", err
+	}
+	if len(candidates) == 0 {
+		return "", errors.New("loconet serial: autodetect found no serial ports")
+	}
 	return candidates[0], nil
 }
 

@@ -177,3 +177,29 @@ export function useSetLayoutCommandStations() {
     },
   });
 }
+
+export interface DetectedConnection {
+  name: string;
+  uri: string;
+}
+
+export function kindFromConnectionUri(uri: string): CommandStationKind {
+  const lower = uri.toLowerCase();
+  if (lower.startsWith("serial://")) return "loconet_serial";
+  if (lower.startsWith("udp://")) return "z21";
+  return "loconet_tcp";
+}
+
+export function isSerialAutodetectUri(uri: string): boolean {
+  return /^serial:\/\/autodetect(?::|$)/i.test(uri);
+}
+
+export function commandStationScanWsUrl(): string {
+  const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${proto}//${window.location.host}/api/v1/command-stations/scan/ws`;
+}
+
+export type ScanWsFrame =
+  | { type: "connection"; name: string; uri: string }
+  | { type: "error"; detail?: string }
+  | { type: "done" };

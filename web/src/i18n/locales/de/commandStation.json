@@ -15,9 +15,64 @@
     "z21ServerOn": "Z21-Server an",
     "actions": {
       "create": "Neue Zentrale",
+      "wizard": "Mit Assistent hinzufügen",
       "edit": "Bearbeiten",
       "delete": "Löschen",
       "slotsDiag": "Slot-Diagnose"
+    },
+    "wizard": {
+      "title": "Verbindungsassistent",
+      "lead": "Der Assistent erkennt verfügbare Zentralen und führt dich durch die Grundeinstellung. Erweiterte Einstellungen (Zeiten, Fahrstufen) kannst du später in der Zentralenliste ändern.",
+      "back": "Zentralen",
+      "cancel": "Abbrechen",
+      "backStep": "Zurück",
+      "next": "Weiter",
+      "finish": "Fertig",
+      "rescan": "Erneut scannen",
+      "stopScan": "Scan abbrechen",
+      "scanning": "Scannen… das kann etwa eine Minute dauern",
+      "scanAlreadyRunning": "Ein Scan läuft bereits. Warte auf das Ende oder lade die Seite neu.",
+      "empty": "Keine Zentrale gefunden. Strom, USB-Kabel / Netzwerk prüfen und erneut scannen.",
+      "autodetectWarning": "Diese Verbindung nutzt dynamische Geräteerkennung bei jedem Neustart von Server und Computer. Die Portnummer kann sich ändern oder die Erkennung irgendwann fehlschlagen (z. B. bei einem zweiten USB-Adapter). Bevorzuge einen konkreten Gerätepfad, wenn verfügbar.",
+      "attachCurrentLayout": "An aktuelle Anlage anhängen ({{name}})",
+      "skipHint": "Schalter aus: nur zum Katalog hinzufügen und später in der Anlagenbearbeitung zuweisen.",
+      "yes": "ja",
+      "no": "nein",
+      "summary": "{{name}} · {{kind}} · {{uri}} · Handregler: {{remotes}} · Boot-Stop: {{bootStop}}",
+      "columns": {
+        "name": "Name",
+        "kind": "Typ",
+        "uri": "URI"
+      },
+      "steps": {
+        "select": {
+          "label": "Auswahl",
+          "title": "Gefundene Verbindungen",
+          "instruction": "BigFred scannt das lokale Netz und serielle Ports nach möglichen Zentralenverbindungen. Bei Unsicherheit zu Baudrate oder Adresse die vertrauteste Option wählen — später änderbar. Empfohlene Baudrate für DR5000, RB1110 und YamoRC YD7001: 115200. Sieh in der Dokumentation deiner Zentrale nach oder frage eine KI (z. B. Google Gemini) mit dem genauen Modell deiner Steuerzentrale."
+        },
+        "remotes": {
+          "label": "Handregler",
+          "title": "Z21- und WiFred-Handregler",
+          "instruction": "Steuerung mit WiFred/LongFred sowie ROCO WlanMaus/Z21 aktivieren."
+        },
+        "bootstop": {
+          "label": "Boot-Stop",
+          "title": "Boot-Stop",
+          "instruction": "Boot-Stop ist ein einmaliger Notstopp aller Anlagenfahrzeuge direkt nach dem Start von dcc-bus. Nützlich, wenn Loks nach einem Neustart nicht mit der alten Geschwindigkeit weiterfahren sollen. Jede Änderung der Zentraleneinstellungen startet die Verbindung neu — das löst ebenfalls Boot-Stop aus.",
+          "alert": "Mit aktivem Boot-Stop erhalten Fahrzeuge bei jedem Neustart von BigFred / dcc-bus einen Notstopp."
+        },
+        "slots": {
+          "label": "Slots",
+          "title": "LocoNet-Slot-Zuweisung",
+          "instruction": "Wenn aktiv, belegt BigFred einen Slot wie ein physischer FRED und übernimmt keine von einem anderen Regler geführte Lok. Standard: an. Abschalten, wenn keine anderen kabelgebundenen Regler genutzt werden. Wird BigFred ausschließlich genutzt, ist physische Slot-Zuweisung nicht nötig — BigFred verwaltet Slots intern und steuert zusätzlich die Berechtigungen."
+        },
+        "layout": {
+          "label": "Anlage",
+          "title": "An Anlage anhängen",
+          "instruction": "Die Zentrale kommt in den Systemkatalog. Du kannst sie jetzt der aktuellen Anlage zuweisen oder überspringen und später in der Anlagenbearbeitung zuordnen.",
+          "warning": "Eine Anlage sollte nur 1–2 tatsächlich genutzte Zentralen haben. Nicht angeschlossene Zentralen nicht zuweisen, um das System nicht zu überlasten. Füge dieselbe Zentrale nicht doppelt über verschiedene Verbindungsarten hinzu — das kann unvorhersehbare Folgen haben."
+        }
+      }
     },
     "kind": {
       "z21": "Z21 (UDP)",
@@ -49,12 +104,12 @@
         "deadmanSecs": "Totmann-Timeout (s)",
         "deadmanSecsHelp": "Leerlaufzeit, nach der der Daemon Notstopp auslöst. Muss länger als der Heartbeat sein. Standard 6 s.",
         "z21ServerEnabled": "ROCO-Z21-Piloten-Server",
-        "z21ServerEnabledHelp": "Unabhängig vom ausgehenden Verbindungstyp. Z21-Apps verbinden sich mit dem dcc-bus-Host über UDP-Port 21105. Die Kopplung erfolgt über CV3 und CV4 oder den Ziffernblock.",
-        "z21IpStickiness": "Sitzung an IP gebunden (IP-Stickiness — Hinweis unten lesen)",
+        "z21ServerEnabledHelp": "Unterstützt WlanMaus, die Z21-App, RailBox Railroad Control und weitere Clients mit dem ROCO-Z21-Protokoll.",
+        "z21IpStickiness": "Sitzung an IP gebunden (IP-Stickiness — Hinweis: Hilfetext unten lesen)",
         "z21IpStickinessHelp": "Wenn aktiv, ist die Piloten-Sitzung an die Client-IP gebunden, nicht an den UDP-Port — für Benutzer deutlich komfortabler. Nach einem Reconnect mit neuem Port (typisch bei DHCP) bleibt die Kopplung aktiv. Wichtig! Im Router müssen IP-Stickiness oder feste IPs für Piloten konfiguriert sein, sonst kann ein anderer Pilot eine zuvor von einem anderen Benutzer genutzte IP erhalten und dessen Fahrzeuge steuern!",
         "z21ServerDisableWarn": "Das Deaktivieren stoppt neue Kopplungen. Aktive Piloten-Sitzungen funktionieren nach einem dcc-bus-Neustart nicht mehr.",
         "withrottleServerEnabled": "WiFred-Server",
-        "withrottleServerEnabledHelp": "WiFred-Piloten verbinden sich mit dem dcc-bus-Host über TCP-Port 12090. Die Kopplung erfolgt per 6-stelligem Code über die virtuelle Kopplungslokomotive oder den Gerätenamen.",
+        "withrottleServerEnabledHelp": "Unterstützt WiFred, LongFred, Engine Driver, weitere physische Regler und Smartphone-Apps mit dem WiThrottle-Protokoll.",
         "withrottleServerDisableWarn": "Das Deaktivieren stoppt neue Kopplungen. Aktive WiFred-Sitzungen funktionieren nach einem dcc-bus-Neustart nicht mehr.",
         "maxLoconetSlots": "LocoNet-Slot-Budget",
         "maxLoconetSlotsHelp": "Wie viele Slots BigFred auf dieser Zentrale belegen darf; der Rest bleibt physischen FREDs vorbehalten. Standard 80.",
@@ -71,7 +126,7 @@
     "empty": "Keine Zentralen anzuzeigen.",
     "slotsDiag": {
       "title": "DCC-Bus Slot-Diagnose",
-      "subtitle": "Live LocoNet-Slot-Leases, Benutzerlimits und FRED-Reserve. Nur Lesen.",
+      "subtitle": "Erweiterte Ansicht — Slot-Verhalten beobachten, Limits einsehen und bei Bedarf einzelne Slots freigeben.",
       "back": "Zentralen",
       "station": "Zentrale",
       "live": "Live",

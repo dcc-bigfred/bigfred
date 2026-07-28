@@ -15,9 +15,64 @@
     "z21ServerOn": "Serwer Z21 włączony",
     "actions": {
       "create": "Nowa centralka",
+      "wizard": "Dodaj z pomocą kreatora",
       "edit": "Edytuj",
       "delete": "Usuń",
       "slotsDiag": "Diagnostyka slotów"
+    },
+    "wizard": {
+      "title": "Kreator połączenia",
+      "lead": "Kreator wykryje dostępne centralki i przeprowadzi Cię przez podstawową konfigurację. Zaawansowane ustawienia (czasy, kroki prędkości) możesz później zmienić na liście centralek.",
+      "back": "Centralki",
+      "cancel": "Anuluj",
+      "backStep": "Wstecz",
+      "next": "Dalej",
+      "finish": "Zakończ",
+      "rescan": "Skanuj ponownie",
+      "stopScan": "Przerwij skanowanie",
+      "scanning": "Skanowanie… to może potrwać do około minuty",
+      "scanAlreadyRunning": "Skanowanie już trwa. Poczekaj na zakończenie albo odśwież stronę.",
+      "empty": "Nie znaleziono żadnej centralki. Sprawdź zasilanie, kabel USB / sieć i uruchom skan ponownie.",
+      "autodetectWarning": "To połączenie używa dynamicznej detekcji urządzenia przy każdym uruchomieniu serwera i komputera. Numer portu może się zmienić albo detekcja może kiedyś nie zadziałać (np. gdy pojawi się drugi adapter USB). Preferuj konkretną ścieżkę urządzenia, jeśli jest dostępna.",
+      "attachCurrentLayout": "Dołącz do bieżącej makiety ({{name}})",
+      "skipHint": "Wyłącz przełącznik, aby dodać centralkę tylko do katalogu i przypisać ją później w edycji makiety.",
+      "yes": "tak",
+      "no": "nie",
+      "summary": "{{name}} · {{kind}} · {{uri}} · piloty: {{remotes}} · boot-stop: {{bootStop}}",
+      "columns": {
+        "name": "Nazwa",
+        "kind": "Typ",
+        "uri": "URI"
+      },
+      "steps": {
+        "select": {
+          "label": "Wybór",
+          "title": "Wykryte połączenia",
+          "instruction": "BigFred skanuje lokalną sieć i porty szeregowe, próbując znaleźć możliwe połączenia z centralkami. Jeśli nie jesteś pewien baud rate albo adresu — wybierz wariant, który wygląda najbardziej znajomo; możesz go później zmienić. Zalecany baudrate dla DR5000, RB1110 oraz YamoRC YD7001 — 115200. Sięgnij do dokumentacji swojej centralki lub zapytaj o to AI, np. Google Gemini, podając konkretny model centralki sterującej."
+        },
+        "remotes": {
+          "label": "Piloty",
+          "title": "Piloty Z21 i WiFred",
+          "instruction": "Włącz możliwość sterowania pilotami WiFred/LongFred oraz ROCO WlanMaus/Z21."
+        },
+        "bootstop": {
+          "label": "Boot-stop",
+          "title": "Boot-stop",
+          "instruction": "Boot-stop to jednorazowe awaryjne zatrzymanie wszystkich pojazdów z makiety zaraz po starcie dcc-bus. Przydatne, gdy po restarcie nie chcesz, żeby lokomotywy ruszyły z poprzednią prędkością. Każda zmiana ustawień centralki powoduje restart połączenia, co również uruchamia boot-stop.",
+          "alert": "Po włączeniu boot-stop przy każdym restarcie BigFred / dcc-bus pojazdy dostaną emergency stop."
+        },
+        "slots": {
+          "label": "Sloty",
+          "title": "Alokacja slotów LocoNet",
+          "instruction": "Gdy włączone, BigFred zajmuje slot jak fizyczny FRED — nie przejmie lokomotywy sterowanej innym manipulatorem. Domyślnie włączone. Możesz wyłączyć tę opcję, jeśli nie używacie innych przewodowych manipulatorów. Gdy BigFred jest używany na wyłączność, fizyczna alokacja slotów nie jest potrzebna — BigFred zajmuje się tym wewnętrznie, jak i dodatkowo kontrolą uprawnień."
+        },
+        "layout": {
+          "label": "Makieta",
+          "title": "Dołącz do makiety",
+          "instruction": "Centralka trafi do katalogu systemu. Możesz od razu przypisać ją do bieżącej makiety albo pominąć i zrobić to później w edycji makiety.",
+          "warning": "Na makiecie powinna znajdować się 1–2 centralki, które faktycznie są używane. Nie przypisuj centralek, które nie są podłączane, aby nie przeciążyć systemu. Nie dodawaj także centralek podwójnie różnymi sposobami podłączenia — może to mieć nieprzewidywalne skutki."
+        }
+      }
     },
     "kind": {
       "z21": "Z21 (UDP)",
@@ -49,12 +104,12 @@
         "deadmanSecs": "Czas dead-man (s)",
         "deadmanSecsHelp": "Czas bezczynności, po którym daemon wykonuje zatrzymanie awaryjne. Musi być dłuższy niż heartbeat. Domyślnie 6 s.",
         "z21ServerEnabled": "Serwer pilota ROCO Z21",
-        "z21ServerEnabledHelp": "Niezależnie od typu połączenia wychodzącego. Aplikacje Z21 łączą się z hostem dcc-bus na porcie UDP 21105. Parowanie odbywa się przez CV3 i CV4 lub numerycznie.",
+        "z21ServerEnabledHelp": "Obsługa WlanMaus, aplikacji Z21, aplikacji RailBox Railroad Control oraz pozostałych obsługujących protokół ROCO Z21",
         "z21IpStickiness": "Przypisanie sesji do IP (IP stickiness - uwaga, przeczytaj notkę poniżej)",
         "z21IpStickinessHelp": "Gdy włączone, sesja pilota jest powiązana z adresem IP, a nie z portem UDP, jest to dużo wygodniejsze i intuicyjne dla użytkowników. Po reconnect z nowym portem (typowe przy DHCP) parowanie pozostaje aktywne. Ważne! W routerze musisz mieć skonfigurowany stickiness adresów IP bądź przydzielone stałe adresy IP do pilotów ręcznie, aby uniknąć sytuacji w której inny pilot otrzyma adres IP od innego pilota należącego do innego użytkownika i będzie mógł sterować jego pojazdami!",
         "z21ServerDisableWarn": "Wyłączenie serwera blokuje nowe parowania. Aktywne sesje pilota przestaną działać po restarcie daemona dcc-bus.",
         "withrottleServerEnabled": "Serwer WiFred",
-        "withrottleServerEnabledHelp": "WiFredy łączą się z hostem dcc-bus na porcie TCP 12090. Parowanie odbywa się 6-cyfrowym kodem przez wirtualną lokomotywę parującą lub nazwę urządzenia.",
+        "withrottleServerEnabledHelp": "Obsługa WiFred, LongFred, Engine Driver oraz pozostałych pilotów fizycznych jak i aplikacji na telefon używających protokołu WiThrottle.",
         "withrottleServerDisableWarn": "Wyłączenie serwera blokuje nowe parowania. Aktywne sesje WiFred przestaną działać po restarcie daemona dcc-bus.",
         "maxLoconetSlots": "Budżet slotów LocoNet",
         "maxLoconetSlotsHelp": "Ile slotów może zająć BigFred w tej centralce; pozostałe zostaną dla fizycznych FREDów. Domyślnie 80.",

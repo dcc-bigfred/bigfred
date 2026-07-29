@@ -48,7 +48,7 @@ build-prod: web-build
 # Production loco-server for Android arm64 (SPA embedded). Published to GHCR;
 # bigfred-android-client pulls ghcr.io/dcc-bigfred/loco-server-android-arm64:main.
 .PHONY: android
-android: web-build
+android: web-build-android
 	CGO_ENABLED=0 GOOS=android GOARCH=arm64 go build -tags prod -ldflags="-s -w" \
 		-o bin/loco-server-android-arm64 ./pkgs/bigfred/server
 	@ls -lh bin/loco-server-android-arm64
@@ -76,7 +76,7 @@ HOST ?= localhost
 # Rasterize src/icons/*.svg → src/icons/png/*.png (70x70, gitignored).
 # Also runs automatically via the Vite plugin on `vite` / `vite build`.
 # Needs: rsvg-convert (librsvg), e.g. pacman -S librsvg / apt install librsvg2-bin.
-.PHONY: web-icons web-install web-dev web-build
+.PHONY: web-icons web-install web-dev web-build web-build-android
 web-icons:
 	cd web && python3 scripts/rasterize_function_icons.py
 
@@ -88,6 +88,10 @@ web-dev:
 
 web-build:
 	cd web && npm ci && npm run build
+
+# SPA with phone capabilities (orange chrome, no remotes menu, no loconet_serial).
+web-build-android:
+	cd web && npm ci && VITE_ANDROID=1 npm run build
 
 web-check-offline:
 	cd web && npm run check:offline

@@ -1,16 +1,22 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "./client";
+import { capabilities } from "../capabilities";
 
 export type CommandStationKind =
   | "z21"
   | "loconet_serial"
   | "loconet_tcp";
 
-export const COMMAND_STATION_KINDS: CommandStationKind[] = [
+const ALL_COMMAND_STATION_KINDS: CommandStationKind[] = [
   "z21",
   "loconet_serial",
   "loconet_tcp",
 ];
+
+export const COMMAND_STATION_KINDS: CommandStationKind[] =
+  capabilities.loconetSerial
+    ? ALL_COMMAND_STATION_KINDS
+    : ALL_COMMAND_STATION_KINDS.filter((k) => k !== "loconet_serial");
 
 export const COMMAND_STATION_SPEED_STEPS = [14, 28, 128] as const;
 

@@ -48,6 +48,7 @@ import {
   type CommandStationKind,
   type ScanWsFrame,
 } from "../../api/command_stations";
+import { capabilities } from "../../capabilities";
 
 function isLoconetKind(kind: CommandStationKind): boolean {
   return kind === "loconet_serial" || kind === "loconet_tcp";
@@ -73,8 +74,12 @@ export default function ConnectionWizardPage() {
   const [stepIndex, setStepIndex] = useState(0);
   const [selected, setSelected] = useState<DetectedConnection | null>(null);
   const [nameInput, setNameInput] = useState("");
-  const [z21ServerEnabled, setZ21ServerEnabled] = useState(true);
-  const [withrottleServerEnabled, setWithrottleServerEnabled] = useState(true);
+  const [z21ServerEnabled, setZ21ServerEnabled] = useState(
+    capabilities.remotesConfigurable,
+  );
+  const [withrottleServerEnabled, setWithrottleServerEnabled] = useState(
+    capabilities.remotesConfigurable,
+  );
   const [bootStopEnabled, setBootStopEnabled] = useState(false);
   const [allocatePhysicalSlots, setAllocatePhysicalSlots] = useState(true);
   const [attachToLayout, setAttachToLayout] = useState(true);
@@ -243,9 +248,10 @@ export default function ConnectionWizardPage() {
         heartbeatSecs: DEFAULT_COMMAND_STATION_HEARTBEAT_SECS,
         deadmanSecs: DEFAULT_COMMAND_STATION_DEADMAN_SECS,
         pollIntervalMs: DEFAULT_COMMAND_STATION_POLL_INTERVAL_MS,
-        z21ServerEnabled,
+        z21ServerEnabled: capabilities.remotesConfigurable && z21ServerEnabled,
         z21IpStickiness: false,
-        withrottleServerEnabled,
+        withrottleServerEnabled:
+          capabilities.remotesConfigurable && withrottleServerEnabled,
         idleTimeoutSecs: DEFAULT_COMMAND_STATION_IDLE_TIMEOUT_SECS,
         bootStopEnabled,
         singleVehicleControl: false,
@@ -312,11 +318,30 @@ export default function ConnectionWizardPage() {
         </Box>
 
         <Stepper activeStep={stepIndex} alternativeLabel>
-          {steps.map((id) => (
-            <Step key={id}>
-              <StepLabel>{stepLabel(id)}</StepLabel>
-            </Step>
-          ))}
+          {steps.map((id) => {
+            const remotesLocked =
+              id === "remotes" && !capabilities.remotesConfigurable;
+            return (
+              <Step key={id} disabled={remotesLocked}>
+                <StepLabel
+                  optional={
+                    remotesLocked ? (
+                      <Typography variant="caption" color="text.disabled">
+                        {t("commandStation:admin.wizard.steps.remotes.unavailableShort")}
+                      </Typography>
+                    ) : undefined
+                  }
+                  sx={
+                    remotesLocked
+                      ? { "& .MuiStepLabel-label": { color: "text.disabled" } }
+                      : undefined
+                  }
+                >
+                  {stepLabel(id)}
+                </StepLabel>
+              </Step>
+            );
+          })}
         </Stepper>
 
         {actionError && <Alert severity="error">{actionError}</Alert>}
@@ -445,10 +470,18 @@ export default function ConnectionWizardPage() {
 
             {activeStep === "remotes" && (
               <>
+                {!capabilities.remotesConfigurable && (
+                  <Alert severity="info">
+                    {t("commandStation:admin.wizard.steps.remotes.unavailable")}
+                  </Alert>
+                )}
                 <FormControlLabel
                   control={
                     <Switch
-                      checked={z21ServerEnabled}
+                      checked={
+                        capabilities.remotesConfigurable && z21ServerEnabled
+                      }
+                      disabled={!capabilities.remotesConfigurable}
                       onChange={(_, v) => setZ21ServerEnabled(v)}
                     />
                   }
@@ -462,7 +495,11 @@ export default function ConnectionWizardPage() {
                 <FormControlLabel
                   control={
                     <Switch
-                      checked={withrottleServerEnabled}
+                      checked={
+                        capabilities.remotesConfigurable &&
+                        withrottleServerEnabled
+                      }
+                      disabled={!capabilities.remotesConfigurable}
                       onChange={(_, v) => setWithrottleServerEnabled(v)}
                     />
                   }
@@ -576,7 +613,7 @@ export default function ConnectionWizardPage() {
             <Button
               variant="contained"
               onClick={goNext}
-              disabled={!canNext() || submitting || scanning}
+              disabled={!canNext() || submitting}
             >
               {stepIndex >= steps.length - 1
                 ? t("commandStation:admin.wizard.finish")

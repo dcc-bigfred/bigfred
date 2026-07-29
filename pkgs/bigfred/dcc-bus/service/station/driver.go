@@ -10,8 +10,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/keskad/loco/pkgs/loco/commandstation"
+	"github.com/keskad/loco/pkgs/bigfred/platform"
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
+	"github.com/keskad/loco/pkgs/loco/commandstation"
 )
 
 // Open dials the command station described by cs. The returned
@@ -27,6 +28,9 @@ func Open(cs domain.CommandStation) (commandstation.Station, error) {
 		return commandstation.NewZ21Roco(host, port)
 
 	case domain.CommandStationKindLocoNetSerial:
+		if !platform.SupportsLocoNetSerial() {
+			return nil, fmt.Errorf("loconet_serial is not supported on Android")
+		}
 		device, baud, err := parseSerial(cs.ConnectionURI)
 		if err != nil {
 			return nil, fmt.Errorf("loconet_serial uri %q: %w", cs.ConnectionURI, err)

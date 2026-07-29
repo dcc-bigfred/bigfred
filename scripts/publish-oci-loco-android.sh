@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 # Publish loco-server-android-arm64 to GHCR as an OCI artifact (ORAS).
+# Intended for CI on push to master/main only.
 # Usage: publish-oci-loco-android.sh <path-to-binary>
 #
-# Tags (from GITHUB_REF_NAME / GITHUB_SHA):
-#   master|main → main
-#   always → sha-<7>
+# Tags: main, sha-<7>
 set -euo pipefail
 
 BINARY="${1:?usage: $0 <path-to-loco-server-android-arm64>}"
@@ -17,11 +16,11 @@ if [[ ! -f "${BINARY}" ]]; then
 fi
 
 BRANCH="${GITHUB_REF_NAME:?GITHUB_REF_NAME required}"
-if [[ "${BRANCH}" == "master" || "${BRANCH}" == "main" ]]; then
-  BRANCH_TAG="main"
-else
-  BRANCH_TAG="branch-$(echo "${BRANCH}" | tr '/_' '-' | tr '[:upper:]' '[:lower:]')"
+if [[ "${BRANCH}" != "master" && "${BRANCH}" != "main" ]]; then
+  echo "error: OCI publish is only allowed from master/main (got ${BRANCH})" >&2
+  exit 1
 fi
+
 SHA_TAG="sha-${GITHUB_SHA::7}"
 
 annotate=(
@@ -29,6 +28,6 @@ annotate=(
   --annotation "org.opencontainers.image.revision=${GITHUB_SHA}"
 )
 
-echo "Publishing ${IMAGE}:${BRANCH_TAG} and :${SHA_TAG} ($(wc -c < "${BINARY}") bytes)"
-oras push "${IMAGE}:${BRANCH_TAG}" "${BINARY}:${MEDIA_TYPE}" "${annotate[@]}"
+echo "Publishing ${IMAGE}:main and :${SHA_TAG} ($(wc -c < "${BINARY}") bytes)"
+oras push "${IMAGE}:main" "${BINARY}:${MEDIA_TYPE}" "${annotate[@]}"
 oras push "${IMAGE}:${SHA_TAG}" "${BINARY}:${MEDIA_TYPE}" "${annotate[@]}"

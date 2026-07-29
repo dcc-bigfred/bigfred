@@ -136,7 +136,7 @@ func TestWriteDefaultsReference(t *testing.T) {
 	}
 	text := string(data)
 	for _, key := range []string{
-		"JWT_SECRET=", "REDIS_DATA_DIR=", "REDIS_ADDR=", "REDIS_RDB_SAVE=",
+		"BIGFRED_DATA_DIR", "JWT_SECRET=", "REDIS_DATA_DIR=", "REDIS_ADDR=", "REDIS_RDB_SAVE=",
 		"ENABLE_TELEMETRY=", "TELEMETRY_CONFIG=", "REMOTE_ICMP_INTERVAL_SECS=",
 		"REMOTE_ICMP_TARGETS_INTERVAL_SECS=", "reference only",
 	} {

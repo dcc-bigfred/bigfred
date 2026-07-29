@@ -39,3 +39,11 @@ func TestPath(t *testing.T) {
 		t.Fatalf("Path(...) = %q, want %q", got, want)
 	}
 }
+
+func TestRootIgnoresRelativeEnv(t *testing.T) {
+	t.Setenv("BIGFRED_DATA_DIR", "relative/path")
+	t.Setenv("DATA_DIR", "")
+	if got := Root(); got != "/data" {
+		t.Fatalf("Root() = %q, want /data", got)
+	}
+}

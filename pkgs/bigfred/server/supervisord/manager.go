@@ -437,12 +437,12 @@ func (s *Manager) allStatus(ctx context.Context) ([]ProgramState, error) {
 
 func (s *Manager) renderLocked() ([]byte, string, string, error) {
 	content, err := Render(RenderInput{
-		RunAsUser:  s.runAsUser,
-		ConfigDir:  s.cfg.ConfigDir,
+		RunAsUser:    s.runAsUser,
+		ConfigDir:    s.cfg.ConfigDir,
 		InetHTTPAddr: s.cfg.InetHTTPAddr,
-		PIDFile:    s.cfg.PIDFile,
-		LogDir:     s.cfg.LogDir,
-		Groups:     s.state.Groups,
+		PIDFile:      s.cfg.PIDFile,
+		LogDir:       s.cfg.LogDir,
+		Groups:       s.state.Groups,
 	})
 	if err != nil {
 		return nil, "", "", err

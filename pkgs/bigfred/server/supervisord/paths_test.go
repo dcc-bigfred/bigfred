@@ -1,9 +1,8 @@
 package supervisord
 
 import (
+	"path/filepath"
 	"testing"
-
-	"github.com/keskad/loco/pkgs/bigfred/server/datadir"
 )
 
 func TestDefaultPathsHubLayout(t *testing.T) {
@@ -14,19 +13,19 @@ func TestDefaultPathsHubLayout(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p.ConfigDir != datadir.Path("etc", "supervisord") {
+	if p.ConfigDir != "/data/etc/supervisord" {
 		t.Fatalf("ConfigDir: %q", p.ConfigDir)
 	}
-	if p.ConfigPath != datadir.Path("etc", "supervisord", "supervisord.conf") {
+	if p.ConfigPath != "/data/etc/supervisord/supervisord.conf" {
 		t.Fatalf("ConfigPath: %q", p.ConfigPath)
 	}
 	if p.InetHTTPAddr != "127.0.0.1:9001" {
 		t.Fatalf("InetHTTPAddr: %q", p.InetHTTPAddr)
 	}
-	if p.PIDFile != datadir.Path("run", "supervisord.pid") {
+	if p.PIDFile != "/data/run/supervisord.pid" {
 		t.Fatalf("PIDFile: %q", p.PIDFile)
 	}
-	if p.LogDir != datadir.Path("logs") {
+	if p.LogDir != "/data/logs" {
 		t.Fatalf("LogDir: %q", p.LogDir)
 	}
 }
@@ -39,10 +38,10 @@ func TestDefaultPathsRespectsDataDir(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p.ConfigDir != datadir.Path("etc", "supervisord") {
+	if p.ConfigDir != filepath.Join(dir, "etc", "supervisord") {
 		t.Fatalf("ConfigDir: %q", p.ConfigDir)
 	}
-	if p.LogDir != datadir.Path("logs") {
+	if p.LogDir != filepath.Join(dir, "logs") {
 		t.Fatalf("LogDir: %q", p.LogDir)
 	}
 	if p.InetHTTPAddr != "127.0.0.1:9001" {

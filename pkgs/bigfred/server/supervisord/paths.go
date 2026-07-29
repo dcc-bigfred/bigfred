@@ -3,11 +3,11 @@ package supervisord
 import "github.com/keskad/loco/pkgs/bigfred/server/datadir"
 
 // Default hub runtime paths for loco-server supervisord (RW partition).
-func DefaultConfigDir() string  { return datadir.Path("etc", "supervisord") }
-func DefaultConfigFile() string { return datadir.Path("etc", "supervisord", "supervisord.conf") }
+func DefaultConfigDir() string    { return datadir.Path("etc", "supervisord") }
+func DefaultConfigFile() string   { return datadir.Path("etc", "supervisord", "supervisord.conf") }
 func DefaultInetHTTPAddr() string { return "127.0.0.1:9001" }
-func DefaultPIDFile() string    { return datadir.Path("run", "supervisord.pid") }
-func DefaultLogDir() string     { return datadir.Path("logs") }
+func DefaultPIDFile() string      { return datadir.Path("run", "supervisord.pid") }
+func DefaultLogDir() string       { return datadir.Path("logs") }
 
 // Paths holds filesystem locations and the inet HTTP control address for
 // the managed supervisord instance.

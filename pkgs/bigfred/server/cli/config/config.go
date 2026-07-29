@@ -246,6 +246,11 @@ func renderDefaultsReference(d File) string {
 	return fmt.Sprintf(`# loco-server.conf.defaults — built-in defaults (reference only)
 # Auto-generated on every loco-server start. Not read at runtime.
 # Copy keys into %s to persist changes. CLI flags override the live config.
+#
+# Persistent data root (config, logs, supervisord, SQLite when DB is relative):
+#   BIGFRED_DATA_DIR  — preferred; absolute path only (Android app sets this)
+#   DATA_DIR          — fallback when BIGFRED_DATA_DIR is unset
+#   default /data     — hub images
 
 # HTTP listen address (flag: --http)
 HTTP=%s

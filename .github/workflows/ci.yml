@@ -97,11 +97,7 @@ jobs:
           CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -o dist/loco-linux-armv7 ./pkgs/loco
           GOOS=linux GOARCH=arm GOARM=7 go build -o dist/rb-linux-armv7 ./pkgs/rb/main.go
 
-<<<<<<< HEAD
-          # Android phone (BigFred on phone) — android/arm64 with embedded SPA
-=======
-          # Android arm64 (SPA embedded) — published to GHCR for bigfred-android-client
->>>>>>> origin/master
+          # Android arm64 (SPA embedded) — BigFred on phone; published to GHCR
           CGO_ENABLED=0 GOOS=android GOARCH=arm64 go build -tags prod -ldflags="-s -w" \
             -o dist/loco-server-android-arm64 ./pkgs/bigfred/server
 

@@ -53,7 +53,9 @@
         "remotes": {
           "label": "Piloty",
           "title": "Piloty Z21 i WiFred",
-          "instruction": "Włącz możliwość sterowania pilotami WiFred/LongFred oraz ROCO WlanMaus/Z21."
+          "instruction": "Włącz możliwość sterowania pilotami WiFred/LongFred oraz ROCO WlanMaus/Z21.",
+          "unavailableShort": "Niedostępne na telefonie",
+          "unavailable": "Zewnętrznych pilotów nie da się podłączyć do BigFred uruchomionego na telefonie. Korzystaj z aplikacji BigFred na tym urządzeniu."
         },
         "bootstop": {
           "label": "Boot-stop",

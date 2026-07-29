@@ -1,13 +1,17 @@
 import { createTheme } from "@mui/material/styles";
 
+import { capabilities } from "./capabilities";
+
 // Single ThemeProvider configuration referenced from main.tsx.
 // Kept intentionally small at the bootstrap milestone — colours and
 // typography overrides will grow as the locomotive-control screens
 // land in later milestones.
+const primaryMain = capabilities.phoneChrome ? "#e65100" : "#0d47a1";
+
 export const theme = createTheme({
   palette: {
     mode: "light",
-    primary: { main: "#0d47a1" },
+    primary: { main: primaryMain },
     secondary: { main: "#ff6f00" },
     background: { default: "#f4f6f8" },
   },

@@ -53,7 +53,9 @@
         "remotes": {
           "label": "Handsets",
           "title": "Z21 and WiFred handsets",
-          "instruction": "Enable control from WiFred/LongFred and ROCO WlanMaus/Z21 handsets."
+          "instruction": "Enable control from WiFred/LongFred and ROCO WlanMaus/Z21 handsets.",
+          "unavailableShort": "Not on phone",
+          "unavailable": "External handsets cannot connect to BigFred running on a phone. Use the BigFred app on this device instead."
         },
         "bootstop": {
           "label": "Boot-stop",

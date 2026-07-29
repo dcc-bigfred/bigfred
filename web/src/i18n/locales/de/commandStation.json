@@ -53,7 +53,9 @@
         "remotes": {
           "label": "Handregler",
           "title": "Z21- und WiFred-Handregler",
-          "instruction": "Steuerung mit WiFred/LongFred sowie ROCO WlanMaus/Z21 aktivieren."
+          "instruction": "Steuerung mit WiFred/LongFred sowie ROCO WlanMaus/Z21 aktivieren.",
+          "unavailableShort": "Nicht am Telefon",
+          "unavailable": "Externe Handregler können sich nicht mit BigFred auf dem Telefon verbinden. Nutzen Sie die BigFred-App auf diesem Gerät."
         },
         "bootstop": {
           "label": "Boot-Stop",

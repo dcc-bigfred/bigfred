@@ -32,6 +32,7 @@ import { Link, Outlet, useMatch, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
 import { useLogout, useMe } from "../api/auth";
+import { capabilities } from "../capabilities";
 import { getUserName } from "../utils/getUserName";
 import { SocketProvider } from "../context/SocketContext";
 import { useSessionExpiryRedirect } from "../hooks/useSessionExpiryRedirect";
@@ -171,8 +172,8 @@ function AppShellContent() {
     [t],
   );
 
-  const myItems: TopBarMenuItem[] = useMemo(
-    () => [
+  const myItems: TopBarMenuItem[] = useMemo(() => {
+    const items: TopBarMenuItem[] = [
       {
         id: "vehicles",
         label: t("nav.my.vehicles"),
@@ -191,12 +192,16 @@ function AppShellContent() {
         icon: <HandshakeIcon fontSize="small" />,
         onClick: () => navigate("/rentals"),
       },
-      {
+    ];
+    if (capabilities.remotesInMenu) {
+      items.push({
         id: "remotes",
         label: t("nav.my.remotes"),
         icon: <Z21Icon size={24} />,
         onClick: () => navigate("/remotes"),
-      },
+      });
+    }
+    items.push(
       {
         id: "templates",
         label: t("nav.my.templates"),
@@ -210,7 +215,9 @@ function AppShellContent() {
         icon: <HistoryIcon fontSize="small" />,
         onClick: () => navigate("/audit-log"),
       },
-    ],
+    );
+    return items;
+  },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [t],
   );

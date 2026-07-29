@@ -22,6 +22,8 @@ declare module "*.ogg" {
 
 interface ImportMetaEnv {
   readonly VITE_API_BASE?: string;
+  /** Set to "1" when building the SPA embedded in the Android phone binary. */
+  readonly VITE_ANDROID?: string;
 }
 
 interface ImportMeta {

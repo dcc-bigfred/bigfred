@@ -96,6 +96,7 @@ REMOTE_ICMP_TARGETS_INTERVAL_SECS=8
 }
 
 func TestLoadOrCreateCreatesFile(t *testing.T) {
+	t.Setenv("BIGFRED_DATA_DIR", t.TempDir())
 	dir := t.TempDir()
 	path := filepath.Join(dir, "loco-server.conf")
 
@@ -135,7 +136,7 @@ func TestWriteDefaultsReference(t *testing.T) {
 	}
 	text := string(data)
 	for _, key := range []string{
-		"JWT_SECRET=", "REDIS_DATA_DIR=", "REDIS_ADDR=", "REDIS_RDB_SAVE=",
+		"BIGFRED_DATA_DIR", "JWT_SECRET=", "REDIS_DATA_DIR=", "REDIS_ADDR=", "REDIS_RDB_SAVE=",
 		"ENABLE_TELEMETRY=", "TELEMETRY_CONFIG=", "REMOTE_ICMP_INTERVAL_SECS=",
 		"REMOTE_ICMP_TARGETS_INTERVAL_SECS=", "reference only",
 	} {
@@ -146,6 +147,7 @@ func TestWriteDefaultsReference(t *testing.T) {
 }
 
 func TestLoadOrCreateMissingDirWarns(t *testing.T) {
+	t.Setenv("BIGFRED_DATA_DIR", t.TempDir())
 	dir := t.TempDir()
 	path := filepath.Join(dir, "missing", "subdir", "loco-server.conf")
 	if err := os.Chmod(dir, 0o555); err != nil {
@@ -162,5 +164,23 @@ func TestLoadOrCreateMissingDirWarns(t *testing.T) {
 	}
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Fatalf("expected no file at %s", path)
+	}
+}
+
+func TestDefaultPathUsesDataDir(t *testing.T) {
+	t.Setenv("BIGFRED_DATA_DIR", "")
+	t.Setenv("DATA_DIR", "")
+	if got := DefaultPath(); got != "/data/etc/loco-server.conf" {
+		t.Fatalf("DefaultPath() = %q", got)
+	}
+	if got := DefaultTemplatePath(); got != "/data/etc/loco-server.conf.defaults" {
+		t.Fatalf("DefaultTemplatePath() = %q", got)
+	}
+
+	dir := t.TempDir()
+	t.Setenv("BIGFRED_DATA_DIR", dir)
+	want := filepath.Join(dir, "etc", "loco-server.conf")
+	if got := DefaultPath(); got != want {
+		t.Fatalf("DefaultPath() = %q, want %q", got, want)
 	}
 }

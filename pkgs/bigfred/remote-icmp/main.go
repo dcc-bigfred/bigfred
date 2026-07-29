@@ -49,7 +49,7 @@ func main() {
 			return run(c.Context(), log, f, c.Flags().Changed)
 		},
 	}
-	cmd.Flags().StringVar(&f.ConfigPath, "config", config.DefaultPath, "shared loco-server.conf path")
+	cmd.Flags().StringVar(&f.ConfigPath, "config", config.DefaultPath(), "shared loco-server.conf path")
 	cmd.Flags().StringVar(&f.RedisAddr, "redis-addr", "", "redis host:port (overrides conf)")
 	cmd.Flags().StringVar(&f.OTLPEndpoint, "otel-endpoint", "", "OTLP/gRPC endpoint (overrides conf; empty uses Alloy default when telemetry enabled)")
 	cmd.Flags().DurationVar(&f.PingInterval, "ping-interval", 0, "ICMP probe interval (0 = conf/default 30s)")

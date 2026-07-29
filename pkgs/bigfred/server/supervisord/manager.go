@@ -24,11 +24,11 @@ type Config struct {
 	SupervisordBin   string
 	SupervisorctlBin string
 
-	ConfigDir  string
-	ConfigPath string
-	SocketPath string
-	PIDFile    string
-	LogDir     string
+	ConfigDir    string
+	ConfigPath   string
+	InetHTTPAddr string
+	PIDFile      string
+	LogDir       string
 
 	InitialState DesiredState
 
@@ -74,7 +74,7 @@ func NewManager(cfg Config) (*Manager, error) {
 		}
 		cfg.ConfigDir = paths.ConfigDir
 		cfg.ConfigPath = paths.ConfigPath
-		cfg.SocketPath = paths.SocketPath
+		cfg.InetHTTPAddr = paths.InetHTTPAddr
 		cfg.PIDFile = paths.PIDFile
 		cfg.LogDir = paths.LogDir
 	} else if cfg.ConfigDir == "" {
@@ -124,8 +124,8 @@ func (s *Manager) Start(ctx context.Context) error {
 	if err := EnsureDir(s.cfg.LogDir); err != nil {
 		return err
 	}
-	if err := EnsureDir(filepath.Dir(s.cfg.SocketPath)); err != nil {
-		return fmt.Errorf("mkdir socket dir: %w", err)
+	if err := EnsureDir(filepath.Dir(s.cfg.PIDFile)); err != nil {
+		return fmt.Errorf("mkdir pidfile dir: %w", err)
 	}
 	if s.cfg.Telemetry.Enable {
 		if err := PrepareAlloyTelemetry(s.cfg.Telemetry); err != nil {
@@ -437,12 +437,12 @@ func (s *Manager) allStatus(ctx context.Context) ([]ProgramState, error) {
 
 func (s *Manager) renderLocked() ([]byte, string, string, error) {
 	content, err := Render(RenderInput{
-		RunAsUser:  s.runAsUser,
-		ConfigDir:  s.cfg.ConfigDir,
-		SocketPath: s.cfg.SocketPath,
-		PIDFile:    s.cfg.PIDFile,
-		LogDir:     s.cfg.LogDir,
-		Groups:     s.state.Groups,
+		RunAsUser:    s.runAsUser,
+		ConfigDir:    s.cfg.ConfigDir,
+		InetHTTPAddr: s.cfg.InetHTTPAddr,
+		PIDFile:      s.cfg.PIDFile,
+		LogDir:       s.cfg.LogDir,
+		Groups:       s.state.Groups,
 	})
 	if err != nil {
 		return nil, "", "", err

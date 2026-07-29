@@ -1,6 +1,7 @@
 package supervisord_test
 
 import (
+	"os"
 	"strings"
 	"testing"
 
@@ -42,18 +43,19 @@ func TestDesiredStateValidate(t *testing.T) {
 
 func TestRenderSingleProgram(t *testing.T) {
 	out, err := supervisord.Render(supervisord.RenderInput{
-		RunAsUser:  "alice",
-		ConfigDir:  "/run/loco/supervisord",
-		SocketPath: "/run/loco/supervisord/supervisor.sock",
-		PIDFile:    "/run/loco/supervisord/supervisord.pid",
-		LogDir:     "/cache/loco/supervisord",
+		RunAsUser:    "alice",
+		ConfigDir:    "/run/loco/supervisord",
+		InetHTTPAddr: "127.0.0.1:9001",
+		PIDFile:      "/run/loco/supervisord/supervisord.pid",
+		LogDir:       "/cache/loco/supervisord",
+		Shell:        "/bin/bash",
 		Groups: []supervisord.GroupSpec{{
 			Name: "loco",
 			Programs: []supervisord.ProgramSpec{{
-				Name:        "scripts-executor",
-				Command:     "/usr/bin/loco scripts-executor --executor-socket /run/loco/exec.sock",
-				Autostart:   true,
-				Autorestart: true,
+				Name:         "scripts-executor",
+				Command:      "/usr/bin/loco scripts-executor --executor-socket /run/loco/exec.sock",
+				Autostart:    true,
+				Autorestart:  true,
 				StopWaitSecs: 5,
 			}},
 		}},
@@ -63,7 +65,9 @@ func TestRenderSingleProgram(t *testing.T) {
 	}
 	text := string(out)
 	checks := []string{
-		"file=/run/loco/supervisord/supervisor.sock",
+		"[inet_http_server]",
+		"port=127.0.0.1:9001",
+		"serverurl=http://127.0.0.1:9001",
 		"user=alice",
 		"[group:loco]",
 		"programs=scripts-executor",
@@ -79,15 +83,19 @@ func TestRenderSingleProgram(t *testing.T) {
 			t.Errorf("render missing %q\n%s", want, text)
 		}
 	}
+	if strings.Contains(text, "[unix_http_server]") || strings.Contains(text, "unix://") {
+		t.Fatalf("render still uses unix socket:\n%s", text)
+	}
 }
 
 func TestRenderShellQuoteEscaping(t *testing.T) {
 	out, err := supervisord.Render(supervisord.RenderInput{
-		RunAsUser:  "bob",
-		ConfigDir:  "/cfg",
-		SocketPath: "/cfg/supervisor.sock",
-		PIDFile:    "/cfg/supervisord.pid",
-		LogDir:     "/log",
+		RunAsUser:    "bob",
+		ConfigDir:    "/cfg",
+		InetHTTPAddr: "127.0.0.1:9001",
+		PIDFile:      "/cfg/supervisord.pid",
+		LogDir:       "/log",
+		Shell:        "/bin/bash",
 		Groups: []supervisord.GroupSpec{{
 			Name: "loco",
 			Programs: []supervisord.ProgramSpec{{
@@ -104,9 +112,41 @@ func TestRenderShellQuoteEscaping(t *testing.T) {
 	}
 }
 
+func TestRenderUsesAndroidShell(t *testing.T) {
+	out, err := supervisord.Render(supervisord.RenderInput{
+		RunAsUser: "u", ConfigDir: "/c", InetHTTPAddr: "127.0.0.1:9001",
+		PIDFile: "/c/s.pid", LogDir: "/l", Shell: "/system/bin/sh",
+		Groups: []supervisord.GroupSpec{{
+			Name: "loco",
+			Programs: []supervisord.ProgramSpec{{
+				Name: "a", Command: "echo hi", Autostart: true, Autorestart: true,
+			}},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	if !strings.Contains(string(out), "command=/system/bin/sh -c 'echo hi'") {
+		t.Fatalf("expected Android shell wrapper:\n%s", out)
+	}
+}
+
+func TestDefaultShellResolvesExisting(t *testing.T) {
+	sh := supervisord.DefaultShell()
+	if sh == "" {
+		t.Fatal("DefaultShell returned empty")
+	}
+	if _, err := os.Stat(sh); err != nil {
+		// Last-resort fallback may not exist in minimal containers; allow /bin/sh.
+		if sh != "/bin/sh" {
+			t.Fatalf("DefaultShell %q is not usable: %v", sh, err)
+		}
+	}
+}
+
 func TestGlobalFingerprintIgnoresPrograms(t *testing.T) {
 	base, err := supervisord.Render(supervisord.RenderInput{
-		RunAsUser: "u", ConfigDir: "/c", SocketPath: "/c/s.sock",
+		RunAsUser: "u", ConfigDir: "/c", InetHTTPAddr: "127.0.0.1:9001",
 		PIDFile: "/c/s.pid", LogDir: "/l",
 		Groups: []supervisord.GroupSpec{{
 			Name: "loco",
@@ -119,7 +159,7 @@ func TestGlobalFingerprintIgnoresPrograms(t *testing.T) {
 		t.Fatal(err)
 	}
 	changed, err := supervisord.Render(supervisord.RenderInput{
-		RunAsUser: "u", ConfigDir: "/c", SocketPath: "/c/s.sock",
+		RunAsUser: "u", ConfigDir: "/c", InetHTTPAddr: "127.0.0.1:9001",
 		PIDFile: "/c/s.pid", LogDir: "/l",
 		Groups: []supervisord.GroupSpec{{
 			Name: "loco",
@@ -136,13 +176,13 @@ func TestGlobalFingerprintIgnoresPrograms(t *testing.T) {
 	}
 
 	globalChanged, err := supervisord.Render(supervisord.RenderInput{
-		RunAsUser: "u", ConfigDir: "/c", SocketPath: "/c/other.sock",
+		RunAsUser: "u", ConfigDir: "/c", InetHTTPAddr: "127.0.0.1:9002",
 		PIDFile: "/c/s.pid", LogDir: "/l",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if supervisord.GlobalFingerprint(base) == supervisord.GlobalFingerprint(globalChanged) {
-		t.Fatal("socket path change should alter global fingerprint")
+		t.Fatal("HTTP addr change should alter global fingerprint")
 	}
 }

@@ -64,7 +64,7 @@ func (c *Ctl) StopProgram(ctx context.Context, name string) error {
 	return err
 }
 
-// Ping checks whether supervisord responds on the unix socket.
+// Ping checks whether supervisord responds via supervisorctl (HTTP ctl).
 func (c *Ctl) Ping(ctx context.Context) error {
 	_, err := c.run(ctx, "pid")
 	return err

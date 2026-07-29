@@ -6,11 +6,12 @@ import (
 )
 
 func TestDefaultInfraProcesses_includesAlloyWhenEnabled(t *testing.T) {
+	t.Setenv("BIGFRED_DATA_DIR", "")
+	t.Setenv("DATA_DIR", "")
 	st := DefaultInfraProcesses(InfraConfig{
 		Redis: RedisConfig{Disable: true},
 		Telemetry: TelemetryConfig{
-			Enable:     true,
-			ConfigPath: "/data/etc/alloy.conf",
+			Enable: true,
 		},
 	})
 	if len(st.Groups) != 1 || len(st.Groups[0].Programs) != 1 {
@@ -20,7 +21,8 @@ func TestDefaultInfraProcesses_includesAlloyWhenEnabled(t *testing.T) {
 	if prog.Name != "alloy" {
 		t.Fatalf("name = %q", prog.Name)
 	}
-	if !strings.Contains(prog.Command, "alloy run --storage.path=/data/alloy /data/etc/alloy.conf") {
+	wantFrag := "alloy run --storage.path=/data/alloy /data/etc/alloy.conf"
+	if !strings.Contains(prog.Command, wantFrag) {
 		t.Fatalf("command = %q", prog.Command)
 	}
 }

@@ -8,23 +8,27 @@ import (
 )
 
 func TestAlloyProgramSpecUsesConfigPath(t *testing.T) {
+	cfgPath := "/custom/etc/alloy.conf"
+	storage := "/custom/alloy"
 	spec := alloyProgramSpec(TelemetryConfig{
 		Enable:      true,
-		ConfigPath:  "/data/etc/alloy.conf",
-		StoragePath: "/data/alloy",
+		ConfigPath:  cfgPath,
+		StoragePath: storage,
 	})
-	want := "alloy run --storage.path=/data/alloy /data/etc/alloy.conf"
+	want := "alloy run --storage.path=" + storage + " " + cfgPath
 	if spec.Command != want {
 		t.Fatalf("command = %q, want %q", spec.Command, want)
 	}
 }
 
 func TestAlloyProgramSpecDefaultConfigPath(t *testing.T) {
+	t.Setenv("BIGFRED_DATA_DIR", "")
+	t.Setenv("DATA_DIR", "")
 	spec := alloyProgramSpec(TelemetryConfig{
 		Enable:      true,
 		StoragePath: "/data/alloy",
 	})
-	want := "alloy run --storage.path=/data/alloy " + DefaultTelemetryConfigPath
+	want := "alloy run --storage.path=/data/alloy /data/etc/alloy.conf"
 	if spec.Command != want {
 		t.Fatalf("command = %q, want %q", spec.Command, want)
 	}

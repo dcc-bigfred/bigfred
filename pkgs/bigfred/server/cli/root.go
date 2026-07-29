@@ -135,7 +135,7 @@ real-time throttle commands.`,
 		"disable RDB snapshots for the managed redis-server (ephemeral mode)")
 	cmd.Flags().BoolVar(&f.EnableTelemetry, "enable-telemetry", false,
 		"start Grafana Alloy via supervisord and enable OTLP metric export for loco-server and dcc-bus")
-	cmd.Flags().StringVar(&f.TelemetryConfig, "telemetry-config", service.DefaultTelemetryConfigPath,
+	cmd.Flags().StringVar(&f.TelemetryConfig, "telemetry-config", service.DefaultTelemetryConfigPath(),
 		"path to the Alloy config file (used with --enable-telemetry)")
 	cmd.Flags().BoolVar(&f.MDNS, "mdns", true,
 		"advertise the HTTP UI via mDNS (bigfred.local by default)")
@@ -262,7 +262,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		supSvc, err = service.NewSupervisordService(service.SupervisordConfig{
 			ConfigDir:    supPaths.ConfigDir,
 			ConfigPath:   supPaths.ConfigPath,
-			SocketPath:   supPaths.SocketPath,
+			InetHTTPAddr: supPaths.InetHTTPAddr,
 			PIDFile:      supPaths.PIDFile,
 			LogDir:       supPaths.LogDir,
 			InitialState: initial,

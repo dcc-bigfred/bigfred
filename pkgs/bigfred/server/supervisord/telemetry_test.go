@@ -5,26 +5,33 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/keskad/loco/pkgs/bigfred/server/datadir"
 )
 
 func TestAlloyProgramSpecUsesConfigPath(t *testing.T) {
+	cfgPath := datadir.Path("etc", "alloy.conf")
+	storage := datadir.Path("alloy")
 	spec := alloyProgramSpec(TelemetryConfig{
 		Enable:      true,
-		ConfigPath:  "/data/etc/alloy.conf",
-		StoragePath: "/data/alloy",
+		ConfigPath:  cfgPath,
+		StoragePath: storage,
 	})
-	want := "alloy run --storage.path=/data/alloy /data/etc/alloy.conf"
+	want := "alloy run --storage.path=" + storage + " " + cfgPath
 	if spec.Command != want {
 		t.Fatalf("command = %q, want %q", spec.Command, want)
 	}
 }
 
 func TestAlloyProgramSpecDefaultConfigPath(t *testing.T) {
+	t.Setenv("BIGFRED_DATA_DIR", "")
+	t.Setenv("DATA_DIR", "")
+	storage := datadir.Path("alloy")
 	spec := alloyProgramSpec(TelemetryConfig{
 		Enable:      true,
-		StoragePath: "/data/alloy",
+		StoragePath: storage,
 	})
-	want := "alloy run --storage.path=/data/alloy " + DefaultTelemetryConfigPath
+	want := "alloy run --storage.path=" + storage + " " + DefaultTelemetryConfigPath()
 	if spec.Command != want {
 		t.Fatalf("command = %q, want %q", spec.Command, want)
 	}

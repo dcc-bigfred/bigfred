@@ -5,13 +5,17 @@ import (
 	"fmt"
 	"path/filepath"
 	"text/template"
+
+	"github.com/keskad/loco/pkgs/bigfred/server/datadir"
 )
 
+// DefaultTelemetryConfigPath is the Alloy config file on hub images.
+func DefaultTelemetryConfigPath() string { return datadir.Path("etc", "alloy.conf") }
+
+// DefaultAlloyStoragePath is Alloy's on-disk state directory.
+func DefaultAlloyStoragePath() string { return datadir.Path("alloy") }
+
 const (
-	// DefaultTelemetryConfigPath is the Alloy config file on hub images.
-	DefaultTelemetryConfigPath = "/data/etc/alloy.conf"
-	// DefaultAlloyStoragePath is Alloy's on-disk state directory.
-	DefaultAlloyStoragePath = "/data/alloy"
 	// DefaultOTLPEndpoint is the loopback gRPC receiver dcc-bus exports to.
 	DefaultOTLPEndpoint = "127.0.0.1:4317"
 )
@@ -105,5 +109,5 @@ func resolveTelemetryConfigPath(cfg TelemetryConfig) string {
 	if cfg.ConfigPath != "" {
 		return cfg.ConfigPath
 	}
-	return DefaultTelemetryConfigPath
+	return DefaultTelemetryConfigPath()
 }

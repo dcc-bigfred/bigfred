@@ -8,7 +8,7 @@ import (
 )
 
 func mergeConfigFile(cmd *cobra.Command, f *Flags, log *logrus.Logger) error {
-	cfg, err := config.LoadOrCreate(config.DefaultPath, log)
+	cfg, err := config.LoadOrCreate(config.DefaultPath(), log)
 	if err != nil {
 		return err
 	}

@@ -18,16 +18,34 @@ var templateFS embed.FS
 
 // RenderInput carries everything needed to render supervisord.conf.
 type RenderInput struct {
-	RunAsUser  string
-	ConfigDir  string
-	SocketPath string
-	PIDFile    string
-	LogDir     string
-	Groups     []GroupSpec
+	RunAsUser    string
+	ConfigDir    string
+	InetHTTPAddr string
+	PIDFile      string
+	LogDir       string
+	// Shell is the program wrapper binary (e.g. /bin/bash or /system/bin/sh).
+	// Empty → DefaultShell().
+	Shell  string
+	Groups []GroupSpec
+}
+
+// DefaultShell returns a usable shell for wrapping program commands.
+// Prefers bash on typical Linux hubs; falls back to Android's /system/bin/sh
+// when /bin is absent.
+func DefaultShell() string {
+	for _, p := range []string{"/bin/bash", "/bin/sh", "/system/bin/sh"} {
+		if st, err := os.Stat(p); err == nil && !st.IsDir() {
+			return p
+		}
+	}
+	return "/bin/sh"
 }
 
 // Render executes the embedded template for the given input.
 func Render(in RenderInput) ([]byte, error) {
+	if in.Shell == "" {
+		in.Shell = DefaultShell()
+	}
 	tmpl, err := template.New("supervisord.conf.tmpl").Funcs(template.FuncMap{
 		"joinProgramNames": joinProgramNames,
 		"shellQuote":       shellQuote,
@@ -114,7 +132,7 @@ func joinProgramNames(programs []ProgramSpec) string {
 	return strings.Join(names, ",")
 }
 
-// shellQuote wraps s for safe use inside /bin/bash -c '…'.
+// shellQuote wraps s for safe use inside <shell> -c '…'.
 func shellQuote(s string) string {
 	if s == "" {
 		return "''"

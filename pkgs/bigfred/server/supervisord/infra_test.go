@@ -3,14 +3,17 @@ package supervisord
 import (
 	"strings"
 	"testing"
+
+	"github.com/keskad/loco/pkgs/bigfred/server/datadir"
 )
 
 func TestDefaultInfraProcesses_includesAlloyWhenEnabled(t *testing.T) {
+	cfgPath := datadir.Path("etc", "alloy.conf")
 	st := DefaultInfraProcesses(InfraConfig{
 		Redis: RedisConfig{Disable: true},
 		Telemetry: TelemetryConfig{
 			Enable:     true,
-			ConfigPath: "/data/etc/alloy.conf",
+			ConfigPath: cfgPath,
 		},
 	})
 	if len(st.Groups) != 1 || len(st.Groups[0].Programs) != 1 {
@@ -20,7 +23,8 @@ func TestDefaultInfraProcesses_includesAlloyWhenEnabled(t *testing.T) {
 	if prog.Name != "alloy" {
 		t.Fatalf("name = %q", prog.Name)
 	}
-	if !strings.Contains(prog.Command, "alloy run --storage.path=/data/alloy /data/etc/alloy.conf") {
+	wantFrag := "alloy run --storage.path=" + datadir.Path("alloy") + " " + cfgPath
+	if !strings.Contains(prog.Command, wantFrag) {
 		t.Fatalf("command = %q", prog.Command)
 	}
 }

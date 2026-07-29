@@ -1,5 +1,5 @@
 // Package config loads dotenv-style settings for loco-server from
-// /data/etc/loco-server.conf on hub images. CLI flags override file values.
+// the data directory (etc/loco-server.conf) on hub images. CLI flags override file values.
 package config
 
 import (
@@ -13,15 +13,16 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/keskad/loco/pkgs/bigfred/server/datadir"
 	"github.com/keskad/loco/pkgs/bigfred/server/service"
 )
 
 // DefaultPath is the persistent configuration file on hub images.
-const DefaultPath = "/data/etc/loco-server.conf"
+func DefaultPath() string { return datadir.Path("etc", "loco-server.conf") }
 
 // DefaultTemplatePath is rewritten on every loco-server start with built-in
 // defaults and documents every supported KEY. It is not read at runtime.
-const DefaultTemplatePath = "/data/etc/loco-server.conf.defaults"
+func DefaultTemplatePath() string { return datadir.Path("etc", "loco-server.conf.defaults") }
 
 // File holds settings from a KEY=value configuration file.
 type File struct {
@@ -58,7 +59,7 @@ func DefaultFile() File {
 		RedisBin:        "valkey-server",
 		RedisBindAddr:   "127.0.0.1",
 		RedisPort:       &port,
-		TelemetryConfig: service.DefaultTelemetryConfigPath,
+		TelemetryConfig: service.DefaultTelemetryConfigPath(),
 	}
 }
 
@@ -70,8 +71,9 @@ func LoadOrCreate(path string, log *logrus.Logger) (*File, error) {
 		log = logrus.New()
 	}
 	defaults := DefaultFile()
-	if writeErr := WriteDefaultsReference(DefaultTemplatePath, defaults); writeErr != nil {
-		log.WithError(writeErr).Warnf("cannot write %s", DefaultTemplatePath)
+	templatePath := DefaultTemplatePath()
+	if writeErr := WriteDefaultsReference(templatePath, defaults); writeErr != nil {
+		log.WithError(writeErr).Warnf("cannot write %s", templatePath)
 	}
 
 	data, err := os.ReadFile(path)
@@ -303,7 +305,7 @@ TELEMETRY_CONFIG=%s
 REMOTE_ICMP_INTERVAL_SECS=30
 # How often bigfred-remote-icmp refreshes the handset IP list from Redis (seconds)
 REMOTE_ICMP_TARGETS_INTERVAL_SECS=10
-`, DefaultPath, d.HTTP, d.DB, cors, d.LogLevel, d.RedisBin, d.RedisBindAddr, redisPort, d.TelemetryConfig)
+`, DefaultPath(), d.HTTP, d.DB, cors, d.LogLevel, d.RedisBin, d.RedisBindAddr, redisPort, d.TelemetryConfig)
 }
 
 func splitList(s string) []string {

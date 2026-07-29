@@ -24,11 +24,14 @@ type RedisConfig = supervisord.RedisConfig
 type InfraConfig = supervisord.InfraConfig
 
 const (
-	// DefaultTelemetryConfigPath is the Alloy config file on hub images.
-	DefaultTelemetryConfigPath = supervisord.DefaultTelemetryConfigPath
 	// DefaultOTLPEndpoint is the loopback gRPC receiver dcc-bus exports to.
 	DefaultOTLPEndpoint = supervisord.DefaultOTLPEndpoint
 )
+
+// DefaultTelemetryConfigPath is the Alloy config file on hub images.
+func DefaultTelemetryConfigPath() string {
+	return supervisord.DefaultTelemetryConfigPath()
+}
 
 // DefaultInfraProcesses returns the "infra" supervisord group with Redis
 // and, when enabled, Grafana Alloy.
@@ -54,11 +57,11 @@ type SupervisordConfig struct {
 	SupervisordBin   string
 	SupervisorctlBin string
 
-	ConfigDir  string
-	ConfigPath string
-	SocketPath string
-	PIDFile    string
-	LogDir     string
+	ConfigDir    string
+	ConfigPath   string
+	InetHTTPAddr string
+	PIDFile      string
+	LogDir       string
 
 	InitialState supervisord.DesiredState
 
@@ -107,7 +110,7 @@ func NewSupervisordService(cfg SupervisordConfig) (Supervisor, error) {
 		}
 		cfg.ConfigDir = paths.ConfigDir
 		cfg.ConfigPath = paths.ConfigPath
-		cfg.SocketPath = paths.SocketPath
+		cfg.InetHTTPAddr = paths.InetHTTPAddr
 		cfg.PIDFile = paths.PIDFile
 		cfg.LogDir = paths.LogDir
 	} else if cfg.ConfigDir == "" {
@@ -119,7 +122,7 @@ func NewSupervisordService(cfg SupervisordConfig) (Supervisor, error) {
 		SupervisorctlBin: cfg.SupervisorctlBin,
 		ConfigDir:        cfg.ConfigDir,
 		ConfigPath:       cfg.ConfigPath,
-		SocketPath:       cfg.SocketPath,
+		InetHTTPAddr:     cfg.InetHTTPAddr,
 		PIDFile:          cfg.PIDFile,
 		LogDir:           cfg.LogDir,
 		InitialState:     cfg.InitialState,

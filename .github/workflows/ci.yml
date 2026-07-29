@@ -48,7 +48,7 @@ jobs:
         run: npm test
 
   build:
-    name: Build (linux/amd64, linux/arm64, linux/armv7)
+    name: Build (linux/amd64, linux/arm64, linux/armv7, android/arm64)
     needs: test
     runs-on: ubuntu-latest
     steps:
@@ -60,6 +60,20 @@ jobs:
         with:
           go-version: "1.25.0"
           cache: true
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install rsvg-convert (function icon rasterization)
+        run: sudo apt-get update && sudo apt-get install -y librsvg2-bin
+
+      - name: Build embedded SPA (required for -tags prod)
+        working-directory: web
+        run: npm ci --no-audit --no-fund && npm run build
 
       - name: Build binaries
         run: |
@@ -82,6 +96,16 @@ jobs:
           CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -o dist/bigfred-remote-icmp-linux-armv7 ./pkgs/bigfred/remote-icmp
           CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -o dist/loco-linux-armv7 ./pkgs/loco
           GOOS=linux GOARCH=arm GOARM=7 go build -o dist/rb-linux-armv7 ./pkgs/rb/main.go
+
+          # Android phone (BigFred on phone) — android/arm64 with embedded SPA
+          CGO_ENABLED=0 GOOS=android GOARCH=arm64 go build -tags prod -ldflags="-s -w" \
+            -o dist/loco-server-android-arm64 ./pkgs/bigfred/server
+
+      - name: Report binary sizes
+        run: |
+          set -euo pipefail
+          ls -lh dist/
+          echo "loco-server-android-arm64: $(wc -c < dist/loco-server-android-arm64) bytes"
 
       - name: Upload binaries
         uses: actions/upload-artifact@v4

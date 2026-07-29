@@ -41,6 +41,14 @@ remote-icmp-build:
 build-prod: web-build
 	CGO_ENABLED=0 go build -tags prod -ldflags="-s -w" -o bin/loco-server ./pkgs/bigfred/server
 
+# Production loco-server for Android arm64 (SPA embedded). Published to GHCR;
+# bigfred-android-client pulls ghcr.io/dcc-bigfred/loco-server-android-arm64:main.
+.PHONY: android
+android: web-build
+	CGO_ENABLED=0 GOOS=android GOARCH=arm64 go build -tags prod -ldflags="-s -w" \
+		-o bin/loco-server-android-arm64 ./pkgs/bigfred/server
+	@ls -lh bin/loco-server-android-arm64
+
 # `run-prod` builds the embedded production binary and runs it with
 # production defaults: info-level logging, no debug. Override the bind
 # address with HTTP_ADDR, e.g. `make run-prod HTTP_ADDR=0.0.0.0:9090`. Set

@@ -41,3 +41,15 @@ func TestIPv4PrefixNone(t *testing.T) {
 		t.Fatal("expected error")
 	}
 }
+
+func TestValidateIPv4Prefix(t *testing.T) {
+	if err := ValidateIPv4Prefix("192.168.0"); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateIPv4Prefix("10.0"); err == nil {
+		t.Fatal("expected error for short prefix")
+	}
+	if err := ValidateIPv4Prefix("192.168.256"); err == nil {
+		t.Fatal("expected error for bad octet")
+	}
+}

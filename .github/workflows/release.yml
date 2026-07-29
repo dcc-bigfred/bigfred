@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  packages: write
 
 jobs:
   release:
@@ -90,3 +91,16 @@ jobs:
             exit 1
           fi
           gh release upload "$TAG" "${FILES[@]}" --clobber
+
+      - name: Set up ORAS
+        uses: oras-project/setup-oras@v1
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Retag loco-server OCI artifact from main
+        run: ./scripts/retag-oci-loco-android.sh "${GITHUB_REF_NAME}"

@@ -5,6 +5,8 @@ package netutil
 import (
 	"fmt"
 	"net"
+	"strconv"
+	"strings"
 )
 
 // listAddrs is overridable in tests.
@@ -20,6 +22,21 @@ func LocalIPv4Prefix() (string, error) {
 		return "", fmt.Errorf("netutil: list addresses: %w", err)
 	}
 	return ipv4PrefixFromAddrs(addrs)
+}
+
+// ValidateIPv4Prefix checks a LAN scan prefix like "192.168.0".
+func ValidateIPv4Prefix(prefix string) error {
+	parts := strings.Split(prefix, ".")
+	if len(parts) != 3 {
+		return fmt.Errorf("netutil: lan-prefix %q: want a.b.c", prefix)
+	}
+	for _, p := range parts {
+		n, err := strconv.Atoi(p)
+		if err != nil || n < 0 || n > 255 {
+			return fmt.Errorf("netutil: lan-prefix %q: invalid octet %q", prefix, p)
+		}
+	}
+	return nil
 }
 
 func ipv4PrefixFromAddrs(addrs []net.Addr) (string, error) {

@@ -67,6 +67,34 @@ func TestBeginCommandStationScanSingleFlight(t *testing.T) {
 	}
 }
 
+func TestStreamScanCommandStationsPassesLanPrefix(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell script helper")
+	}
+	dir := t.TempDir()
+	script := filepath.Join(dir, "fake-loco-server")
+	outFile := filepath.Join(dir, "args.txt")
+	body := "#!/bin/sh\n" +
+		"printf '%s\\n' \"$*\" > '" + outFile + "'\n" +
+		"exit 0\n"
+	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(EnvLanPrefix, "192.168.1")
+	_, err := StreamScanCommandStations(context.Background(), script, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(outFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "dcc-bus scan --lan-prefix 192.168.1\n"
+	if string(got) != want {
+		t.Fatalf("args=%q want %q", got, want)
+	}
+}
+
 func TestStreamScanCommandStationsCancel(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("shell script helper")

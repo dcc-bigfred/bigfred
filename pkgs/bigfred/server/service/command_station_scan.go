@@ -9,11 +9,16 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/keskad/loco/pkgs/loco/commandstation"
 )
+
+// EnvLanPrefix is set by the Android host process so StreamScanCommandStations
+// can pass --lan-prefix (net.InterfaceAddrs / netlink is denied for apps).
+const EnvLanPrefix = "BIGFRED_LAN_PREFIX"
 
 const commandStationScanTimeout = 65 * time.Second
 
@@ -62,7 +67,11 @@ func StreamScanCommandStations(
 	ctx, cancel := context.WithTimeout(ctx, commandStationScanTimeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, executable, "dcc-bus", "scan")
+	cmdArgs := []string{"dcc-bus", "scan"}
+	if prefix := strings.TrimSpace(os.Getenv(EnvLanPrefix)); prefix != "" {
+		cmdArgs = append(cmdArgs, "--lan-prefix", prefix)
+	}
+	cmd := exec.CommandContext(ctx, executable, cmdArgs...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return "", fmt.Errorf("command station scan: stdout pipe: %w", err)

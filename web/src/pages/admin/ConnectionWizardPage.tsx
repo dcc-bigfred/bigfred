@@ -613,7 +613,7 @@ export default function ConnectionWizardPage() {
             <Button
               variant="contained"
               onClick={goNext}
-              disabled={!canNext() || submitting || scanning}
+              disabled={!canNext() || submitting}
             >
               {stepIndex >= steps.length - 1
                 ? t("commandStation:admin.wizard.finish")

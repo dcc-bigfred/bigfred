@@ -59,6 +59,12 @@ func runScan(parent context.Context, log *logrus.Logger, lanPrefix string) error
 
 	prefix, err := resolveLanPrefix(lanPrefix)
 	if err != nil {
+		// An explicit --lan-prefix that fails validation is an operator error —
+		// fail loudly instead of silently running a LAN-less scan that looks
+		// like "no stations found". Auto-detect failures stay non-fatal.
+		if strings.TrimSpace(lanPrefix) != "" {
+			return fmt.Errorf("dcc-bus scan: invalid --lan-prefix: %w", err)
+		}
 		log.WithError(err).Warn("dcc-bus scan: no local IPv4 prefix; skipping LAN discovery")
 		prefix = ""
 	} else {

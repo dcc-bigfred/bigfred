@@ -97,7 +97,11 @@ jobs:
           CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -o dist/loco-linux-armv7 ./pkgs/loco
           GOOS=linux GOARCH=arm GOARM=7 go build -o dist/rb-linux-armv7 ./pkgs/rb/main.go
 
+<<<<<<< HEAD
           # Android phone (BigFred on phone) — android/arm64 with embedded SPA
+=======
+          # Android arm64 (SPA embedded) — published to GHCR for bigfred-android-client
+>>>>>>> origin/master
           CGO_ENABLED=0 GOOS=android GOARCH=arm64 go build -tags prod -ldflags="-s -w" \
             -o dist/loco-server-android-arm64 ./pkgs/bigfred/server
 
@@ -114,3 +118,34 @@ jobs:
           path: dist/
           if-no-files-found: error
           retention-days: 90
+
+  publish-oci:
+    name: Publish loco-server to GHCR (ORAS)
+    needs: build
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: binaries
+          path: dist/
+
+      - name: Set up ORAS
+        uses: oras-project/setup-oras@v1
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish loco-server-android-arm64
+        run: ./scripts/publish-oci-loco-android.sh dist/loco-server-android-arm64

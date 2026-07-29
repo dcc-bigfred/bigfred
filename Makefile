@@ -41,8 +41,13 @@ remote-icmp-build:
 build-prod: web-build
 	CGO_ENABLED=0 go build -tags prod -ldflags="-s -w" -o bin/loco-server ./pkgs/bigfred/server
 
+<<<<<<< HEAD
 # Production loco-server for Android arm64 (SPA embedded). Consumed by
 # bigfred-android-client via ../bigfred/bin or GitHub release assets.
+=======
+# Production loco-server for Android arm64 (SPA embedded). Published to GHCR;
+# bigfred-android-client pulls ghcr.io/dcc-bigfred/loco-server-android-arm64:main.
+>>>>>>> origin/master
 .PHONY: android
 android: web-build
 	CGO_ENABLED=0 GOOS=android GOARCH=arm64 go build -tags prod -ldflags="-s -w" \

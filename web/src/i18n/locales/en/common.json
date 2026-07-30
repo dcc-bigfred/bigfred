@@ -66,6 +66,7 @@
       "profile": "Profile",
       "apiKeys": "API keys",
       "changePin": "Change password",
+      "version": "Version",
       "logout": "Log out"
     }
   },

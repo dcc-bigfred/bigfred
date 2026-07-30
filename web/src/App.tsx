@@ -25,6 +25,7 @@ import ThrottlePage from "./pages/ThrottlePage";
 import AuditLogPage from "./pages/AuditLogPage";
 import ProfilePage from "./pages/ProfilePage";
 import ChangePinPage from "./pages/ChangePinPage";
+import VersionPage from "./pages/VersionPage";
 import LayoutsAdminPage from "./pages/admin/LayoutsPage";
 import InterlockingsAdminPage from "./pages/admin/InterlockingsPage";
 import CommandStationsAdminPage from "./pages/admin/CommandStationsPage";
@@ -78,6 +79,7 @@ const router = createBrowserRouter(
           <Route path="/audit-log" element={<AuditLogPage />} />
           <Route path="/account/profile" element={<ProfilePage />} />
           <Route path="/account/change-pin" element={<ChangePinPage />} />
+          <Route path="/account/version" element={<VersionPage />} />
           <Route element={<AdminRoute />}>
             <Route path="/admin/users" element={<UsersAdminPage />} />
             <Route path="/admin/layouts" element={<LayoutsAdminPage />} />

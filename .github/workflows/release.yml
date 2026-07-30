@@ -65,6 +65,44 @@ jobs:
             --name binaries \
             --dir release-assets
 
+      - name: Inject release version into ELF binaries
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          COMMIT="${GITHUB_SHA::7}"
+          find release-assets -type f -print0 | while IFS= read -r -d '' f; do
+            # Only ELF binaries carry the section (skip .exe if present).
+            if file -b "$f" | grep -qi 'ELF'; then
+              ./scripts/inject-elf-version.sh "$f" "$TAG" "$COMMIT"
+            else
+              echo "skip (not ELF): $f"
+            fi
+          done
+
+      - name: Install minisign
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y minisign
+
+      - name: Sign release binaries with minisign
+        env:
+          MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
+          MINISIGN_PASSWORD: ${{ secrets.MINISIGN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "${MINISIGN_SECRET_KEY:-}" ]; then
+            echo "error: MINISIGN_SECRET_KEY secret is required (fail-closed)" >&2
+            exit 1
+          fi
+          mapfile -d '' FILES < <(find release-assets -type f ! -name '*.minisig' -print0)
+          if [ "${#FILES[@]}" -eq 0 ]; then
+            echo "No files to sign"
+            exit 1
+          fi
+          # Signs and verifies each artifact against committed minisign.pub.
+          ./scripts/minisign-sign.sh "${FILES[@]}"
+
       - name: Create release if missing
         env:
           GH_TOKEN: ${{ github.token }}
@@ -103,4 +141,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Retag loco-server OCI artifact from main
+        env:
+          MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
+          MINISIGN_PASSWORD: ${{ secrets.MINISIGN_PASSWORD }}
         run: ./scripts/retag-oci-loco-android.sh "${GITHUB_REF_NAME}"

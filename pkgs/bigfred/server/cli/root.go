@@ -35,6 +35,7 @@ import (
 	"github.com/keskad/loco/pkgs/bigfred/server/repo/migrations"
 	"github.com/keskad/loco/pkgs/bigfred/server/service"
 	"github.com/keskad/loco/pkgs/bigfred/server/supervisord"
+	"github.com/keskad/loco/pkgs/bigfred/server/version"
 	"github.com/keskad/loco/pkgs/bigfred/server/ws"
 )
 
@@ -160,6 +161,14 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	if err := configureLogLevel(log, f.LogLevel); err != nil {
 		return err
 	}
+
+	info := version.Get()
+	log.WithFields(logrus.Fields{
+		"version":     info.Version,
+		"tagCommit":   info.TagCommit,
+		"buildCommit": info.BuildCommit,
+		"buildTime":   info.BuildTime,
+	}).Info("loco-server starting")
 
 	if absPath, err := filepath.Abs(f.DBPath); err == nil {
 		f.DBPath = absPath

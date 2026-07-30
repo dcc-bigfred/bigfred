@@ -26,6 +26,7 @@ import {
   THROTTLE_PANEL_WIDTH_PX,
 } from "./throttleCockpitTheme";
 import RadioStopButton from "./RadioStopButton";
+import ThrottleRotateScreenButton from "./ThrottleRotateScreenButton";
 import FunctionButtonsPanel from "./FunctionButtonsPanel";
 import VerticalThrottle from "./VerticalThrottle";
 
@@ -206,6 +207,7 @@ function ThrottleCockpit({
           layoutId={layoutId}
           onRetryingChange={onRadioStopRetryingChange}
         />
+        <ThrottleRotateScreenButton />
         {headerExtra}
 
         <FormControl

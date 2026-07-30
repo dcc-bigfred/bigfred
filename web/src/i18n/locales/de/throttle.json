@@ -18,6 +18,9 @@
     "cancel": "Abbrechen",
     "toast": "Funkstopp — ausgelöst von {{login}}"
   },
+  "rotateScreen": {
+    "tooltip": "Bildschirm drehen"
+  },
   "radio": {
     "open": "Funk zum Stellwerk",
     "chat": "Mein Funk",

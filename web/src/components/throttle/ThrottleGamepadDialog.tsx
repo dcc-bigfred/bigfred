@@ -360,11 +360,9 @@ export default function ThrottleGamepadDialog({
   }, [activePad, draft.gamepadId, updateDraft]);
 
   const handleConfirm = () => {
+    // Disabling only flips the activity flag — keep idle calibration and
+    // button bindings so re-enabling does not force a full re-setup.
     const next: GamepadMapping = { ...draft, enabled: draft.enabled };
-    if (!next.enabled) {
-      next.idleAxisMin = undefined;
-      next.idleAxisMax = undefined;
-    }
     onMappingChange(next);
     onConfirm(next);
     onClose();

@@ -13,6 +13,8 @@ interface BigFredNativeAppBridge {
   getPreferredLocale?: () => string;
   /** Tell the shell to consume volume keys only while a throttle surface is active. */
   setThrottleHardwareKeysActive?: (active: boolean) => void;
+  /** Toggle locked portrait/landscape in the Android shell. */
+  rotateScreen?: () => void;
 }
 
 declare global {
@@ -81,5 +83,27 @@ export function setThrottleHardwareKeysActive(active: boolean): void {
     bridge.setThrottleHardwareKeysActive(active);
   } catch {
     // Ignore bridge failures — volume keys simply keep system behaviour.
+  }
+}
+
+/** True when the native shell exposes manual screen rotation. */
+export function canRotateScreen(): boolean {
+  if (!isBigFredNativeMobileApp()) return false;
+  return typeof window.BigFredNativeApp?.rotateScreen === "function";
+}
+
+/**
+ * Ask the Android shell to toggle portrait/landscape.
+ * No-op outside the native WebView / when the bridge method is missing.
+ */
+export function rotateScreen(): void {
+  const bridge = window.BigFredNativeApp;
+  if (typeof bridge?.rotateScreen !== "function") {
+    return;
+  }
+  try {
+    bridge.rotateScreen();
+  } catch {
+    // Ignore — orientation stays as-is.
   }
 }

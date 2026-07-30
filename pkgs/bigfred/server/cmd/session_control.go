@@ -16,13 +16,13 @@ import (
 )
 
 const (
-	TypeSessionSetCommandStation                 = "session.setCommandStation"
-	TypeSessionOpened                            = "session.opened"
-	TypeSessionCommandStationChanged             = "session.commandStationChanged"
-	TypeSessionCommandStationCatalogChanged      = "session.commandStationCatalogChanged"
-	TypeSessionAvailableCommandStationsChanged   = "session.availableCommandStationsChanged"
-	TypeSystemRadioStop                          = "system.radioStop"
-	TypeSystemEStopTarget                        = "system.estopTarget"
+	TypeSessionSetCommandStation               = "session.setCommandStation"
+	TypeSessionOpened                          = "session.opened"
+	TypeSessionCommandStationChanged           = "session.commandStationChanged"
+	TypeSessionCommandStationCatalogChanged    = "session.commandStationCatalogChanged"
+	TypeSessionAvailableCommandStationsChanged = "session.availableCommandStationsChanged"
+	TypeSystemRadioStop                        = "system.radioStop"
+	TypeSystemEStopTarget                      = "system.estopTarget"
 )
 
 type SessionSetCommandStationRequest struct {

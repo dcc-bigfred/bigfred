@@ -72,6 +72,11 @@ type CommandStationSessionPort interface {
 	BroadcastCommandStationCatalogChanged(ctx context.Context, commandStation domain.CommandStation)
 }
 
+// LayoutSessionPort pushes layout command-station membership to live sessions.
+type LayoutSessionPort interface {
+	BroadcastLayoutAvailableCommandStations(ctx context.Context, layoutID uint)
+}
+
 // InterlockingOccupancyAuthPort computes effective layout roles.
 type InterlockingOccupancyAuthPort interface {
 	Effective(ctx context.Context, user domain.User, layoutID uint) (domain.EffectiveRoles, error)

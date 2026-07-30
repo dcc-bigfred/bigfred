@@ -26,6 +26,7 @@ type Layout struct {
 	commandStations       *repo.CommandStations
 	layoutCommandStations *repo.LayoutCommandStations
 	sec                   security.LayoutSecurityContext
+	sessionCtl            LayoutSessionPort
 }
 
 // NewLayout constructs a service bound to a Layouts
@@ -44,6 +45,12 @@ func NewLayout(
 		commandStations:       commandStations,
 		layoutCommandStations: layoutCommandStations,
 	}
+}
+
+// SetSessionCtl wires the optional control-plane broadcaster used after
+// layout command-station membership changes.
+func (s *Layout) SetSessionCtl(sessionCtl LayoutSessionPort) {
+	s.sessionCtl = sessionCtl
 }
 
 // EnsureSystemLayout inserts the bootstrap system layout row if it
@@ -528,6 +535,9 @@ func (s *Layout) SetCommandStations(ctx context.Context, eff domain.EffectiveRol
 	}
 	if err := s.setCommandStations(ctx, layoutID, addedBy, commandStationIDs); err != nil {
 		return nil, err
+	}
+	if s.sessionCtl != nil {
+		s.sessionCtl.BroadcastLayoutAvailableCommandStations(ctx, layoutID)
 	}
 	return s.ListCommandStations(ctx, layoutID)
 }

@@ -293,7 +293,6 @@ function ThrottleCockpit({
         <IconButton
           size="small"
           onClick={onOpenSetup}
-          disabled={connectionLost || settingsRetrying}
           aria-label={
             connectionLost
               ? t("reconnecting")

@@ -184,3 +184,45 @@ func TestLayoutUpdateRadioChatEnabled(t *testing.T) {
 		t.Fatalf("expected radio chat enabled again")
 	}
 }
+
+type recordingLayoutSessionPort struct {
+	calls []uint
+}
+
+func (p *recordingLayoutSessionPort) BroadcastLayoutAvailableCommandStations(_ context.Context, layoutID uint) {
+	p.calls = append(p.calls, layoutID)
+}
+
+func TestSetCommandStationsBroadcastsAvailableList(t *testing.T) {
+	bundle, cleanup := freshRepo(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	svc := freshLayoutSvc(t, ctx, bundle)
+	adminEff := domain.NewEffectiveRoles(domain.RoleAdmin)
+	port := &recordingLayoutSessionPort{}
+	svc.SetSessionCtl(port)
+
+	cs1 := insertCommandStation(t, ctx, bundle.CommandStations, "Z21 A")
+	cs2 := insertCommandStation(t, ctx, bundle.CommandStations, "Z21 B")
+
+	layout, err := svc.Create(ctx, adminEff, cmd.LayoutCreateInput{
+		Name:              "Ops",
+		CreatedBy:         1,
+		CommandStationIDs: []uint{cs1.ID},
+		AdminPIN:          "1234",
+	})
+	if err != nil {
+		t.Fatalf("create layout: %v", err)
+	}
+	if len(port.calls) != 0 {
+		t.Fatalf("create should not broadcast via SetCommandStations hook, got %v", port.calls)
+	}
+
+	if _, err := svc.SetCommandStations(ctx, adminEff, layout.ID, 1, []uint{cs2.ID}); err != nil {
+		t.Fatalf("set command stations: %v", err)
+	}
+	if len(port.calls) != 1 || port.calls[0] != layout.ID {
+		t.Fatalf("expected one broadcast for layout %d, got %v", layout.ID, port.calls)
+	}
+}

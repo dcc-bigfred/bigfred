@@ -3,6 +3,29 @@ loco
 
 CLI utility to work with DCC equpied locomotives and wagons.
 
+Verifying release binaries (minisign)
+-------------------------------------
+
+Release assets (and tagged OCI layers) are signed with [minisign](https://jedisct1.github.io/minisign/)
+after the release version ELF section is injected. The public key lives in
+[`minisign.pub`](./minisign.pub).
+
+```bash
+# Arch / Manjaro
+pacman -S minisign
+
+# Debian / Ubuntu
+apt install minisign
+
+# Verify a downloaded release asset
+minisign -Vm loco-server-linux-amd64 -p minisign.pub
+```
+
+GitHub Actions signs with repository secrets `MINISIGN_SECRET_KEY` (contents of
+the secret key file) and optional `MINISIGN_PASSWORD` (only if the key is
+password-protected). When the secret is unset, release upload still works but
+assets are unsigned.
+
 BigFred SPA (`web/`)
 --------------------
 

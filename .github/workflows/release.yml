@@ -79,6 +79,29 @@ jobs:
             fi
           done
 
+      - name: Install minisign
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y minisign
+
+      - name: Sign release binaries with minisign
+        env:
+          MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
+          MINISIGN_PASSWORD: ${{ secrets.MINISIGN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "${MINISIGN_SECRET_KEY:-}" ]; then
+            echo "MINISIGN_SECRET_KEY secret not set — skipping signing"
+            exit 0
+          fi
+          mapfile -d '' FILES < <(find release-assets -type f ! -name '*.minisig' -print0)
+          if [ "${#FILES[@]}" -eq 0 ]; then
+            echo "No files to sign"
+            exit 1
+          fi
+          ./scripts/minisign-sign.sh "${FILES[@]}"
+
       - name: Create release if missing
         env:
           GH_TOKEN: ${{ github.token }}
@@ -117,4 +140,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Retag loco-server OCI artifact from main
+        env:
+          MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
+          MINISIGN_PASSWORD: ${{ secrets.MINISIGN_PASSWORD }}
         run: ./scripts/retag-oci-loco-android.sh "${GITHUB_REF_NAME}"

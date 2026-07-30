@@ -80,26 +80,31 @@ jobs:
           set -euo pipefail
           mkdir -p dist
 
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o dist/loco-server-linux-amd64 ./pkgs/bigfred/server
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o dist/bigfred-remote-icmp-linux-amd64 ./pkgs/bigfred/remote-icmp
+          COMMIT="${GITHUB_SHA::7}"
+          BUILDTIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          VERSION_PKG="github.com/keskad/loco/pkgs/bigfred/server/version"
+          LDFLAGS="-X ${VERSION_PKG}.buildCommit=${COMMIT} -X ${VERSION_PKG}.buildTime=${BUILDTIME}"
+
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o dist/loco-server-linux-amd64 ./pkgs/bigfred/server
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o dist/bigfred-remote-icmp-linux-amd64 ./pkgs/bigfred/remote-icmp
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o dist/loco-linux-amd64 ./pkgs/loco
           GOOS=linux GOARCH=amd64 go build -o dist/rb-linux-amd64 ./pkgs/rb/main.go
 
           # Raspberry Pi 5 (BCM2712, Cortex-A76) — linux/arm64
-          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o dist/loco-server-linux-arm64 ./pkgs/bigfred/server
-          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o dist/bigfred-remote-icmp-linux-arm64 ./pkgs/bigfred/remote-icmp
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="${LDFLAGS}" -o dist/loco-server-linux-arm64 ./pkgs/bigfred/server
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="${LDFLAGS}" -o dist/bigfred-remote-icmp-linux-arm64 ./pkgs/bigfred/remote-icmp
           CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o dist/loco-linux-arm64 ./pkgs/loco
           GOOS=linux GOARCH=arm64 go build -o dist/rb-linux-arm64 ./pkgs/rb/main.go
 
           # Raspberry Pi 2 (BCM2836, Cortex-A7) — linux/arm, GOARM=7
-          CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -o dist/loco-server-linux-armv7 ./pkgs/bigfred/server
-          CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -o dist/bigfred-remote-icmp-linux-armv7 ./pkgs/bigfred/remote-icmp
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -ldflags="${LDFLAGS}" -o dist/loco-server-linux-armv7 ./pkgs/bigfred/server
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -ldflags="${LDFLAGS}" -o dist/bigfred-remote-icmp-linux-armv7 ./pkgs/bigfred/remote-icmp
           CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -o dist/loco-linux-armv7 ./pkgs/loco
           GOOS=linux GOARCH=arm GOARM=7 go build -o dist/rb-linux-armv7 ./pkgs/rb/main.go
 
           # Android arm64 — rebuild SPA with phone capabilities, then embed
           (cd web && VITE_ANDROID=1 npm run build)
-          CGO_ENABLED=0 GOOS=android GOARCH=arm64 go build -tags prod -ldflags="-s -w" \
+          CGO_ENABLED=0 GOOS=android GOARCH=arm64 go build -tags prod -ldflags="-s -w ${LDFLAGS}" \
             -o dist/loco-server-android-arm64 ./pkgs/bigfred/server
 
       - name: Report binary sizes

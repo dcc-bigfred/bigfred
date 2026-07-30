@@ -131,6 +131,10 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		// the list before submitting credentials.
 		r.Get("/layouts/login", layoutH.ListForLogin)
 
+		// Public build / release metadata (no auth) so clients can
+		// show the connected server version before login.
+		r.Get("/version", VersionHandler)
+
 		// Authenticated routes share the RequireAuth middleware.
 		r.Group(func(r chi.Router) {
 			r.Use(RequireAuth(cfg.Auth, cfg.Metrics))

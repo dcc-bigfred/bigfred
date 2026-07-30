@@ -1,0 +1,14 @@
+{
+  "title": "Version",
+  "subtitle": "Version information for the BigFred server you are connected to.",
+  "fields": {
+    "version": "Version",
+    "tagCommit": "Tag commit",
+    "buildCommit": "Build commit",
+    "buildTime": "Build time"
+  },
+  "states": {
+    "loading": "Loading…",
+    "error": "Could not load version information."
+  }
+}

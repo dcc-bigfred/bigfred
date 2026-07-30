@@ -27,6 +27,7 @@ import TrainIcon from "@mui/icons-material/Train";
 import TuneIcon from "@mui/icons-material/Tune";
 import VpnKeyIcon from "@mui/icons-material/VpnKey";
 import LockResetIcon from "@mui/icons-material/LockReset";
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import LogoutIcon from "@mui/icons-material/Logout";
 import { Link, Outlet, useMatch, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -242,6 +243,12 @@ function AppShellContent() {
         label: t("nav.account.changePin"),
         icon: <LockResetIcon fontSize="small" />,
         onClick: () => navigate("/account/change-pin"),
+      },
+      {
+        id: "version",
+        label: t("nav.account.version"),
+        icon: <InfoOutlinedIcon fontSize="small" />,
+        onClick: () => navigate("/account/version"),
       },
       { id: "divider-1", divider: true },
       {

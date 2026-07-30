@@ -65,6 +65,20 @@ jobs:
             --name binaries \
             --dir release-assets
 
+      - name: Inject release version into ELF binaries
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          COMMIT="${GITHUB_SHA::7}"
+          find release-assets -type f -print0 | while IFS= read -r -d '' f; do
+            # Only ELF binaries carry the section (skip .exe if present).
+            if file -b "$f" | grep -qi 'ELF'; then
+              ./scripts/inject-elf-version.sh "$f" "$TAG" "$COMMIT"
+            else
+              echo "skip (not ELF): $f"
+            fi
+          done
+
       - name: Create release if missing
         env:
           GH_TOKEN: ${{ github.token }}

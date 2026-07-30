@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # Retag the loco-server-android-arm64 OCI artifact from :main to a release tag,
 # injecting .bigfred.version (ELF section) with the release tag + tag commit.
-# Optionally signs the binary with minisign and pushes .minisig as a second layer
-# when MINISIGN_SECRET_KEY is set.
+# Optionally signs the binary with minisign and pushes .minisig as a second layer.
+# Signing is fail-closed: MINISIGN_SECRET_KEY is required and must verify against
+# the committed minisign.pub.
 # Usage: retag-oci-loco-android.sh <release-tag>   e.g. v1.2.3
 #
-# Requires: GITHUB_SHA (tag commit), oras, objcopy (binutils).
-# Optional: MINISIGN_SECRET_KEY, MINISIGN_PASSWORD, minisign on PATH.
+# Requires: GITHUB_SHA (tag commit), oras, objcopy (binutils), minisign,
+#           MINISIGN_SECRET_KEY (and optional MINISIGN_PASSWORD).
 set -euo pipefail
 
 RELEASE_TAG="${1:?usage: $0 <release-tag>}"
@@ -43,16 +44,17 @@ push_args=(
   "${BINARY}:${MEDIA_TYPE}"
 )
 
-if [[ -n "${MINISIGN_SECRET_KEY:-}" ]]; then
-  if ! command -v minisign >/dev/null 2>&1; then
-    echo "error: MINISIGN_SECRET_KEY set but minisign not on PATH" >&2
-    exit 1
-  fi
-  "${SCRIPT_DIR}/minisign-sign.sh" "${BINARY}"
-  push_args+=("${BINARY}.minisig:${MINISIG_MEDIA_TYPE}")
-else
-  echo "MINISIGN_SECRET_KEY unset — publishing unsigned OCI artifact"
+if [[ -z "${MINISIGN_SECRET_KEY:-}" ]]; then
+  echo "error: MINISIGN_SECRET_KEY is required to publish a signed OCI release (fail-closed)" >&2
+  exit 1
 fi
+if ! command -v minisign >/dev/null 2>&1; then
+  echo "error: minisign not on PATH" >&2
+  exit 1
+fi
+# Signs and verifies against committed minisign.pub (key mismatch fails the job).
+"${SCRIPT_DIR}/minisign-sign.sh" "${BINARY}"
+push_args+=("${BINARY}.minisig:${MINISIG_MEDIA_TYPE}")
 
 annotate=(
   --annotation "org.opencontainers.image.source=${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:-dcc-bigfred/bigfred}"

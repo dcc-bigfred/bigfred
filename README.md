@@ -23,8 +23,9 @@ minisign -Vm loco-server-linux-amd64 -p minisign.pub
 
 GitHub Actions signs with repository secrets `MINISIGN_SECRET_KEY` (contents of
 the secret key file) and optional `MINISIGN_PASSWORD` (only if the key is
-password-protected). When the secret is unset, release upload still works but
-assets are unsigned.
+password-protected). Signing is **fail-closed**: releases fail if the secret is
+missing, and each signature is verified against the committed `minisign.pub`
+before upload (so a mismatched private/public key pair cannot ship).
 
 BigFred SPA (`web/`)
 --------------------

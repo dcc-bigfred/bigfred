@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
-# Sign one or more files with minisign (writes <file>.minisig next to each).
+# Sign one or more files with minisign (writes <file>.minisig next to each),
+# then verify each signature against the committed public key.
 # Usage: minisign-sign.sh <file> [file...]
 #
 # Env:
 #   MINISIGN_SECRET_KEY  — full contents of the minisign secret key file (required)
 #   MINISIGN_PASSWORD    — password if the secret key is encrypted (optional)
+#   MINISIGN_PUBLIC_KEY  — path to public key (default: minisign.pub next to repo root /
+#                          or $SCRIPT_DIR/../minisign.pub)
 #   GITHUB_REF_NAME / GITHUB_SHA — included in the trusted comment when set
 set -euo pipefail
 
@@ -17,6 +20,13 @@ fi
 
 if ! command -v minisign >/dev/null 2>&1; then
   echo "error: minisign not found on PATH" >&2
+  exit 1
+fi
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PUBKEY="${MINISIGN_PUBLIC_KEY:-${SCRIPT_DIR}/../minisign.pub}"
+if [[ ! -f "${PUBKEY}" ]]; then
+  echo "error: public key not found: ${PUBKEY}" >&2
   exit 1
 fi
 
@@ -50,4 +60,12 @@ for f in "$@"; do
     minisign -Sm "${f}" -s "${keyfile}" -t "${trusted}" < /dev/null
   fi
   echo "signed: ${f} -> ${f}.minisig"
+
+  # Fail closed if the secret key does not match the committed public key.
+  if ! minisign -Vm "${f}" -x "${f}.minisig" -p "${PUBKEY}" >/dev/null; then
+    echo "error: signature verification failed for ${f} against ${PUBKEY}" >&2
+    echo "error: MINISIGN_SECRET_KEY does not match the committed public key" >&2
+    exit 1
+  fi
+  echo "verified: ${f} (pubkey=$(basename "${PUBKEY}"))"
 done

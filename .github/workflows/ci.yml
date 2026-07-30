@@ -29,6 +29,12 @@ jobs:
       - name: Run tests
         run: go test -count=1 ./...
 
+      - name: Install minisign
+        run: sudo apt-get update && sudo apt-get install -y minisign
+
+      - name: Smoke-test minisign-sign.sh
+        run: ./scripts/test-minisign-sign.sh
+
       - name: Set up Node
         uses: actions/setup-node@v4
         with:

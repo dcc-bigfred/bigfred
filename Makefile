@@ -111,6 +111,10 @@ test: ensure-go-junit-report
 	export PATH=$$PATH:~/go/bin:$$GOROOT/bin:$$(pwd)/.bin; \
 	go test -v ./... -covermode=count -coverprofile=coverage.out 2>&1 | go-junit-report -set-exit-code -out junit.xml -iocopy
 
+.PHONY: test-minisign
+test-minisign:
+	./scripts/test-minisign-sign.sh
+
 .PHONY: fmt
 fmt: ## Run go fmt against code.
 	go fmt ./...

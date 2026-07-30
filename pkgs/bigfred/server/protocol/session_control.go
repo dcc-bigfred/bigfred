@@ -3,12 +3,13 @@ package protocol
 import "github.com/keskad/loco/pkgs/bigfred/server/domain"
 
 const (
-	TypeSessionSetCommandStation            = "session.setCommandStation"
-	TypeSessionOpened                       = "session.opened"
-	TypeSessionCommandStationChanged        = "session.commandStationChanged"
-	TypeSessionCommandStationCatalogChanged = "session.commandStationCatalogChanged"
-	TypeSystemRadioStop                     = "system.radioStop"
-	TypeSystemEStopTarget                   = "system.estopTarget"
+	TypeSessionSetCommandStation               = "session.setCommandStation"
+	TypeSessionOpened                          = "session.opened"
+	TypeSessionCommandStationChanged           = "session.commandStationChanged"
+	TypeSessionCommandStationCatalogChanged    = "session.commandStationCatalogChanged"
+	TypeSessionAvailableCommandStationsChanged = "session.availableCommandStationsChanged"
+	TypeSystemRadioStop                        = "system.radioStop"
+	TypeSystemEStopTarget                      = "system.estopTarget"
 )
 
 type SessionSetCommandStationRequest struct {
@@ -27,6 +28,10 @@ type CommandStationCatalogChangedPayload struct {
 	Name             string                    `json:"name"`
 	Kind             domain.CommandStationKind `json:"kind"`
 	SpeedSteps       uint                      `json:"speedSteps"`
+}
+
+type AvailableCommandStationsChangedPayload struct {
+	AvailableCommandStations []AvailableCommandStationPayload `json:"availableCommandStations"`
 }
 
 type OpenedSessionPayload struct {

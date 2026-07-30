@@ -113,6 +113,10 @@ func (s *SessionControlService) BroadcastCommandStationCatalogChanged(ctx contex
 	s.core.BroadcastCommandStationCatalogChanged(ctx, cs)
 }
 
+func (s *SessionControlService) BroadcastLayoutAvailableCommandStations(ctx context.Context, layoutID uint) {
+	s.core.BroadcastLayoutAvailableCommandStations(ctx, layoutID)
+}
+
 type controlClient struct {
 	client  *ws.Client
 	session controlSession

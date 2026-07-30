@@ -16,12 +16,13 @@ import (
 )
 
 const (
-	TypeSessionSetCommandStation            = "session.setCommandStation"
-	TypeSessionOpened                       = "session.opened"
-	TypeSessionCommandStationChanged        = "session.commandStationChanged"
-	TypeSessionCommandStationCatalogChanged = "session.commandStationCatalogChanged"
-	TypeSystemRadioStop                     = "system.radioStop"
-	TypeSystemEStopTarget                   = "system.estopTarget"
+	TypeSessionSetCommandStation               = "session.setCommandStation"
+	TypeSessionOpened                          = "session.opened"
+	TypeSessionCommandStationChanged           = "session.commandStationChanged"
+	TypeSessionCommandStationCatalogChanged    = "session.commandStationCatalogChanged"
+	TypeSessionAvailableCommandStationsChanged = "session.availableCommandStationsChanged"
+	TypeSystemRadioStop                        = "system.radioStop"
+	TypeSystemEStopTarget                      = "system.estopTarget"
 )
 
 type SessionSetCommandStationRequest struct {
@@ -40,6 +41,12 @@ type CommandStationCatalogChangedPayload struct {
 	Name             string                    `json:"name"`
 	Kind             domain.CommandStationKind `json:"kind"`
 	SpeedSteps       uint                      `json:"speedSteps"`
+}
+
+// AvailableCommandStationsChangedPayload replaces the layout membership
+// list for live throttle / interlocking sessions after attachments change.
+type AvailableCommandStationsChangedPayload struct {
+	AvailableCommandStations []AvailableCommandStationPayload `json:"availableCommandStations"`
 }
 
 type OpenedSessionPayload struct {
@@ -303,6 +310,24 @@ func (s *SessionControl) BroadcastCommandStationCatalogChanged(ctx context.Conte
 	}
 }
 
+// BroadcastLayoutAvailableCommandStations pushes a fresh membership list
+// to every live control-plane session on layoutID (add/remove after
+// layout command-station attachment edits).
+func (s *SessionControl) BroadcastLayoutAvailableCommandStations(ctx context.Context, layoutID uint) {
+	if s.layoutCS == nil || s.layoutRows == nil || s.cs == nil {
+		return
+	}
+	for _, c := range s.Sessions() {
+		sess := c.Session()
+		if sess.LayoutID() != layoutID {
+			continue
+		}
+		c.SendTyped(TypeSessionAvailableCommandStationsChanged, AvailableCommandStationsChangedPayload{
+			AvailableCommandStations: s.availableStationsForClient(ctx, c),
+		})
+	}
+}
+
 func (s *SessionControl) broadcastChangeForUser(layoutID, userID uint, payload SessionCommandStationChangedPayload) {
 	for _, c := range s.Sessions() {
 		sess := c.Session()
@@ -316,18 +341,27 @@ func (s *SessionControl) broadcastChangeForUser(layoutID, userID uint, payload S
 func (s *SessionControl) openedPayload(ctx context.Context, c ControlClient) OpenedSessionPayload {
 	sess := c.Session()
 	out := OpenedSessionPayload{
-		SessionID: sess.SessionID(),
-		LayoutID:  sess.LayoutID(),
+		SessionID:                sess.SessionID(),
+		LayoutID:                 sess.LayoutID(),
+		AvailableCommandStations: s.availableStationsForClient(ctx, c),
 	}
+	if cur := sess.CurrentCommandStation(); cur != 0 {
+		out.CurrentSession = &CurrentSessionPayload{CommandStationID: cur}
+	}
+	return out
+}
+
+func (s *SessionControl) availableStationsForClient(ctx context.Context, c ControlClient) []AvailableCommandStationPayload {
 	if s.layoutCS == nil || s.cs == nil || s.layoutRows == nil {
-		return out
+		return nil
 	}
+	sess := c.Session()
 	stations, err := s.listAvailableStations(ctx, sess.LayoutID())
 	if err != nil {
-		s.log.WithError(err).Warn("session.opened: list cs by ids")
-		return out
+		s.log.WithError(err).Warn("session: list available command stations")
+		return nil
 	}
-	out.AvailableCommandStations = make([]AvailableCommandStationPayload, 0, len(stations))
+	out := make([]AvailableCommandStationPayload, 0, len(stations))
 	for _, st := range stations {
 		var wsURL *string
 		if s.dccBus != nil && s.dccBus.PortFor(sess.LayoutID(), st.ID) != 0 {
@@ -340,16 +374,13 @@ func (s *SessionControl) openedPayload(ctx context.Context, c ControlClient) Ope
 				wsURL = &url
 			}
 		}
-		out.AvailableCommandStations = append(out.AvailableCommandStations, AvailableCommandStationPayload{
+		out = append(out, AvailableCommandStationPayload{
 			ID:         st.ID,
 			Name:       st.Name,
 			Kind:       st.Kind,
 			SpeedSteps: st.SpeedSteps,
 			WSURL:      wsURL,
 		})
-	}
-	if cur := sess.CurrentCommandStation(); cur != 0 {
-		out.CurrentSession = &CurrentSessionPayload{CommandStationID: cur}
 	}
 	return out
 }

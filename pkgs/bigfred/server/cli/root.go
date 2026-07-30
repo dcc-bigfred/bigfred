@@ -499,6 +499,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		Layouts:     layouts,
 		Metrics:     serverMetrics,
 	})
+	layoutSvc.SetSessionCtl(sessionCtl)
 
 	if redisReady {
 		radioStore := service.NewRadioStore(service.RadioStoreConfig{Redis: redisSvc})

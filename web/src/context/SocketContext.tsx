@@ -28,6 +28,8 @@ const WsMessageType = {
   SessionOpened: "session.opened",
   SessionCommandStationChanged: "session.commandStationChanged",
   SessionCommandStationCatalogChanged: "session.commandStationCatalogChanged",
+  SessionAvailableCommandStationsChanged:
+    "session.availableCommandStationsChanged",
   SessionSetCommandStation: "session.setCommandStation",
 } as const;
 
@@ -66,6 +68,10 @@ export interface CommandStationCatalogChangedPayload {
   name: string;
   kind: string;
   speedSteps: number;
+}
+
+export interface AvailableCommandStationsChangedPayload {
+  availableCommandStations: AvailableCommandStation[];
 }
 
 // Pending request → ack resolver. Used by `sendAction` so the caller
@@ -256,6 +262,16 @@ export function SocketProvider({
             speedSteps: p.speedSteps,
           };
           return next;
+        });
+      }
+      if (msg.type === WsMessageType.SessionAvailableCommandStationsChanged) {
+        const p = msg.payload as AvailableCommandStationsChangedPayload;
+        setSession((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            availableCommandStations: p.availableCommandStations ?? [],
+          };
         });
       }
       handlers.current.get(msg.type)?.forEach((fn) => fn(msg.payload));

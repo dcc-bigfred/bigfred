@@ -201,8 +201,17 @@ export function isSerialAutodetectUri(uri: string): boolean {
 }
 
 export function commandStationScanWsUrl(): string {
+  const path = "/api/v1/command-stations/scan/ws";
+  const base = (import.meta.env.VITE_API_BASE ?? "") as string;
+  if (base) {
+    const url = new URL(base);
+    url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+    url.pathname = path;
+    url.search = "";
+    return url.toString();
+  }
   const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return `${proto}//${window.location.host}/api/v1/command-stations/scan/ws`;
+  return `${proto}//${window.location.host}${path}`;
 }
 
 export type ScanWsFrame =

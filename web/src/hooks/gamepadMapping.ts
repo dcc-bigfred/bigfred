@@ -1,4 +1,6 @@
 const STORAGE_KEY_PREFIX = "bigfred.throttle.gamepad";
+/** Last confirmed mapping — survives Gamepad.id changes across WebView sessions. */
+const LAST_MAPPING_KEY = `${STORAGE_KEY_PREFIX}.last`;
 
 /** Default axis index for speed (left stick Y on standard gamepad layout). */
 export const DEFAULT_SPEED_AXIS = 1;
@@ -110,7 +112,8 @@ export function defaultGamepadMapping(gamepadId: string): GamepadMapping {
     fnButtons: {},
     speedSensitivity: 0,
     speedButtonSteps: DEFAULT_SPEED_BUTTON_STEPS,
-    enabled: false,
+    // New setups start enabled; explicit stored `false` is still respected on load.
+    enabled: true,
   };
 }
 
@@ -118,62 +121,90 @@ function storageKey(gamepadId: string): string {
   return `${STORAGE_KEY_PREFIX}.${encodeURIComponent(gamepadId)}`;
 }
 
+function parseStoredMapping(
+  raw: string,
+  gamepadId: string,
+): GamepadMapping | null {
+  const parsed = JSON.parse(raw) as Partial<GamepadMapping>;
+  if (typeof parsed.gamepadId !== "string") {
+    return null;
+  }
+  const fnButtons: Record<number, number> = {};
+  if (parsed.fnButtons && typeof parsed.fnButtons === "object") {
+    for (const [k, v] of Object.entries(parsed.fnButtons)) {
+      const fn = Number(k);
+      if (Number.isFinite(fn) && typeof v === "number") {
+        fnButtons[fn] = v;
+      }
+    }
+  }
+  return {
+    gamepadId,
+    speedAxis:
+      typeof parsed.speedAxis === "number"
+        ? parsed.speedAxis
+        : DEFAULT_SPEED_AXIS,
+    invertAxis: parsed.invertAxis !== false,
+    axisEnabled: parsed.axisEnabled !== false,
+    axisToggleButton:
+      typeof parsed.axisToggleButton === "number"
+        ? parsed.axisToggleButton
+        : undefined,
+    idleAxisMin:
+      typeof parsed.idleAxisMin === "number" ? parsed.idleAxisMin : undefined,
+    idleAxisMax:
+      typeof parsed.idleAxisMax === "number" ? parsed.idleAxisMax : undefined,
+    reverseButton:
+      typeof parsed.reverseButton === "number"
+        ? parsed.reverseButton
+        : undefined,
+    stopButton:
+      typeof parsed.stopButton === "number" ? parsed.stopButton : undefined,
+    accelerateButton:
+      typeof parsed.accelerateButton === "number"
+        ? parsed.accelerateButton
+        : undefined,
+    decelerateButton:
+      typeof parsed.decelerateButton === "number"
+        ? parsed.decelerateButton
+        : undefined,
+    fnButtons,
+    speedSensitivity: parseSpeedSensitivity(parsed.speedSensitivity),
+    speedButtonSteps: parseSpeedButtonSteps(parsed.speedButtonSteps),
+    // Strict true check so historical explicit `false` stays off.
+    enabled: parsed.enabled === true,
+  };
+}
+
+/** Last confirmed mapping, or null when none has been saved yet. */
+export function loadLastGamepadMapping(): GamepadMapping | null {
+  try {
+    const raw = localStorage.getItem(LAST_MAPPING_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<GamepadMapping>;
+    if (typeof parsed.gamepadId !== "string") return null;
+    return parseStoredMapping(raw, parsed.gamepadId);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Load mapping for a gamepad id. Falls back to the last confirmed mapping
+ * (rewritten onto this id) when the exact key is missing — Gamepad.id is not
+ * a stable device identifier across WebView sessions.
+ */
 export function loadGamepadMapping(gamepadId: string): GamepadMapping {
   try {
     const raw = localStorage.getItem(storageKey(gamepadId));
-    if (!raw) return defaultGamepadMapping(gamepadId);
-    const parsed = JSON.parse(raw) as Partial<GamepadMapping>;
-    if (typeof parsed.gamepadId !== "string") {
-      return defaultGamepadMapping(gamepadId);
+    if (raw) {
+      return parseStoredMapping(raw, gamepadId) ?? defaultGamepadMapping(gamepadId);
     }
-    const fnButtons: Record<number, number> = {};
-    if (parsed.fnButtons && typeof parsed.fnButtons === "object") {
-      for (const [k, v] of Object.entries(parsed.fnButtons)) {
-        const fn = Number(k);
-        if (Number.isFinite(fn) && typeof v === "number") {
-          fnButtons[fn] = v;
-        }
-      }
+    const last = loadLastGamepadMapping();
+    if (last) {
+      return { ...last, gamepadId };
     }
-    return {
-      gamepadId,
-      speedAxis:
-        typeof parsed.speedAxis === "number"
-          ? parsed.speedAxis
-          : DEFAULT_SPEED_AXIS,
-      invertAxis: parsed.invertAxis !== false,
-      axisEnabled: parsed.axisEnabled !== false,
-      axisToggleButton:
-        typeof parsed.axisToggleButton === "number"
-          ? parsed.axisToggleButton
-          : undefined,
-      idleAxisMin:
-        typeof parsed.idleAxisMin === "number"
-          ? parsed.idleAxisMin
-          : undefined,
-      idleAxisMax:
-        typeof parsed.idleAxisMax === "number"
-          ? parsed.idleAxisMax
-          : undefined,
-      reverseButton:
-        typeof parsed.reverseButton === "number"
-          ? parsed.reverseButton
-          : undefined,
-      stopButton:
-        typeof parsed.stopButton === "number" ? parsed.stopButton : undefined,
-      accelerateButton:
-        typeof parsed.accelerateButton === "number"
-          ? parsed.accelerateButton
-          : undefined,
-      decelerateButton:
-        typeof parsed.decelerateButton === "number"
-          ? parsed.decelerateButton
-          : undefined,
-      fnButtons,
-      speedSensitivity: parseSpeedSensitivity(parsed.speedSensitivity),
-      speedButtonSteps: parseSpeedButtonSteps(parsed.speedButtonSteps),
-      enabled: parsed.enabled === true,
-    };
+    return defaultGamepadMapping(gamepadId);
   } catch {
     return defaultGamepadMapping(gamepadId);
   }
@@ -181,7 +212,9 @@ export function loadGamepadMapping(gamepadId: string): GamepadMapping {
 
 export function saveGamepadMapping(mapping: GamepadMapping): void {
   try {
-    localStorage.setItem(storageKey(mapping.gamepadId), JSON.stringify(mapping));
+    const payload = JSON.stringify(mapping);
+    localStorage.setItem(storageKey(mapping.gamepadId), payload);
+    localStorage.setItem(LAST_MAPPING_KEY, payload);
   } catch {
     /* ignore */
   }

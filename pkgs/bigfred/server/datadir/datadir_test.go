@@ -47,3 +47,22 @@ func TestRootIgnoresRelativeEnv(t *testing.T) {
 		t.Fatalf("Root() = %q, want /data", got)
 	}
 }
+
+func TestResolveRelativeUnderRoot(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("BIGFRED_DATA_DIR", dir)
+	t.Setenv("DATA_DIR", "")
+	want := filepath.Join(dir, "bigfred.db")
+	if got := Resolve("bigfred.db"); got != want {
+		t.Fatalf("Resolve(relative) = %q, want %q", got, want)
+	}
+}
+
+func TestResolveAbsoluteUnchanged(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("BIGFRED_DATA_DIR", dir)
+	abs := filepath.Join(dir, "elsewhere", "custom.db")
+	if got := Resolve(abs); got != filepath.Clean(abs) {
+		t.Fatalf("Resolve(abs) = %q, want %q", got, filepath.Clean(abs))
+	}
+}

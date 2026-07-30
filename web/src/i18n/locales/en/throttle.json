@@ -18,6 +18,9 @@
     "cancel": "Cancel",
     "toast": "Radio stop — triggered by {{login}}"
   },
+  "rotateScreen": {
+    "tooltip": "Rotate screen"
+  },
   "radio": {
     "open": "Radio to interlocking",
     "chat": "My radio",

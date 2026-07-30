@@ -34,3 +34,13 @@ func rootFromEnv(name string) (string, bool) {
 func Path(parts ...string) string {
 	return filepath.Join(append([]string{Root()}, parts...)...)
 }
+
+// Resolve returns an absolute path. Relative paths are joined under Root()
+// so SQLite (and similar) land in the persistent data directory rather than
+// the process working directory.
+func Resolve(path string) string {
+	if filepath.IsAbs(path) {
+		return filepath.Clean(path)
+	}
+	return Path(path)
+}

@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 import {
   Alert,
   Box,
@@ -44,15 +52,14 @@ import ThrottleSetupDialog from "../components/throttle/ThrottleSetupDialog";
 import ThrottleGamepadDialog from "../components/throttle/ThrottleGamepadDialog";
 import CommandStationPicker from "../components/throttle/CommandStationPicker";
 import { useDebouncedSpeedSend } from "../hooks/useDebouncedSpeedSend";
-import { useGamepads } from "../hooks/useGamepads";
+import { useGamepads, type ConnectedGamepad } from "../hooks/useGamepads";
 import { useGamepadControl } from "../hooks/useGamepadControl";
 import { useThrottleHardwareKeys } from "../hooks/useThrottleHardwareKeys";
 import {
   defaultGamepadMapping,
-  loadGamepadMapping,
-  saveGamepadMapping,
   type GamepadMapping,
 } from "../hooks/gamepadMapping";
+import { usePersistedGamepadMapping } from "../hooks/usePersistedGamepadMapping";
 import { useRadioStopSound } from "../hooks/useRadioStopSound";
 import { useThrottleSpeedOverride } from "../hooks/useThrottleSpeedOverride";
 import { useThrottleCommandStationSelection } from "../hooks/useThrottleCommandStationSelection";
@@ -132,6 +139,14 @@ export default function ThrottlePage() {
   const [setupOpen, setSetupOpen] = useState(false);
   const spawnGenRef = useRef(0);
   const { functionsAsList, setFunctionsAsList } = useThrottleFunctionsListView();
+  // Keep gamepad mapping above ConnectedThrottle so remounts (CS reconnect,
+  // WebView continuity edge cases) do not drop the hydrated config.
+  const { gamepads } = useGamepads();
+  const {
+    mapping: gamepadMapping,
+    setMapping: setGamepadMapping,
+    persist: persistGamepadMapping,
+  } = usePersistedGamepadMapping(gamepads);
 
   const activeStation = useMemo(
     () => stations.find((s) => s.id === selectedCS),
@@ -337,6 +352,10 @@ export default function ThrottlePage() {
               driverRadio={driverRadio}
               radioChatEnabled={radioChatEnabled}
               functionsAsList={functionsAsList}
+              gamepads={gamepads}
+              gamepadMapping={gamepadMapping}
+              setGamepadMapping={setGamepadMapping}
+              persistGamepadMapping={persistGamepadMapping}
             />
           </DccBusProvider>
         ) : (
@@ -605,6 +624,10 @@ function ConnectedThrottle({
   driverRadio,
   radioChatEnabled,
   functionsAsList,
+  gamepads,
+  gamepadMapping,
+  setGamepadMapping,
+  persistGamepadMapping,
 }: {
   layoutID: number;
   speedSteps: number;
@@ -612,6 +635,10 @@ function ConnectedThrottle({
   driverRadio: DriverRadioInbound;
   radioChatEnabled: boolean;
   functionsAsList: boolean;
+  gamepads: ConnectedGamepad[];
+  gamepadMapping: GamepadMapping | null;
+  setGamepadMapping: Dispatch<SetStateAction<GamepadMapping | null>>;
+  persistGamepadMapping: (next: GamepadMapping) => void;
 }) {
   const me = useMe().data;
   useLeaseEvents();
@@ -744,27 +771,10 @@ function ConnectedThrottle({
 
   const [settingsMemberId, setSettingsMemberId] = useState<number | null>(null);
   const [gamepadOpen, setGamepadOpen] = useState(false);
-  const [gamepadMapping, setGamepadMapping] = useState<GamepadMapping | null>(
-    null,
-  );
-  const { gamepads } = useGamepads();
   const patchMemberSettings = usePatchTrainMemberSettings();
   const { expandedMemberIds, toggleMember } = useTrainAccordionExpanded(
     isTrainMode ? selectedTarget.trainId : null,
   );
-
-  useEffect(() => {
-    if (gamepads.length === 0) {
-      return;
-    }
-    const pad = gamepads[0];
-    setGamepadMapping((prev) => {
-      if (prev?.gamepadId === pad.id) {
-        return prev;
-      }
-      return loadGamepadMapping(pad.id);
-    });
-  }, [gamepads]);
 
   const activeGamepadIndex =
     gamepads.find((gp) => gp.id === gamepadMapping?.gamepadId)?.index ??
@@ -865,13 +875,12 @@ function ConnectedThrottle({
   }, [noteUserSpeed, sendSpeedNow, sendTrainSpeedNow]);
 
   const handleAxisEnabledToggle = useCallback(() => {
-    setGamepadMapping((prev) => {
-      if (prev == null) return prev;
-      const next = { ...prev, axisEnabled: prev.axisEnabled === false };
-      saveGamepadMapping(next);
-      return next;
+    if (gamepadMapping == null) return;
+    persistGamepadMapping({
+      ...gamepadMapping,
+      axisEnabled: gamepadMapping.axisEnabled === false,
     });
-  }, []);
+  }, [gamepadMapping, persistGamepadMapping]);
 
   const gamepadDisabled =
     gamepadOpen ||
@@ -1048,10 +1057,7 @@ function ConnectedThrottle({
           }
           maxSpeed={throttleMaxSpeed}
           onMappingChange={setGamepadMapping}
-          onConfirm={(next) => {
-            setGamepadMapping(next);
-            saveGamepadMapping(next);
-          }}
+          onConfirm={persistGamepadMapping}
         />
       )}
       <ThrottleCockpit

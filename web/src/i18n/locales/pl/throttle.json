@@ -18,6 +18,9 @@
     "cancel": "Anuluj",
     "toast": "Radiostop — uruchomiony przez {{login}}"
   },
+  "rotateScreen": {
+    "tooltip": "Obróć ekran"
+  },
   "radio": {
     "open": "Radio do nastawni",
     "chat": "Moje radio",

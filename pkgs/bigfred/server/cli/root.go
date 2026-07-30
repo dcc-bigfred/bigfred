@@ -13,7 +13,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"strconv"
 	"syscall"
 	"time"
@@ -28,6 +27,7 @@ import (
 	bfotel "github.com/keskad/loco/pkgs/bigfred/otel"
 	"github.com/keskad/loco/pkgs/bigfred/remotepairing"
 	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
+	"github.com/keskad/loco/pkgs/bigfred/server/datadir"
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
 	httpapi "github.com/keskad/loco/pkgs/bigfred/server/http"
 	"github.com/keskad/loco/pkgs/bigfred/server/metrics"
@@ -170,9 +170,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		"buildTime":   info.BuildTime,
 	}).Info("loco-server starting")
 
-	if absPath, err := filepath.Abs(f.DBPath); err == nil {
-		f.DBPath = absPath
-	}
+	f.DBPath = datadir.Resolve(f.DBPath)
 
 	secret, err := resolveJWTSecret(f.JWTSecret, log)
 	if err != nil {

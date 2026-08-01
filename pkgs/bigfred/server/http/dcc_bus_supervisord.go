@@ -71,7 +71,12 @@ func (h *DccBusSupervisordHandler) Action(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if err != nil {
-		writeJSONError(w, http.StatusUnprocessableEntity, "action_failed")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"error":   "action_failed",
+			"message": err.Error(),
+		})
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

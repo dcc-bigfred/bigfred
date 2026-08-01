@@ -53,6 +53,7 @@ func (c *Ctl) Shutdown(ctx context.Context) error {
 }
 
 // StartProgram starts a single program.
+// name may be bare ("dcc-bus-1-2") or group-qualified ("dcc-bus:dcc-bus-1-2").
 func (c *Ctl) StartProgram(ctx context.Context, name string) error {
 	_, err := c.run(ctx, "start", name)
 	return err
@@ -61,6 +62,12 @@ func (c *Ctl) StartProgram(ctx context.Context, name string) error {
 // StopProgram stops a single program.
 func (c *Ctl) StopProgram(ctx context.Context, name string) error {
 	_, err := c.run(ctx, "stop", name)
+	return err
+}
+
+// RestartProgram restarts a single program via supervisorctl restart.
+func (c *Ctl) RestartProgram(ctx context.Context, name string) error {
+	_, err := c.run(ctx, "restart", name)
 	return err
 }
 

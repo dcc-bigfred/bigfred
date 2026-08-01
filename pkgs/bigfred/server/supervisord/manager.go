@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -367,24 +368,65 @@ func (s *Manager) RemoveProgram(ctx context.Context, group, name string) error {
 }
 
 // StopProgram stops one program without rewriting config.
+// Programs in a [group:…] are addressed as "group:program" for supervisorctl.
 func (s *Manager) StopProgram(ctx context.Context, name string) error {
-	return s.ctl.StopProgram(ctx, name)
+	err := s.ctl.StopProgram(ctx, s.resolveCtlName(name))
+	if isSupervisorNotRunning(err) {
+		return nil
+	}
+	return err
 }
 
 // StartProgram starts one program without rewriting config.
+// Programs in a [group:…] are addressed as "group:program" for supervisorctl.
 func (s *Manager) StartProgram(ctx context.Context, name string) error {
-	return s.ctl.StartProgram(ctx, name)
+	err := s.ctl.StartProgram(ctx, s.resolveCtlName(name))
+	if isSupervisorAlreadyStarted(err) {
+		return nil
+	}
+	return err
 }
 
-// RestartProgram stops then starts one program without rewriting config.
+// RestartProgram restarts one program without rewriting config.
 func (s *Manager) RestartProgram(ctx context.Context, name string) error {
-	_ = s.ctl.StopProgram(ctx, name)
-	return s.ctl.StartProgram(ctx, name)
+	return s.ctl.RestartProgram(ctx, s.resolveCtlName(name))
 }
 
 // Status returns the observable status of every managed program.
 func (s *Manager) Status(ctx context.Context) ([]ProgramState, error) {
 	return s.allStatus(ctx)
+}
+
+// resolveCtlName returns the name supervisorctl expects. Grouped programs
+// must be addressed as "group:program" (same convention as bigfred-os-ui).
+func (s *Manager) resolveCtlName(name string) string {
+	if name == "" || strings.Contains(name, ":") {
+		return name
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if group := s.state.ProgramGroup(name); group != "" && group != name {
+		return group + ":" + name
+	}
+	return name
+}
+
+func isSupervisorAlreadyStarted(err error) bool {
+	if err == nil {
+		return false
+	}
+	u := strings.ToUpper(err.Error())
+	return strings.Contains(u, "ALREADY_STARTED") ||
+		strings.Contains(u, "ALREADY STARTED")
+}
+
+func isSupervisorNotRunning(err error) bool {
+	if err == nil {
+		return false
+	}
+	u := strings.ToUpper(err.Error())
+	return strings.Contains(u, "NOT_RUNNING") ||
+		strings.Contains(u, "NOT RUNNING")
 }
 
 // RunHealthLoop polls program status until ctx is cancelled.
@@ -436,14 +478,23 @@ func (s *Manager) allStatus(ctx context.Context) ([]ProgramState, error) {
 
 	out := make([]ProgramState, 0, len(rows))
 	for _, row := range rows {
+		bare := bareProgramName(row.Name)
 		out = append(out, ProgramState{
-			Name:   row.Name,
-			Group:  state.ProgramGroup(row.Name),
+			Name:   bare,
+			Group:  state.ProgramGroup(bare),
 			Status: row.Status,
 			PID:    row.PID,
 		})
 	}
 	return out, nil
+}
+
+// bareProgramName strips a "group:" prefix from supervisorctl status names.
+func bareProgramName(statusName string) string {
+	if i := strings.LastIndex(statusName, ":"); i >= 0 {
+		return statusName[i+1:]
+	}
+	return statusName
 }
 
 func (s *Manager) renderLocked() ([]byte, string, string, error) {

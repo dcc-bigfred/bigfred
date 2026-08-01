@@ -235,7 +235,7 @@ func (d *DccBusService) StartDccBus(ctx context.Context, layoutID, commandStatio
 	if d.sup == nil {
 		return errors.New("dcc-bus: supervisord service is not wired")
 	}
-	return d.sup.StartProgram(ctx, programName(layoutID, commandStationID))
+	return d.sup.StartProgram(ctx, ctlProgramName(layoutID, commandStationID))
 }
 
 // StopDccBus stops the dcc-bus supervisord program without removing it
@@ -244,7 +244,7 @@ func (d *DccBusService) StopDccBus(ctx context.Context, layoutID, commandStation
 	if d.sup == nil {
 		return errors.New("dcc-bus: supervisord service is not wired")
 	}
-	return d.sup.StopProgram(ctx, programName(layoutID, commandStationID))
+	return d.sup.StopProgram(ctx, ctlProgramName(layoutID, commandStationID))
 }
 
 // RestartDccBus stops then starts the dcc-bus supervisord program.
@@ -252,7 +252,14 @@ func (d *DccBusService) RestartDccBus(ctx context.Context, layoutID, commandStat
 	if d.sup == nil {
 		return errors.New("dcc-bus: supervisord service is not wired")
 	}
-	return d.sup.RestartProgram(ctx, programName(layoutID, commandStationID))
+	return d.sup.RestartProgram(ctx, ctlProgramName(layoutID, commandStationID))
+}
+
+// ctlProgramName returns the supervisorctl target for a dcc-bus program
+// ("dcc-bus:dcc-bus-{layout}-{cs}"). Grouped programs must be addressed
+// with the group prefix.
+func ctlProgramName(layoutID, commandStationID uint) string {
+	return DccBusGroupName + ":" + programName(layoutID, commandStationID)
 }
 
 // matchSupervisordProgram matches a supervisorctl status name against a

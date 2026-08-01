@@ -98,6 +98,10 @@ type Supervisor interface {
 	StartProgram(ctx context.Context, name string) error
 	// StopProgram stops one program without rewriting config.
 	StopProgram(ctx context.Context, name string) error
+	// RestartProgram stops then starts one program without rewriting config.
+	RestartProgram(ctx context.Context, name string) error
+	// Status returns the observable status of every managed program.
+	Status(ctx context.Context) ([]ProgramState, error)
 }
 
 // NewSupervisordService builds the supervisord facade. Default hub paths

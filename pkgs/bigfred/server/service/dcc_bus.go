@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -18,8 +19,8 @@ import (
 	dccbuscli "github.com/keskad/loco/pkgs/bigfred/dcc-bus/cli"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/protocol"
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
-	"github.com/keskad/loco/pkgs/bigfred/server/metrics"
 	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
+	"github.com/keskad/loco/pkgs/bigfred/server/metrics"
 	"github.com/keskad/loco/pkgs/bigfred/server/repo"
 	"github.com/keskad/loco/pkgs/bigfred/server/supervisord"
 )
@@ -36,6 +37,10 @@ var ErrNoDccBusPortsAvailable = svcerrors.ErrNoDCCBusPortsAvailable
 // confirm the daemon reached RUNNING + dial-able within the timeout.
 // Surface this to the WS layer as `dcc_bus_unavailable`.
 var ErrDccBusUnavailable = errors.New("dcc-bus daemon unavailable")
+
+// ErrSupervisordNotWired is returned when admin start/stop/restart (or
+// status) is requested but supervisord was not configured (--no-supervisor).
+var ErrSupervisordNotWired = errors.New("dcc-bus: supervisord service is not wired")
 
 // DccBusConfig configures DccBusService. Defaults match §7e.2.
 type DccBusConfig struct {
@@ -76,12 +81,12 @@ type DccBusConfig struct {
 // SupervisordService, and exposes typed helpers to publish commands
 // onto the daemon's Redis channels (§7e.6).
 type DccBusService struct {
-	cfg   DccBusConfig
-	sup   Supervisor
-	redis *RedisService
-	cs    *repo.CommandStations
+	cfg     DccBusConfig
+	sup     Supervisor
+	redis   *RedisService
+	cs      *repo.CommandStations
 	layouts *repo.Layouts
-	log   *logrus.Logger
+	log     *logrus.Logger
 
 	mu      sync.Mutex
 	ports   map[portKey]uint16 // (layoutID, commandStationID) -> port
@@ -114,13 +119,13 @@ func NewDccBusService(cfg DccBusConfig, sup Supervisor, redis *RedisService, cs 
 		cfg.SpawnTimeout = 10 * time.Second
 	}
 	return &DccBusService{
-		cfg:   cfg,
-		sup:   sup,
-		redis: redis,
+		cfg:     cfg,
+		sup:     sup,
+		redis:   redis,
 		cs:      cs,
 		layouts: layouts,
 		log:     log,
-		ports: make(map[portKey]uint16, 8),
+		ports:   make(map[portKey]uint16, 8),
 	}
 }
 
@@ -201,6 +206,169 @@ func (d *DccBusService) PortFor(layoutID, commandStationID uint) uint16 {
 // validation, so we always lower-case + dash-join the numbers.
 func programName(layoutID, commandStationID uint) string {
 	return fmt.Sprintf("dcc-bus-%d-%d", layoutID, commandStationID)
+}
+
+// DccBusProgramStatus is one dcc-bus supervisord program for a
+// (layout, commandStation) pair, as shown in the admin popup.
+type DccBusProgramStatus struct {
+	LayoutID   uint   `json:"layoutId"`
+	LayoutName string `json:"layoutName"`
+	Name       string `json:"name"`
+	Status     string `json:"status"`
+	PID        int    `json:"pid,omitempty"`
+	Running    bool   `json:"running"`
+}
+
+// ProgramsForCommandStation lists every dcc-bus supervisord program
+// for commandStationID across all layouts that have a port assignment
+// or a supervisord row. Absent programs are reported as STOPPED.
+// When supervisord is not wired (--no-supervisor), returns ErrSupervisordNotWired.
+func (d *DccBusService) ProgramsForCommandStation(ctx context.Context, commandStationID uint) ([]DccBusProgramStatus, error) {
+	if d.sup == nil {
+		return nil, ErrSupervisordNotWired
+	}
+	rows, err := d.sup.Status(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	candidates := make(map[uint]struct{})
+	for _, id := range d.LayoutIDsWithProgramForCS(commandStationID) {
+		candidates[id] = struct{}{}
+	}
+	statusByLayout := make(map[uint]ProgramState)
+	for _, row := range rows {
+		bare := row.Name
+		if i := strings.LastIndex(bare, ":"); i >= 0 {
+			bare = bare[i+1:]
+		}
+		layoutID, ok := parseDccBusProgramLayoutID(bare, commandStationID)
+		if !ok {
+			continue
+		}
+		candidates[layoutID] = struct{}{}
+		st := row
+		st.Name = programName(layoutID, commandStationID)
+		if st.Group == "" {
+			st.Group = DccBusGroupName
+		}
+		statusByLayout[layoutID] = st
+	}
+
+	out := make([]DccBusProgramStatus, 0, len(candidates))
+	for layoutID := range candidates {
+		name := programName(layoutID, commandStationID)
+		st, found := statusByLayout[layoutID]
+		if !found {
+			st = ProgramState{Name: name, Group: DccBusGroupName, Status: "STOPPED"}
+		}
+		layoutName := ""
+		if d.layouts != nil {
+			if layout, err := d.layouts.FindByID(ctx, layoutID); err == nil {
+				layoutName = layout.Name
+			}
+		}
+		out = append(out, DccBusProgramStatus{
+			LayoutID:   layoutID,
+			LayoutName: layoutName,
+			Name:       st.Name,
+			Status:     st.Status,
+			PID:        st.PID,
+			Running:    strings.EqualFold(st.Status, "RUNNING"),
+		})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].LayoutID < out[j].LayoutID })
+	if d.log != nil {
+		d.log.WithFields(logrus.Fields{
+			"commandStationId": commandStationID,
+			"count":            len(out),
+		}).Debug("dcc-bus programs for command station")
+	}
+	return out, nil
+}
+
+// StartDccBus starts the existing dcc-bus supervisord program without
+// rewriting config (unlike EnsureRunning, which upserts the program).
+func (d *DccBusService) StartDccBus(ctx context.Context, layoutID, commandStationID uint) error {
+	return d.controlDccBus(ctx, layoutID, commandStationID, "start")
+}
+
+// StopDccBus stops the dcc-bus supervisord program without removing it
+// from config (unlike Stop, which also RemoveProgram).
+func (d *DccBusService) StopDccBus(ctx context.Context, layoutID, commandStationID uint) error {
+	return d.controlDccBus(ctx, layoutID, commandStationID, "stop")
+}
+
+// RestartDccBus stops then starts the dcc-bus supervisord program.
+func (d *DccBusService) RestartDccBus(ctx context.Context, layoutID, commandStationID uint) error {
+	return d.controlDccBus(ctx, layoutID, commandStationID, "restart")
+}
+
+// controlDccBus is the shared implementation of Start/Stop/RestartDccBus.
+func (d *DccBusService) controlDccBus(
+	ctx context.Context,
+	layoutID, commandStationID uint,
+	action string,
+) error {
+	if d.sup == nil {
+		return ErrSupervisordNotWired
+	}
+	name := ctlProgramName(layoutID, commandStationID)
+	fields := logrus.Fields{
+		"program":          name,
+		"layoutId":         layoutID,
+		"commandStationId": commandStationID,
+		"action":           action,
+	}
+	if d.log != nil {
+		d.log.WithFields(fields).Debug("dcc-bus supervisord action")
+	}
+	var err error
+	switch action {
+	case "start":
+		err = d.sup.StartProgram(ctx, name)
+	case "stop":
+		err = d.sup.StopProgram(ctx, name)
+	case "restart":
+		err = d.sup.RestartProgram(ctx, name)
+	default:
+		return fmt.Errorf("dcc-bus: unknown action %q", action)
+	}
+	if err != nil && d.log != nil {
+		d.log.WithError(err).WithFields(fields).Warn("dcc-bus supervisord action failed")
+	}
+	return err
+}
+
+// ctlProgramName returns the supervisorctl target for a dcc-bus program
+// ("dcc-bus:dcc-bus-{layout}-{cs}"). Grouped programs must be addressed
+// with the group prefix.
+func ctlProgramName(layoutID, commandStationID uint) string {
+	return DccBusGroupName + ":" + programName(layoutID, commandStationID)
+}
+
+// parseDccBusProgramLayoutID extracts layoutID from a bare program name
+// "dcc-bus-{layoutID}-{commandStationID}". Returns false when the name
+// does not match that shape for the given commandStationID.
+func parseDccBusProgramLayoutID(bareName string, commandStationID uint) (uint, bool) {
+	const prefix = "dcc-bus-"
+	if !strings.HasPrefix(bareName, prefix) {
+		return 0, false
+	}
+	rest := bareName[len(prefix):]
+	suffix := fmt.Sprintf("-%d", commandStationID)
+	if !strings.HasSuffix(rest, suffix) {
+		return 0, false
+	}
+	layoutPart := rest[:len(rest)-len(suffix)]
+	if layoutPart == "" {
+		return 0, false
+	}
+	id, err := strconv.ParseUint(layoutPart, 10, 32)
+	if err != nil || id == 0 {
+		return 0, false
+	}
+	return uint(id), true
 }
 
 // EnsureRunning guarantees a `dcc-bus-<L>-<C>` program exists in

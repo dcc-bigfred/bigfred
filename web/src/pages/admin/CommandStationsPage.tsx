@@ -35,6 +35,7 @@ import AutoFixHighIcon from "@mui/icons-material/AutoFixHigh";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import MonitorHeartIcon from "@mui/icons-material/MonitorHeart";
+import PowerSettingsNewIcon from "@mui/icons-material/PowerSettingsNew";
 import { Link as RouterLink, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
@@ -46,6 +47,8 @@ import {
   useCreateCommandStation,
   useDeleteCommandStation,
   useUpdateCommandStation,
+  useDccBusSupervisordStatus,
+  useDccBusSupervisordAction,
   DEFAULT_COMMAND_STATION_DEADMAN_SECS,
   DEFAULT_COMMAND_STATION_HEARTBEAT_SECS,
   DEFAULT_COMMAND_STATION_POLL_INTERVAL_MS,
@@ -54,6 +57,8 @@ import {
   DEFAULT_COMMAND_STATION_IDLE_TIMEOUT_SECS,
   type CommandStation,
   type CommandStationKind,
+  type DccBusProgramStatus,
+  type DccBusSupervisordAction,
 } from "../../api/command_stations";
 
 function isLoconetKind(kind: CommandStationKind): boolean {
@@ -72,6 +77,7 @@ export default function CommandStationsPage() {
     | { kind: "create" }
     | { kind: "edit"; target: CommandStation }
     | { kind: "delete"; target: CommandStation }
+    | { kind: "supervisord"; target: CommandStation }
     | null;
 
   const [dialog, setDialog] = useState<DialogState>(null);
@@ -336,6 +342,20 @@ export default function CommandStationsPage() {
                           spacing={0.5}
                           justifyContent="flex-end"
                         >
+                          <Tooltip title={t("commandStation:admin.actions.supervisord")}>
+                            <IconButton
+                              size="small"
+                              onClick={() =>
+                                setDialog({ kind: "supervisord", target: row })
+                              }
+                              disabled={submitting}
+                              aria-label={t(
+                                "commandStation:admin.actions.supervisord",
+                              )}
+                            >
+                              <PowerSettingsNewIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
                           <Tooltip title={t("commandStation:admin.actions.slotsDiag")}>
                             <IconButton
                               size="small"
@@ -694,6 +714,201 @@ export default function CommandStationsPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {dialog?.kind === "supervisord" && (
+        <DccBusSupervisordDialog
+          target={dialog.target}
+          onClose={closeDialog}
+        />
+      )}
     </Container>
+  );
+}
+
+function dccBusStderrFileId(layoutId: number, commandStationId: number): string {
+  return `dcc-bus.dcc-bus-${layoutId}-${commandStationId}.stderr.log`;
+}
+
+function DccBusSupervisordDialog({
+  target,
+  onClose,
+}: {
+  target: CommandStation;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation(["commandStation", "common", "errors"]);
+  const navigate = useNavigate();
+  const status = useDccBusSupervisordStatus(target.id);
+  const action = useDccBusSupervisordAction(target.id);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [failedLayoutId, setFailedLayoutId] = useState<number | null>(null);
+  const [pendingLayoutId, setPendingLayoutId] = useState<number | null>(null);
+
+  const programs = status.data?.programs ?? [];
+
+  const formatError = (err: unknown): string => {
+    if (err instanceof ApiError) {
+      if (err.status === 503 || err.code === "service_unavailable") {
+        return t("commandStation:admin.supervisord.unavailable");
+      }
+      return (
+        err.detail ||
+        t(`errors:${err.code}` as const, {
+          defaultValue: t("commandStation:admin.supervisord.actionFailed"),
+        })
+      );
+    }
+    return t("errors:network");
+  };
+
+  const runAction = async (
+    layoutId: number,
+    next: DccBusSupervisordAction,
+  ) => {
+    setActionError(null);
+    setFailedLayoutId(null);
+    setPendingLayoutId(layoutId);
+    try {
+      await action.mutateAsync({ action: next, layoutId });
+    } catch (err) {
+      setFailedLayoutId(layoutId);
+      setActionError(formatError(err));
+    } finally {
+      setPendingLayoutId(null);
+    }
+  };
+
+  const openLogs = (layoutId: number) => {
+    const file = dccBusStderrFileId(layoutId, target.id);
+    onClose();
+    navigate(
+      `/admin/logs?group=${encodeURIComponent("dcc-bus")}&file=${encodeURIComponent(file)}`,
+    );
+  };
+
+  return (
+    <Dialog open onClose={onClose} fullWidth maxWidth="sm">
+      <DialogTitle>
+        {t("commandStation:admin.supervisord.title", { name: target.name })}
+      </DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} sx={{ mt: 1 }}>
+          {status.isLoading ? (
+            <CircularProgress size={24} />
+          ) : status.isError ? (
+            <Alert severity="error">
+              {formatError(status.error)}
+            </Alert>
+          ) : programs.length === 0 ? (
+            <Alert severity="info">
+              {t("commandStation:admin.supervisord.noPrograms")}
+            </Alert>
+          ) : (
+            programs.map((program) => (
+              <DccBusProgramRow
+                key={program.layoutId}
+                program={program}
+                pendingLayoutId={pendingLayoutId}
+                error={
+                  failedLayoutId === program.layoutId ? actionError : null
+                }
+                onAction={(next) => void runAction(program.layoutId, next)}
+                onViewLogs={() => openLogs(program.layoutId)}
+              />
+            ))
+          )}
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>
+          {t("commandStation:admin.supervisord.close")}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+function DccBusProgramRow({
+  program,
+  pendingLayoutId,
+  error,
+  onAction,
+  onViewLogs,
+}: {
+  program: DccBusProgramStatus;
+  pendingLayoutId: number | null;
+  error: string | null;
+  onAction: (action: DccBusSupervisordAction) => void;
+  onViewLogs: () => void;
+}) {
+  const { t } = useTranslation(["commandStation"]);
+  const layoutLabel = program.layoutName || `#${program.layoutId}`;
+  const busy = pendingLayoutId === program.layoutId;
+  const running = program.running;
+
+  return (
+    <Stack
+      spacing={1}
+      sx={{
+        border: 1,
+        borderColor: "divider",
+        borderRadius: 1,
+        p: 1.5,
+      }}
+    >
+      <Stack
+        direction="row"
+        spacing={1}
+        alignItems="center"
+        justifyContent="space-between"
+        flexWrap="wrap"
+        useFlexGap
+      >
+        <Typography variant="subtitle2">{layoutLabel}</Typography>
+        <Chip
+          size="small"
+          color={running ? "success" : "default"}
+          label={
+            running
+              ? t("commandStation:admin.supervisord.statusOn")
+              : t("commandStation:admin.supervisord.statusOff")
+          }
+        />
+      </Stack>
+      <Typography variant="caption" color="text.secondary">
+        {program.name}
+        {program.pid != null && program.pid > 0 ? ` · pid ${program.pid}` : ""}
+      </Typography>
+      {error && <Alert severity="error">{error}</Alert>}
+      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+        <Button
+          variant="contained"
+          size="small"
+          disabled={busy || running}
+          onClick={() => onAction("start")}
+        >
+          {t("commandStation:admin.supervisord.start")}
+        </Button>
+        <Button
+          variant="outlined"
+          size="small"
+          disabled={busy || !running}
+          onClick={() => onAction("stop")}
+        >
+          {t("commandStation:admin.supervisord.stop")}
+        </Button>
+        <Button
+          variant="outlined"
+          size="small"
+          disabled={busy}
+          onClick={() => onAction("restart")}
+        >
+          {t("commandStation:admin.supervisord.restart")}
+        </Button>
+        <Button variant="text" size="small" onClick={onViewLogs}>
+          {t("commandStation:admin.supervisord.viewLogs")}
+        </Button>
+      </Stack>
+    </Stack>
   );
 }

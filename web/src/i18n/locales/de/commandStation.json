@@ -18,7 +18,21 @@
       "wizard": "Mit Assistent hinzufügen",
       "edit": "Bearbeiten",
       "delete": "Löschen",
-      "slotsDiag": "Slot-Diagnose"
+      "slotsDiag": "Slot-Diagnose",
+      "supervisord": "dcc-bus-Dienst"
+    },
+    "supervisord": {
+      "title": "dcc-bus-Dienst — {{name}}",
+      "layoutContext": "Verbindung im Rahmen der aktuellen Anlage: {{name}}",
+      "statusOn": "Aktiv",
+      "statusOff": "Gestoppt",
+      "start": "Start",
+      "stop": "Stop",
+      "restart": "Neustart",
+      "viewLogs": "Logs anzeigen",
+      "close": "Schließen",
+      "unavailable": "Dienst nicht verfügbar (supervisord nicht konfiguriert)",
+      "actionFailed": "Aktion fehlgeschlagen"
     },
     "wizard": {
       "title": "Verbindungsassistent",

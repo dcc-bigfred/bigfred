@@ -35,10 +35,12 @@ import AutoFixHighIcon from "@mui/icons-material/AutoFixHigh";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import MonitorHeartIcon from "@mui/icons-material/MonitorHeart";
+import PowerSettingsNewIcon from "@mui/icons-material/PowerSettingsNew";
 import { Link as RouterLink, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
 import { ApiError } from "../../api/client";
+import { useMe } from "../../api/auth";
 import {
   COMMAND_STATION_KINDS,
   COMMAND_STATION_SPEED_STEPS,
@@ -46,6 +48,8 @@ import {
   useCreateCommandStation,
   useDeleteCommandStation,
   useUpdateCommandStation,
+  useDccBusSupervisordStatus,
+  useDccBusSupervisordAction,
   DEFAULT_COMMAND_STATION_DEADMAN_SECS,
   DEFAULT_COMMAND_STATION_HEARTBEAT_SECS,
   DEFAULT_COMMAND_STATION_POLL_INTERVAL_MS,
@@ -54,6 +58,7 @@ import {
   DEFAULT_COMMAND_STATION_IDLE_TIMEOUT_SECS,
   type CommandStation,
   type CommandStationKind,
+  type DccBusSupervisordAction,
 } from "../../api/command_stations";
 
 function isLoconetKind(kind: CommandStationKind): boolean {
@@ -72,6 +77,7 @@ export default function CommandStationsPage() {
     | { kind: "create" }
     | { kind: "edit"; target: CommandStation }
     | { kind: "delete"; target: CommandStation }
+    | { kind: "supervisord"; target: CommandStation }
     | null;
 
   const [dialog, setDialog] = useState<DialogState>(null);
@@ -336,6 +342,20 @@ export default function CommandStationsPage() {
                           spacing={0.5}
                           justifyContent="flex-end"
                         >
+                          <Tooltip title={t("commandStation:admin.actions.supervisord")}>
+                            <IconButton
+                              size="small"
+                              onClick={() =>
+                                setDialog({ kind: "supervisord", target: row })
+                              }
+                              disabled={submitting}
+                              aria-label={t(
+                                "commandStation:admin.actions.supervisord",
+                              )}
+                            >
+                              <PowerSettingsNewIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
                           <Tooltip title={t("commandStation:admin.actions.slotsDiag")}>
                             <IconButton
                               size="small"
@@ -694,6 +714,147 @@ export default function CommandStationsPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {dialog?.kind === "supervisord" && (
+        <DccBusSupervisordDialog
+          target={dialog.target}
+          onClose={closeDialog}
+        />
+      )}
     </Container>
+  );
+}
+
+function dccBusStderrFileId(layoutId: number, commandStationId: number): string {
+  return `dcc-bus.dcc-bus-${layoutId}-${commandStationId}.stderr.log`;
+}
+
+function DccBusSupervisordDialog({
+  target,
+  onClose,
+}: {
+  target: CommandStation;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation(["commandStation", "common", "errors"]);
+  const navigate = useNavigate();
+  const me = useMe().data;
+  const status = useDccBusSupervisordStatus(target.id);
+  const action = useDccBusSupervisordAction(target.id);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const running = status.data?.running === true;
+  const busy = action.isPending || status.isFetching;
+
+  const runAction = async (next: DccBusSupervisordAction) => {
+    setActionError(null);
+    try {
+      await action.mutateAsync(next);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        if (err.status === 503 || err.code === "service_unavailable") {
+          setActionError(t("commandStation:admin.supervisord.unavailable"));
+          return;
+        }
+        const localised = t(`errors:${err.code}` as const, { defaultValue: "" });
+        setActionError(
+          localised || t("commandStation:admin.supervisord.actionFailed"),
+        );
+        return;
+      }
+      setActionError(t("errors:network"));
+    }
+  };
+
+  const openLogs = () => {
+    const layoutId = me?.layoutId;
+    if (layoutId == null || layoutId <= 0) {
+      return;
+    }
+    const file = dccBusStderrFileId(layoutId, target.id);
+    onClose();
+    navigate(
+      `/admin/logs?group=${encodeURIComponent("dcc-bus")}&file=${encodeURIComponent(file)}`,
+    );
+  };
+
+  return (
+    <Dialog open onClose={onClose} fullWidth maxWidth="xs">
+      <DialogTitle>
+        {t("commandStation:admin.supervisord.title", { name: target.name })}
+      </DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} sx={{ mt: 1 }}>
+          <Typography variant="body2" color="text.secondary">
+            {t("commandStation:admin.supervisord.layoutContext", {
+              name: me?.layoutName || "—",
+            })}
+          </Typography>
+          {status.isLoading ? (
+            <CircularProgress size={24} />
+          ) : status.isError ? (
+            <Alert severity="error">
+              {status.error instanceof ApiError &&
+              (status.error.status === 503 ||
+                status.error.code === "service_unavailable")
+                ? t("commandStation:admin.supervisord.unavailable")
+                : t("errors:network")}
+            </Alert>
+          ) : (
+            <Chip
+              size="small"
+              color={running ? "success" : "default"}
+              label={
+                running
+                  ? t("commandStation:admin.supervisord.statusOn")
+                  : t("commandStation:admin.supervisord.statusOff")
+              }
+              sx={{ alignSelf: "flex-start" }}
+            />
+          )}
+          {actionError && <Alert severity="error">{actionError}</Alert>}
+          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+            <Button
+              variant="contained"
+              size="small"
+              disabled={busy || running || status.isError}
+              onClick={() => void runAction("start")}
+            >
+              {t("commandStation:admin.supervisord.start")}
+            </Button>
+            <Button
+              variant="outlined"
+              size="small"
+              disabled={busy || !running || status.isError}
+              onClick={() => void runAction("stop")}
+            >
+              {t("commandStation:admin.supervisord.stop")}
+            </Button>
+            <Button
+              variant="outlined"
+              size="small"
+              disabled={busy || status.isError}
+              onClick={() => void runAction("restart")}
+            >
+              {t("commandStation:admin.supervisord.restart")}
+            </Button>
+          </Stack>
+          <Button
+            variant="text"
+            size="small"
+            onClick={openLogs}
+            disabled={me?.layoutId == null || me.layoutId <= 0}
+            sx={{ alignSelf: "flex-start" }}
+          >
+            {t("commandStation:admin.supervisord.viewLogs")}
+          </Button>
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>
+          {t("commandStation:admin.supervisord.close")}
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 }

@@ -376,6 +376,17 @@ func (s *Manager) StartProgram(ctx context.Context, name string) error {
 	return s.ctl.StartProgram(ctx, name)
 }
 
+// RestartProgram stops then starts one program without rewriting config.
+func (s *Manager) RestartProgram(ctx context.Context, name string) error {
+	_ = s.ctl.StopProgram(ctx, name)
+	return s.ctl.StartProgram(ctx, name)
+}
+
+// Status returns the observable status of every managed program.
+func (s *Manager) Status(ctx context.Context) ([]ProgramState, error) {
+	return s.allStatus(ctx)
+}
+
 // RunHealthLoop polls program status until ctx is cancelled.
 func (s *Manager) RunHealthLoop(ctx context.Context, interval time.Duration, onChange func([]ProgramState)) {
 	loopCtx, cancel := context.WithCancel(ctx)

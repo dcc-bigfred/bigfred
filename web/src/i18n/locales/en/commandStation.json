@@ -18,7 +18,21 @@
       "wizard": "Add with wizard",
       "edit": "Edit",
       "delete": "Delete",
-      "slotsDiag": "Slot diagnostics"
+      "slotsDiag": "Slot diagnostics",
+      "supervisord": "dcc-bus service"
+    },
+    "supervisord": {
+      "title": "dcc-bus service — {{name}}",
+      "layoutContext": "Connection for the current layout: {{name}}",
+      "statusOn": "Running",
+      "statusOff": "Stopped",
+      "start": "Start",
+      "stop": "Stop",
+      "restart": "Restart",
+      "viewLogs": "View logs",
+      "close": "Close",
+      "unavailable": "Service unavailable (supervisord not configured)",
+      "actionFailed": "Action failed"
     },
     "wizard": {
       "title": "Connection wizard",

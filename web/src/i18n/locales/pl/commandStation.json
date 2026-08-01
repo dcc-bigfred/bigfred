@@ -18,7 +18,21 @@
       "wizard": "Dodaj z pomocą kreatora",
       "edit": "Edytuj",
       "delete": "Usuń",
-      "slotsDiag": "Diagnostyka slotów"
+      "slotsDiag": "Diagnostyka slotów",
+      "supervisord": "Usługa dcc-bus"
+    },
+    "supervisord": {
+      "title": "Usługa dcc-bus — {{name}}",
+      "layoutContext": "Połączenie w ramach obecnego layoutu: {{name}}",
+      "statusOn": "Włączona",
+      "statusOff": "Wyłączona",
+      "start": "Start",
+      "stop": "Stop",
+      "restart": "Restart",
+      "viewLogs": "Zobacz logi",
+      "close": "Zamknij",
+      "unavailable": "Usługa niedostępna (supervisord nie skonfigurowany)",
+      "actionFailed": "Akcja nie powiodła się"
     },
     "wizard": {
       "title": "Kreator połączenia",

@@ -218,3 +218,44 @@ export type ScanWsFrame =
   | { type: "connection"; name: string; uri: string }
   | { type: "error"; detail?: string }
   | { type: "done" };
+
+export interface DccBusSupervisordStatus {
+  name: string;
+  status: string;
+  pid?: number;
+  running: boolean;
+}
+
+export type DccBusSupervisordAction = "start" | "stop" | "restart";
+
+function dccBusSupervisordStatusQueryKey(csId: number) {
+  return ["admin", "dcc-bus", csId, "supervisord"] as const;
+}
+
+export function useDccBusSupervisordStatus(csId: number | null) {
+  return useQuery({
+    queryKey: dccBusSupervisordStatusQueryKey(csId ?? 0),
+    queryFn: () =>
+      apiFetch<DccBusSupervisordStatus>(
+        `/api/v1/admin/dcc-bus/${csId}/supervisord`,
+      ),
+    enabled: csId != null && csId > 0,
+    staleTime: 2 * 1000,
+    refetchInterval: 5 * 1000,
+  });
+}
+
+export function useDccBusSupervisordAction(csId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (action: DccBusSupervisordAction) =>
+      apiFetch<void>(`/api/v1/admin/dcc-bus/${csId}/supervisord/${action}`, {
+        method: "POST",
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({
+        queryKey: dccBusSupervisordStatusQueryKey(csId),
+      });
+    },
+  });
+}

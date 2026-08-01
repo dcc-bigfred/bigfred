@@ -16,6 +16,7 @@ import {
 } from "@mui/material";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import { useTranslation } from "react-i18next";
+import { useSearchParams } from "react-router-dom";
 
 import { ApiError } from "../../api/client";
 import {
@@ -36,6 +37,7 @@ function formatBytes(n: number): string {
 
 export default function DiagnosticsPage() {
   const { t } = useTranslation(["diagnostics", "common", "errors"]);
+  const [searchParams] = useSearchParams();
   const sources = useDiagnosticSources();
 
   const [groupId, setGroupId] = useState("");
@@ -51,6 +53,8 @@ export default function DiagnosticsPage() {
   const [contentError, setContentError] = useState<string | null>(null);
 
   const groups = sources.data?.groups ?? [];
+  const preferredGroup = searchParams.get("group") ?? "";
+  const preferredFile = searchParams.get("file") ?? "";
 
   const entries: DiagnosticEntry[] = useMemo(() => {
     const g = groups.find((x) => x.id === groupId);
@@ -61,20 +65,28 @@ export default function DiagnosticsPage() {
     if (groups.length === 0) {
       return;
     }
-    if (!groupId || !groups.some((g) => g.id === groupId)) {
-      setGroupId(groups[0].id);
+    if (preferredGroup && groups.some((g) => g.id === preferredGroup)) {
+      setGroupId(preferredGroup);
+      return;
     }
-  }, [groups, groupId]);
+    setGroupId((current) =>
+      current && groups.some((g) => g.id === current) ? current : groups[0].id,
+    );
+  }, [groups, preferredGroup]);
 
   useEffect(() => {
     if (entries.length === 0) {
       setFileId("");
       return;
     }
-    if (!fileId || !entries.some((e) => e.id === fileId)) {
-      setFileId(entries[0].id);
+    if (preferredFile && entries.some((e) => e.id === preferredFile)) {
+      setFileId(preferredFile);
+      return;
     }
-  }, [entries, fileId]);
+    setFileId((current) =>
+      current && entries.some((e) => e.id === current) ? current : entries[0].id,
+    );
+  }, [entries, preferredFile]);
 
   const loadContent = useCallback(async () => {
     if (!fileId) {

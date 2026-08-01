@@ -203,6 +203,71 @@ func programName(layoutID, commandStationID uint) string {
 	return fmt.Sprintf("dcc-bus-%d-%d", layoutID, commandStationID)
 }
 
+// ProgramStatus returns the supervisord status of the dcc-bus program
+// for (layoutID, commandStationID). When the program is absent from
+// supervisord (not yet synced / not attached to the layout), the
+// returned state uses Status "STOPPED".
+func (d *DccBusService) ProgramStatus(ctx context.Context, layoutID, commandStationID uint) (ProgramState, error) {
+	name := programName(layoutID, commandStationID)
+	if d.sup == nil {
+		return ProgramState{Name: name, Group: DccBusGroupName, Status: "STOPPED"}, nil
+	}
+	rows, err := d.sup.Status(ctx)
+	if err != nil {
+		return ProgramState{}, err
+	}
+	for _, row := range rows {
+		if matchSupervisordProgram(row.Name, name) {
+			st := row
+			st.Name = name
+			if st.Group == "" {
+				st.Group = DccBusGroupName
+			}
+			return st, nil
+		}
+	}
+	return ProgramState{Name: name, Group: DccBusGroupName, Status: "STOPPED"}, nil
+}
+
+// StartDccBus starts the existing dcc-bus supervisord program without
+// rewriting config (unlike EnsureRunning, which upserts the program).
+func (d *DccBusService) StartDccBus(ctx context.Context, layoutID, commandStationID uint) error {
+	if d.sup == nil {
+		return errors.New("dcc-bus: supervisord service is not wired")
+	}
+	return d.sup.StartProgram(ctx, programName(layoutID, commandStationID))
+}
+
+// StopDccBus stops the dcc-bus supervisord program without removing it
+// from config (unlike Stop, which also RemoveProgram).
+func (d *DccBusService) StopDccBus(ctx context.Context, layoutID, commandStationID uint) error {
+	if d.sup == nil {
+		return errors.New("dcc-bus: supervisord service is not wired")
+	}
+	return d.sup.StopProgram(ctx, programName(layoutID, commandStationID))
+}
+
+// RestartDccBus stops then starts the dcc-bus supervisord program.
+func (d *DccBusService) RestartDccBus(ctx context.Context, layoutID, commandStationID uint) error {
+	if d.sup == nil {
+		return errors.New("dcc-bus: supervisord service is not wired")
+	}
+	return d.sup.RestartProgram(ctx, programName(layoutID, commandStationID))
+}
+
+// matchSupervisordProgram matches a supervisorctl status name against a
+// bare program name. Status rows for grouped programs may appear as
+// "group:program".
+func matchSupervisordProgram(statusName, programName string) bool {
+	if statusName == programName {
+		return true
+	}
+	if i := strings.LastIndex(statusName, ":"); i >= 0 {
+		return statusName[i+1:] == programName
+	}
+	return false
+}
+
 // EnsureRunning guarantees a `dcc-bus-<L>-<C>` program exists in
 // supervisord, RUNNING, and accepting WS connections. It returns
 // the loopback port the daemon listens on plus the program name

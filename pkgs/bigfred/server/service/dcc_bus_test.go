@@ -5,6 +5,9 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/keskad/loco/pkgs/bigfred/server/supervisord"
 )
 
 func TestProgramNameDeterministic(t *testing.T) {
@@ -40,11 +43,63 @@ func TestMatchSupervisordProgram(t *testing.T) {
 	}
 }
 
-func TestProgramStatusNilSupervisor(t *testing.T) {
+func TestProgramsForCommandStationNilSupervisor(t *testing.T) {
 	d := NewDccBusService(DccBusConfig{}, nil, nil, nil, nil, nil)
-	_, err := d.ProgramStatus(context.Background(), 1, 2)
+	_, err := d.ProgramsForCommandStation(context.Background(), 2)
 	if !errors.Is(err, ErrSupervisordNotWired) {
-		t.Fatalf("ProgramStatus: got %v, want ErrSupervisordNotWired", err)
+		t.Fatalf("ProgramsForCommandStation: got %v, want ErrSupervisordNotWired", err)
+	}
+}
+
+func TestParseDccBusProgramLayoutID(t *testing.T) {
+	if id, ok := parseDccBusProgramLayoutID("dcc-bus-7-3", 3); !ok || id != 7 {
+		t.Fatalf("got %d ok=%v", id, ok)
+	}
+	if _, ok := parseDccBusProgramLayoutID("dcc-bus-7-3", 4); ok {
+		t.Fatal("expected mismatch for wrong cs")
+	}
+	if _, ok := parseDccBusProgramLayoutID("redis", 3); ok {
+		t.Fatal("expected non-match")
+	}
+}
+
+func TestProgramsForCommandStationMergesPortsAndStatus(t *testing.T) {
+	fake := &fakeSupervisor{
+		status: []ProgramState{
+			{Name: "dcc-bus:dcc-bus-2-5", Group: DccBusGroupName, Status: "RUNNING", PID: 42},
+			{Name: "dcc-bus:dcc-bus-9-5", Group: DccBusGroupName, Status: "FATAL", PID: 0},
+			{Name: "redis", Status: "RUNNING", PID: 1},
+		},
+	}
+	d := NewDccBusService(DccBusConfig{PortMin: 9200, PortMax: 9209}, fake, nil, nil, nil, nil)
+	// Port-only layout 3 (no supervisord row yet) → STOPPED.
+	if _, err := d.allocatePortLocked(3, 5); err != nil {
+		t.Fatalf("alloc: %v", err)
+	}
+	// Layout 2 already has a RUNNING row; also give it a port.
+	if _, err := d.allocatePortLocked(2, 5); err != nil {
+		t.Fatalf("alloc: %v", err)
+	}
+
+	got, err := d.ProgramsForCommandStation(context.Background(), 5)
+	if err != nil {
+		t.Fatalf("ProgramsForCommandStation: %v", err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("len=%d want 3: %+v", len(got), got)
+	}
+	byLayout := map[uint]DccBusProgramStatus{}
+	for _, p := range got {
+		byLayout[p.LayoutID] = p
+	}
+	if p := byLayout[2]; !p.Running || p.Status != "RUNNING" || p.PID != 42 || p.Name != "dcc-bus-2-5" {
+		t.Fatalf("layout 2: %+v", p)
+	}
+	if p := byLayout[3]; p.Running || p.Status != "STOPPED" || p.Name != "dcc-bus-3-5" {
+		t.Fatalf("layout 3 (port-only): %+v", p)
+	}
+	if p := byLayout[9]; p.Running || p.Status != "FATAL" || p.Name != "dcc-bus-9-5" {
+		t.Fatalf("layout 9 (status-only): %+v", p)
 	}
 }
 
@@ -111,4 +166,48 @@ func TestAppendDccBusTelemetryArgs(t *testing.T) {
 	if len(unchanged) != 1 {
 		t.Fatalf("expected no flags without endpoint, got %v", unchanged)
 	}
+}
+
+// fakeSupervisor is a minimal Supervisor stub for unit tests.
+type fakeSupervisor struct {
+	status     []ProgramState
+	statusErr  error
+	startErr   error
+	lastStart  string
+	lastStop   string
+	lastRestart string
+}
+
+func (f *fakeSupervisor) Start(context.Context) error   { return nil }
+func (f *fakeSupervisor) Stop(context.Context) error    { return nil }
+func (f *fakeSupervisor) Apply(context.Context, supervisord.DesiredState) error {
+	return nil
+}
+func (f *fakeSupervisor) RunHealthLoop(context.Context, time.Duration, func([]ProgramState)) {
+}
+func (f *fakeSupervisor) Paths() (string, string) { return "", "" }
+func (f *fakeSupervisor) UpsertProgram(context.Context, string, supervisord.ProgramSpec) error {
+	return nil
+}
+func (f *fakeSupervisor) ReplaceGroupPrograms(context.Context, string, []supervisord.ProgramSpec) error {
+	return nil
+}
+func (f *fakeSupervisor) RemoveProgram(context.Context, string, string) error { return nil }
+func (f *fakeSupervisor) StartProgram(_ context.Context, name string) error {
+	f.lastStart = name
+	return f.startErr
+}
+func (f *fakeSupervisor) StopProgram(_ context.Context, name string) error {
+	f.lastStop = name
+	return nil
+}
+func (f *fakeSupervisor) RestartProgram(_ context.Context, name string) error {
+	f.lastRestart = name
+	return nil
+}
+func (f *fakeSupervisor) Status(context.Context) ([]ProgramState, error) {
+	if f.statusErr != nil {
+		return nil, f.statusErr
+	}
+	return f.status, nil
 }

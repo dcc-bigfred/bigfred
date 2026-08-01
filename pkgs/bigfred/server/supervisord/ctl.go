@@ -3,6 +3,7 @@ package supervisord
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"regexp"
@@ -26,8 +27,10 @@ type ProgramStatus struct {
 var statusLinePattern = regexp.MustCompile(`^(\S+)\s+(\S+)(?:\s+pid\s+(\d+))?`)
 
 // Status runs supervisorctl status and parses the output.
+// supervisorctl exits with code 3 when any program is not RUNNING; that is
+// still a successful status listing and must not be treated as failure.
 func (c *Ctl) Status(ctx context.Context) ([]ProgramStatus, error) {
-	out, err := c.run(ctx, "status")
+	out, err := c.runStatus(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -78,6 +81,26 @@ func (c *Ctl) Ping(ctx context.Context) error {
 }
 
 func (c *Ctl) run(ctx context.Context, args ...string) (string, error) {
+	out, err := c.runRaw(ctx, args...)
+	if err != nil {
+		return "", err
+	}
+	return out, nil
+}
+
+// runStatus is like run("status") but treats exit code 3 as success.
+func (c *Ctl) runStatus(ctx context.Context) (string, error) {
+	out, err := c.runRaw(ctx, "status")
+	if err == nil {
+		return out, nil
+	}
+	if isSupervisorStatusPartialExit(err) && strings.TrimSpace(out) != "" {
+		return out, nil
+	}
+	return "", err
+}
+
+func (c *Ctl) runRaw(ctx context.Context, args ...string) (string, error) {
 	bin := c.Bin
 	if bin == "" {
 		bin = "supervisorctl"
@@ -87,17 +110,45 @@ func (c *Ctl) run(ctx context.Context, args ...string) (string, error) {
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
+	err := cmd.Run()
+	out := stdout.String()
+	if err != nil {
 		msg := strings.TrimSpace(stderr.String())
 		if msg == "" {
-			msg = strings.TrimSpace(stdout.String())
+			msg = strings.TrimSpace(out)
 		}
 		if msg == "" {
 			msg = err.Error()
 		}
-		return "", fmt.Errorf("supervisorctl %s: %s", strings.Join(args, " "), msg)
+		return out, &supervisorctlError{
+			args:    args,
+			exitErr: err,
+			msg:     msg,
+		}
 	}
-	return stdout.String(), nil
+	return out, nil
+}
+
+type supervisorctlError struct {
+	args    []string
+	exitErr error
+	msg     string
+}
+
+func (e *supervisorctlError) Error() string {
+	return fmt.Sprintf("supervisorctl %s: %s", strings.Join(e.args, " "), e.msg)
+}
+
+func (e *supervisorctlError) Unwrap() error { return e.exitErr }
+
+// isSupervisorStatusPartialExit reports whether err comes from
+// supervisorctl status exiting 3 (some programs not RUNNING).
+func isSupervisorStatusPartialExit(err error) bool {
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) {
+		return false
+	}
+	return exitErr.ExitCode() == 3
 }
 
 func parseStatusOutput(out string) []ProgramStatus {

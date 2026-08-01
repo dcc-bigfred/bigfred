@@ -32,7 +32,8 @@
       "viewLogs": "Zobacz logi",
       "close": "Zamknij",
       "unavailable": "Usługa niedostępna (supervisord nie skonfigurowany)",
-      "actionFailed": "Akcja nie powiodła się"
+      "actionFailed": "Akcja nie powiodła się",
+      "noPrograms": "Brak programów dcc-bus dla tej stacji"
     },
     "wizard": {
       "title": "Kreator połączenia",

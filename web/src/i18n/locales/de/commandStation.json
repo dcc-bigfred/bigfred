@@ -32,7 +32,8 @@
       "viewLogs": "Logs anzeigen",
       "close": "Schließen",
       "unavailable": "Dienst nicht verfügbar (supervisord nicht konfiguriert)",
-      "actionFailed": "Aktion fehlgeschlagen"
+      "actionFailed": "Aktion fehlgeschlagen",
+      "noPrograms": "Keine dcc-bus-Programme für diese Zentrale"
     },
     "wizard": {
       "title": "Verbindungsassistent",

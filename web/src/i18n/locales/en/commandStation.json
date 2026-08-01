@@ -32,7 +32,8 @@
       "viewLogs": "View logs",
       "close": "Close",
       "unavailable": "Service unavailable (supervisord not configured)",
-      "actionFailed": "Action failed"
+      "actionFailed": "Action failed",
+      "noPrograms": "No dcc-bus programs for this command station"
     },
     "wizard": {
       "title": "Connection wizard",

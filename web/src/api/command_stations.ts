@@ -219,11 +219,17 @@ export type ScanWsFrame =
   | { type: "error"; detail?: string }
   | { type: "done" };
 
-export interface DccBusSupervisordStatus {
+export interface DccBusProgramStatus {
+  layoutId: number;
+  layoutName: string;
   name: string;
   status: string;
   pid?: number;
   running: boolean;
+}
+
+export interface DccBusSupervisordStatus {
+  programs: DccBusProgramStatus[];
 }
 
 export type DccBusSupervisordAction = "start" | "stop" | "restart";
@@ -248,10 +254,11 @@ export function useDccBusSupervisordStatus(csId: number | null) {
 export function useDccBusSupervisordAction(csId: number) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (action: DccBusSupervisordAction) =>
-      apiFetch<void>(`/api/v1/admin/dcc-bus/${csId}/supervisord/${action}`, {
-        method: "POST",
-      }),
+    mutationFn: (vars: { action: DccBusSupervisordAction; layoutId: number }) =>
+      apiFetch<void>(
+        `/api/v1/admin/dcc-bus/${csId}/supervisord/${vars.action}?layoutId=${vars.layoutId}`,
+        { method: "POST" },
+      ),
     onSuccess: () => {
       void qc.invalidateQueries({
         queryKey: dccBusSupervisordStatusQueryKey(csId),

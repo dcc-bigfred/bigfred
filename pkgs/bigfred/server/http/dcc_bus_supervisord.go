@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -11,9 +12,8 @@ import (
 	"github.com/keskad/loco/pkgs/bigfred/server/service"
 )
 
-// DccBusSupervisordHandler exposes admin REST endpoints for the
-// dcc-bus supervisord program tied to the caller's session layout
-// and a command-station id.
+// DccBusSupervisordHandler exposes admin REST endpoints for dcc-bus
+// supervisord programs tied to a command-station id (across layouts).
 type DccBusSupervisordHandler struct {
 	dccBus *service.DccBusService
 }
@@ -23,20 +23,18 @@ func NewDccBusSupervisordHandler(dccBus *service.DccBusService) *DccBusSuperviso
 	return &DccBusSupervisordHandler{dccBus: dccBus}
 }
 
-type dccBusSupervisordStatusResponse struct {
-	Name    string `json:"name"`
-	Status  string `json:"status"`
-	PID     int    `json:"pid,omitempty"`
-	Running bool   `json:"running"`
+type dccBusSupervisordListResponse struct {
+	Programs []service.DccBusProgramStatus `json:"programs"`
 }
 
 // GetStatus handles GET /api/v1/admin/dcc-bus/{commandStationId}/supervisord.
+// Returns every dcc-bus program for the command station across all layouts.
 func (h *DccBusSupervisordHandler) GetStatus(w http.ResponseWriter, r *http.Request) {
-	layoutID, csID, ok := h.requireSessionCS(w, r)
+	csID, ok := h.requireAdminCS(w, r)
 	if !ok {
 		return
 	}
-	st, err := h.dccBus.ProgramStatus(r.Context(), layoutID, csID)
+	programs, err := h.dccBus.ProgramsForCommandStation(r.Context(), csID)
 	if err != nil {
 		if errors.Is(err, service.ErrSupervisordNotWired) {
 			writeJSONError(w, http.StatusServiceUnavailable, "service_unavailable")
@@ -45,21 +43,23 @@ func (h *DccBusSupervisordHandler) GetStatus(w http.ResponseWriter, r *http.Requ
 		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 		return
 	}
-	running := strings.EqualFold(st.Status, "RUNNING")
+	if programs == nil {
+		programs = []service.DccBusProgramStatus{}
+	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(dccBusSupervisordStatusResponse{
-		Name:    st.Name,
-		Status:  st.Status,
-		PID:     st.PID,
-		Running: running,
-	})
+	_ = json.NewEncoder(w).Encode(dccBusSupervisordListResponse{Programs: programs})
 }
 
-// Action handles POST /api/v1/admin/dcc-bus/{commandStationId}/supervisord/{action}.
-// action is one of start|stop|restart.
+// Action handles POST /api/v1/admin/dcc-bus/{commandStationId}/supervisord/{action}?layoutId=N.
+// action is one of start|stop|restart. layoutId selects which layout's program to control.
 func (h *DccBusSupervisordHandler) Action(w http.ResponseWriter, r *http.Request) {
-	layoutID, csID, ok := h.requireSessionCS(w, r)
+	csID, ok := h.requireAdminCS(w, r)
 	if !ok {
+		return
+	}
+	layoutID, ok := parseLayoutIDQuery(r)
+	if !ok {
+		writeJSONError(w, http.StatusBadRequest, "invalid_layout")
 		return
 	}
 	action := strings.ToLower(strings.TrimSpace(chi.URLParam(r, "action")))
@@ -80,30 +80,43 @@ func (h *DccBusSupervisordHandler) Action(w http.ResponseWriter, r *http.Request
 			writeJSONError(w, http.StatusServiceUnavailable, "service_unavailable")
 			return
 		}
-		writeJSONError(w, http.StatusUnprocessableEntity, "action_failed")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"error":   "action_failed",
+			"message": err.Error(),
+		})
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *DccBusSupervisordHandler) requireSessionCS(w http.ResponseWriter, r *http.Request) (layoutID, csID uint, ok bool) {
+func (h *DccBusSupervisordHandler) requireAdminCS(w http.ResponseWriter, r *http.Request) (csID uint, ok bool) {
 	if h.dccBus == nil {
 		writeJSONError(w, http.StatusServiceUnavailable, "service_unavailable")
-		return 0, 0, false
+		return 0, false
 	}
-	actor, ok := IdentityFromContext(r.Context())
+	_, ok = IdentityFromContext(r.Context())
 	if !ok {
 		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
-		return 0, 0, false
-	}
-	if actor.Layout.ID == 0 {
-		writeJSONError(w, http.StatusUnprocessableEntity, "layout_mismatch")
-		return 0, 0, false
+		return 0, false
 	}
 	csID, ok = parseUintParam(r, "commandStationId")
 	if !ok {
 		writeJSONError(w, http.StatusBadRequest, "invalid_id")
-		return 0, 0, false
+		return 0, false
 	}
-	return actor.Layout.ID, csID, true
+	return csID, true
+}
+
+func parseLayoutIDQuery(r *http.Request) (uint, bool) {
+	raw := strings.TrimSpace(r.URL.Query().Get("layoutId"))
+	if raw == "" {
+		return 0, false
+	}
+	n, err := strconv.ParseUint(raw, 10, 32)
+	if err != nil || n == 0 {
+		return 0, false
+	}
+	return uint(n), true
 }

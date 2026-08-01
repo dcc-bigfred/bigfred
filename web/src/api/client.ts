@@ -9,16 +9,18 @@
 //      bigfred_session cookie so the backend can identify the caller.
 //   3. JSON envelope handling — the backend returns {error: "code"}
 //      for 4xx/5xx responses; we surface it as ApiError so React
-//      Query can render a useful message.
-
+//      Query can render a useful message. Optional `message` becomes
+//      ApiError.detail for operator-facing diagnostics.
 export class ApiError extends Error {
   public readonly status: number;
   public readonly code: string;
+  public readonly detail: string;
 
-  constructor(status: number, code: string) {
+  constructor(status: number, code: string, detail = "") {
     super(`API ${status}: ${code}`);
     this.status = status;
     this.code = code;
+    this.detail = detail;
   }
 }
 
@@ -63,7 +65,11 @@ export async function apiFetch<T = unknown>(
       typeof body === "object" && body !== null && "error" in body
         ? String((body as { error: unknown }).error)
         : `http_${res.status}`;
-    throw new ApiError(res.status, code);
+    const detail =
+      typeof body === "object" && body !== null && "message" in body
+        ? String((body as { message: unknown }).message)
+        : "";
+    throw new ApiError(res.status, code, detail);
   }
 
   return body as T;

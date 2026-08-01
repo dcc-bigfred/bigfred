@@ -742,9 +742,24 @@ function DccBusSupervisordDialog({
   const action = useDccBusSupervisordAction(target.id);
   const [actionError, setActionError] = useState<string | null>(null);
   const [failedLayoutId, setFailedLayoutId] = useState<number | null>(null);
-  const [pendingKey, setPendingKey] = useState<string | null>(null);
+  const [pendingLayoutId, setPendingLayoutId] = useState<number | null>(null);
 
   const programs = status.data?.programs ?? [];
+
+  const formatError = (err: unknown): string => {
+    if (err instanceof ApiError) {
+      if (err.status === 503 || err.code === "service_unavailable") {
+        return t("commandStation:admin.supervisord.unavailable");
+      }
+      return (
+        err.detail ||
+        t(`errors:${err.code}` as const, {
+          defaultValue: t("commandStation:admin.supervisord.actionFailed"),
+        })
+      );
+    }
+    return t("errors:network");
+  };
 
   const runAction = async (
     layoutId: number,
@@ -752,29 +767,14 @@ function DccBusSupervisordDialog({
   ) => {
     setActionError(null);
     setFailedLayoutId(null);
-    setPendingKey(`${layoutId}:${next}`);
+    setPendingLayoutId(layoutId);
     try {
       await action.mutateAsync({ action: next, layoutId });
     } catch (err) {
       setFailedLayoutId(layoutId);
-      if (err instanceof ApiError) {
-        if (err.status === 503 || err.code === "service_unavailable") {
-          setActionError(t("commandStation:admin.supervisord.unavailable"));
-          return;
-        }
-        if (err.detail) {
-          setActionError(err.detail);
-          return;
-        }
-        const localised = t(`errors:${err.code}` as const, { defaultValue: "" });
-        setActionError(
-          localised || t("commandStation:admin.supervisord.actionFailed"),
-        );
-        return;
-      }
-      setActionError(t("errors:network"));
+      setActionError(formatError(err));
     } finally {
-      setPendingKey(null);
+      setPendingLayoutId(null);
     }
   };
 
@@ -797,15 +797,7 @@ function DccBusSupervisordDialog({
             <CircularProgress size={24} />
           ) : status.isError ? (
             <Alert severity="error">
-              {status.error instanceof ApiError
-                ? status.error.status === 503 ||
-                  status.error.code === "service_unavailable"
-                  ? t("commandStation:admin.supervisord.unavailable")
-                  : status.error.detail ||
-                    t(`errors:${status.error.code}` as const, {
-                      defaultValue: t("commandStation:admin.supervisord.actionFailed"),
-                    })
-                : t("errors:network")}
+              {formatError(status.error)}
             </Alert>
           ) : programs.length === 0 ? (
             <Alert severity="info">
@@ -816,7 +808,7 @@ function DccBusSupervisordDialog({
               <DccBusProgramRow
                 key={program.layoutId}
                 program={program}
-                pendingKey={pendingKey}
+                pendingLayoutId={pendingLayoutId}
                 error={
                   failedLayoutId === program.layoutId ? actionError : null
                 }
@@ -838,20 +830,20 @@ function DccBusSupervisordDialog({
 
 function DccBusProgramRow({
   program,
-  pendingKey,
+  pendingLayoutId,
   error,
   onAction,
   onViewLogs,
 }: {
   program: DccBusProgramStatus;
-  pendingKey: string | null;
+  pendingLayoutId: number | null;
   error: string | null;
   onAction: (action: DccBusSupervisordAction) => void;
   onViewLogs: () => void;
 }) {
   const { t } = useTranslation(["commandStation"]);
   const layoutLabel = program.layoutName || `#${program.layoutId}`;
-  const busy = pendingKey?.startsWith(`${program.layoutId}:`) === true;
+  const busy = pendingLayoutId === program.layoutId;
   const running = program.running;
 
   return (

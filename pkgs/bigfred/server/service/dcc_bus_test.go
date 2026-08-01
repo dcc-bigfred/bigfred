@@ -25,24 +25,6 @@ func TestCtlProgramName(t *testing.T) {
 	}
 }
 
-func TestMatchSupervisordProgram(t *testing.T) {
-	cases := []struct {
-		status, program string
-		want            bool
-	}{
-		{"dcc-bus-1-2", "dcc-bus-1-2", true},
-		{"dcc-bus:dcc-bus-1-2", "dcc-bus-1-2", true},
-		{"dcc-bus:dcc-bus-1-3", "dcc-bus-1-2", false},
-		{"redis", "dcc-bus-1-2", false},
-		{"", "dcc-bus-1-2", false},
-	}
-	for _, tc := range cases {
-		if got := matchSupervisordProgram(tc.status, tc.program); got != tc.want {
-			t.Fatalf("matchSupervisordProgram(%q, %q) = %v, want %v", tc.status, tc.program, got, tc.want)
-		}
-	}
-}
-
 func TestProgramsForCommandStationNilSupervisor(t *testing.T) {
 	d := NewDccBusService(DccBusConfig{}, nil, nil, nil, nil, nil)
 	_, err := d.ProgramsForCommandStation(context.Background(), 2)
@@ -170,16 +152,16 @@ func TestAppendDccBusTelemetryArgs(t *testing.T) {
 
 // fakeSupervisor is a minimal Supervisor stub for unit tests.
 type fakeSupervisor struct {
-	status     []ProgramState
-	statusErr  error
-	startErr   error
-	lastStart  string
-	lastStop   string
+	status      []ProgramState
+	statusErr   error
+	startErr    error
+	lastStart   string
+	lastStop    string
 	lastRestart string
 }
 
-func (f *fakeSupervisor) Start(context.Context) error   { return nil }
-func (f *fakeSupervisor) Stop(context.Context) error    { return nil }
+func (f *fakeSupervisor) Start(context.Context) error { return nil }
+func (f *fakeSupervisor) Stop(context.Context) error  { return nil }
 func (f *fakeSupervisor) Apply(context.Context, supervisord.DesiredState) error {
 	return nil
 }

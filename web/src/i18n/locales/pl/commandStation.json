@@ -23,7 +23,6 @@
     },
     "supervisord": {
       "title": "Usługa dcc-bus — {{name}}",
-      "layoutContext": "Połączenie w ramach obecnego layoutu: {{name}}",
       "statusOn": "Włączona",
       "statusOff": "Wyłączona",
       "start": "Start",

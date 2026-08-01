@@ -30,11 +30,16 @@ var statusLinePattern = regexp.MustCompile(`^(\S+)\s+(\S+)(?:\s+pid\s+(\d+))?`)
 // supervisorctl exits with code 3 when any program is not RUNNING; that is
 // still a successful status listing and must not be treated as failure.
 func (c *Ctl) Status(ctx context.Context) ([]ProgramStatus, error) {
-	out, err := c.runStatus(ctx)
-	if err != nil {
-		return nil, err
+	out, err := c.run(ctx, "status")
+	if err == nil {
+		return parseStatusOutput(out), nil
 	}
-	return parseStatusOutput(out), nil
+	// Exit code 3 means "some programs not RUNNING" — stdout still holds
+	// the full status table, so parse it and swallow the error.
+	if isSupervisorStatusPartialExit(err) && strings.TrimSpace(out) != "" {
+		return parseStatusOutput(out), nil
+	}
+	return nil, err
 }
 
 // Reread re-parses the on-disk config file.
@@ -80,27 +85,9 @@ func (c *Ctl) Ping(ctx context.Context) error {
 	return err
 }
 
+// run executes supervisorctl and returns stdout. On error the wrapped
+// *exec.ExitError is preserved via %w so callers can inspect the exit code.
 func (c *Ctl) run(ctx context.Context, args ...string) (string, error) {
-	out, err := c.runRaw(ctx, args...)
-	if err != nil {
-		return "", err
-	}
-	return out, nil
-}
-
-// runStatus is like run("status") but treats exit code 3 as success.
-func (c *Ctl) runStatus(ctx context.Context) (string, error) {
-	out, err := c.runRaw(ctx, "status")
-	if err == nil {
-		return out, nil
-	}
-	if isSupervisorStatusPartialExit(err) && strings.TrimSpace(out) != "" {
-		return out, nil
-	}
-	return "", err
-}
-
-func (c *Ctl) runRaw(ctx context.Context, args ...string) (string, error) {
 	bin := c.Bin
 	if bin == "" {
 		bin = "supervisorctl"
@@ -120,26 +107,10 @@ func (c *Ctl) runRaw(ctx context.Context, args ...string) (string, error) {
 		if msg == "" {
 			msg = err.Error()
 		}
-		return out, &supervisorctlError{
-			args:    args,
-			exitErr: err,
-			msg:     msg,
-		}
+		return out, fmt.Errorf("supervisorctl %s: %s: %w", strings.Join(args, " "), msg, err)
 	}
 	return out, nil
 }
-
-type supervisorctlError struct {
-	args    []string
-	exitErr error
-	msg     string
-}
-
-func (e *supervisorctlError) Error() string {
-	return fmt.Sprintf("supervisorctl %s: %s", strings.Join(e.args, " "), e.msg)
-}
-
-func (e *supervisorctlError) Unwrap() error { return e.exitErr }
 
 // isSupervisorStatusPartialExit reports whether err comes from
 // supervisorctl status exiting 3 (some programs not RUNNING).

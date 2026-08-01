@@ -23,7 +23,6 @@
     },
     "supervisord": {
       "title": "dcc-bus service — {{name}}",
-      "layoutContext": "Connection for the current layout: {{name}}",
       "statusOn": "Running",
       "statusOff": "Stopped",
       "start": "Start",

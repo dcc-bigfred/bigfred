@@ -23,7 +23,6 @@
     },
     "supervisord": {
       "title": "dcc-bus-Dienst — {{name}}",
-      "layoutContext": "Verbindung im Rahmen der aktuellen Anlage: {{name}}",
       "statusOn": "Aktiv",
       "statusOff": "Gestoppt",
       "start": "Start",

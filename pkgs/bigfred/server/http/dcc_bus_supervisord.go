@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -37,6 +38,10 @@ func (h *DccBusSupervisordHandler) GetStatus(w http.ResponseWriter, r *http.Requ
 	}
 	st, err := h.dccBus.ProgramStatus(r.Context(), layoutID, csID)
 	if err != nil {
+		if errors.Is(err, service.ErrSupervisordNotWired) {
+			writeJSONError(w, http.StatusServiceUnavailable, "service_unavailable")
+			return
+		}
 		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 		return
 	}
@@ -71,12 +76,11 @@ func (h *DccBusSupervisordHandler) Action(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusUnprocessableEntity)
-		_ = json.NewEncoder(w).Encode(map[string]string{
-			"error":   "action_failed",
-			"message": err.Error(),
-		})
+		if errors.Is(err, service.ErrSupervisordNotWired) {
+			writeJSONError(w, http.StatusServiceUnavailable, "service_unavailable")
+			return
+		}
+		writeJSONError(w, http.StatusUnprocessableEntity, "action_failed")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

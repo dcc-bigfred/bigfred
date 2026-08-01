@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Box,
@@ -55,6 +55,10 @@ export default function DiagnosticsPage() {
   const groups = sources.data?.groups ?? [];
   const preferredGroup = searchParams.get("group") ?? "";
   const preferredFile = searchParams.get("file") ?? "";
+  // Apply deep-link prefs once so a later sources refetch does not
+  // overwrite a manual group/file selection.
+  const appliedGroupPref = useRef(false);
+  const appliedFilePref = useRef(false);
 
   const entries: DiagnosticEntry[] = useMemo(() => {
     const g = groups.find((x) => x.id === groupId);
@@ -65,8 +69,13 @@ export default function DiagnosticsPage() {
     if (groups.length === 0) {
       return;
     }
-    if (preferredGroup && groups.some((g) => g.id === preferredGroup)) {
+    if (
+      !appliedGroupPref.current &&
+      preferredGroup &&
+      groups.some((g) => g.id === preferredGroup)
+    ) {
       setGroupId(preferredGroup);
+      appliedGroupPref.current = true;
       return;
     }
     setGroupId((current) =>
@@ -79,8 +88,13 @@ export default function DiagnosticsPage() {
       setFileId("");
       return;
     }
-    if (preferredFile && entries.some((e) => e.id === preferredFile)) {
+    if (
+      !appliedFilePref.current &&
+      preferredFile &&
+      entries.some((e) => e.id === preferredFile)
+    ) {
       setFileId(preferredFile);
+      appliedFilePref.current = true;
       return;
     }
     setFileId((current) =>

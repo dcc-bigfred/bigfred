@@ -744,7 +744,9 @@ function DccBusSupervisordDialog({
   const [actionError, setActionError] = useState<string | null>(null);
 
   const running = status.data?.running === true;
-  const busy = action.isPending || status.isFetching;
+  // Only block on the mutation itself — status.isFetching flickers every
+  // refetchInterval and would disable Start/Stop/Restart every few seconds.
+  const busy = action.isPending;
 
   const runAction = async (next: DccBusSupervisordAction) => {
     setActionError(null);

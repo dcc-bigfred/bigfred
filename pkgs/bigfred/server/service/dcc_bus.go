@@ -37,6 +37,10 @@ var ErrNoDccBusPortsAvailable = svcerrors.ErrNoDCCBusPortsAvailable
 // Surface this to the WS layer as `dcc_bus_unavailable`.
 var ErrDccBusUnavailable = errors.New("dcc-bus daemon unavailable")
 
+// ErrSupervisordNotWired is returned when admin start/stop/restart (or
+// status) is requested but supervisord was not configured (--no-supervisor).
+var ErrSupervisordNotWired = errors.New("dcc-bus: supervisord service is not wired")
+
 // DccBusConfig configures DccBusService. Defaults match §7e.2.
 type DccBusConfig struct {
 	// Executable is the absolute path of the loco-server binary used
@@ -206,11 +210,12 @@ func programName(layoutID, commandStationID uint) string {
 // ProgramStatus returns the supervisord status of the dcc-bus program
 // for (layoutID, commandStationID). When the program is absent from
 // supervisord (not yet synced / not attached to the layout), the
-// returned state uses Status "STOPPED".
+// returned state uses Status "STOPPED". When supervisord is not wired
+// (--no-supervisor), returns ErrSupervisordNotWired.
 func (d *DccBusService) ProgramStatus(ctx context.Context, layoutID, commandStationID uint) (ProgramState, error) {
 	name := programName(layoutID, commandStationID)
 	if d.sup == nil {
-		return ProgramState{Name: name, Group: DccBusGroupName, Status: "STOPPED"}, nil
+		return ProgramState{}, ErrSupervisordNotWired
 	}
 	rows, err := d.sup.Status(ctx)
 	if err != nil {
@@ -233,7 +238,7 @@ func (d *DccBusService) ProgramStatus(ctx context.Context, layoutID, commandStat
 // rewriting config (unlike EnsureRunning, which upserts the program).
 func (d *DccBusService) StartDccBus(ctx context.Context, layoutID, commandStationID uint) error {
 	if d.sup == nil {
-		return errors.New("dcc-bus: supervisord service is not wired")
+		return ErrSupervisordNotWired
 	}
 	return d.sup.StartProgram(ctx, ctlProgramName(layoutID, commandStationID))
 }
@@ -242,7 +247,7 @@ func (d *DccBusService) StartDccBus(ctx context.Context, layoutID, commandStatio
 // from config (unlike Stop, which also RemoveProgram).
 func (d *DccBusService) StopDccBus(ctx context.Context, layoutID, commandStationID uint) error {
 	if d.sup == nil {
-		return errors.New("dcc-bus: supervisord service is not wired")
+		return ErrSupervisordNotWired
 	}
 	return d.sup.StopProgram(ctx, ctlProgramName(layoutID, commandStationID))
 }
@@ -250,7 +255,7 @@ func (d *DccBusService) StopDccBus(ctx context.Context, layoutID, commandStation
 // RestartDccBus stops then starts the dcc-bus supervisord program.
 func (d *DccBusService) RestartDccBus(ctx context.Context, layoutID, commandStationID uint) error {
 	if d.sup == nil {
-		return errors.New("dcc-bus: supervisord service is not wired")
+		return ErrSupervisordNotWired
 	}
 	return d.sup.RestartProgram(ctx, ctlProgramName(layoutID, commandStationID))
 }

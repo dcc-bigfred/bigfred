@@ -10,6 +10,17 @@ Release assets (and tagged OCI layers) are signed with [minisign](https://jedisc
 after the release version ELF section is injected. The public key lives in
 [`minisign.pub`](./minisign.pub).
 
+OCI artifacts (ORAS / GHCR)
+---------------------------
+
+| Image | Floating tags | Release tags |
+|-------|---------------|--------------|
+| `ghcr.io/dcc-bigfred/loco-server-android-arm64` | `:main`, `:sha-<7>` | `:v*` |
+| `ghcr.io/dcc-bigfred/bigfred-hub-linux-arm64` | `:master`, `:sha-<7>` | `:v*`, `:latest-release` |
+
+Hub bundle layers: `loco-server-linux-arm64` + `bigfred-remote-icmp-linux-arm64`
+(prod SPA embedded). Push on `master`; release workflow retags from `:master`.
+
 ```bash
 # Arch / Manjaro
 pacman -S minisign

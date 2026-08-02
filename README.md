@@ -7,6 +7,8 @@ Open the app in any browser, pick a locomotive, and drive. BigFred works with Ro
 ## What you get
 
 - **Web throttle** — speed, direction, functions, and emergency stop from phone, tablet, or desktop
+- **Android app** — native client with LAN hub discovery for phones and tablets
+- **Access control** — user accounts and a shared vehicle catalog; each operator drives only their own vehicles
 - **Roster & consists** — register vehicles and drive multi-loco trains as one unit
 - **Leases** — lend control to another operator with time and speed limits
 - **Interlockings** — coordinate busy junctions with radio chat and a signalman role

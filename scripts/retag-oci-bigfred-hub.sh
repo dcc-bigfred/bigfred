@@ -6,6 +6,8 @@
 #
 # Requires: GITHUB_SHA (tag commit), oras, objcopy (binutils), minisign,
 #           MINISIGN_SECRET_KEY (and optional MINISIGN_PASSWORD).
+#
+# ORAS rejects absolute file paths; we push from the pull dir with relative names.
 set -euo pipefail
 
 RELEASE_TAG="${1:?usage: $0 <release-tag>}"
@@ -26,16 +28,16 @@ echo "Pulling ${IMAGE}:master…"
 oras pull "${IMAGE}:master" -o "${tmpdir}"
 
 # Prefer canonical layer names; fall back to unique basename matches.
+# Resolves to basenames under $tmpdir (relative for oras push).
 find_layer() {
   local want="$1"
-  local path="${tmpdir}/${want}"
-  if [[ -f "${path}" ]]; then
-    echo "${path}"
+  if [[ -f "${tmpdir}/${want}" ]]; then
+    echo "${want}"
     return 0
   fi
   mapfile -t files < <(find "${tmpdir}" -type f \
     ! -name 'manifest.json' ! -name 'config.json' ! -name '*.minisig' \
-    -name "${want}")
+    -name "${want}" -printf '%f\n')
   if [[ ${#files[@]} -eq 1 ]]; then
     echo "${files[0]}"
     return 0
@@ -43,13 +45,16 @@ find_layer() {
   return 1
 }
 
-SERVER_BIN="$(find_layer loco-server-linux-arm64)" || true
-ICMP_BIN="$(find_layer bigfred-remote-icmp-linux-arm64)" || true
-if [[ -z "${SERVER_BIN}" || -z "${ICMP_BIN}" ]]; then
+SERVER_NAME="$(find_layer loco-server-linux-arm64)" || true
+ICMP_NAME="$(find_layer bigfred-remote-icmp-linux-arm64)" || true
+if [[ -z "${SERVER_NAME}" || -z "${ICMP_NAME}" ]]; then
   echo "error: expected loco-server-linux-arm64 and bigfred-remote-icmp-linux-arm64 in OCI artifact, found:" >&2
   find "${tmpdir}" -type f >&2
   exit 1
 fi
+
+SERVER_BIN="${tmpdir}/${SERVER_NAME}"
+ICMP_BIN="${tmpdir}/${ICMP_NAME}"
 
 "${SCRIPT_DIR}/inject-elf-version.sh" "${SERVER_BIN}" "${RELEASE_TAG}" "${TAG_COMMIT_SHORT}"
 "${SCRIPT_DIR}/inject-elf-version.sh" "${ICMP_BIN}" "${RELEASE_TAG}" "${TAG_COMMIT_SHORT}"
@@ -66,10 +71,10 @@ fi
 "${SCRIPT_DIR}/minisign-sign.sh" "${SERVER_BIN}" "${ICMP_BIN}"
 
 push_args=(
-  "${SERVER_BIN}:${SERVER_MEDIA_TYPE}"
-  "${ICMP_BIN}:${ICMP_MEDIA_TYPE}"
-  "${SERVER_BIN}.minisig:${MINISIG_MEDIA_TYPE}"
-  "${ICMP_BIN}.minisig:${MINISIG_MEDIA_TYPE}"
+  "${SERVER_NAME}:${SERVER_MEDIA_TYPE}"
+  "${ICMP_NAME}:${ICMP_MEDIA_TYPE}"
+  "${SERVER_NAME}.minisig:${MINISIG_MEDIA_TYPE}"
+  "${ICMP_NAME}.minisig:${MINISIG_MEDIA_TYPE}"
 )
 
 annotate=(
@@ -81,5 +86,8 @@ annotate=(
 echo "Publishing ${IMAGE}:${RELEASE_TAG} and :latest-release"
 echo "  loco-server: $(wc -c < "${SERVER_BIN}") bytes"
 echo "  remote-icmp: $(wc -c < "${ICMP_BIN}") bytes"
-oras push "${IMAGE}:${RELEASE_TAG}" "${push_args[@]}" "${annotate[@]}"
-oras push "${IMAGE}:latest-release" "${push_args[@]}" "${annotate[@]}"
+(
+  cd "${tmpdir}"
+  oras push "${IMAGE}:${RELEASE_TAG}" "${push_args[@]}" "${annotate[@]}"
+  oras push "${IMAGE}:latest-release" "${push_args[@]}" "${annotate[@]}"
+)

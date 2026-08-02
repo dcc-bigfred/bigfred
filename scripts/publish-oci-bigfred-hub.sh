@@ -4,6 +4,9 @@
 # Usage: publish-oci-bigfred-hub.sh <loco-server-linux-arm64> <bigfred-remote-icmp-linux-arm64>
 #
 # Tags: master, sha-<7>
+#
+# ORAS rejects absolute file paths unless --disable-path-validation is set;
+# we push from a staging dir with relative basenames.
 set -euo pipefail
 
 SERVER_BIN="${1:?usage: $0 <loco-server-linux-arm64> <bigfred-remote-icmp-linux-arm64>}"
@@ -44,12 +47,15 @@ annotate=(
 )
 
 layers=(
-  "${tmpdir}/loco-server-linux-arm64:${SERVER_MEDIA_TYPE}"
-  "${tmpdir}/bigfred-remote-icmp-linux-arm64:${ICMP_MEDIA_TYPE}"
+  "loco-server-linux-arm64:${SERVER_MEDIA_TYPE}"
+  "bigfred-remote-icmp-linux-arm64:${ICMP_MEDIA_TYPE}"
 )
 
 echo "Publishing ${IMAGE}:master and :${SHA_TAG}"
 echo "  loco-server: $(wc -c < "${tmpdir}/loco-server-linux-arm64") bytes"
 echo "  remote-icmp: $(wc -c < "${tmpdir}/bigfred-remote-icmp-linux-arm64") bytes"
-oras push "${IMAGE}:master" "${layers[@]}" "${annotate[@]}"
-oras push "${IMAGE}:${SHA_TAG}" "${layers[@]}" "${annotate[@]}"
+(
+  cd "${tmpdir}"
+  oras push "${IMAGE}:master" "${layers[@]}" "${annotate[@]}"
+  oras push "${IMAGE}:${SHA_TAG}" "${layers[@]}" "${annotate[@]}"
+)

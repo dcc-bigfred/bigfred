@@ -91,19 +91,23 @@ jobs:
           VERSION_PKG="github.com/keskad/loco/pkgs/bigfred/server/version"
           LDFLAGS="-X ${VERSION_PKG}.buildCommit=${COMMIT} -X ${VERSION_PKG}.buildTime=${BUILDTIME}"
 
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o dist/loco-server-linux-amd64 ./pkgs/bigfred/server
+          # Hub / desktop SPA embedded via -tags prod (built above).
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -tags prod -ldflags="-s -w ${LDFLAGS}" \
+            -o dist/loco-server-linux-amd64 ./pkgs/bigfred/server
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o dist/bigfred-remote-icmp-linux-amd64 ./pkgs/bigfred/remote-icmp
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o dist/loco-linux-amd64 ./pkgs/loco
           GOOS=linux GOARCH=amd64 go build -o dist/rb-linux-amd64 ./pkgs/rb/main.go
 
-          # Raspberry Pi 5 (BCM2712, Cortex-A76) — linux/arm64
-          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="${LDFLAGS}" -o dist/loco-server-linux-arm64 ./pkgs/bigfred/server
+          # Raspberry Pi 5 (BCM2712, Cortex-A76) — linux/arm64 (hub OCI bundle)
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -tags prod -ldflags="-s -w ${LDFLAGS}" \
+            -o dist/loco-server-linux-arm64 ./pkgs/bigfred/server
           CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="${LDFLAGS}" -o dist/bigfred-remote-icmp-linux-arm64 ./pkgs/bigfred/remote-icmp
           CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o dist/loco-linux-arm64 ./pkgs/loco
           GOOS=linux GOARCH=arm64 go build -o dist/rb-linux-arm64 ./pkgs/rb/main.go
 
           # Raspberry Pi 2 (BCM2836, Cortex-A7) — linux/arm, GOARM=7
-          CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -ldflags="${LDFLAGS}" -o dist/loco-server-linux-armv7 ./pkgs/bigfred/server
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -tags prod -ldflags="-s -w ${LDFLAGS}" \
+            -o dist/loco-server-linux-armv7 ./pkgs/bigfred/server
           CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -ldflags="${LDFLAGS}" -o dist/bigfred-remote-icmp-linux-armv7 ./pkgs/bigfred/remote-icmp
           CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -o dist/loco-linux-armv7 ./pkgs/loco
           GOOS=linux GOARCH=arm GOARM=7 go build -o dist/rb-linux-armv7 ./pkgs/rb/main.go
@@ -128,7 +132,7 @@ jobs:
           retention-days: 90
 
   publish-oci:
-    name: Publish loco-server to GHCR (ORAS)
+    name: Publish OCI artifacts to GHCR (ORAS)
     needs: build
     if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
@@ -156,4 +160,9 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish loco-server-android-arm64
+        if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
         run: ./scripts/publish-oci-loco-android.sh dist/loco-server-android-arm64
+
+      - name: Publish bigfred-hub-linux-arm64
+        if: github.ref == 'refs/heads/master'
+        run: ./scripts/publish-oci-bigfred-hub.sh dist/loco-server-linux-arm64 dist/bigfred-remote-icmp-linux-arm64

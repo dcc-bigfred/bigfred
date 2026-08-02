@@ -140,8 +140,14 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Retag loco-server OCI artifact from main
+      - name: Retag loco-server Android OCI artifact from main
         env:
           MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
           MINISIGN_PASSWORD: ${{ secrets.MINISIGN_PASSWORD }}
         run: ./scripts/retag-oci-loco-android.sh "${GITHUB_REF_NAME}"
+
+      - name: Retag hub linux/arm64 OCI artifact from master
+        env:
+          MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
+          MINISIGN_PASSWORD: ${{ secrets.MINISIGN_PASSWORD }}
+        run: ./scripts/retag-oci-bigfred-hub.sh "${GITHUB_REF_NAME}"

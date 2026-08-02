@@ -160,7 +160,6 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish loco-server-android-arm64
-        if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
         run: ./scripts/publish-oci-loco-android.sh dist/loco-server-android-arm64
 
       - name: Publish bigfred-hub-linux-arm64

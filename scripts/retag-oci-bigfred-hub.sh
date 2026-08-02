@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Retag the hub linux/arm64 OCI artifact from :master to a release tag and
-# latest-release. Injects .bigfred.version into loco-server and signs both
-# binaries with minisign (fail-closed).
+# latest-release. Injects .bigfred.version into both binaries and signs them
+# with minisign (fail-closed).
 # Usage: retag-oci-bigfred-hub.sh <release-tag>   e.g. v1.2.3
 #
 # Requires: GITHUB_SHA (tag commit), oras, objcopy (binutils), minisign,
@@ -25,15 +25,34 @@ trap cleanup EXIT
 echo "Pulling ${IMAGE}:master…"
 oras pull "${IMAGE}:master" -o "${tmpdir}"
 
-SERVER_BIN="${tmpdir}/loco-server-linux-arm64"
-ICMP_BIN="${tmpdir}/bigfred-remote-icmp-linux-arm64"
-if [[ ! -f "${SERVER_BIN}" || ! -f "${ICMP_BIN}" ]]; then
+# Prefer canonical layer names; fall back to unique basename matches.
+find_layer() {
+  local want="$1"
+  local path="${tmpdir}/${want}"
+  if [[ -f "${path}" ]]; then
+    echo "${path}"
+    return 0
+  fi
+  mapfile -t files < <(find "${tmpdir}" -type f \
+    ! -name 'manifest.json' ! -name 'config.json' ! -name '*.minisig' \
+    -name "${want}")
+  if [[ ${#files[@]} -eq 1 ]]; then
+    echo "${files[0]}"
+    return 0
+  fi
+  return 1
+}
+
+SERVER_BIN="$(find_layer loco-server-linux-arm64)" || true
+ICMP_BIN="$(find_layer bigfred-remote-icmp-linux-arm64)" || true
+if [[ -z "${SERVER_BIN}" || -z "${ICMP_BIN}" ]]; then
   echo "error: expected loco-server-linux-arm64 and bigfred-remote-icmp-linux-arm64 in OCI artifact, found:" >&2
   find "${tmpdir}" -type f >&2
   exit 1
 fi
 
 "${SCRIPT_DIR}/inject-elf-version.sh" "${SERVER_BIN}" "${RELEASE_TAG}" "${TAG_COMMIT_SHORT}"
+"${SCRIPT_DIR}/inject-elf-version.sh" "${ICMP_BIN}" "${RELEASE_TAG}" "${TAG_COMMIT_SHORT}"
 
 if [[ -z "${MINISIGN_SECRET_KEY:-}" ]]; then
   echo "error: MINISIGN_SECRET_KEY is required to publish a signed OCI release (fail-closed)" >&2

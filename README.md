@@ -13,6 +13,7 @@ Open the app in any browser, pick a locomotive, and drive. BigFred works with Ro
 - **Leases** — lend control to another operator with time and speed limits
 - **Interlockings** — coordinate busy junctions with radio chat and a signalman role
 - **Remote handsets** — pair Z21 handsets and WiThrottle apps to vehicles in your roster
+- **LongFred** — our own WiFred-based wireless handset for physical throttle control on the layout
 
 ## Guides
 

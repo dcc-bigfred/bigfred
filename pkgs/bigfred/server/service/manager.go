@@ -180,7 +180,11 @@ func EnsureInfra(ctx context.Context, mgr ServiceManager, cfg InfraConfig) error
 			if err := microinit.PrepareAlloyTelemetry(cfg.Telemetry); err != nil {
 				return err
 			}
-			if err := mgr.UpsertService(ctx, GroupInfra, microinit.AlloyServiceDef(cfg.Telemetry)); err != nil {
+			svc, err := microinit.AlloyServiceDef(cfg.Telemetry)
+			if err != nil {
+				return err
+			}
+			if err := mgr.UpsertService(ctx, GroupInfra, svc); err != nil {
 				return err
 			}
 			if err := mgr.StartService(ctx, "alloy"); err != nil {

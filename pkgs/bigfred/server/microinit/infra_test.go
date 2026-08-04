@@ -41,3 +41,38 @@ func TestRedisServiceDefDefaultDataDir(t *testing.T) {
 		t.Fatalf("expected default var/lib/redis in StartCmd: %s", svc.StartCmd)
 	}
 }
+
+func TestPrepareAlloyTelemetryRendersValidBlocks(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("BIGFRED_DATA_DIR", root)
+	t.Setenv("DATA_DIR", "")
+	path := filepath.Join(root, "etc", "alloy.conf")
+	if err := PrepareAlloyTelemetry(TelemetryConfig{
+		ConfigPath:   path,
+		OTLPEndpoint: "127.0.0.1:4317",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(raw)
+	for _, want := range []string{
+		`otelcol.receiver.otlp "bigfred" {`,
+		`endpoint = "127.0.0.1:4317"`,
+		`otelcol.processor.batch "bigfred" {`,
+		`otelcol.exporter.otlphttp "bigfred" {`,
+		`otelcol.auth.basic "bigfred" {`,
+		`username = sys.env("GRAFANA_CLOUD_INSTANCE_ID")`,
+		`password = sys.env("GRAFANA_CLOUD_API_KEY")`,
+	} {
+		if !strings.Contains(s, want) {
+			t.Fatalf("alloy.conf missing %q; got:\n%s", want, s)
+		}
+	}
+	// Nested blocks must not be collapsed onto one line (River parse failure).
+	if strings.Contains(s, "grpc { endpoint") {
+		t.Fatalf("alloy.conf still has compacted nested blocks:\n%s", s)
+	}
+}

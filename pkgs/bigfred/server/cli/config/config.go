@@ -288,7 +288,7 @@ REDIS_BIND=%s
 # TCP port for the managed redis-server (flag: --redis-port)
 REDIS_PORT=%d
 
-# Working directory for redis-server; empty = supervisord config directory (flag: --redis-data-dir)
+# Working directory for redis-server; empty = $BIGFRED_DATA_DIR/var/lib/redis (flag: --redis-data-dir)
 REDIS_DATA_DIR=
 
 # Redis dial address for loco-server and dcc-bus; empty = REDIS_BIND:REDIS_PORT (flag: --redis-addr)

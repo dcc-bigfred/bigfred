@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"net"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -64,7 +65,7 @@ func ResolveRDBSavePoints(noPersist bool, values []string) ([]RDBSavePoint, erro
 	}
 	return ParseRDBSavePoints(values)
 }
-func RedisServiceDef(cfg RedisConfig) ServiceDef {
+func RedisServiceDef(cfg RedisConfig) (ServiceDef, error) {
 	bin, bind, port, dir := cfg.Bin, cfg.BindAddr, cfg.Port, cfg.DataDir
 	if bin == "" {
 		bin = "redis-server"
@@ -76,7 +77,10 @@ func RedisServiceDef(cfg RedisConfig) ServiceDef {
 		port = 6379
 	}
 	if dir == "" {
-		dir = "."
+		dir = datadir.Path("var", "lib", "redis")
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return ServiceDef{}, fmt.Errorf("create redis data dir %s: %w", dir, err)
 	}
 	args := []string{
 		shellQuote(bin),
@@ -93,7 +97,16 @@ func RedisServiceDef(cfg RedisConfig) ServiceDef {
 		// Redis expects: --save <seconds> <changes> as two argv tokens.
 		args = append(args, "--save", strconv.Itoa(point.Seconds), strconv.Itoa(point.Changes))
 	}
-	return ServiceDef{Name: "redis", Enabled: BoolPtr(true), Daemon: BoolPtr(true), Restart: BoolPtr(true), StartWaitSecs: IntPtr(2), ShutdownWaitSecs: IntPtr(10), StartCmd: "exec " + strings.Join(args, " "), LivenessProbe: &LivenessProbe{TCPAddr: net.JoinHostPort(bind, strconv.Itoa(int(port))), Interval: 10}}
+	return ServiceDef{
+		Name:             "redis",
+		Enabled:          BoolPtr(true),
+		Daemon:           BoolPtr(true),
+		Restart:          BoolPtr(true),
+		StartWaitSecs:    IntPtr(2),
+		ShutdownWaitSecs: IntPtr(10),
+		StartCmd:         "exec " + strings.Join(args, " "),
+		LivenessProbe:    &LivenessProbe{TCPAddr: net.JoinHostPort(bind, strconv.Itoa(int(port))), Interval: 10},
+	}, nil
 }
 
 type TelemetryConfig struct {

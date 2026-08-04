@@ -159,7 +159,11 @@ func EnsureInfra(ctx context.Context, mgr ServiceManager, cfg InfraConfig) error
 			return err
 		}
 		if !exists {
-			if err := mgr.UpsertService(ctx, GroupInfra, microinit.RedisServiceDef(cfg.Redis)); err != nil {
+			svc, err := microinit.RedisServiceDef(cfg.Redis)
+			if err != nil {
+				return err
+			}
+			if err := mgr.UpsertService(ctx, GroupInfra, svc); err != nil {
 				return err
 			}
 			if err := mgr.StartService(ctx, "redis"); err != nil {

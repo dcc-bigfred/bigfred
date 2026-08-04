@@ -129,7 +129,7 @@ real-time throttle commands.`,
 	cmd.Flags().Uint16Var(&f.RedisPort, "redis-port", 6379,
 		"TCP port the managed redis-server listens on")
 	cmd.Flags().StringVar(&f.RedisDataDir, "redis-data-dir", "",
-		"working directory for redis-server (defaults to the supervisord config directory)")
+		"working directory for redis-server (default $BIGFRED_DATA_DIR/var/lib/redis)")
 	cmd.Flags().StringVar(&f.RedisAddr, "redis-addr", "",
 		"redis dial address (host:port) used by loco-server and dcc-bus; defaults to redis-bind:redis-port")
 	cmd.Flags().BoolVar(&f.RedisExternal, "redis-external", false,
@@ -250,7 +250,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		return err
 	}
 	if f.RedisDataDir == "" {
-		f.RedisDataDir = datadir.Path("redis")
+		f.RedisDataDir = datadir.Path("var", "lib", "redis")
 	}
 
 	var supSvc service.ServiceManager

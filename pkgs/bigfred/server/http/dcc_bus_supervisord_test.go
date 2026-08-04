@@ -23,9 +23,9 @@ func TestActionRequiresLayoutId(t *testing.T) {
 	h := NewDccBusSupervisordHandler(dcc)
 
 	r := chi.NewRouter()
-	r.Post("/admin/dcc-bus/{commandStationId}/supervisord/{action}", h.Action)
+	r.Post("/admin/dcc-bus/{commandStationId}/services/{action}", h.Action)
 
-	req := httptest.NewRequest(http.MethodPost, "/admin/dcc-bus/5/supervisord/start", nil)
+	req := httptest.NewRequest(http.MethodPost, "/admin/dcc-bus/5/services/start", nil)
 	req = req.WithContext(WithIdentity(req.Context(), cmd.Identity{
 		User:   domain.User{ID: 1},
 		Layout: domain.Layout{ID: 1},
@@ -50,9 +50,9 @@ func TestActionStartInvokesService(t *testing.T) {
 	h := NewDccBusSupervisordHandler(dcc)
 
 	r := chi.NewRouter()
-	r.Post("/admin/dcc-bus/{commandStationId}/supervisord/{action}", h.Action)
+	r.Post("/admin/dcc-bus/{commandStationId}/services/{action}", h.Action)
 
-	req := httptest.NewRequest(http.MethodPost, "/admin/dcc-bus/5/supervisord/start?layoutId=2", nil)
+	req := httptest.NewRequest(http.MethodPost, "/admin/dcc-bus/5/services/start?layoutId=2", nil)
 	req = req.WithContext(WithIdentity(req.Context(), cmd.Identity{
 		User:   domain.User{ID: 1},
 		Layout: domain.Layout{ID: 1},
@@ -62,7 +62,7 @@ func TestActionStartInvokesService(t *testing.T) {
 	if rec.Code != http.StatusNoContent {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
-	if fake.lastStart != "dcc-bus:dcc-bus-2-5" {
+	if fake.lastStart != "dcc-bus-2-5" {
 		t.Fatalf("lastStart=%q", fake.lastStart)
 	}
 }
@@ -73,9 +73,9 @@ func TestActionStartSurfacesMessage(t *testing.T) {
 	h := NewDccBusSupervisordHandler(dcc)
 
 	r := chi.NewRouter()
-	r.Post("/admin/dcc-bus/{commandStationId}/supervisord/{action}", h.Action)
+	r.Post("/admin/dcc-bus/{commandStationId}/services/{action}", h.Action)
 
-	req := httptest.NewRequest(http.MethodPost, "/admin/dcc-bus/5/supervisord/start?layoutId=2", nil)
+	req := httptest.NewRequest(http.MethodPost, "/admin/dcc-bus/5/services/start?layoutId=2", nil)
 	req = req.WithContext(WithIdentity(req.Context(), cmd.Identity{
 		User:   domain.User{ID: 1},
 		Layout: domain.Layout{ID: 1},
@@ -107,9 +107,9 @@ func TestGetStatusListsPrograms(t *testing.T) {
 	h := NewDccBusSupervisordHandler(dcc)
 
 	r := chi.NewRouter()
-	r.Get("/admin/dcc-bus/{commandStationId}/supervisord", h.GetStatus)
+	r.Get("/admin/dcc-bus/{commandStationId}/services", h.GetStatus)
 
-	req := httptest.NewRequest(http.MethodGet, "/admin/dcc-bus/5/supervisord", nil)
+	req := httptest.NewRequest(http.MethodGet, "/admin/dcc-bus/5/services", nil)
 	req = req.WithContext(WithIdentity(req.Context(), cmd.Identity{
 		User:   domain.User{ID: 1},
 		Layout: domain.Layout{ID: 99},
@@ -149,6 +149,9 @@ func (f *actionFakeSup) ReplaceServices(context.Context, string, []microinit.Ser
 }
 func (f *actionFakeSup) RemoveService(context.Context, string, string) error { return nil }
 func (f *actionFakeSup) HasService(context.Context, string) (bool, error)    { return false, nil }
+func (f *actionFakeSup) IsSystemService(context.Context, string) (bool, error) {
+	return false, nil
+}
 func (f *actionFakeSup) StartService(_ context.Context, name string) error {
 	f.lastStart = name
 	return f.startErr

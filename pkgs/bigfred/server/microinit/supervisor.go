@@ -36,7 +36,17 @@ func NewSupervisor(socket, bin, configPath, dropinDir string, log *logrus.Logger
 	}
 	return &Supervisor{Socket: socket, Bin: bin, ConfigPath: configPath, DropinDir: dropinDir, Log: log, owned: map[string]struct{}{}, client: &Client{Socket: socket}}
 }
+
 func (s *Supervisor) Client() *Client { return s.client }
+
+func (s *Supervisor) SystemServiceNames() (map[string]struct{}, error) {
+	return BaseConfigServiceNames(s.ConfigPath)
+}
+
+// OwnsDropin reports whether bigfred already wrote a drop-in for name in group.
+func (s *Supervisor) OwnsDropin(group, name string) bool {
+	return DropinExists(s.DropinDir, group, name)
+}
 
 // EnsureRunning joins an existing microinit when its socket responds. Otherwise
 // it launches exactly one host-supervisor instance and waits for its IPC socket.

@@ -78,9 +78,20 @@ func RedisServiceDef(cfg RedisConfig) ServiceDef {
 	if dir == "" {
 		dir = "."
 	}
-	args := []string{shellQuote(bin), "--bind", shellQuote(bind), "--port", strconv.Itoa(int(port)), "--dir", shellQuote(dir), "--daemonize", "no", "--protected-mode", "no", "--logfile", "''", "--appendonly", "no", "--save", "''"}
+	args := []string{
+		shellQuote(bin),
+		"--bind", shellQuote(bind),
+		"--port", strconv.Itoa(int(port)),
+		"--dir", shellQuote(dir),
+		"--daemonize", "no",
+		"--protected-mode", "no",
+		"--logfile", "''",
+		"--appendonly", "no",
+		"--save", "''",
+	}
 	for _, point := range cfg.RDBSavePoints {
-		args = append(args, "--save", strconv.Itoa(point.Seconds)+" "+strconv.Itoa(point.Changes))
+		// Redis expects: --save <seconds> <changes> as two argv tokens.
+		args = append(args, "--save", strconv.Itoa(point.Seconds), strconv.Itoa(point.Changes))
 	}
 	return ServiceDef{Name: "redis", Enabled: BoolPtr(true), Daemon: BoolPtr(true), Restart: BoolPtr(true), StartWaitSecs: IntPtr(2), ShutdownWaitSecs: IntPtr(10), StartCmd: "exec " + strings.Join(args, " "), LivenessProbe: &LivenessProbe{TCPAddr: net.JoinHostPort(bind, strconv.Itoa(int(port))), Interval: 10}}
 }

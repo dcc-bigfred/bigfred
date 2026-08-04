@@ -115,8 +115,8 @@ real-time throttle commands.`,
 		"set the Secure flag on the session cookie (REQUIRED in production, off for local http://)")
 	cmd.Flags().BoolVar(&f.NoSupervisor, "no-supervisor", false,
 		"skip supervisord process management (for local dev without the supervisor package)")
-	cmd.Flags().StringVar(&f.MicroinitSocket, "microinit-socket", "/run/microinit.sock",
-		"microinit IPC socket path")
+	cmd.Flags().StringVar(&f.MicroinitSocket, "microinit-socket", datadir.Path("run", "microinit.sock"),
+		"microinit IPC socket path (default $BIGFRED_DATA_DIR/run/microinit.sock)")
 	cmd.Flags().StringVar(&f.MicroinitBin, "microinit-bin", "microinit",
 		"microinit binary path (PATH-relative or absolute)")
 	cmd.Flags().StringVar(&f.LogLevel, "log-level", "info",

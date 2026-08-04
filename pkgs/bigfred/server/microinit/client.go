@@ -9,13 +9,21 @@ import (
 	"net"
 	"strings"
 	"time"
+
+	"github.com/keskad/loco/pkgs/bigfred/server/datadir"
 )
 
 const (
-	DefaultSocket  = "/run/microinit.sock"
+	// DefaultSocket is the hub path when the data root is /data.
+	DefaultSocket  = "/data/run/microinit.sock"
 	maxFrameBytes  = 16 * 1024 * 1024
 	defaultTimeout = 10 * time.Second
 )
+
+// DefaultSocketPath returns `$BIGFRED_DATA_DIR/run/microinit.sock` (or DATA_DIR /data).
+func DefaultSocketPath() string {
+	return datadir.Path("run", "microinit.sock")
+}
 
 var (
 	ErrInvalidName   = errors.New("invalid service name")
@@ -70,7 +78,7 @@ func (c *Client) socketPath() string {
 	if c.Socket != "" {
 		return c.Socket
 	}
-	return DefaultSocket
+	return DefaultSocketPath()
 }
 func (c *Client) dial() (net.Conn, error) {
 	dial := c.Dial

@@ -51,9 +51,15 @@ var listSerialPorts = serial.GetPortsList
 // knownSerialSymlinks lists stable device paths created by udev rules on
 // BigFred OS. go.bug.st/serial.GetPortsList does not enumerate custom
 // symlinks like /dev/loconet-63120, so we merge them into the candidate
-// set when present. Keep in sync with bigfred-os/os/overlays/etc/udev/rules.d/.
+// set when present. Keep in sync with
+// bigfred-os/os/overlays/etc/udev/rules.d/99-loconet-usb.rules
+// (and 99-loconet-centrals.rules once DR5000/YD7010 IDs are filled in).
 var knownSerialSymlinks = []string{
-	"/dev/loconet-63120", // 99-uhlenbrock-63120.rules (CP210x 10c4:ea60)
+	"/dev/loconet-63120", // Uhlenbrock 63120 (CP210x 10c4:ea60)
+	"/dev/loconet-lb-usb", // RR-CirKits LocoBuffer-USB (FTDI 0403:c7d0)
+	"/dev/loconet-ch340",  // DIY CH340 (WCH 1a86:7523)
+	// "/dev/loconet-dr5000", // enable when 99-loconet-centrals.rules is filled
+	// "/dev/loconet-yd7010",
 }
 
 // serialDeviceExists is overridable in tests.
@@ -62,14 +68,40 @@ var serialDeviceExists = func(path string) bool {
 	return err == nil
 }
 
+// isOnboardUART reports Pi / SoC console UARTs that must not win serial://autodetect.
+func isOnboardUART(p string) bool {
+	base := p
+	if i := strings.LastIndex(p, "/"); i >= 0 {
+		base = p[i+1:]
+	}
+	switch {
+	case strings.HasPrefix(base, "ttyAMA"):
+		return true
+	case strings.HasPrefix(base, "ttyS"):
+		return true
+	case strings.HasPrefix(base, "ttymxc"):
+		return true
+	default:
+		return false
+	}
+}
+
 // listSerialCandidates returns available serial ports ranked for LocoNet
 // adapters (udev symlinks first, then USB/ACM). Empty slice when none found.
+// Onboard UARTs (ttyAMA*, ttyS*, ttymxc*) are excluded so autodetect does not
+// open the Pi console/Bluetooth UART when a USB adapter is missing.
 func listSerialCandidates() ([]string, error) {
 	ports, err := listSerialPorts()
 	if err != nil {
 		return nil, fmt.Errorf("loconet serial: enumerate ports: %w", err)
 	}
-	candidates := append([]string(nil), ports...)
+	candidates := make([]string, 0, len(ports)+len(knownSerialSymlinks))
+	for _, p := range ports {
+		if isOnboardUART(p) {
+			continue
+		}
+		candidates = append(candidates, p)
+	}
 	for _, link := range knownSerialSymlinks {
 		if !serialDeviceExists(link) {
 			continue
@@ -104,9 +136,10 @@ func resolveSerialDevice() (string, error) {
 }
 
 // serialPortPriority ranks likely LocoNet adapters ahead of other ports.
+// Lower is better. udev loconet-* symlinks beat raw ttyUSB/ttyACM.
 func serialPortPriority(p string) int {
 	switch {
-	case strings.Contains(p, "loconet-63120"):
+	case strings.Contains(p, "loconet-"):
 		return 0
 	case strings.Contains(p, "ttyUSB"):
 		return 1

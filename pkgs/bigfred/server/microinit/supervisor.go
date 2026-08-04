@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	miclient "github.com/dcc-bigfred/microinit/go/client"
 	"github.com/sirupsen/logrus"
 )
 
@@ -24,7 +25,7 @@ type Supervisor struct {
 	waitCh  <-chan error
 	mu      sync.Mutex
 	owned   map[string]struct{}
-	client  *Client
+	client  *miclient.Client
 }
 
 func NewSupervisor(socket, bin, configPath, dropinDir string, log *logrus.Logger) *Supervisor {
@@ -34,10 +35,10 @@ func NewSupervisor(socket, bin, configPath, dropinDir string, log *logrus.Logger
 	if bin == "" {
 		bin = "microinit"
 	}
-	return &Supervisor{Socket: socket, Bin: bin, ConfigPath: configPath, DropinDir: dropinDir, Log: log, owned: map[string]struct{}{}, client: &Client{Socket: socket}}
+	return &Supervisor{Socket: socket, Bin: bin, ConfigPath: configPath, DropinDir: dropinDir, Log: log, owned: map[string]struct{}{}, client: &miclient.Client{Socket: socket}}
 }
 
-func (s *Supervisor) Client() *Client { return s.client }
+func (s *Supervisor) Client() *miclient.Client { return s.client }
 
 func (s *Supervisor) SystemServiceNames() (map[string]struct{}, error) {
 	return BaseConfigServiceNames(s.ConfigPath)

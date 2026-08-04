@@ -13,8 +13,8 @@ import (
 
 	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
+	"github.com/keskad/loco/pkgs/bigfred/server/microinit"
 	"github.com/keskad/loco/pkgs/bigfred/server/service"
-	"github.com/keskad/loco/pkgs/bigfred/server/supervisord"
 )
 
 func TestActionRequiresLayoutId(t *testing.T) {
@@ -99,8 +99,8 @@ func TestActionStartSurfacesMessage(t *testing.T) {
 
 func TestGetStatusListsPrograms(t *testing.T) {
 	fake := &actionFakeSup{
-		status: []service.ProgramState{
-			{Name: "dcc-bus:dcc-bus-2-5", Group: "dcc-bus", Status: "RUNNING", PID: 11},
+		status: []service.ServiceState{
+			{Name: "dcc-bus-2-5", State: "running", PID: 11},
 		},
 	}
 	dcc := service.NewDccBusService(service.DccBusConfig{}, fake, nil, nil, nil, nil)
@@ -132,32 +132,29 @@ func TestGetStatusListsPrograms(t *testing.T) {
 
 // actionFakeSup implements service.Supervisor for HTTP handler tests.
 type actionFakeSup struct {
-	status    []service.ProgramState
+	status    []service.ServiceState
 	startErr  error
 	lastStart string
 }
 
-func (f *actionFakeSup) Start(context.Context) error { return nil }
-func (f *actionFakeSup) Stop(context.Context) error  { return nil }
-func (f *actionFakeSup) Apply(context.Context, supervisord.DesiredState) error {
+func (f *actionFakeSup) Start(context.Context) error                                                { return nil }
+func (f *actionFakeSup) Stop(context.Context) error                                                 { return nil }
+func (f *actionFakeSup) RunHealthLoop(context.Context, time.Duration, func([]service.ServiceState)) {}
+func (f *actionFakeSup) Paths() (string, string)                                                    { return "", "" }
+func (f *actionFakeSup) UpsertService(context.Context, string, microinit.ServiceDef) error {
 	return nil
 }
-func (f *actionFakeSup) RunHealthLoop(context.Context, time.Duration, func([]service.ProgramState)) {
-}
-func (f *actionFakeSup) Paths() (string, string) { return "", "" }
-func (f *actionFakeSup) UpsertProgram(context.Context, string, supervisord.ProgramSpec) error {
+func (f *actionFakeSup) ReplaceServices(context.Context, string, []microinit.ServiceDef) error {
 	return nil
 }
-func (f *actionFakeSup) ReplaceGroupPrograms(context.Context, string, []supervisord.ProgramSpec) error {
-	return nil
-}
-func (f *actionFakeSup) RemoveProgram(context.Context, string, string) error { return nil }
-func (f *actionFakeSup) StartProgram(_ context.Context, name string) error {
+func (f *actionFakeSup) RemoveService(context.Context, string, string) error { return nil }
+func (f *actionFakeSup) HasService(context.Context, string) (bool, error)    { return false, nil }
+func (f *actionFakeSup) StartService(_ context.Context, name string) error {
 	f.lastStart = name
 	return f.startErr
 }
-func (f *actionFakeSup) StopProgram(context.Context, string) error    { return nil }
-func (f *actionFakeSup) RestartProgram(context.Context, string) error { return nil }
-func (f *actionFakeSup) Status(context.Context) ([]service.ProgramState, error) {
+func (f *actionFakeSup) StopService(context.Context, string) error    { return nil }
+func (f *actionFakeSup) RestartService(context.Context, string) error { return nil }
+func (f *actionFakeSup) Status(context.Context) ([]service.ServiceState, error) {
 	return f.status, nil
 }

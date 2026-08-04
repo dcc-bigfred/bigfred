@@ -9,7 +9,7 @@ import (
 	"sync"
 
 	"github.com/keskad/loco/pkgs/bigfred/contract"
-	"github.com/keskad/loco/pkgs/bigfred/server/supervisord"
+	"github.com/keskad/loco/pkgs/bigfred/server/microinit"
 	"github.com/keskad/loco/pkgs/bigfred/server/ws"
 )
 
@@ -28,14 +28,14 @@ func (d *DccBusService) SyncProgramsForLayouts(
 	layoutIDs []uint,
 	resolve CommandStationIDsForLayout,
 ) error {
-	if d.sup == nil {
+	if d.mgr == nil {
 		return nil
 	}
 	if len(layoutIDs) == 0 {
 		if d.log != nil {
 			d.log.Info("dcc-bus supervisord sync: no layouts, clearing dcc-bus group")
 		}
-		return d.sup.ReplaceGroupPrograms(ctx, DccBusGroupName, nil)
+		return d.mgr.ReplaceServices(ctx, GroupBigfred, nil)
 	}
 
 	seen := make(map[uint]struct{}, len(layoutIDs))
@@ -56,7 +56,7 @@ func (d *DccBusService) SyncProgramsForLayouts(
 	}
 
 	desiredKeys := make(map[portKey]struct{})
-	programs := make([]supervisord.ProgramSpec, 0)
+	programs := make([]microinit.ServiceDef, 0)
 
 	for _, layoutID := range uniqueLayouts {
 		csIDs, err := resolve.CommandStationIDsForLayout(ctx, layoutID)
@@ -75,7 +75,7 @@ func (d *DccBusService) SyncProgramsForLayouts(
 				return fmt.Errorf("dcc-bus sync layout %d cs %d: %w", layoutID, csID, err)
 			}
 			name := programName(layoutID, csID)
-			spec, err := d.buildProgramSpec(ctx, name, layoutID, csID, port)
+			spec, err := d.buildServiceDef(ctx, name, layoutID, csID, port)
 			if err != nil {
 				return err
 			}
@@ -101,7 +101,7 @@ func (d *DccBusService) SyncProgramsForLayouts(
 			"count":    len(programs),
 		}).Info("dcc-bus supervisord sync: applying dcc-bus group")
 	}
-	if err := d.sup.ReplaceGroupPrograms(ctx, DccBusGroupName, programs); err != nil {
+	if err := d.mgr.ReplaceServices(ctx, GroupBigfred, programs); err != nil {
 		if d.log != nil {
 			d.log.WithError(err).Error("dcc-bus supervisord sync: apply failed")
 		}

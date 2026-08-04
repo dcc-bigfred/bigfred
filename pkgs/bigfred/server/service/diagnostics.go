@@ -10,7 +10,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/supervisord"
+	"github.com/keskad/loco/pkgs/bigfred/server/datadir"
 )
 
 var (
@@ -63,17 +63,13 @@ type DiagnosticsService struct {
 
 // NewDiagnosticsService builds a catalogue from supervisord paths.
 // When sup is nil, default hub paths are used (files may be absent).
-func NewDiagnosticsService(sup Supervisor) (*DiagnosticsService, error) {
+func NewDiagnosticsService(sup ServiceManager) (*DiagnosticsService, error) {
 	var configPath, logDir string
 	if sup != nil {
 		configPath, logDir = sup.Paths()
 	} else {
-		paths, err := supervisord.DefaultPaths()
-		if err != nil {
-			return nil, err
-		}
-		configPath = paths.ConfigPath
-		logDir = paths.LogDir
+		configPath = datadir.Path("etc", "microinit.json")
+		logDir = datadir.Path("logs")
 	}
 	return &DiagnosticsService{
 		configPath: configPath,

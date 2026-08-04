@@ -235,7 +235,7 @@ export interface DccBusSupervisordStatus {
 export type DccBusSupervisordAction = "start" | "stop" | "restart";
 
 function dccBusSupervisordStatusQueryKey(csId: number) {
-  return ["admin", "dcc-bus", csId, "supervisord"] as const;
+  return ["admin", "dcc-bus", csId, "services"] as const;
 }
 
 export function useDccBusSupervisordStatus(csId: number | null) {
@@ -243,7 +243,7 @@ export function useDccBusSupervisordStatus(csId: number | null) {
     queryKey: dccBusSupervisordStatusQueryKey(csId ?? 0),
     queryFn: () =>
       apiFetch<DccBusSupervisordStatus>(
-        `/api/v1/admin/dcc-bus/${csId}/supervisord`,
+        `/api/v1/admin/dcc-bus/${csId}/services`,
       ),
     enabled: csId != null && csId > 0,
     staleTime: 2 * 1000,
@@ -256,7 +256,7 @@ export function useDccBusSupervisordAction(csId: number) {
   return useMutation({
     mutationFn: (vars: { action: DccBusSupervisordAction; layoutId: number }) =>
       apiFetch<void>(
-        `/api/v1/admin/dcc-bus/${csId}/supervisord/${vars.action}?layoutId=${vars.layoutId}`,
+        `/api/v1/admin/dcc-bus/${csId}/services/${vars.action}?layoutId=${vars.layoutId}`,
         { method: "POST" },
       ),
     onSuccess: () => {

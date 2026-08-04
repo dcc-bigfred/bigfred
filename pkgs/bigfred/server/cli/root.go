@@ -34,7 +34,6 @@ import (
 	"github.com/keskad/loco/pkgs/bigfred/server/repo"
 	"github.com/keskad/loco/pkgs/bigfred/server/repo/migrations"
 	"github.com/keskad/loco/pkgs/bigfred/server/service"
-	"github.com/keskad/loco/pkgs/bigfred/server/supervisord"
 	"github.com/keskad/loco/pkgs/bigfred/server/version"
 	"github.com/keskad/loco/pkgs/bigfred/server/ws"
 )
@@ -51,10 +50,8 @@ type Flags struct {
 	SecureCookie   bool
 	NoSupervisor   bool
 
-	// SupervisordBin / SupervisorctlBin override PATH lookup (absolute paths
-	// for Android jniLibs, bare names on hub). Empty → "supervisord" / "supervisorctl".
-	SupervisordBin   string
-	SupervisorctlBin string
+	MicroinitSocket string
+	MicroinitBin    string
 
 	// Redis. By default loco-server spawns its own redis-server via
 	// supervisord on RedisBindAddr:RedisPort; pass --redis-external
@@ -118,10 +115,10 @@ real-time throttle commands.`,
 		"set the Secure flag on the session cookie (REQUIRED in production, off for local http://)")
 	cmd.Flags().BoolVar(&f.NoSupervisor, "no-supervisor", false,
 		"skip supervisord process management (for local dev without the supervisor package)")
-	cmd.Flags().StringVar(&f.SupervisordBin, "supervisord-bin", "supervisord",
-		"supervisord binary path (PATH-relative or absolute)")
-	cmd.Flags().StringVar(&f.SupervisorctlBin, "supervisorctl-bin", "supervisorctl",
-		"supervisorctl binary path (PATH-relative or absolute)")
+	cmd.Flags().StringVar(&f.MicroinitSocket, "microinit-socket", "/run/microinit.sock",
+		"microinit IPC socket path")
+	cmd.Flags().StringVar(&f.MicroinitBin, "microinit-bin", "microinit",
+		"microinit binary path (PATH-relative or absolute)")
 	cmd.Flags().StringVar(&f.LogLevel, "log-level", "info",
 		"logrus level (debug, info, warn, error). BIGFRED_LOG_LEVEL env overrides this flag.")
 
@@ -248,23 +245,34 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	redisSvc := service.NewRedisService(redisCfg)
 	defer func() { _ = redisSvc.Close() }()
 
-	redisRDBSavePoints, err := supervisord.ResolveRDBSavePoints(f.RedisNoPersist, f.RedisRDBSave)
+	redisRDBSavePoints, err := service.ResolveRDBSavePoints(f.RedisNoPersist, f.RedisRDBSave)
 	if err != nil {
 		return err
 	}
+	if f.RedisDataDir == "" {
+		f.RedisDataDir = datadir.Path("redis")
+	}
 
-	var supSvc service.Supervisor
+	var supSvc service.ServiceManager
 	if !f.NoSupervisor {
-		supPaths, err := supervisord.DefaultPaths()
-		if err != nil {
-			return fmt.Errorf("supervisord paths: %w", err)
-		}
 		telemetryCfg := service.TelemetryConfig{
 			Enable:       f.EnableTelemetry,
 			ConfigPath:   f.TelemetryConfig,
 			OTLPEndpoint: service.DefaultOTLPEndpoint,
 		}
-		initial := service.DefaultInfraProcesses(service.InfraConfig{
+		supSvc, err = service.NewMicroinitManager(service.MicroinitConfig{
+			Socket: f.MicroinitSocket, Bin: f.MicroinitBin,
+			ConfigPath: datadir.Path("etc", "microinit.json"),
+			DropinDir:  datadir.Path("etc", "microinit.d", "services"),
+			Log:        log,
+		})
+		if err != nil {
+			return fmt.Errorf("microinit init: %w", err)
+		}
+		if err := supSvc.Start(ctx); err != nil {
+			return fmt.Errorf("microinit start: %w", err)
+		}
+		if err := service.EnsureInfra(ctx, supSvc, service.InfraConfig{
 			Redis: service.RedisConfig{
 				Bin:           f.RedisBin,
 				BindAddr:      f.RedisBindAddr,
@@ -274,24 +282,8 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 				Disable:       !redisMgmt.Managed,
 			},
 			Telemetry: telemetryCfg,
-		})
-		supSvc, err = service.NewSupervisordService(service.SupervisordConfig{
-			SupervisordBin:   f.SupervisordBin,
-			SupervisorctlBin: f.SupervisorctlBin,
-			ConfigDir:        supPaths.ConfigDir,
-			ConfigPath:       supPaths.ConfigPath,
-			InetHTTPAddr:     supPaths.InetHTTPAddr,
-			PIDFile:          supPaths.PIDFile,
-			LogDir:           supPaths.LogDir,
-			InitialState:     initial,
-			Telemetry:        telemetryCfg,
-			Log:              log,
-		})
-		if err != nil {
-			return fmt.Errorf("supervisord init: %w", err)
-		}
-		if err := supSvc.Start(ctx); err != nil {
-			return fmt.Errorf("supervisord start: %w", err)
+		}); err != nil {
+			return fmt.Errorf("ensure microinit infrastructure: %w", err)
 		}
 		if f.EnableTelemetry {
 			log.WithFields(logrus.Fields{
@@ -300,8 +292,8 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 				"generated": service.BigFredAlloyGeneratedPath(telemetryCfg),
 			}).Info("telemetry enabled: supervisord will manage alloy")
 		}
-		supSvc.RunHealthLoop(ctx, 5*time.Second, func(states []service.ProgramState) {
-			log.WithField("programs", states).Debug("supervisord status changed")
+		supSvc.RunHealthLoop(ctx, 5*time.Second, func(states []service.ServiceState) {
+			log.WithField("services", states).Debug("microinit status changed")
 		})
 	}
 

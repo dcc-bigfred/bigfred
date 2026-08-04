@@ -32,6 +32,8 @@ type File struct {
 	CorsOrigins                   []string
 	SecureCookie                  *bool
 	NoSupervisor                  *bool
+	MicroinitSocket               string
+	MicroinitBin                  string
 	LogLevel                      string
 	RedisBin                      string
 	RedisBindAddr                 string
@@ -128,6 +130,10 @@ func Parse(text string) File {
 		case "NO_SUPERVISOR", "NOSUPERVISOR":
 			v := parseBool(value)
 			f.NoSupervisor = &v
+		case "MICROINIT_SOCKET", "MICROINITSOCKET":
+			f.MicroinitSocket = value
+		case "MICROINIT_BIN", "MICROINITBIN":
+			f.MicroinitBin = value
 		case "LOG_LEVEL", "LOGLEVEL":
 			f.LogLevel = value
 		case "REDIS_BIN", "REDISBIN":

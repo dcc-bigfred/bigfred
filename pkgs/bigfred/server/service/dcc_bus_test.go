@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/supervisord"
+	"github.com/keskad/loco/pkgs/bigfred/server/microinit"
 )
 
 func TestProgramNameDeterministic(t *testing.T) {
@@ -16,12 +16,6 @@ func TestProgramNameDeterministic(t *testing.T) {
 	}
 	if got := programName(99, 7); got != "dcc-bus-99-7" {
 		t.Fatalf("programName(99,7) = %q", got)
-	}
-}
-
-func TestCtlProgramName(t *testing.T) {
-	if got := ctlProgramName(1, 2); got != "dcc-bus:dcc-bus-1-2" {
-		t.Fatalf("ctlProgramName(1,2) = %q", got)
 	}
 }
 
@@ -47,10 +41,10 @@ func TestParseDccBusProgramLayoutID(t *testing.T) {
 
 func TestProgramsForCommandStationMergesPortsAndStatus(t *testing.T) {
 	fake := &fakeSupervisor{
-		status: []ProgramState{
-			{Name: "dcc-bus:dcc-bus-2-5", Group: DccBusGroupName, Status: "RUNNING", PID: 42},
-			{Name: "dcc-bus:dcc-bus-9-5", Group: DccBusGroupName, Status: "FATAL", PID: 0},
-			{Name: "redis", Status: "RUNNING", PID: 1},
+		status: []ServiceState{
+			{Name: "dcc-bus-2-5", State: "running", PID: 42},
+			{Name: "dcc-bus-9-5", State: "failed"},
+			{Name: "redis", State: "running", PID: 1},
 		},
 	}
 	d := NewDccBusService(DccBusConfig{PortMin: 9200, PortMax: 9209}, fake, nil, nil, nil, nil)
@@ -74,13 +68,13 @@ func TestProgramsForCommandStationMergesPortsAndStatus(t *testing.T) {
 	for _, p := range got {
 		byLayout[p.LayoutID] = p
 	}
-	if p := byLayout[2]; !p.Running || p.Status != "RUNNING" || p.PID != 42 || p.Name != "dcc-bus-2-5" {
+	if p := byLayout[2]; !p.Running || p.Status != "running" || p.PID != 42 || p.Name != "dcc-bus-2-5" {
 		t.Fatalf("layout 2: %+v", p)
 	}
-	if p := byLayout[3]; p.Running || p.Status != "STOPPED" || p.Name != "dcc-bus-3-5" {
+	if p := byLayout[3]; p.Running || p.Status != "stopped" || p.Name != "dcc-bus-3-5" {
 		t.Fatalf("layout 3 (port-only): %+v", p)
 	}
-	if p := byLayout[9]; p.Running || p.Status != "FATAL" || p.Name != "dcc-bus-9-5" {
+	if p := byLayout[9]; p.Running || p.Status != "failed" || p.Name != "dcc-bus-9-5" {
 		t.Fatalf("layout 9 (status-only): %+v", p)
 	}
 }
@@ -152,7 +146,7 @@ func TestAppendDccBusTelemetryArgs(t *testing.T) {
 
 // fakeSupervisor is a minimal Supervisor stub for unit tests.
 type fakeSupervisor struct {
-	status      []ProgramState
+	status      []ServiceState
 	statusErr   error
 	startErr    error
 	lastStart   string
@@ -160,34 +154,31 @@ type fakeSupervisor struct {
 	lastRestart string
 }
 
-func (f *fakeSupervisor) Start(context.Context) error { return nil }
-func (f *fakeSupervisor) Stop(context.Context) error  { return nil }
-func (f *fakeSupervisor) Apply(context.Context, supervisord.DesiredState) error {
+func (f *fakeSupervisor) Start(context.Context) error                                        { return nil }
+func (f *fakeSupervisor) Stop(context.Context) error                                         { return nil }
+func (f *fakeSupervisor) RunHealthLoop(context.Context, time.Duration, func([]ServiceState)) {}
+func (f *fakeSupervisor) Paths() (string, string)                                            { return "", "" }
+func (f *fakeSupervisor) UpsertService(context.Context, string, microinit.ServiceDef) error {
 	return nil
 }
-func (f *fakeSupervisor) RunHealthLoop(context.Context, time.Duration, func([]ProgramState)) {
-}
-func (f *fakeSupervisor) Paths() (string, string) { return "", "" }
-func (f *fakeSupervisor) UpsertProgram(context.Context, string, supervisord.ProgramSpec) error {
+func (f *fakeSupervisor) ReplaceServices(context.Context, string, []microinit.ServiceDef) error {
 	return nil
 }
-func (f *fakeSupervisor) ReplaceGroupPrograms(context.Context, string, []supervisord.ProgramSpec) error {
-	return nil
-}
-func (f *fakeSupervisor) RemoveProgram(context.Context, string, string) error { return nil }
-func (f *fakeSupervisor) StartProgram(_ context.Context, name string) error {
+func (f *fakeSupervisor) RemoveService(context.Context, string, string) error { return nil }
+func (f *fakeSupervisor) HasService(context.Context, string) (bool, error)    { return false, nil }
+func (f *fakeSupervisor) StartService(_ context.Context, name string) error {
 	f.lastStart = name
 	return f.startErr
 }
-func (f *fakeSupervisor) StopProgram(_ context.Context, name string) error {
+func (f *fakeSupervisor) StopService(_ context.Context, name string) error {
 	f.lastStop = name
 	return nil
 }
-func (f *fakeSupervisor) RestartProgram(_ context.Context, name string) error {
+func (f *fakeSupervisor) RestartService(_ context.Context, name string) error {
 	f.lastRestart = name
 	return nil
 }
-func (f *fakeSupervisor) Status(context.Context) ([]ProgramState, error) {
+func (f *fakeSupervisor) Status(context.Context) ([]ServiceState, error) {
 	if f.statusErr != nil {
 		return nil, f.statusErr
 	}

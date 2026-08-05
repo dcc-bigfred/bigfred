@@ -6,7 +6,7 @@ require (
 	github.com/alicebob/miniredis/v2 v2.38.0
 	github.com/brutella/dnssd v1.2.14
 	github.com/coder/websocket v1.8.13
-	github.com/dcc-bigfred/microinit/go v0.4.0
+	github.com/dcc-bigfred/microinit/go v0.5.0
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/go-chi/chi/v5 v5.3.0
 	github.com/go-chi/cors v1.2.2
@@ -80,5 +80,3 @@ require (
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
 )
-
-replace github.com/dcc-bigfred/microinit/go => ../microinit/go

@@ -51,7 +51,9 @@ type ServiceManager interface {
 
 type MicroinitConfig struct {
 	Socket, Bin, ConfigPath, DropinDir string
-	Log                                *logrus.Logger
+	// SpawnEnv is passed only to a supervised microinit child (not the embedder).
+	SpawnEnv []string
+	Log      *logrus.Logger
 }
 
 type manager struct {
@@ -64,7 +66,7 @@ func NewMicroinitManager(cfg MicroinitConfig) (ServiceManager, error) {
 		return nil, errors.New("microinit config path and drop-in directory are required")
 	}
 	return &manager{
-		supervisor: microinit.NewSupervisor(cfg.Socket, cfg.Bin, cfg.ConfigPath, cfg.DropinDir, cfg.Log),
+		supervisor: microinit.NewSupervisor(cfg.Socket, cfg.Bin, cfg.ConfigPath, cfg.DropinDir, cfg.SpawnEnv, cfg.Log),
 		log:        cfg.Log,
 	}, nil
 }

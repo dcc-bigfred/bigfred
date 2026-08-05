@@ -99,20 +99,22 @@ type Supervisor struct {
 	host *supervise.Host
 }
 
-func NewSupervisor(socket, bin, configPath, dropinDir string, log *logrus.Logger) *Supervisor {
+func NewSupervisor(socket, bin, configPath, dropinDir string, spawnEnv []string, log *logrus.Logger) *Supervisor {
 	if socket == "" {
 		socket = DefaultSocketPath()
 	}
 	if bin == "" {
 		bin = "microinit"
 	}
+	host := supervise.New(socket, bin, configPath, dropinDir)
+	host.ExtraEnv = spawnEnv
 	return &Supervisor{
 		Socket:     socket,
 		Bin:        bin,
 		ConfigPath: configPath,
 		DropinDir:  dropinDir,
 		Log:        log,
-		host:       supervise.New(socket, bin, configPath, dropinDir),
+		host:       host,
 	}
 }
 

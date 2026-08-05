@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -31,6 +32,7 @@ import (
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
 	httpapi "github.com/keskad/loco/pkgs/bigfred/server/http"
 	"github.com/keskad/loco/pkgs/bigfred/server/metrics"
+	"github.com/keskad/loco/pkgs/bigfred/server/otelenv"
 	"github.com/keskad/loco/pkgs/bigfred/server/repo"
 	"github.com/keskad/loco/pkgs/bigfred/server/repo/migrations"
 	"github.com/keskad/loco/pkgs/bigfred/server/service"
@@ -95,9 +97,16 @@ LocoApp controller layer. It owns user authentication, session
 management and (in later milestones) the WebSocket fan-out for
 real-time throttle commands.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if err := otelenv.WriteDefaultsReference(otelenv.DefaultsReferencePath()); err != nil {
+				log.WithError(err).Warnf("cannot write %s", otelenv.DefaultsReferencePath())
+			}
+			if err := otelenv.Load(otelenv.DefaultPath()); err != nil {
+				return fmt.Errorf("otel.env: %w", err)
+			}
 			if err := mergeConfigFile(cmd, &f, log); err != nil {
 				return err
 			}
+			applyOtelEnvFlags(cmd, &f)
 			return run(cmd.Context(), log, f)
 		},
 	}
@@ -159,6 +168,14 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		return err
 	}
 
+	// Align DATA_DIR with BigFred's data root so supervised microinit reads the
+	// same $DATA_DIR/etc/otel.env (Android often sets only BIGFRED_DATA_DIR).
+	if os.Getenv("DATA_DIR") == "" {
+		if err := os.Setenv("DATA_DIR", datadir.Root()); err != nil {
+			return fmt.Errorf("set DATA_DIR: %w", err)
+		}
+	}
+
 	info := version.Get()
 	log.WithFields(logrus.Fields{
 		"version":     info.Version,
@@ -176,9 +193,10 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 
 	var metricsShutdown func(context.Context) error
 	var serverMetrics *metrics.Metrics
+	otlpEndpoint := resolveOTLPEndpoint()
 	if f.EnableTelemetry {
 		var shutdownErr error
-		metricsShutdown, shutdownErr = bfotel.InitMetrics(ctx, "loco-server", service.DefaultOTLPEndpoint)
+		metricsShutdown, shutdownErr = bfotel.InitMetrics(ctx, "loco-server", otlpEndpoint)
 		if shutdownErr != nil {
 			return fmt.Errorf("loco-server metrics: %w", shutdownErr)
 		}
@@ -191,7 +209,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		if err != nil {
 			return fmt.Errorf("loco-server metrics instruments: %w", err)
 		}
-		log.WithField("endpoint", service.DefaultOTLPEndpoint).Info("loco-server metrics enabled")
+		log.WithField("endpoint", otlpEndpoint).Info("loco-server metrics enabled")
 	}
 
 	repository, sqlDB, err := repo.Open(f.DBPath, log, serverMetrics)
@@ -255,15 +273,20 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 
 	var supSvc service.ServiceManager
 	if !f.NoSupervisor {
+		spawnEnv := []string{}
+		if f.EnableTelemetry {
+			spawnEnv = append(spawnEnv, "ENABLE_TELEMETRY=true")
+		}
 		telemetryCfg := service.TelemetryConfig{
 			Enable:       f.EnableTelemetry,
 			ConfigPath:   f.TelemetryConfig,
-			OTLPEndpoint: service.DefaultOTLPEndpoint,
+			OTLPEndpoint: otlpEndpoint,
 		}
 		supSvc, err = service.NewMicroinitManager(service.MicroinitConfig{
 			Socket: f.MicroinitSocket, Bin: f.MicroinitBin,
 			ConfigPath: datadir.Path("etc", "microinit.json"),
 			DropinDir:  datadir.Path("etc", "microinit.d", "services"),
+			SpawnEnv:   spawnEnv,
 			Log:        log,
 		})
 		if err != nil {
@@ -427,7 +450,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 			SpawnTimeout:    10 * time.Second,
 			ProxyEnabled:    true,
 			EnableTelemetry: f.EnableTelemetry,
-			OTLPEndpoint:    service.DefaultOTLPEndpoint,
+			OTLPEndpoint:    otlpEndpoint,
 			ManagedRedis:    redisMgmt.Managed,
 		}, supSvc, redisSvc, commandStations, layouts, log)
 		if err := dccBusSvc.HydratePorts(ctx); err != nil {
@@ -751,6 +774,28 @@ func configureLogLevel(log *logrus.Logger, flagLevel string) error {
 	log.SetLevel(level)
 	log.WithField("level", level.String()).Debug("log level configured")
 	return nil
+}
+
+// applyOtelEnvFlags overlays ENABLE_TELEMETRY from the process environment
+// (including values loaded from otel.env) when the CLI flag was not set.
+// Precedence: CLI > env/otel.env > loco-server.conf.
+func applyOtelEnvFlags(cmd *cobra.Command, f *Flags) {
+	if cmd.Flags().Changed("enable-telemetry") {
+		return
+	}
+	if v, set := otelenv.EnvBool("ENABLE_TELEMETRY"); set {
+		f.EnableTelemetry = v
+	}
+}
+
+// resolveOTLPEndpoint returns the OTLP/gRPC host:port for loco-server and
+// managed dcc-bus. OTEL_EXPORTER_OTLP_ENDPOINT wins when set (after otel.env
+// load); otherwise the Alloy default is used.
+func resolveOTLPEndpoint() string {
+	if v := strings.TrimSpace(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")); v != "" {
+		return v
+	}
+	return service.DefaultOTLPEndpoint
 }
 
 // resolveJWTSecret picks the JWT signing key in the documented

@@ -67,6 +67,7 @@ func TestPrepareAlloyTelemetryRendersValidBlocks(t *testing.T) {
 	for _, want := range []string{
 		`otelcol.receiver.otlp "bigfred" {`,
 		`endpoint = "127.0.0.1:4317"`,
+		`endpoint = "127.0.0.1:4318"`,
 		`otelcol.processor.batch "bigfred" {`,
 		`otelcol.exporter.otlphttp "bigfred" {`,
 		`otelcol.auth.basic "bigfred" {`,
@@ -80,5 +81,8 @@ func TestPrepareAlloyTelemetryRendersValidBlocks(t *testing.T) {
 	// Nested blocks must not be collapsed onto one line (River parse failure).
 	if strings.Contains(s, "grpc { endpoint") {
 		t.Fatalf("alloy.conf still has compacted nested blocks:\n%s", s)
+	}
+	if strings.Contains(s, "http { endpoint") {
+		t.Fatalf("alloy.conf still has compacted nested http blocks:\n%s", s)
 	}
 }

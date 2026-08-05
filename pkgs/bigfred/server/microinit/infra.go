@@ -79,7 +79,7 @@ func RedisServiceDef(cfg RedisConfig) (ServiceDef, error) {
 		port = 6379
 	}
 	if dir == "" {
-		dir = datadir.Path("var", "lib", "redis")
+		dir = datadir.Path("var", "db", "redis")
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return ServiceDef{}, fmt.Errorf("create redis data dir %s: %w", dir, err)
@@ -123,7 +123,7 @@ type InfraConfig struct {
 const DefaultOTLPEndpoint = "127.0.0.1:4317"
 
 func DefaultTelemetryConfigPath() string { return datadir.Path("etc", "alloy.conf") }
-func DefaultAlloyStoragePath() string    { return datadir.Path("alloy") }
+func DefaultAlloyStoragePath() string    { return datadir.Path("var", "lib", "alloy") }
 func AlloyRunConfigPath(cfg TelemetryConfig) string {
 	if cfg.ConfigPath != "" {
 		return cfg.ConfigPath

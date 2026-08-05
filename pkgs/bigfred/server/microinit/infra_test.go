@@ -43,8 +43,8 @@ func TestRedisServiceDefDefaultDataDir(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(svc.StartCmd, filepath.Join("var", "lib", "redis")) {
-		t.Fatalf("expected default var/lib/redis in StartCmd: %s", svc.StartCmd)
+	if !strings.Contains(svc.StartCmd, filepath.Join("var", "db", "redis")) {
+		t.Fatalf("expected default var/db/redis in StartCmd: %s", svc.StartCmd)
 	}
 }
 

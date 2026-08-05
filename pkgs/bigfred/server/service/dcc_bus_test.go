@@ -166,9 +166,7 @@ func (f *fakeSupervisor) ReplaceServices(context.Context, string, []microinit.Se
 }
 func (f *fakeSupervisor) RemoveService(context.Context, string, string) error { return nil }
 func (f *fakeSupervisor) HasService(context.Context, string) (bool, error)    { return false, nil }
-func (f *fakeSupervisor) IsSystemService(context.Context, string) (bool, error) {
-	return false, nil
-}
+func (f *fakeSupervisor) CanManage(context.Context, string) (bool, error)     { return true, nil }
 func (f *fakeSupervisor) StartService(_ context.Context, name string) error {
 	f.lastStart = name
 	return f.startErr

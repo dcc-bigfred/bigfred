@@ -149,9 +149,7 @@ func (f *actionFakeSup) ReplaceServices(context.Context, string, []microinit.Ser
 }
 func (f *actionFakeSup) RemoveService(context.Context, string, string) error { return nil }
 func (f *actionFakeSup) HasService(context.Context, string) (bool, error)    { return false, nil }
-func (f *actionFakeSup) IsSystemService(context.Context, string) (bool, error) {
-	return false, nil
-}
+func (f *actionFakeSup) CanManage(context.Context, string) (bool, error)     { return true, nil }
 func (f *actionFakeSup) StartService(_ context.Context, name string) error {
 	f.lastStart = name
 	return f.startErr

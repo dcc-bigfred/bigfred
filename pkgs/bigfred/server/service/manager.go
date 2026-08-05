@@ -18,9 +18,9 @@ const (
 
 var (
 	ErrNotFound = microinit.ErrNotFound
-	// ErrSystemService is returned when refusing to write a drop-in for a
-	// service declared in the main microinit.json.
-	ErrSystemService = errors.New("refusing to manage system microinit service")
+	// ErrNotOurs is returned when refusing to write a drop-in for a service
+	// that already exists without created-by=bigfred.
+	ErrNotOurs = errors.New("refusing to manage microinit service not labeled created-by=bigfred")
 )
 
 type ServiceState struct {
@@ -44,8 +44,9 @@ type ServiceManager interface {
 	RunHealthLoop(context.Context, time.Duration, func([]ServiceState))
 	Paths() (socket, dropinDir string)
 	HasService(context.Context, string) (bool, error)
-	// IsSystemService reports whether name is declared in main microinit.json.
-	IsSystemService(context.Context, string) (bool, error)
+	// CanManage reports whether bigfred may write/overwrite a drop-in for name
+	// (service absent, or already labeled created-by=bigfred).
+	CanManage(context.Context, string) (bool, error)
 }
 
 type MicroinitConfig struct {
@@ -69,34 +70,29 @@ func (m *manager) Start(ctx context.Context) error {
 
 func (m *manager) Stop(ctx context.Context) error { return m.supervisor.Stop(ctx) }
 
-func (m *manager) IsSystemService(_ context.Context, name string) (bool, error) {
-	names, err := m.supervisor.SystemServiceNames()
-	if err != nil {
-		return false, err
-	}
-	_, ok := names[name]
-	return ok, nil
+func (m *manager) CanManage(_ context.Context, name string) (bool, error) {
+	return m.supervisor.CanManage(name)
 }
 
 func (m *manager) UpsertService(ctx context.Context, group string, svc microinit.ServiceDef) error {
-	sys, err := m.IsSystemService(ctx, svc.Name)
+	ok, err := m.CanManage(ctx, svc.Name)
 	if err != nil {
 		return err
 	}
-	if sys {
-		return fmt.Errorf("%w: %s", ErrSystemService, svc.Name)
+	if !ok {
+		return fmt.Errorf("%w: %s", ErrNotOurs, svc.Name)
 	}
 	return m.supervisor.WriteDropin(group, svc.Name, svc)
 }
 
-func (m *manager) ReplaceServices(_ context.Context, group string, services []microinit.ServiceDef) error {
-	system, err := m.supervisor.SystemServiceNames()
-	if err != nil {
-		return err
-	}
+func (m *manager) ReplaceServices(ctx context.Context, group string, services []microinit.ServiceDef) error {
 	desired := make(map[string]microinit.ServiceDef, len(services))
 	for _, svc := range services {
-		if _, sys := system[svc.Name]; sys {
+		ok, err := m.CanManage(ctx, svc.Name)
+		if err != nil {
+			return err
+		}
+		if !ok {
 			continue
 		}
 		desired[svc.Name] = svc
@@ -137,16 +133,11 @@ func (m *manager) Status(_ context.Context) ([]ServiceState, error) {
 }
 
 func (m *manager) HasService(_ context.Context, name string) (bool, error) {
-	rows, err := m.supervisor.Client().List()
+	st, err := m.supervisor.Status(name)
 	if err != nil {
 		return false, err
 	}
-	for _, row := range rows {
-		if row.Name == name {
-			return true, nil
-		}
-	}
-	return false, nil
+	return st != nil, nil
 }
 
 func (m *manager) RunHealthLoop(ctx context.Context, interval time.Duration, onChange func([]ServiceState)) {
@@ -204,9 +195,9 @@ func ResolveRDBSavePoints(noPersist bool, values []string) ([]RDBSavePoint, erro
 	return microinit.ResolveRDBSavePoints(noPersist, values)
 }
 
-// EnsureInfra writes redis/alloy drop-ins only when those services are not
-// system-declared and not already provided by another microinit source.
-// Leftover bigfred drop-ins for system services are removed so base config wins.
+// EnsureInfra writes redis/alloy drop-ins only when those services are absent
+// or already labeled created-by=bigfred. Foreign services are left alone; any
+// leftover bigfred drop-in for a foreign name is removed.
 func EnsureInfra(ctx context.Context, mgr ServiceManager, cfg InfraConfig) error {
 	if !cfg.Redis.Disable {
 		if err := ensureOwnedInfra(ctx, mgr, GroupInfra, "redis", func() (microinit.ServiceDef, error) {
@@ -234,24 +225,13 @@ func ensureOwnedInfra(
 	group, name string,
 	build func() (microinit.ServiceDef, error),
 ) error {
-	sys, err := mgr.IsSystemService(ctx, name)
+	ok, err := mgr.CanManage(ctx, name)
 	if err != nil {
 		return err
 	}
-	if sys {
-		// Drop any previous bigfred override so system definition is authoritative.
+	if !ok {
+		// Foreign (e.g. system image) — drop leftover bigfred override if any.
 		_ = mgr.RemoveService(ctx, group, name)
-		return nil
-	}
-
-	exists, err := mgr.HasService(ctx, name)
-	if err != nil {
-		return err
-	}
-	_, dropinDir := mgr.Paths()
-	ours := microinit.DropinExists(dropinDir, group, name)
-	if exists && !ours {
-		// Provided by another drop-in / source — do not steal.
 		return nil
 	}
 

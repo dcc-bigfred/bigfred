@@ -272,6 +272,17 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		if err := supSvc.Start(ctx); err != nil {
 			return fmt.Errorf("microinit start: %w", err)
 		}
+		// Guarantee microinit is stopped on every return path (including
+		// early errors between Start and the final shutdown). The SDK
+		// Shutdown sends IPC halt → SIGTERM (soft-kill) → SIGKILL, so
+		// managed services get a chance to flush before the process dies.
+		defer func() {
+			stopCtx, stopCancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer stopCancel()
+			if err := supSvc.Stop(stopCtx); err != nil {
+				log.WithError(err).Warn("microinit shutdown")
+			}
+		}()
 		if err := service.EnsureInfra(ctx, supSvc, service.InfraConfig{
 			Redis: service.RedisConfig{
 				Bin:           f.RedisBin,
@@ -677,13 +688,8 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if supSvc != nil {
-		stopCtx, stopCancel := context.WithTimeout(context.Background(), 15*time.Second)
-		if err := supSvc.Stop(stopCtx); err != nil {
-			log.WithError(err).Warn("supervisord shutdown")
-		}
-		stopCancel()
-	}
+	// microinit is stopped by the defer registered after Start; it runs
+	// after srv.Shutdown returns, so we stop accepting requests first.
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		return fmt.Errorf("shutdown: %w", err)
 	}

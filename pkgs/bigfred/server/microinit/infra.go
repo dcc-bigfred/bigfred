@@ -85,10 +85,10 @@ func RedisServiceDef(cfg RedisConfig) (ServiceDef, error) {
 		return ServiceDef{}, fmt.Errorf("create redis data dir %s: %w", dir, err)
 	}
 	args := []string{
-		shellQuote(bin),
-		"--bind", shellQuote(bind),
+		config.ShellQuote(bin),
+		"--bind", config.ShellQuote(bind),
 		"--port", strconv.Itoa(int(port)),
-		"--dir", shellQuote(dir),
+		"--dir", config.ShellQuote(dir),
 		"--daemonize", "no",
 		"--protected-mode", "no",
 		"--logfile", "''",
@@ -151,7 +151,7 @@ func AlloyServiceDef(cfg TelemetryConfig) (ServiceDef, error) {
 		ShutdownWaitSecs: IntPtr(10),
 		StartCmd: fmt.Sprintf(
 			"exec %s run --storage.path=%s %s",
-			shellQuote(bin), shellQuote(storage), shellQuote(AlloyRunConfigPath(cfg)),
+			config.ShellQuote(bin), config.ShellQuote(storage), config.ShellQuote(AlloyRunConfigPath(cfg)),
 		),
 		LivenessProbe: &LivenessProbe{
 			HTTPUrl:           "http://127.0.0.1:12345/-/ready",
@@ -209,5 +209,3 @@ func PrepareAlloyTelemetry(cfg TelemetryConfig) error {
 	path := filepath.Clean(AlloyRunConfigPath(cfg))
 	return config.WriteFileAtomically(path, content.Bytes())
 }
-
-func shellQuote(value string) string { return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'" }

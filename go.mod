@@ -80,3 +80,9 @@ require (
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
 )
+
+// Coordination with the microinit migration PRs: use the local SDK checkout
+// so bigfred picks up the new helpers (ShellQuote/BuildStartCmd, stable
+// error codes, read-deadline, soft-kill lifecycle). Drop this and bump the
+// require version once a new microinit/go tag is published.
+replace github.com/dcc-bigfred/microinit/go => ../microinit/go

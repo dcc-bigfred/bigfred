@@ -22,8 +22,8 @@ func TestProgramNameDeterministic(t *testing.T) {
 func TestProgramsForCommandStationNilSupervisor(t *testing.T) {
 	d := NewDccBusService(DccBusConfig{}, nil, nil, nil, nil, nil)
 	_, err := d.ProgramsForCommandStation(context.Background(), 2)
-	if !errors.Is(err, ErrSupervisordNotWired) {
-		t.Fatalf("ProgramsForCommandStation: got %v, want ErrSupervisordNotWired", err)
+	if !errors.Is(err, ErrServicesNotWired) {
+		t.Fatalf("ProgramsForCommandStation: got %v, want ErrServicesNotWired", err)
 	}
 }
 
@@ -82,13 +82,13 @@ func TestProgramsForCommandStationMergesPortsAndStatus(t *testing.T) {
 func TestStartStopRestartNilSupervisor(t *testing.T) {
 	d := NewDccBusService(DccBusConfig{}, nil, nil, nil, nil, nil)
 	ctx := context.Background()
-	if err := d.StartDccBus(ctx, 1, 2); !errors.Is(err, ErrSupervisordNotWired) {
+	if err := d.StartDccBus(ctx, 1, 2); !errors.Is(err, ErrServicesNotWired) {
 		t.Fatalf("StartDccBus: got %v", err)
 	}
-	if err := d.StopDccBus(ctx, 1, 2); !errors.Is(err, ErrSupervisordNotWired) {
+	if err := d.StopDccBus(ctx, 1, 2); !errors.Is(err, ErrServicesNotWired) {
 		t.Fatalf("StopDccBus: got %v", err)
 	}
-	if err := d.RestartDccBus(ctx, 1, 2); !errors.Is(err, ErrSupervisordNotWired) {
+	if err := d.RestartDccBus(ctx, 1, 2); !errors.Is(err, ErrServicesNotWired) {
 		t.Fatalf("RestartDccBus: got %v", err)
 	}
 }

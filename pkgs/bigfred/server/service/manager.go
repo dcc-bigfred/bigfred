@@ -12,8 +12,8 @@ import (
 )
 
 const (
-	GroupBigfred = "bigfred"
-	GroupInfra   = "infra"
+	GroupDccBus = "dcc-bus"
+	GroupInfra  = "infra"
 )
 
 var (
@@ -54,13 +54,19 @@ type MicroinitConfig struct {
 	Log                                *logrus.Logger
 }
 
-type manager struct{ supervisor *microinit.Supervisor }
+type manager struct {
+	supervisor *microinit.Supervisor
+	log        *logrus.Logger
+}
 
 func NewMicroinitManager(cfg MicroinitConfig) (ServiceManager, error) {
 	if cfg.ConfigPath == "" || cfg.DropinDir == "" {
 		return nil, errors.New("microinit config path and drop-in directory are required")
 	}
-	return &manager{supervisor: microinit.NewSupervisor(cfg.Socket, cfg.Bin, cfg.ConfigPath, cfg.DropinDir, cfg.Log)}, nil
+	return &manager{
+		supervisor: microinit.NewSupervisor(cfg.Socket, cfg.Bin, cfg.ConfigPath, cfg.DropinDir, cfg.Log),
+		log:        cfg.Log,
+	}, nil
 }
 
 func (m *manager) Start(ctx context.Context) error {
@@ -93,6 +99,10 @@ func (m *manager) ReplaceServices(ctx context.Context, group string, services []
 			return err
 		}
 		if !ok {
+			if m.log != nil {
+				m.log.WithField("service", svc.Name).
+					Warn("microinit: skipping service not labeled created-by=bigfred")
+			}
 			continue
 		}
 		desired[svc.Name] = svc

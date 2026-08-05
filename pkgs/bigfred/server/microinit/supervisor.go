@@ -37,6 +37,13 @@ type (
 func BoolPtr(v bool) *bool { return config.BoolPtr(v) }
 func IntPtr(v int) *int    { return config.IntPtr(v) }
 
+// ShellQuote wraps an argv token for safe interpolation into a shell command
+// line. Re-exported so service builders can use a single import.
+func ShellQuote(value string) string { return config.ShellQuote(value) }
+
+// BuildStartCmd joins and shell-quotes argv into a single "exec ..." command.
+func BuildStartCmd(args []string) string { return config.BuildStartCmd(args) }
+
 // LabelCreatedBy is the conventional drop-in ownership label key.
 const LabelCreatedBy = config.LabelCreatedBy
 

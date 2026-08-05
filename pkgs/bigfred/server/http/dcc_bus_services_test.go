@@ -20,7 +20,7 @@ import (
 func TestActionRequiresLayoutId(t *testing.T) {
 	fake := &actionFakeSup{}
 	dcc := service.NewDccBusService(service.DccBusConfig{}, fake, nil, nil, nil, nil)
-	h := NewDccBusSupervisordHandler(dcc)
+	h := NewDccBusServicesHandler(dcc)
 
 	r := chi.NewRouter()
 	r.Post("/admin/dcc-bus/{commandStationId}/services/{action}", h.Action)
@@ -47,7 +47,7 @@ func TestActionRequiresLayoutId(t *testing.T) {
 func TestActionStartInvokesService(t *testing.T) {
 	fake := &actionFakeSup{}
 	dcc := service.NewDccBusService(service.DccBusConfig{}, fake, nil, nil, nil, nil)
-	h := NewDccBusSupervisordHandler(dcc)
+	h := NewDccBusServicesHandler(dcc)
 
 	r := chi.NewRouter()
 	r.Post("/admin/dcc-bus/{commandStationId}/services/{action}", h.Action)
@@ -70,7 +70,7 @@ func TestActionStartInvokesService(t *testing.T) {
 func TestActionStartSurfacesMessage(t *testing.T) {
 	fake := &actionFakeSup{startErr: errors.New(`supervisorctl start: ERROR (no such process)`)}
 	dcc := service.NewDccBusService(service.DccBusConfig{}, fake, nil, nil, nil, nil)
-	h := NewDccBusSupervisordHandler(dcc)
+	h := NewDccBusServicesHandler(dcc)
 
 	r := chi.NewRouter()
 	r.Post("/admin/dcc-bus/{commandStationId}/services/{action}", h.Action)
@@ -104,7 +104,7 @@ func TestGetStatusListsPrograms(t *testing.T) {
 		},
 	}
 	dcc := service.NewDccBusService(service.DccBusConfig{}, fake, nil, nil, nil, nil)
-	h := NewDccBusSupervisordHandler(dcc)
+	h := NewDccBusServicesHandler(dcc)
 
 	r := chi.NewRouter()
 	r.Get("/admin/dcc-bus/{commandStationId}/services", h.GetStatus)

@@ -27,7 +27,7 @@ import (
 
 // DccBusGroupName is retained for compatibility. dcc-bus services are
 // persisted in the BigFred microinit drop-in group.
-const DccBusGroupName = GroupBigfred
+const DccBusGroupName = GroupDccBus
 
 // ErrNoDccBusPortsAvailable is returned by EnsureRunning when the
 // configured port pool is exhausted.
@@ -41,7 +41,7 @@ var ErrDccBusUnavailable = errors.New("dcc-bus daemon unavailable")
 var ErrServiceManagerNotWired = errors.New("dcc-bus: service manager is not wired")
 
 // Deprecated: use ErrServiceManagerNotWired.
-var ErrSupervisordNotWired = ErrServiceManagerNotWired
+var ErrServicesNotWired = ErrServiceManagerNotWired
 
 // DccBusConfig configures DccBusService. Defaults match §7e.2.
 type DccBusConfig struct {
@@ -51,7 +51,7 @@ type DccBusConfig struct {
 	// RedisAddr is forwarded as the daemon's --redis-addr flag.
 	RedisAddr string
 	// JWTSecret is forwarded verbatim via --jwt-secret. The
-	// supervisord render path applies shell quoting so spaces /
+	// microinit render path applies shell quoting so spaces /
 	// quotes survive.
 	JWTSecret []byte
 	// PortMin / PortMax bracket the TCP port pool. Default
@@ -60,7 +60,7 @@ type DccBusConfig struct {
 	PortMax uint16
 	// SpawnTimeout is the budget EnsureRunning waits for a freshly-
 	// spawned daemon to accept a WS dial. Default 10s — matches
-	// supervisord's startsecs + a small slack window.
+	// microinit's startsecs + a small slack window.
 	SpawnTimeout time.Duration
 	// AllowedOrigins is forwarded as --allowed-origin flags so a
 	// dev frontend can dial the daemon directly (production proxies
@@ -78,7 +78,7 @@ type DccBusConfig struct {
 }
 
 // DccBusService is the loco-server-side orchestrator for dcc-bus
-// daemons. It owns the port pool, drives supervisord via
+// daemons. It owns the port pool, drives microinit via
 // SupervisordService, and exposes typed helpers to publish commands
 // onto the daemon's Redis channels (§7e.6).
 type DccBusService struct {
@@ -160,7 +160,7 @@ func (d *DccBusService) HydratePorts(ctx context.Context) error {
 
 // LayoutIDsWithProgramForCS returns layout ids that currently have a
 // port assignment for commandStationID. Used when catalogue rows change
-// so supervisord can restart daemons that are still running after the
+// so microinit can restart daemons that are still running after the
 // operator disconnects from the control plane.
 func (d *DccBusService) LayoutIDsWithProgramForCS(commandStationID uint) []uint {
 	d.mu.Lock()
@@ -202,14 +202,14 @@ func (d *DccBusService) PortFor(layoutID, commandStationID uint) uint16 {
 	return d.ports[portKey{LayoutID: layoutID, CommandStationID: commandStationID}]
 }
 
-// programName returns the supervisord program name for a daemon.
+// programName returns the microinit program name for a daemon.
 // The name MUST satisfy `[a-z][a-z0-9_-]*` to pass DesiredState
 // validation, so we always lower-case + dash-join the numbers.
 func programName(layoutID, commandStationID uint) string {
 	return fmt.Sprintf("dcc-bus-%d-%d", layoutID, commandStationID)
 }
 
-// DccBusProgramStatus is one dcc-bus supervisord program for a
+// DccBusProgramStatus is one dcc-bus microinit program for a
 // (layout, commandStation) pair, as shown in the admin popup.
 type DccBusProgramStatus struct {
 	LayoutID   uint   `json:"layoutId"`
@@ -220,10 +220,10 @@ type DccBusProgramStatus struct {
 	Running    bool   `json:"running"`
 }
 
-// ProgramsForCommandStation lists every dcc-bus supervisord program
+// ProgramsForCommandStation lists every dcc-bus microinit program
 // for commandStationID across all layouts that have a port assignment
-// or a supervisord row. Absent programs are reported as STOPPED.
-// When supervisord is not wired (--no-supervisor), returns ErrSupervisordNotWired.
+// or a microinit row. Absent programs are reported as STOPPED.
+// When microinit is not wired (--no-supervisor), returns ErrServicesNotWired.
 func (d *DccBusService) ProgramsForCommandStation(ctx context.Context, commandStationID uint) ([]DccBusProgramStatus, error) {
 	if d.mgr == nil {
 		return nil, ErrServiceManagerNotWired
@@ -285,19 +285,19 @@ func (d *DccBusService) ProgramsForCommandStation(ctx context.Context, commandSt
 	return out, nil
 }
 
-// StartDccBus starts the existing dcc-bus supervisord program without
+// StartDccBus starts the existing dcc-bus microinit program without
 // rewriting config (unlike EnsureRunning, which upserts the program).
 func (d *DccBusService) StartDccBus(ctx context.Context, layoutID, commandStationID uint) error {
 	return d.controlDccBus(ctx, layoutID, commandStationID, "start")
 }
 
-// StopDccBus stops the dcc-bus supervisord program without removing it
+// StopDccBus stops the dcc-bus microinit program without removing it
 // from config (unlike Stop, which also RemoveProgram).
 func (d *DccBusService) StopDccBus(ctx context.Context, layoutID, commandStationID uint) error {
 	return d.controlDccBus(ctx, layoutID, commandStationID, "stop")
 }
 
-// RestartDccBus stops then starts the dcc-bus supervisord program.
+// RestartDccBus stops then starts the dcc-bus microinit program.
 func (d *DccBusService) RestartDccBus(ctx context.Context, layoutID, commandStationID uint) error {
 	return d.controlDccBus(ctx, layoutID, commandStationID, "restart")
 }
@@ -363,7 +363,7 @@ func parseDccBusProgramLayoutID(bareName string, commandStationID uint) (uint, b
 }
 
 // EnsureRunning guarantees a `dcc-bus-<L>-<C>` program exists in
-// supervisord, RUNNING, and accepting WS connections. It returns
+// microinit, RUNNING, and accepting WS connections. It returns
 // the loopback port the daemon listens on plus the program name
 // for audit / logging.
 //
@@ -372,7 +372,7 @@ func parseDccBusProgramLayoutID(bareName string, commandStationID uint) (uint, b
 //  1. If a port is already allocated, just verify the daemon is
 //     RUNNING and dial-able; return its port.
 //  2. Otherwise allocate a free port from the pool, upsert the
-//     program into supervisord (autostart + autorestart), wait for
+//     program into microinit (autostart + autorestart), wait for
 //     RUNNING and `tcp dial OK`, persist the port assignment.
 func (d *DccBusService) EnsureRunning(ctx context.Context, layoutID, commandStationID uint) (uint16, string, error) {
 	start := time.Now()
@@ -421,15 +421,15 @@ func (d *DccBusService) ensureRunning(ctx context.Context, layoutID, commandStat
 	if err != nil {
 		return 0, name, err
 	}
-	d.log.WithFields(logrus.Fields{"program": name, "port": port}).Info("dcc-bus ensure running: upserting supervisord program")
-	if err := d.mgr.UpsertService(ctx, GroupBigfred, spec); err != nil {
+	d.log.WithFields(logrus.Fields{"program": name, "port": port}).Info("dcc-bus ensure running: upserting microinit program")
+	if err := d.mgr.UpsertService(ctx, GroupDccBus, spec); err != nil {
 		return 0, name, fmt.Errorf("upsert dcc-bus program: %w", err)
 	}
 
-	// supervisord autostarts the program; explicitly StartProgram
+	// microinit autostarts the program; explicitly StartProgram
 	// covers the "already declared, was stopped" path.
 	if err := d.mgr.StartService(ctx, name); err != nil {
-		// supervisord returns an error when the program is already
+		// microinit returns an error when the program is already
 		// running; swallow that case.
 		if !strings.Contains(err.Error(), "ALREADY_STARTED") &&
 			!strings.Contains(strings.ToUpper(err.Error()), "ALREADY") {
@@ -452,12 +452,12 @@ func (d *DccBusService) Stop(ctx context.Context, layoutID, commandStationID uin
 	name := programName(layoutID, commandStationID)
 	d.log.WithFields(logrus.Fields{
 		"program": name, "layoutId": layoutID, "commandStationId": commandStationID,
-	}).Info("dcc-bus stop: removing supervisord program")
+	}).Info("dcc-bus stop: removing microinit program")
 	if d.mgr == nil {
 		return ErrServiceManagerNotWired
 	}
 	_ = d.mgr.StopService(ctx, name)
-	if err := d.mgr.RemoveService(ctx, GroupBigfred, name); err != nil {
+	if err := d.mgr.RemoveService(ctx, GroupDccBus, name); err != nil {
 		if !errors.Is(err, ErrNotFound) {
 			return err
 		}
@@ -515,7 +515,7 @@ func (d *DccBusService) allocatePortLocked(layoutID, commandStationID uint) (uin
 			continue
 		}
 		// Optimistically claim. The OS-level bind happens later via
-		// supervisord; on a race the daemon would fail to listen and
+		// microinit; on a race the daemon would fail to listen and
 		// EnsureRunning would surface ErrDccBusUnavailable.
 		d.ports[portKey{LayoutID: layoutID, CommandStationID: commandStationID}] = p
 		return p, nil
@@ -610,7 +610,7 @@ func (d *DccBusService) buildServiceDef(ctx context.Context, name string, layout
 	}
 	args = appendDccBusTelemetryArgs(args, d.cfg)
 	for i, arg := range args {
-		args[i] = shellQuote(arg)
+		args[i] = microinit.ShellQuote(arg)
 	}
 	return microinit.WithCreatedBy(microinit.ServiceDef{
 		Name: name, Enabled: microinit.BoolPtr(true), Daemon: microinit.BoolPtr(true),
@@ -618,8 +618,6 @@ func (d *DccBusService) buildServiceDef(ctx context.Context, name string, layout
 		ShutdownWaitSecs: microinit.IntPtr(35), StartCmd: "exec " + strings.Join(args, " "),
 	}, microinit.CreatedByBigfred), nil
 }
-
-func shellQuote(value string) string { return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'" }
 
 func appendDccBusTelemetryArgs(args []string, cfg DccBusConfig) []string {
 	if !cfg.EnableTelemetry || cfg.OTLPEndpoint == "" {

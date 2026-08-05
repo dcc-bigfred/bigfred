@@ -10,6 +10,8 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/dcc-bigfred/microinit/go/config"
+
 	"github.com/keskad/loco/pkgs/bigfred/server/datadir"
 )
 
@@ -205,7 +207,7 @@ func PrepareAlloyTelemetry(cfg TelemetryConfig) error {
 		return fmt.Errorf("render alloy config: %w", err)
 	}
 	path := filepath.Clean(AlloyRunConfigPath(cfg))
-	return writeFileAtomically(path, content.Bytes())
+	return config.WriteFileAtomically(path, content.Bytes())
 }
 
 func shellQuote(value string) string { return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'" }

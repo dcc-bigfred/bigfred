@@ -51,7 +51,9 @@ type ServiceManager interface {
 
 type MicroinitConfig struct {
 	Socket, Bin, ConfigPath, DropinDir string
-	Log                                *logrus.Logger
+	// SpawnEnv is passed only to a supervised microinit child (not the embedder).
+	SpawnEnv []string
+	Log      *logrus.Logger
 }
 
 type manager struct {
@@ -64,7 +66,7 @@ func NewMicroinitManager(cfg MicroinitConfig) (ServiceManager, error) {
 		return nil, errors.New("microinit config path and drop-in directory are required")
 	}
 	return &manager{
-		supervisor: microinit.NewSupervisor(cfg.Socket, cfg.Bin, cfg.ConfigPath, cfg.DropinDir, cfg.Log),
+		supervisor: microinit.NewSupervisor(cfg.Socket, cfg.Bin, cfg.ConfigPath, cfg.DropinDir, cfg.SpawnEnv, cfg.Log),
 		log:        cfg.Log,
 	}, nil
 }
@@ -208,7 +210,10 @@ func ResolveRDBSavePoints(noPersist bool, values []string) ([]RDBSavePoint, erro
 // EnsureInfra writes redis/alloy drop-ins only when those services are absent
 // or already labeled created-by=bigfred. Foreign services are left alone; any
 // leftover bigfred drop-in for a foreign name is removed.
-func EnsureInfra(ctx context.Context, mgr ServiceManager, cfg InfraConfig) error {
+//
+// Alloy setup is best-effort: failures are logged as warnings and do not fail
+// bootstrap. Redis remains required when managed.
+func EnsureInfra(ctx context.Context, mgr ServiceManager, log *logrus.Logger, cfg InfraConfig) error {
 	if !cfg.Redis.Disable {
 		if err := ensureOwnedInfra(ctx, mgr, GroupInfra, "redis", func() (microinit.ServiceDef, error) {
 			return microinit.RedisServiceDef(cfg.Redis)
@@ -223,7 +228,9 @@ func EnsureInfra(ctx context.Context, mgr ServiceManager, cfg InfraConfig) error
 			}
 			return microinit.AlloyServiceDef(cfg.Telemetry)
 		}); err != nil {
-			return err
+			if log != nil {
+				log.WithError(err).WithField("service", "alloy").Warn("microinit alloy setup failed; continuing without managed telemetry")
+			}
 		}
 	}
 	return nil

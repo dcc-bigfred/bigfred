@@ -37,6 +37,16 @@ type (
 func BoolPtr(v bool) *bool { return config.BoolPtr(v) }
 func IntPtr(v int) *int    { return config.IntPtr(v) }
 
+// LabelCreatedBy is the conventional drop-in ownership label key.
+const LabelCreatedBy = config.LabelCreatedBy
+
+// CreatedByBigfred is the created-by value for services written by bigfred.
+const CreatedByBigfred = "bigfred"
+
+func WithCreatedBy(svc ServiceDef, who string) ServiceDef {
+	return config.WithCreatedBy(svc, who)
+}
+
 func WriteDropin(dir, group, name string, svc ServiceDef) error {
 	return config.WriteDropin(dir, group, name, svc)
 }

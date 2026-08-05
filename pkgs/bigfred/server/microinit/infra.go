@@ -99,7 +99,7 @@ func RedisServiceDef(cfg RedisConfig) (ServiceDef, error) {
 		// Redis expects: --save <seconds> <changes> as two argv tokens.
 		args = append(args, "--save", strconv.Itoa(point.Seconds), strconv.Itoa(point.Changes))
 	}
-	return ServiceDef{
+	return WithCreatedBy(ServiceDef{
 		Name:             "redis",
 		Enabled:          BoolPtr(true),
 		Daemon:           BoolPtr(true),
@@ -108,7 +108,7 @@ func RedisServiceDef(cfg RedisConfig) (ServiceDef, error) {
 		ShutdownWaitSecs: IntPtr(10),
 		StartCmd:         "exec " + strings.Join(args, " "),
 		LivenessProbe:    &LivenessProbe{TCPAddr: net.JoinHostPort(bind, strconv.Itoa(int(port))), Interval: 10},
-	}, nil
+	}, CreatedByBigfred), nil
 }
 
 type TelemetryConfig struct {
@@ -142,7 +142,7 @@ func AlloyServiceDef(cfg TelemetryConfig) (ServiceDef, error) {
 	if err := os.MkdirAll(storage, 0o755); err != nil {
 		return ServiceDef{}, fmt.Errorf("create alloy storage dir %s: %w", storage, err)
 	}
-	return ServiceDef{
+	return WithCreatedBy(ServiceDef{
 		Name:             "alloy",
 		Enabled:          BoolPtr(true),
 		Daemon:           BoolPtr(true),
@@ -158,7 +158,7 @@ func AlloyServiceDef(cfg TelemetryConfig) (ServiceDef, error) {
 			HTTPAcceptedCodes: []int{200},
 			Interval:          30,
 		},
-	}, nil
+	}, CreatedByBigfred), nil
 }
 
 // Alloy River config: keep multi-line blocks — single-line nested blocks fail to parse.

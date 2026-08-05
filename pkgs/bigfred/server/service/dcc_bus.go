@@ -612,11 +612,11 @@ func (d *DccBusService) buildServiceDef(ctx context.Context, name string, layout
 	for i, arg := range args {
 		args[i] = shellQuote(arg)
 	}
-	return microinit.ServiceDef{
+	return microinit.WithCreatedBy(microinit.ServiceDef{
 		Name: name, Enabled: microinit.BoolPtr(true), Daemon: microinit.BoolPtr(true),
 		Restart: microinit.BoolPtr(true), StartWaitSecs: microinit.IntPtr(1),
 		ShutdownWaitSecs: microinit.IntPtr(35), StartCmd: "exec " + strings.Join(args, " "),
-	}, nil
+	}, microinit.CreatedByBigfred), nil
 }
 
 func shellQuote(value string) string { return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'" }

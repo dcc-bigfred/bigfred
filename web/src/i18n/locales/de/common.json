@@ -45,7 +45,8 @@
       "slotsDiagnostics": "Slot-Diagnose",
       "logs": "Protokolle",
       "auditLog": "Audit-Protokoll",
-      "rentals": "Ausleihen"
+      "rentals": "Ausleihen",
+      "systemPower": "System ausschalten"
     },
     "my": {
       "menuLabel": "Meine",
@@ -71,5 +72,17 @@
     }
   },
   "comingSoon": "Demnächst ({{milestone}})",
-  "networkError": "Server nicht erreichbar."
+  "networkError": "Server nicht erreichbar.",
+  "systemPower": {
+    "title": "System ausschalten",
+    "confirmBody": "Ausschalten oder Neustart beendet alle Dienste auf dem Hub. Fortfahren?",
+    "unavailableTitle": "Ausschalten nicht verfügbar",
+    "unavailableBody": "Systemabschaltung funktioniert nur, wenn BigFred auf Raspberry Pi / BigFredOS läuft (microinit im Init-Modus).",
+    "shutdown": "Ausschalten",
+    "restart": "Neustart",
+    "shuttingDownTitle": "Wird ausgeschaltet…",
+    "shuttingDownBody": "Das System wird ausgeschaltet. Dieses Fenster schließt sich möglicherweise von selbst.",
+    "restartingTitle": "Neustart…",
+    "restartingBody": "Das System wird neu gestartet. Dieses Fenster schließt sich möglicherweise von selbst."
+  }
 }

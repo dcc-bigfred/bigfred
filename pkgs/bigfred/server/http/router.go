@@ -35,6 +35,7 @@ type RouterConfig struct {
 	Sudo             *cmd.Sudo
 	CommandStations  *cmd.CommandStation
 	Diagnostics      *service.DiagnosticsService
+	System           *service.SystemControl
 	Hub              *ws.Hub
 	DccBus           *service.DccBusService
 	Radio            *service.RadioService
@@ -101,6 +102,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		commandStationH.SetExecutable(cfg.DccBus.Executable())
 	}
 	diagnosticsH := NewDiagnosticsHandler(cfg.Diagnostics)
+	systemH := NewSystemHandler(cfg.System)
 	radioH := NewRadioHandler(cfg.Radio)
 	auditH := NewAuditHandler(cfg.Audit)
 	leaseH := NewLeaseHandler(cfg.Leases, cfg.Auth)
@@ -265,6 +267,9 @@ func NewRouter(cfg RouterConfig) http.Handler {
 
 				r.Get("/diagnostics/sources", diagnosticsH.ListSources)
 				r.Get("/diagnostics/content", diagnosticsH.ReadContent)
+
+				r.Get("/admin/system", systemH.Get)
+				r.Post("/admin/system/shutdown", systemH.Shutdown)
 
 				if cfg.DccBus != nil {
 					slotsProxy := NewDccBusSlotsProxy(cfg.Auth, cfg.DccBus)

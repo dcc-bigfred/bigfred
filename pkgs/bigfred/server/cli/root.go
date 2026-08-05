@@ -661,6 +661,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		Sudo:             sudoSvc,
 		CommandStations:  commandStationSvc,
 		Diagnostics:      diagSvc,
+		System:           service.NewSystemControl(supSvc),
 		Hub:              hub,
 		DccBus:           dccBusSvc,
 		Radio:            radioSvc,

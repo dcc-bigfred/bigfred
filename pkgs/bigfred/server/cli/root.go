@@ -283,7 +283,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 				log.WithError(err).Warn("microinit shutdown")
 			}
 		}()
-		if err := service.EnsureInfra(ctx, supSvc, service.InfraConfig{
+		if err := service.EnsureInfra(ctx, supSvc, log, service.InfraConfig{
 			Redis: service.RedisConfig{
 				Bin:           f.RedisBin,
 				BindAddr:      f.RedisBindAddr,

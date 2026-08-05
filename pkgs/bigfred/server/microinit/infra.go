@@ -103,7 +103,7 @@ func RedisServiceDef(cfg RedisConfig) (ServiceDef, error) {
 		Name:             "redis",
 		Enabled:          BoolPtr(true),
 		Daemon:           BoolPtr(true),
-		Restart:          BoolPtr(true),
+		RestartPolicy:    RestartOnError,
 		StartWaitSecs:    IntPtr(2),
 		ShutdownWaitSecs: IntPtr(10),
 		StartCmd:         "exec " + strings.Join(args, " "),
@@ -146,7 +146,7 @@ func AlloyServiceDef(cfg TelemetryConfig) (ServiceDef, error) {
 		Name:             "alloy",
 		Enabled:          BoolPtr(true),
 		Daemon:           BoolPtr(true),
-		Restart:          BoolPtr(true),
+		RestartPolicy:    RestartOnError,
 		StartWaitSecs:    IntPtr(2),
 		ShutdownWaitSecs: IntPtr(10),
 		StartCmd: fmt.Sprintf(

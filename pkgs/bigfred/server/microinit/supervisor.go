@@ -37,6 +37,12 @@ type (
 func BoolPtr(v bool) *bool { return config.BoolPtr(v) }
 func IntPtr(v int) *int    { return config.IntPtr(v) }
 
+const (
+	RestartAlways  = config.RestartAlways
+	RestartOnError = config.RestartOnError
+	RestartNone    = config.RestartNone
+)
+
 // ShellQuote wraps an argv token for safe interpolation into a shell command
 // line. Re-exported so service builders can use a single import.
 func ShellQuote(value string) string { return config.ShellQuote(value) }

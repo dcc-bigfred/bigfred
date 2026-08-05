@@ -252,5 +252,33 @@ func ensureOwnedInfra(
 	if err := mgr.UpsertService(ctx, group, svc); err != nil {
 		return err
 	}
+	if err := waitServiceKnown(ctx, mgr, name, 2*time.Second); err != nil {
+		return err
+	}
 	return mgr.StartService(ctx, name)
+}
+
+// waitServiceKnown polls microinit Status until name is registered (drop-in
+// reload debounce is ~300ms) or ctx/timeout expires.
+func waitServiceKnown(ctx context.Context, mgr ServiceManager, name string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		ok, err := mgr.HasService(ctx, name)
+		if err != nil {
+			return err
+		}
+		if ok {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("microinit service %q not visible within %s after drop-in write", name, timeout)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+		}
+	}
 }

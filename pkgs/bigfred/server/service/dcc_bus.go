@@ -425,6 +425,9 @@ func (d *DccBusService) ensureRunning(ctx context.Context, layoutID, commandStat
 	if err := d.mgr.UpsertService(ctx, GroupDccBus, spec); err != nil {
 		return 0, name, fmt.Errorf("upsert dcc-bus program: %w", err)
 	}
+	if err := waitServiceKnown(ctx, d.mgr, name, 2*time.Second); err != nil {
+		return 0, name, err
+	}
 
 	// microinit autostarts the program; explicitly StartProgram
 	// covers the "already declared, was stopped" path.
@@ -614,7 +617,7 @@ func (d *DccBusService) buildServiceDef(ctx context.Context, name string, layout
 	}
 	return microinit.WithCreatedBy(microinit.ServiceDef{
 		Name: name, Enabled: microinit.BoolPtr(true), Daemon: microinit.BoolPtr(true),
-		Restart: microinit.BoolPtr(true), StartWaitSecs: microinit.IntPtr(1),
+		RestartPolicy: microinit.RestartAlways, StartWaitSecs: microinit.IntPtr(1),
 		ShutdownWaitSecs: microinit.IntPtr(35), StartCmd: "exec " + strings.Join(args, " "),
 	}, microinit.CreatedByBigfred), nil
 }

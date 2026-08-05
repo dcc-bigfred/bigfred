@@ -12,31 +12,31 @@ import (
 	"github.com/keskad/loco/pkgs/bigfred/server/service"
 )
 
-// DccBusSupervisordHandler exposes admin REST endpoints for dcc-bus
-// supervisord programs tied to a command-station id (across layouts).
-type DccBusSupervisordHandler struct {
+// DccBusServicesHandler exposes admin REST endpoints for dcc-bus
+// services programs tied to a command-station id (across layouts).
+type DccBusServicesHandler struct {
 	dccBus *service.DccBusService
 }
 
-// NewDccBusSupervisordHandler returns a DccBusSupervisordHandler.
-func NewDccBusSupervisordHandler(dccBus *service.DccBusService) *DccBusSupervisordHandler {
-	return &DccBusSupervisordHandler{dccBus: dccBus}
+// NewDccBusServicesHandler returns a DccBusServicesHandler.
+func NewDccBusServicesHandler(dccBus *service.DccBusService) *DccBusServicesHandler {
+	return &DccBusServicesHandler{dccBus: dccBus}
 }
 
-type dccBusSupervisordListResponse struct {
+type dccBusServicesListResponse struct {
 	Programs []service.DccBusProgramStatus `json:"programs"`
 }
 
-// GetStatus handles GET /api/v1/admin/dcc-bus/{commandStationId}/supervisord.
+// GetStatus handles GET /api/v1/admin/dcc-bus/{commandStationId}/services.
 // Returns every dcc-bus program for the command station across all layouts.
-func (h *DccBusSupervisordHandler) GetStatus(w http.ResponseWriter, r *http.Request) {
+func (h *DccBusServicesHandler) GetStatus(w http.ResponseWriter, r *http.Request) {
 	csID, ok := h.requireAdminCS(w, r)
 	if !ok {
 		return
 	}
 	programs, err := h.dccBus.ProgramsForCommandStation(r.Context(), csID)
 	if err != nil {
-		if errors.Is(err, service.ErrSupervisordNotWired) {
+		if errors.Is(err, service.ErrServicesNotWired) {
 			writeJSONError(w, http.StatusServiceUnavailable, "service_unavailable")
 			return
 		}
@@ -47,12 +47,12 @@ func (h *DccBusSupervisordHandler) GetStatus(w http.ResponseWriter, r *http.Requ
 		programs = []service.DccBusProgramStatus{}
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(dccBusSupervisordListResponse{Programs: programs})
+	_ = json.NewEncoder(w).Encode(dccBusServicesListResponse{Programs: programs})
 }
 
-// Action handles POST /api/v1/admin/dcc-bus/{commandStationId}/supervisord/{action}?layoutId=N.
+// Action handles POST /api/v1/admin/dcc-bus/{commandStationId}/services/{action}?layoutId=N.
 // action is one of start|stop|restart. layoutId selects which layout's program to control.
-func (h *DccBusSupervisordHandler) Action(w http.ResponseWriter, r *http.Request) {
+func (h *DccBusServicesHandler) Action(w http.ResponseWriter, r *http.Request) {
 	csID, ok := h.requireAdminCS(w, r)
 	if !ok {
 		return
@@ -76,7 +76,7 @@ func (h *DccBusSupervisordHandler) Action(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if err != nil {
-		if errors.Is(err, service.ErrSupervisordNotWired) {
+		if errors.Is(err, service.ErrServicesNotWired) {
 			writeJSONError(w, http.StatusServiceUnavailable, "service_unavailable")
 			return
 		}
@@ -91,7 +91,7 @@ func (h *DccBusSupervisordHandler) Action(w http.ResponseWriter, r *http.Request
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *DccBusSupervisordHandler) requireAdminCS(w http.ResponseWriter, r *http.Request) (csID uint, ok bool) {
+func (h *DccBusServicesHandler) requireAdminCS(w http.ResponseWriter, r *http.Request) (csID uint, ok bool) {
 	if h.dccBus == nil {
 		writeJSONError(w, http.StatusServiceUnavailable, "service_unavailable")
 		return 0, false

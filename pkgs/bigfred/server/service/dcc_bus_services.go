@@ -9,7 +9,7 @@ import (
 	"sync"
 
 	"github.com/keskad/loco/pkgs/bigfred/contract"
-	"github.com/keskad/loco/pkgs/bigfred/server/supervisord"
+	"github.com/keskad/loco/pkgs/bigfred/server/microinit"
 	"github.com/keskad/loco/pkgs/bigfred/server/ws"
 )
 
@@ -19,7 +19,7 @@ type CommandStationIDsForLayout interface {
 	CommandStationIDsForLayout(ctx context.Context, layoutID uint) ([]uint, error)
 }
 
-// SyncProgramsForLayouts rebuilds the supervisord `dcc-bus` group so it
+// SyncProgramsForLayouts rebuilds the microinit `dcc-bus` group so it
 // contains exactly one program per (layout, commandStation) pair drawn
 // from the supplied layouts. Port assignments are preserved when
 // already allocated and persisted in Redis.
@@ -28,14 +28,14 @@ func (d *DccBusService) SyncProgramsForLayouts(
 	layoutIDs []uint,
 	resolve CommandStationIDsForLayout,
 ) error {
-	if d.sup == nil {
+	if d.mgr == nil {
 		return nil
 	}
 	if len(layoutIDs) == 0 {
 		if d.log != nil {
-			d.log.Info("dcc-bus supervisord sync: no layouts, clearing dcc-bus group")
+			d.log.Info("dcc-bus microinit sync: no layouts, clearing dcc-bus group")
 		}
-		return d.sup.ReplaceGroupPrograms(ctx, DccBusGroupName, nil)
+		return d.mgr.ReplaceServices(ctx, GroupDccBus, nil)
 	}
 
 	seen := make(map[uint]struct{}, len(layoutIDs))
@@ -52,11 +52,11 @@ func (d *DccBusService) SyncProgramsForLayouts(
 	}
 
 	if d.log != nil {
-		d.log.WithField("layoutIds", uniqueLayouts).Info("dcc-bus supervisord sync: rebuilding programs")
+		d.log.WithField("layoutIds", uniqueLayouts).Info("dcc-bus microinit sync: rebuilding programs")
 	}
 
 	desiredKeys := make(map[portKey]struct{})
-	programs := make([]supervisord.ProgramSpec, 0)
+	programs := make([]microinit.ServiceDef, 0)
 
 	for _, layoutID := range uniqueLayouts {
 		csIDs, err := resolve.CommandStationIDsForLayout(ctx, layoutID)
@@ -75,7 +75,7 @@ func (d *DccBusService) SyncProgramsForLayouts(
 				return fmt.Errorf("dcc-bus sync layout %d cs %d: %w", layoutID, csID, err)
 			}
 			name := programName(layoutID, csID)
-			spec, err := d.buildProgramSpec(ctx, name, layoutID, csID, port)
+			spec, err := d.buildServiceDef(ctx, name, layoutID, csID, port)
 			if err != nil {
 				return err
 			}
@@ -89,7 +89,7 @@ func (d *DccBusService) SyncProgramsForLayouts(
 
 	pruned := d.prunePorts(ctx, desiredKeys)
 	if d.log != nil && pruned > 0 {
-		d.log.WithField("prunedPorts", pruned).Info("dcc-bus supervisord sync: dropped stale port assignments")
+		d.log.WithField("prunedPorts", pruned).Info("dcc-bus microinit sync: dropped stale port assignments")
 	}
 	programNames := make([]string, len(programs))
 	for i, p := range programs {
@@ -99,21 +99,21 @@ func (d *DccBusService) SyncProgramsForLayouts(
 		d.log.WithFields(map[string]any{
 			"programs": programNames,
 			"count":    len(programs),
-		}).Info("dcc-bus supervisord sync: applying dcc-bus group")
+		}).Info("dcc-bus microinit sync: applying dcc-bus group")
 	}
-	if err := d.sup.ReplaceGroupPrograms(ctx, DccBusGroupName, programs); err != nil {
+	if err := d.mgr.ReplaceServices(ctx, GroupDccBus, programs); err != nil {
 		if d.log != nil {
-			d.log.WithError(err).Error("dcc-bus supervisord sync: apply failed")
+			d.log.WithError(err).Error("dcc-bus microinit sync: apply failed")
 		}
 		return err
 	}
 	if d.log != nil {
-		d.log.WithField("count", len(programs)).Info("dcc-bus supervisord sync: complete")
+		d.log.WithField("count", len(programs)).Info("dcc-bus microinit sync: complete")
 	}
 	return nil
 }
 
-// SyncProgramsForOnlineLayouts rebuilds supervisord for every layout
+// SyncProgramsForOnlineLayouts rebuilds microinit for every layout
 // that has at least one live WebSocket session, plus any ids listed in
 // ensureLayoutIDs. The extras cover the dashboard HTTP poll racing
 // ahead of the WS upgrade (same issue as presence list).
@@ -129,7 +129,7 @@ func (d *DccBusService) SyncProgramsForOnlineLayouts(
 	}
 	layoutIDs = mergeLayoutIDs(layoutIDs, ensureLayoutIDs...)
 	if d.log != nil {
-		d.log.WithField("layoutIds", layoutIDs).Debug("dcc-bus supervisord sync: target layouts")
+		d.log.WithField("layoutIds", layoutIDs).Debug("dcc-bus microinit sync: target layouts")
 	}
 	return d.SyncProgramsForLayouts(ctx, layoutIDs, resolve)
 }
@@ -187,7 +187,7 @@ func (d *DccBusService) prunePorts(ctx context.Context, desired map[portKey]stru
 }
 
 // DccBusLayoutSync watches command-station attachment sets and
-// triggers supervisord rebuilds when they change on the dashboard
+// triggers microinit rebuilds when they change on the dashboard
 // poll path.
 type DccBusLayoutSync struct {
 	dcc     *DccBusService
@@ -199,7 +199,7 @@ type DccBusLayoutSync struct {
 }
 
 // NewDccBusLayoutSync returns a sync helper. Pass nil dcc to disable
-// supervisord updates (e.g. --no-supervisor).
+// microinit updates (e.g. --no-supervisor).
 func NewDccBusLayoutSync(dcc *DccBusService, layouts CommandStationIDsForLayout, hub *ws.Hub) *DccBusLayoutSync {
 	return &DccBusLayoutSync{
 		dcc:     dcc,
@@ -222,7 +222,7 @@ func commandStationIDsFingerprint(ids []uint) string {
 	return strings.Join(parts, ",")
 }
 
-// ObserveCommandStationCatalog refreshes supervisord when a command-
+// ObserveCommandStationCatalog refreshes microinit when a command-
 // station catalogue row changes (speed steps, URI, kind, name). Any
 // layout that currently has online users or a running dcc-bus daemon
 // for the station is included in the rebuild.
@@ -235,13 +235,13 @@ func (s *DccBusLayoutSync) ObserveCommandStationCatalog(ctx context.Context, com
 		s.dcc.log.WithFields(map[string]any{
 			"commandStationId": commandStationID,
 			"layoutIds":        extras,
-		}).Info("dcc-bus catalog sync: command station changed, refreshing supervisord")
+		}).Info("dcc-bus catalog sync: command station changed, refreshing microinit")
 	}
 	return s.dcc.SyncProgramsForOnlineLayouts(ctx, s.hub, s.layouts, extras...)
 }
 
 // ObserveLayout compares the layout's current command-station id set
-// with the last seen value. When it changed, supervisord is
+// with the last seen value. When it changed, microinit is
 // regenerated for every layout that currently has online users.
 func (s *DccBusLayoutSync) ObserveLayout(ctx context.Context, layoutID uint) error {
 	if s == nil || s.dcc == nil || s.layouts == nil {
@@ -265,10 +265,10 @@ func (s *DccBusLayoutSync) ObserveLayout(ctx context.Context, layoutID uint) err
 		s.dcc.log.WithFields(map[string]any{
 			"layoutId": layoutID,
 			"csIds":    ids,
-		}).Info("dcc-bus layout sync: command-station set changed, refreshing supervisord")
+		}).Info("dcc-bus layout sync: command-station set changed, refreshing microinit")
 	}
 	if err := s.dcc.SyncProgramsForOnlineLayouts(ctx, s.hub, s.layouts, layoutID); err != nil {
-		s.dcc.log.WithError(err).WithField("layoutId", layoutID).Error("dcc-bus layout sync: supervisord refresh failed")
+		s.dcc.log.WithError(err).WithField("layoutId", layoutID).Error("dcc-bus layout sync: microinit refresh failed")
 	}
 	return nil
 }

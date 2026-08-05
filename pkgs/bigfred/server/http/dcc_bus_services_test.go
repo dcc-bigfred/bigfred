@@ -13,19 +13,19 @@ import (
 
 	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
+	"github.com/keskad/loco/pkgs/bigfred/server/microinit"
 	"github.com/keskad/loco/pkgs/bigfred/server/service"
-	"github.com/keskad/loco/pkgs/bigfred/server/supervisord"
 )
 
 func TestActionRequiresLayoutId(t *testing.T) {
 	fake := &actionFakeSup{}
 	dcc := service.NewDccBusService(service.DccBusConfig{}, fake, nil, nil, nil, nil)
-	h := NewDccBusSupervisordHandler(dcc)
+	h := NewDccBusServicesHandler(dcc)
 
 	r := chi.NewRouter()
-	r.Post("/admin/dcc-bus/{commandStationId}/supervisord/{action}", h.Action)
+	r.Post("/admin/dcc-bus/{commandStationId}/services/{action}", h.Action)
 
-	req := httptest.NewRequest(http.MethodPost, "/admin/dcc-bus/5/supervisord/start", nil)
+	req := httptest.NewRequest(http.MethodPost, "/admin/dcc-bus/5/services/start", nil)
 	req = req.WithContext(WithIdentity(req.Context(), cmd.Identity{
 		User:   domain.User{ID: 1},
 		Layout: domain.Layout{ID: 1},
@@ -47,12 +47,12 @@ func TestActionRequiresLayoutId(t *testing.T) {
 func TestActionStartInvokesService(t *testing.T) {
 	fake := &actionFakeSup{}
 	dcc := service.NewDccBusService(service.DccBusConfig{}, fake, nil, nil, nil, nil)
-	h := NewDccBusSupervisordHandler(dcc)
+	h := NewDccBusServicesHandler(dcc)
 
 	r := chi.NewRouter()
-	r.Post("/admin/dcc-bus/{commandStationId}/supervisord/{action}", h.Action)
+	r.Post("/admin/dcc-bus/{commandStationId}/services/{action}", h.Action)
 
-	req := httptest.NewRequest(http.MethodPost, "/admin/dcc-bus/5/supervisord/start?layoutId=2", nil)
+	req := httptest.NewRequest(http.MethodPost, "/admin/dcc-bus/5/services/start?layoutId=2", nil)
 	req = req.WithContext(WithIdentity(req.Context(), cmd.Identity{
 		User:   domain.User{ID: 1},
 		Layout: domain.Layout{ID: 1},
@@ -62,7 +62,7 @@ func TestActionStartInvokesService(t *testing.T) {
 	if rec.Code != http.StatusNoContent {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
-	if fake.lastStart != "dcc-bus:dcc-bus-2-5" {
+	if fake.lastStart != "dcc-bus-2-5" {
 		t.Fatalf("lastStart=%q", fake.lastStart)
 	}
 }
@@ -70,12 +70,12 @@ func TestActionStartInvokesService(t *testing.T) {
 func TestActionStartSurfacesMessage(t *testing.T) {
 	fake := &actionFakeSup{startErr: errors.New(`supervisorctl start: ERROR (no such process)`)}
 	dcc := service.NewDccBusService(service.DccBusConfig{}, fake, nil, nil, nil, nil)
-	h := NewDccBusSupervisordHandler(dcc)
+	h := NewDccBusServicesHandler(dcc)
 
 	r := chi.NewRouter()
-	r.Post("/admin/dcc-bus/{commandStationId}/supervisord/{action}", h.Action)
+	r.Post("/admin/dcc-bus/{commandStationId}/services/{action}", h.Action)
 
-	req := httptest.NewRequest(http.MethodPost, "/admin/dcc-bus/5/supervisord/start?layoutId=2", nil)
+	req := httptest.NewRequest(http.MethodPost, "/admin/dcc-bus/5/services/start?layoutId=2", nil)
 	req = req.WithContext(WithIdentity(req.Context(), cmd.Identity{
 		User:   domain.User{ID: 1},
 		Layout: domain.Layout{ID: 1},
@@ -99,17 +99,17 @@ func TestActionStartSurfacesMessage(t *testing.T) {
 
 func TestGetStatusListsPrograms(t *testing.T) {
 	fake := &actionFakeSup{
-		status: []service.ProgramState{
-			{Name: "dcc-bus:dcc-bus-2-5", Group: "dcc-bus", Status: "RUNNING", PID: 11},
+		status: []service.ServiceState{
+			{Name: "dcc-bus-2-5", State: "running", PID: 11},
 		},
 	}
 	dcc := service.NewDccBusService(service.DccBusConfig{}, fake, nil, nil, nil, nil)
-	h := NewDccBusSupervisordHandler(dcc)
+	h := NewDccBusServicesHandler(dcc)
 
 	r := chi.NewRouter()
-	r.Get("/admin/dcc-bus/{commandStationId}/supervisord", h.GetStatus)
+	r.Get("/admin/dcc-bus/{commandStationId}/services", h.GetStatus)
 
-	req := httptest.NewRequest(http.MethodGet, "/admin/dcc-bus/5/supervisord", nil)
+	req := httptest.NewRequest(http.MethodGet, "/admin/dcc-bus/5/services", nil)
 	req = req.WithContext(WithIdentity(req.Context(), cmd.Identity{
 		User:   domain.User{ID: 1},
 		Layout: domain.Layout{ID: 99},
@@ -132,32 +132,30 @@ func TestGetStatusListsPrograms(t *testing.T) {
 
 // actionFakeSup implements service.Supervisor for HTTP handler tests.
 type actionFakeSup struct {
-	status    []service.ProgramState
+	status    []service.ServiceState
 	startErr  error
 	lastStart string
 }
 
-func (f *actionFakeSup) Start(context.Context) error { return nil }
-func (f *actionFakeSup) Stop(context.Context) error  { return nil }
-func (f *actionFakeSup) Apply(context.Context, supervisord.DesiredState) error {
+func (f *actionFakeSup) Start(context.Context) error                                                { return nil }
+func (f *actionFakeSup) Stop(context.Context) error                                                 { return nil }
+func (f *actionFakeSup) RunHealthLoop(context.Context, time.Duration, func([]service.ServiceState)) {}
+func (f *actionFakeSup) Paths() (string, string)                                                    { return "", "" }
+func (f *actionFakeSup) UpsertService(context.Context, string, microinit.ServiceDef) error {
 	return nil
 }
-func (f *actionFakeSup) RunHealthLoop(context.Context, time.Duration, func([]service.ProgramState)) {
-}
-func (f *actionFakeSup) Paths() (string, string) { return "", "" }
-func (f *actionFakeSup) UpsertProgram(context.Context, string, supervisord.ProgramSpec) error {
+func (f *actionFakeSup) ReplaceServices(context.Context, string, []microinit.ServiceDef) error {
 	return nil
 }
-func (f *actionFakeSup) ReplaceGroupPrograms(context.Context, string, []supervisord.ProgramSpec) error {
-	return nil
-}
-func (f *actionFakeSup) RemoveProgram(context.Context, string, string) error { return nil }
-func (f *actionFakeSup) StartProgram(_ context.Context, name string) error {
+func (f *actionFakeSup) RemoveService(context.Context, string, string) error { return nil }
+func (f *actionFakeSup) HasService(context.Context, string) (bool, error)    { return false, nil }
+func (f *actionFakeSup) CanManage(context.Context, string) (bool, error)     { return true, nil }
+func (f *actionFakeSup) StartService(_ context.Context, name string) error {
 	f.lastStart = name
 	return f.startErr
 }
-func (f *actionFakeSup) StopProgram(context.Context, string) error    { return nil }
-func (f *actionFakeSup) RestartProgram(context.Context, string) error { return nil }
-func (f *actionFakeSup) Status(context.Context) ([]service.ProgramState, error) {
+func (f *actionFakeSup) StopService(context.Context, string) error    { return nil }
+func (f *actionFakeSup) RestartService(context.Context, string) error { return nil }
+func (f *actionFakeSup) Status(context.Context) ([]service.ServiceState, error) {
 	return f.status, nil
 }

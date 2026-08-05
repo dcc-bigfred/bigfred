@@ -41,6 +41,12 @@ func applyConfig(f *Flags, cfg *config.File, changed func(string) bool) {
 	if !changed("no-supervisor") && cfg.NoSupervisor != nil {
 		f.NoSupervisor = *cfg.NoSupervisor
 	}
+	if !changed("microinit-socket") && cfg.MicroinitSocket != "" {
+		f.MicroinitSocket = cfg.MicroinitSocket
+	}
+	if !changed("microinit-bin") && cfg.MicroinitBin != "" {
+		f.MicroinitBin = cfg.MicroinitBin
+	}
 	if !changed("log-level") && cfg.LogLevel != "" {
 		f.LogLevel = cfg.LogLevel
 	}

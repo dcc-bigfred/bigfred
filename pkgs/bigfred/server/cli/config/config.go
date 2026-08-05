@@ -32,6 +32,8 @@ type File struct {
 	CorsOrigins                   []string
 	SecureCookie                  *bool
 	NoSupervisor                  *bool
+	MicroinitSocket               string
+	MicroinitBin                  string
 	LogLevel                      string
 	RedisBin                      string
 	RedisBindAddr                 string
@@ -128,6 +130,10 @@ func Parse(text string) File {
 		case "NO_SUPERVISOR", "NOSUPERVISOR":
 			v := parseBool(value)
 			f.NoSupervisor = &v
+		case "MICROINIT_SOCKET", "MICROINITSOCKET":
+			f.MicroinitSocket = value
+		case "MICROINIT_BIN", "MICROINITBIN":
+			f.MicroinitBin = value
 		case "LOG_LEVEL", "LOGLEVEL":
 			f.LogLevel = value
 		case "REDIS_BIN", "REDISBIN":
@@ -282,7 +288,7 @@ REDIS_BIND=%s
 # TCP port for the managed redis-server (flag: --redis-port)
 REDIS_PORT=%d
 
-# Working directory for redis-server; empty = supervisord config directory (flag: --redis-data-dir)
+# Working directory for redis-server; empty = $BIGFRED_DATA_DIR/var/lib/redis (flag: --redis-data-dir)
 REDIS_DATA_DIR=
 
 # Redis dial address for loco-server and dcc-bus; empty = REDIS_BIND:REDIS_PORT (flag: --redis-addr)

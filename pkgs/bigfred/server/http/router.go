@@ -271,9 +271,9 @@ func NewRouter(cfg RouterConfig) http.Handler {
 					r.Get("/admin/dcc-bus/{commandStationId}/slots/ws", slotsProxy.ServeHTTP)
 					r.Post("/admin/dcc-bus/{commandStationId}/slots/release", slotsProxy.ServeRelease)
 
-					supH := NewDccBusSupervisordHandler(cfg.DccBus)
-					r.Get("/admin/dcc-bus/{commandStationId}/supervisord", supH.GetStatus)
-					r.Post("/admin/dcc-bus/{commandStationId}/supervisord/{action}", supH.Action)
+					supH := NewDccBusServicesHandler(cfg.DccBus)
+					r.Get("/admin/dcc-bus/{commandStationId}/services", supH.GetStatus)
+					r.Post("/admin/dcc-bus/{commandStationId}/services/{action}", supH.Action)
 				}
 			})
 		})

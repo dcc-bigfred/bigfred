@@ -428,6 +428,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 			ProxyEnabled:    true,
 			EnableTelemetry: f.EnableTelemetry,
 			OTLPEndpoint:    service.DefaultOTLPEndpoint,
+			ManagedRedis:    redisMgmt.Managed,
 		}, supSvc, redisSvc, commandStations, layouts, log)
 		if err := dccBusSvc.HydratePorts(ctx); err != nil {
 			log.WithError(err).Warn("dcc-bus hydrate ports")

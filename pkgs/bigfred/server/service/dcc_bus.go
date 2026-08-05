@@ -75,6 +75,9 @@ type DccBusConfig struct {
 	// OTLPEndpoint is the OTLP/gRPC address dcc-bus exports metrics to
 	// (typically the local Alloy receiver).
 	OTLPEndpoint string
+	// ManagedRedis is true when microinit runs the redis service; dcc-bus
+	// programs then declare dependsOn: ["redis"].
+	ManagedRedis bool
 }
 
 // DccBusService is the loco-server-side orchestrator for dcc-bus
@@ -615,11 +618,19 @@ func (d *DccBusService) buildServiceDef(ctx context.Context, name string, layout
 	for i, arg := range args {
 		args[i] = microinit.ShellQuote(arg)
 	}
-	return microinit.WithCreatedBy(microinit.ServiceDef{
-		Name: name, Enabled: microinit.BoolPtr(true), Daemon: microinit.BoolPtr(true),
-		RestartPolicy: microinit.RestartAlways, StartWaitSecs: microinit.IntPtr(1),
-		ShutdownWaitSecs: microinit.IntPtr(35), StartCmd: "exec " + strings.Join(args, " "),
-	}, microinit.CreatedByBigfred), nil
+	svc := microinit.ServiceDef{
+		Name:             name,
+		Enabled:          microinit.BoolPtr(true),
+		Daemon:           microinit.BoolPtr(true),
+		RestartPolicy:    microinit.RestartOnError,
+		StartWaitSecs:    microinit.IntPtr(1),
+		ShutdownWaitSecs: microinit.IntPtr(35),
+		StartCmd:         "exec " + strings.Join(args, " "),
+	}
+	if d.cfg.ManagedRedis {
+		svc.DependsOn = []string{"redis"}
+	}
+	return microinit.WithCreatedBy(svc, microinit.CreatedByBigfred), nil
 }
 
 func appendDccBusTelemetryArgs(args []string, cfg DccBusConfig) []string {

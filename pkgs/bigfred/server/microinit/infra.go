@@ -103,7 +103,7 @@ func RedisServiceDef(cfg RedisConfig) (ServiceDef, error) {
 		Name:             "redis",
 		Enabled:          BoolPtr(true),
 		Daemon:           BoolPtr(true),
-		RestartPolicy:    RestartOnError,
+		RestartPolicy:    RestartAlways,
 		StartWaitSecs:    IntPtr(2),
 		ShutdownWaitSecs: IntPtr(10),
 		StartCmd:         "exec " + strings.Join(args, " "),

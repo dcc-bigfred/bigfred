@@ -31,6 +31,9 @@ func TestRedisServiceDefCreatesDataDir(t *testing.T) {
 	if svc.Labels[LabelCreatedBy] != CreatedByBigfred {
 		t.Fatalf("labels: %+v", svc.Labels)
 	}
+	if svc.RestartPolicy != RestartAlways {
+		t.Fatalf("RestartPolicy = %q, want %q", svc.RestartPolicy, RestartAlways)
+	}
 }
 
 func TestRedisServiceDefDefaultDataDir(t *testing.T) {

@@ -55,7 +55,7 @@ func DefaultFile() File {
 	port := uint16(6379)
 	return File{
 		HTTP:            "0.0.0.0:8080",
-		DB:              "bigfred.db",
+		DB:              "var/db/bigfred/bigfred.sqlite3",
 		CorsOrigins:     []string{"http://localhost:5173", "http://127.0.0.1:5173"},
 		LogLevel:        "info",
 		RedisBin:        "valkey-server",
@@ -288,7 +288,7 @@ REDIS_BIND=%s
 # TCP port for the managed redis-server (flag: --redis-port)
 REDIS_PORT=%d
 
-# Working directory for redis-server; empty = $BIGFRED_DATA_DIR/var/lib/redis (flag: --redis-data-dir)
+# Working directory for redis-server; empty = $BIGFRED_DATA_DIR/var/db/redis (flag: --redis-data-dir)
 REDIS_DATA_DIR=
 
 # Redis dial address for loco-server and dcc-bus; empty = REDIS_BIND:REDIS_PORT (flag: --redis-addr)

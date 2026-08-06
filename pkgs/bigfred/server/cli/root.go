@@ -113,7 +113,7 @@ real-time throttle commands.`,
 
 	cmd.Flags().StringVar(&f.HTTPAddr, "http", "0.0.0.0:8080",
 		"address the HTTP server listens on (0.0.0.0 = all interfaces)")
-	cmd.Flags().StringVar(&f.DBPath, "db", "bigfred.db", "path to the SQLite database file")
+	cmd.Flags().StringVar(&f.DBPath, "db", "var/db/bigfred/bigfred.sqlite3", "path to the SQLite database file")
 	cmd.Flags().StringVar(&f.JWTSecret, "jwt-secret", "",
 		"hex/base64 secret used to sign session JWTs. Falls back to BIGFRED_JWT_SECRET "+
 			"env var; a random per-run secret is generated when empty (sessions don't survive restarts).")
@@ -138,7 +138,7 @@ real-time throttle commands.`,
 	cmd.Flags().Uint16Var(&f.RedisPort, "redis-port", 6379,
 		"TCP port the managed redis-server listens on")
 	cmd.Flags().StringVar(&f.RedisDataDir, "redis-data-dir", "",
-		"working directory for redis-server (default $BIGFRED_DATA_DIR/var/lib/redis)")
+		"working directory for redis-server (default $BIGFRED_DATA_DIR/var/db/redis)")
 	cmd.Flags().StringVar(&f.RedisAddr, "redis-addr", "",
 		"redis dial address (host:port) used by loco-server and dcc-bus; defaults to redis-bind:redis-port")
 	cmd.Flags().BoolVar(&f.RedisExternal, "redis-external", false,
@@ -268,7 +268,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		return err
 	}
 	if f.RedisDataDir == "" {
-		f.RedisDataDir = datadir.Path("var", "lib", "redis")
+		f.RedisDataDir = datadir.Path("var", "db", "redis")
 	}
 
 	var supSvc service.ServiceManager

@@ -9,11 +9,9 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"net"
 	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -24,14 +22,15 @@ import (
 	frontend "github.com/keskad/loco/web"
 
 	dccbuscli "github.com/keskad/loco/pkgs/bigfred/dcc-bus/cli"
-	"github.com/keskad/loco/pkgs/bigfred/mdns"
 	bfotel "github.com/keskad/loco/pkgs/bigfred/otel"
+	"github.com/keskad/loco/pkgs/bigfred/platform"
 	"github.com/keskad/loco/pkgs/bigfred/remotepairing"
 	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
 	"github.com/keskad/loco/pkgs/bigfred/server/datadir"
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
 	httpapi "github.com/keskad/loco/pkgs/bigfred/server/http"
 	"github.com/keskad/loco/pkgs/bigfred/server/metrics"
+	"github.com/keskad/loco/pkgs/bigfred/server/microinit"
 	"github.com/keskad/loco/pkgs/bigfred/server/otelenv"
 	"github.com/keskad/loco/pkgs/bigfred/server/repo"
 	"github.com/keskad/loco/pkgs/bigfred/server/repo/migrations"
@@ -73,9 +72,9 @@ type Flags struct {
 	EnableTelemetry bool
 	TelemetryConfig string
 
-	// MDNS advertises the HTTP UI on the LAN as <MDNSHost>.local (default
-	// bigfred.local). Disable with --mdns=false for local-only binds or
-	// when another process owns mDNS.
+	// MDNS and MDNSHost are deprecated no-ops kept for CLI compatibility
+	// (Android still passes --mdns=false). LAN advertisement is owned by
+	// the external microdns daemon via $DATA_DIR/etc/microdns.json.
 	MDNS     bool
 	MDNSHost string
 
@@ -153,10 +152,14 @@ real-time throttle commands.`,
 		"start Grafana Alloy via supervisord and enable OTLP metric export for loco-server and dcc-bus")
 	cmd.Flags().StringVar(&f.TelemetryConfig, "telemetry-config", service.DefaultTelemetryConfigPath(),
 		"path to the Alloy config file (used with --enable-telemetry)")
+	// Deprecated: accepted and ignored so older clients (notably Android
+	// loco-server wrappers) keep starting after mDNS moved to microdns.
 	cmd.Flags().BoolVar(&f.MDNS, "mdns", true,
-		"advertise the HTTP UI via mDNS (bigfred.local by default)")
+		"deprecated: no-op; HTTP/DCC discovery is handled by microdns")
 	cmd.Flags().StringVar(&f.MDNSHost, "mdns-host", "bigfred",
-		"mDNS hostname without domain (e.g. bigfred → bigfred.local)")
+		"deprecated: no-op; configure hostnames in microdns.json instead")
+	_ = cmd.Flags().MarkDeprecated("mdns", "no-op; LAN advertisement is owned by microdns")
+	_ = cmd.Flags().MarkDeprecated("mdns-host", "no-op; configure hostnames in microdns.json instead")
 
 	cmd.AddCommand(dccbuscli.NewCommand(log))
 
@@ -318,6 +321,14 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 			Telemetry: telemetryCfg,
 		}); err != nil {
 			return fmt.Errorf("ensure microinit infrastructure: %w", err)
+		}
+		// microdns.json is best-effort: seed a default only when absent so
+		// operator edits are preserved; never block startup on write failure.
+		// Android phone builds do not ship microdns — skip seeding entirely.
+		if platform.SupportsMicrodns() {
+			if err := microinit.EnsureMicrodnsConfig(); err != nil {
+				log.WithError(err).Warn("microdns config seed failed; continuing without default template")
+			}
 		}
 		if f.EnableTelemetry {
 			log.WithFields(logrus.Fields{
@@ -689,10 +700,6 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		close(serveErr)
 	}()
 
-	mdnsCtx, mdnsCancel := context.WithCancel(ctx)
-	defer mdnsCancel()
-	startHTTPMDNS(mdnsCtx, log, f)
-
 	// Cooperative shutdown on SIGINT/SIGTERM. We give in-flight
 	// requests a brief grace period before forcing the server down.
 	sigCh := make(chan os.Signal, 1)
@@ -709,8 +716,6 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	case <-ctx.Done():
 	}
 
-	mdnsCancel()
-
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	// microinit is stopped by the defer registered after Start; it runs
@@ -719,48 +724,6 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		return fmt.Errorf("shutdown: %w", err)
 	}
 	return nil
-}
-
-// startHTTPMDNS advertises the loco-server HTTP UI on the LAN. Failures are
-// logged and never abort the HTTP server.
-func startHTTPMDNS(ctx context.Context, log *logrus.Logger, f Flags) {
-	if !f.MDNS {
-		log.Debug("mDNS advertisement disabled")
-		return
-	}
-	host, portStr, err := net.SplitHostPort(f.HTTPAddr)
-	if err != nil {
-		log.WithError(err).WithField("addr", f.HTTPAddr).Warn("mDNS: parse http listen address")
-		return
-	}
-	if mdns.IsLoopbackHost(host) {
-		log.WithField("addr", f.HTTPAddr).Info("mDNS: skipping advertisement for loopback-only bind")
-		return
-	}
-	port, err := strconv.Atoi(portStr)
-	if err != nil || port <= 0 {
-		log.WithField("port", portStr).Warn("mDNS: invalid http port")
-		return
-	}
-	mdnsHost := f.MDNSHost
-	if mdnsHost == "" {
-		mdnsHost = "bigfred"
-	}
-	go func() {
-		reg := mdns.NewRegistrar(log)
-		err := reg.Register(ctx, mdns.RegisterInput{
-			Instance: "BigFred",
-			Service:  mdns.ServiceHTTP,
-			Host:     mdnsHost,
-			Port:     port,
-			TXT: map[string]string{
-				"path": "/",
-			},
-		})
-		if err != nil && ctx.Err() == nil {
-			log.WithError(err).Warn("mDNS: advertisement stopped with error")
-		}
-	}()
 }
 
 func configureLogLevel(log *logrus.Logger, flagLevel string) error {

@@ -22,7 +22,7 @@ import (
 	frontend "github.com/keskad/loco/web"
 
 	dccbuscli "github.com/keskad/loco/pkgs/bigfred/dcc-bus/cli"
-	bfotel 	"github.com/keskad/loco/pkgs/bigfred/otel"
+	bfotel "github.com/keskad/loco/pkgs/bigfred/otel"
 	"github.com/keskad/loco/pkgs/bigfred/platform"
 	"github.com/keskad/loco/pkgs/bigfred/remotepairing"
 	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
@@ -71,6 +71,12 @@ type Flags struct {
 
 	EnableTelemetry bool
 	TelemetryConfig string
+
+	// MDNS and MDNSHost are deprecated no-ops kept for CLI compatibility
+	// (Android still passes --mdns=false). LAN advertisement is owned by
+	// the external microdns daemon via $DATA_DIR/etc/microdns.json.
+	MDNS     bool
+	MDNSHost string
 
 	// LogLevel is a logrus level name (debug, info, warn, error). The
 	// BIGFRED_LOG_LEVEL env var overrides the flag when set.
@@ -146,6 +152,14 @@ real-time throttle commands.`,
 		"start Grafana Alloy via supervisord and enable OTLP metric export for loco-server and dcc-bus")
 	cmd.Flags().StringVar(&f.TelemetryConfig, "telemetry-config", service.DefaultTelemetryConfigPath(),
 		"path to the Alloy config file (used with --enable-telemetry)")
+	// Deprecated: accepted and ignored so older clients (notably Android
+	// loco-server wrappers) keep starting after mDNS moved to microdns.
+	cmd.Flags().BoolVar(&f.MDNS, "mdns", true,
+		"deprecated: no-op; HTTP/DCC discovery is handled by microdns")
+	cmd.Flags().StringVar(&f.MDNSHost, "mdns-host", "bigfred",
+		"deprecated: no-op; configure hostnames in microdns.json instead")
+	_ = cmd.Flags().MarkDeprecated("mdns", "no-op; LAN advertisement is owned by microdns")
+	_ = cmd.Flags().MarkDeprecated("mdns-host", "no-op; configure hostnames in microdns.json instead")
 
 	cmd.AddCommand(dccbuscli.NewCommand(log))
 

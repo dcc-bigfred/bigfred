@@ -32,8 +32,10 @@ jobs:
       - name: Install minisign
         run: sudo apt-get update && sudo apt-get install -y minisign
 
-      - name: Smoke-test minisign-sign.sh
-        run: ./scripts/test-minisign-sign.sh
+      - name: Smoke-test minisign-sign
+        env:
+          GOPROXY: direct
+        run: go test -count=1 github.com/dcc-bigfred/common/internal/minisignsign@latest
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -131,37 +133,3 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-  publish-oci:
-    name: Publish OCI artifacts to GHCR (ORAS)
-    needs: build
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Download binaries
-        uses: actions/download-artifact@v4
-        with:
-          name: binaries
-          path: dist/
-
-      - name: Set up ORAS
-        uses: oras-project/setup-oras@v1
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Publish loco-server-android-arm64
-        run: ./scripts/publish-oci-loco-android.sh dist/loco-server-android-arm64
-
-      - name: Publish bigfred-hub-linux-arm64
-        if: github.ref == 'refs/heads/master'
-        run: ./scripts/publish-oci-bigfred-hub.sh dist/loco-server-linux-arm64 dist/bigfred-remote-icmp-linux-arm64

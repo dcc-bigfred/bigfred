@@ -78,6 +78,8 @@
     "confirmBody": "Shutting down or restarting will stop all services on the hub. Continue?",
     "unavailableTitle": "Shutdown unavailable",
     "unavailableBody": "System shutdown only works when BigFred is running on Raspberry Pi / BigFredOS (microinit in init mode).",
+    "errorTitle": "Shutdown failed",
+    "errorBody": "The shutdown request was rejected. The hub is still running — try again or check logs.",
     "shutdown": "Shut down",
     "restart": "Restart",
     "shuttingDownTitle": "Shutting down…",

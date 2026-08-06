@@ -17,11 +17,17 @@ import {
 } from "../api/system";
 import { ApiError } from "../api/client";
 
-type Phase = "loading" | "unavailable" | "confirm" | "working" | "done";
+type Phase =
+  | "loading"
+  | "unavailable"
+  | "confirm"
+  | "working"
+  | "done"
+  | "error";
 
 /**
  * Admin dialog for host poweroff/reboot when microinit runs in init mode
- * (BigFredOS). POST is fire-and-forget — see plan D2.1.
+ * (BigFredOS). POST is fire-and-forget — connection drop after send is success.
  */
 export default function SystemPowerDialog({
   open,
@@ -64,16 +70,25 @@ export default function SystemPowerDialog({
   }, [onClose, phase]);
 
   const run = async (mode: SystemShutdownMode) => {
+    if (phase === "working" || phase === "done") return;
     setWorkingMode(mode);
     setPhase("working");
     try {
       await requestSystemShutdown(mode);
       setPhase("done");
     } catch (err) {
-      if (err instanceof ApiError && err.code === "system_not_init") {
-        setPhase("unavailable");
+      if (err instanceof ApiError) {
+        if (
+          err.code === "system_not_init" ||
+          err.code === "system_unavailable"
+        ) {
+          setPhase("unavailable");
+          return;
+        }
+        setPhase("error");
         return;
       }
+      // Unexpected non-ApiError after send — treat as success (connection drop).
       setPhase("done");
     }
   };
@@ -81,11 +96,15 @@ export default function SystemPowerDialog({
   const title =
     phase === "unavailable"
       ? t("systemPower.unavailableTitle")
-      : phase === "done" || phase === "working"
-        ? workingMode === "reboot"
-          ? t("systemPower.restartingTitle")
-          : t("systemPower.shuttingDownTitle")
-        : t("systemPower.title");
+      : phase === "error"
+        ? t("systemPower.errorTitle")
+        : phase === "done" || phase === "working"
+          ? workingMode === "reboot"
+            ? t("systemPower.restartingTitle")
+            : t("systemPower.shuttingDownTitle")
+          : t("systemPower.title");
+
+  const actionsLocked = phase === "working" || phase === "done";
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
@@ -100,8 +119,16 @@ export default function SystemPowerDialog({
         {phase === "confirm" ? (
           <DialogContentText>{t("systemPower.confirmBody")}</DialogContentText>
         ) : null}
+        {phase === "error" ? (
+          <DialogContentText>{t("systemPower.errorBody")}</DialogContentText>
+        ) : null}
         {phase === "done" || phase === "working" ? (
-          <DialogContentText sx={{ mt: phase === "working" ? 2 : 0, textAlign: phase === "working" ? "center" : "left" }}>
+          <DialogContentText
+            sx={{
+              mt: phase === "working" ? 2 : 0,
+              textAlign: phase === "working" ? "center" : "left",
+            }}
+          >
             {workingMode === "reboot"
               ? t("systemPower.restartingBody")
               : t("systemPower.shuttingDownBody")}
@@ -109,16 +136,28 @@ export default function SystemPowerDialog({
         ) : null}
       </DialogContent>
       <DialogActions>
-        {phase === "unavailable" ? (
+        {phase === "unavailable" || phase === "error" ? (
           <Button onClick={onClose}>{t("actions.close")}</Button>
         ) : null}
         {phase === "confirm" ? (
           <>
-            <Button onClick={onClose}>{t("actions.cancel")}</Button>
-            <Button color="error" variant="contained" onClick={() => void run("poweroff")}>
+            <Button onClick={onClose} disabled={actionsLocked}>
+              {t("actions.cancel")}
+            </Button>
+            <Button
+              color="error"
+              variant="contained"
+              disabled={actionsLocked}
+              onClick={() => void run("poweroff")}
+            >
               {t("systemPower.shutdown")}
             </Button>
-            <Button color="warning" variant="contained" onClick={() => void run("reboot")}>
+            <Button
+              color="warning"
+              variant="contained"
+              disabled={actionsLocked}
+              onClick={() => void run("reboot")}
+            >
               {t("systemPower.restart")}
             </Button>
           </>

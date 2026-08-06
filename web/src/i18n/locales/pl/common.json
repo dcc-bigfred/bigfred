@@ -78,6 +78,8 @@
     "confirmBody": "Wyłączenie lub restart zatrzyma wszystkie usługi na hubie. Kontynuować?",
     "unavailableTitle": "Wyłączenie niedostępne",
     "unavailableBody": "Wyłączenie systemu działa tylko gdy BigFred jest uruchomiony na Raspberry Pi / BigFredOS (microinit w trybie init).",
+    "errorTitle": "Wyłączenie nieudane",
+    "errorBody": "Żądanie wyłączenia zostało odrzucone. Hub nadal działa — spróbuj ponownie lub sprawdź logi.",
     "shutdown": "Wyłącz",
     "restart": "Restart",
     "shuttingDownTitle": "Wyłączanie…",

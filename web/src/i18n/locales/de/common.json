@@ -78,6 +78,8 @@
     "confirmBody": "Ausschalten oder Neustart beendet alle Dienste auf dem Hub. Fortfahren?",
     "unavailableTitle": "Ausschalten nicht verfügbar",
     "unavailableBody": "Systemabschaltung funktioniert nur, wenn BigFred auf Raspberry Pi / BigFredOS läuft (microinit im Init-Modus).",
+    "errorTitle": "Ausschalten fehlgeschlagen",
+    "errorBody": "Die Abschaltanforderung wurde abgelehnt. Der Hub läuft weiter — erneut versuchen oder Logs prüfen.",
     "shutdown": "Ausschalten",
     "restart": "Neustart",
     "shuttingDownTitle": "Wird ausgeschaltet…",

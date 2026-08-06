@@ -7,6 +7,7 @@ import (
 
 	"github.com/dcc-bigfred/microinit/go/config"
 
+	"github.com/keskad/loco/pkgs/bigfred/platform"
 	"github.com/keskad/loco/pkgs/bigfred/server/datadir"
 )
 
@@ -24,8 +25,11 @@ const defaultMicrodnsConfig = `{
 
 // EnsureMicrodnsConfig writes $DATA_DIR/etc/microdns.json with the default
 // template only when the file does not already exist. Existing operator
-// edits are left untouched.
+// edits are left untouched. No-op on Android (phone builds do not run microdns).
 func EnsureMicrodnsConfig() error {
+	if !platform.SupportsMicrodns() {
+		return nil
+	}
 	path := datadir.Path("etc", "microdns.json")
 	if _, err := os.Stat(path); err == nil {
 		return nil

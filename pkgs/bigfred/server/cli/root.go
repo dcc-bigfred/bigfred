@@ -22,7 +22,8 @@ import (
 	frontend "github.com/keskad/loco/web"
 
 	dccbuscli "github.com/keskad/loco/pkgs/bigfred/dcc-bus/cli"
-	bfotel "github.com/keskad/loco/pkgs/bigfred/otel"
+	bfotel 	"github.com/keskad/loco/pkgs/bigfred/otel"
+	"github.com/keskad/loco/pkgs/bigfred/platform"
 	"github.com/keskad/loco/pkgs/bigfred/remotepairing"
 	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
 	"github.com/keskad/loco/pkgs/bigfred/server/datadir"
@@ -309,8 +310,11 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		}
 		// microdns.json is best-effort: seed a default only when absent so
 		// operator edits are preserved; never block startup on write failure.
-		if err := microinit.EnsureMicrodnsConfig(); err != nil {
-			log.WithError(err).Warn("microdns config seed failed; continuing without default template")
+		// Android phone builds do not ship microdns — skip seeding entirely.
+		if platform.SupportsMicrodns() {
+			if err := microinit.EnsureMicrodnsConfig(); err != nil {
+				log.WithError(err).Warn("microdns config seed failed; continuing without default template")
+			}
 		}
 		if f.EnableTelemetry {
 			log.WithFields(logrus.Fields{

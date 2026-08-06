@@ -15,3 +15,9 @@ func IsAndroid() bool {
 func SupportsLocoNetSerial() bool {
 	return !IsAndroid()
 }
+
+// SupportsMicrodns is false on Android: phone builds do not ship or run
+// the microdns daemon, so loco-server must not seed microdns.json.
+func SupportsMicrodns() bool {
+	return !IsAndroid()
+}

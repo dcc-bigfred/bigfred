@@ -28,6 +28,7 @@ import TuneIcon from "@mui/icons-material/Tune";
 import VpnKeyIcon from "@mui/icons-material/VpnKey";
 import LockResetIcon from "@mui/icons-material/LockReset";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
+import PowerSettingsNewIcon from "@mui/icons-material/PowerSettingsNew";
 import LogoutIcon from "@mui/icons-material/Logout";
 import { Link, Outlet, useMatch, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -38,6 +39,7 @@ import { getUserName } from "../utils/getUserName";
 import { SocketProvider } from "../context/SocketContext";
 import { useSessionExpiryRedirect } from "../hooks/useSessionExpiryRedirect";
 import LanguageMenu from "./LanguageMenu";
+import SystemPowerDialog from "./SystemPowerDialog";
 import { useSudoMobileMenuItems } from "./SudoIndicator";
 import MobileNavDrawer, { type MobileNavSection } from "./MobileNavDrawer";
 import TopBarMenu, { type TopBarMenuItem } from "./TopBarMenu";
@@ -79,6 +81,7 @@ function AppShellContent() {
   const isCompactNav = useMediaQuery(theme.breakpoints.down("md"));
   const hideAppTitle = useMediaQuery(theme.breakpoints.down("lg"));
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [systemPowerOpen, setSystemPowerOpen] = useState(false);
   const onThrottlePage = Boolean(useMatch("/throttle"));
 
   // Throttle is a fixed-viewport route (AppShell clips to 100dvh). Ensure
@@ -148,6 +151,13 @@ function AppShellContent() {
         label: t("nav.administration.rentals"),
         icon: <HandshakeIcon fontSize="small" />,
         onClick: () => navigate("/admin/rentals"),
+      },
+      { id: "divider-system", divider: true },
+      {
+        id: "systemPower",
+        label: t("nav.administration.systemPower"),
+        icon: <PowerSettingsNewIcon fontSize="small" />,
+        onClick: () => setSystemPowerOpen(true),
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -468,6 +478,10 @@ function AppShellContent() {
             identityLine={accountCaption ?? undefined}
           />
           {sudoMobileDialogs}
+          <SystemPowerDialog
+            open={systemPowerOpen}
+            onClose={() => setSystemPowerOpen(false)}
+          />
         </>
       )}
 

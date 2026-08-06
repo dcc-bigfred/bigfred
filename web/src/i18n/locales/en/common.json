@@ -45,7 +45,8 @@
       "slotsDiagnostics": "Slot diagnostics",
       "logs": "Logs",
       "auditLog": "Audit log",
-      "rentals": "Rentals"
+      "rentals": "Rentals",
+      "systemPower": "Shut down system"
     },
     "my": {
       "menuLabel": "My",
@@ -71,5 +72,19 @@
     }
   },
   "comingSoon": "Coming soon ({{milestone}})",
-  "networkError": "Could not reach the server."
+  "networkError": "Could not reach the server.",
+  "systemPower": {
+    "title": "System power",
+    "confirmBody": "Shutting down or restarting will stop all services on the hub. Continue?",
+    "unavailableTitle": "Shutdown unavailable",
+    "unavailableBody": "System shutdown only works when BigFred is running on Raspberry Pi / BigFredOS (microinit in init mode).",
+    "errorTitle": "Shutdown failed",
+    "errorBody": "The shutdown request was rejected. The hub is still running — try again or check logs.",
+    "shutdown": "Shut down",
+    "restart": "Restart",
+    "shuttingDownTitle": "Shutting down…",
+    "shuttingDownBody": "The system is shutting down. This window may close by itself.",
+    "restartingTitle": "Restarting…",
+    "restartingBody": "The system is restarting. This window may close by itself."
+  }
 }

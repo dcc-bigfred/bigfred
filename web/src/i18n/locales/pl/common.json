@@ -45,7 +45,8 @@
       "slotsDiagnostics": "Diagnostyka slotów",
       "logs": "Logi",
       "auditLog": "Dziennik audytu",
-      "rentals": "Wypożyczenia"
+      "rentals": "Wypożyczenia",
+      "systemPower": "Wyłącz system"
     },
     "my": {
       "menuLabel": "Moje",
@@ -71,5 +72,19 @@
     }
   },
   "comingSoon": "Wkrótce ({{milestone}})",
-  "networkError": "Nie udało się połączyć z serwerem."
+  "networkError": "Nie udało się połączyć z serwerem.",
+  "systemPower": {
+    "title": "Wyłączenie systemu",
+    "confirmBody": "Wyłączenie lub restart zatrzyma wszystkie usługi na hubie. Kontynuować?",
+    "unavailableTitle": "Wyłączenie niedostępne",
+    "unavailableBody": "Wyłączenie systemu działa tylko gdy BigFred jest uruchomiony na Raspberry Pi / BigFredOS (microinit w trybie init).",
+    "errorTitle": "Wyłączenie nieudane",
+    "errorBody": "Żądanie wyłączenia zostało odrzucone. Hub nadal działa — spróbuj ponownie lub sprawdź logi.",
+    "shutdown": "Wyłącz",
+    "restart": "Restart",
+    "shuttingDownTitle": "Wyłączanie…",
+    "shuttingDownBody": "System jest wyłączany. To okno może się zamknąć samo.",
+    "restartingTitle": "Restartowanie…",
+    "restartingBody": "System jest restartowany. To okno może się zamknąć samo."
+  }
 }

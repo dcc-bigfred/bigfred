@@ -115,7 +115,8 @@ jobs:
             exit 1
           fi
           # Signs and verifies each artifact against committed minisign.pub.
-          ./scripts/minisign-sign.sh "${FILES[@]}"
+          export GOPROXY="${GOPROXY:-direct}"
+          go run github.com/dcc-bigfred/common/cmd/minisign-sign@latest "${FILES[@]}"
 
       - name: Create release if missing
         env:

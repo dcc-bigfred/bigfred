@@ -32,8 +32,10 @@ jobs:
       - name: Install minisign
         run: sudo apt-get update && sudo apt-get install -y minisign
 
-      - name: Smoke-test minisign-sign.sh
-        run: ./scripts/test-minisign-sign.sh
+      - name: Smoke-test minisign-sign
+        env:
+          GOPROXY: direct
+        run: go test -count=1 github.com/dcc-bigfred/common/internal/minisignsign@latest
 
       - name: Set up Node
         uses: actions/setup-node@v4

@@ -113,7 +113,7 @@ real-time throttle commands.`,
 
 	cmd.Flags().StringVar(&f.HTTPAddr, "http", "0.0.0.0:8080",
 		"address the HTTP server listens on (0.0.0.0 = all interfaces)")
-	cmd.Flags().StringVar(&f.DBPath, "db", "var/db/bigfred.sqlite3", "path to the SQLite database file")
+	cmd.Flags().StringVar(&f.DBPath, "db", "var/db/bigfred/bigfred.sqlite3", "path to the SQLite database file")
 	cmd.Flags().StringVar(&f.JWTSecret, "jwt-secret", "",
 		"hex/base64 secret used to sign session JWTs. Falls back to BIGFRED_JWT_SECRET "+
 			"env var; a random per-run secret is generated when empty (sessions don't survive restarts).")

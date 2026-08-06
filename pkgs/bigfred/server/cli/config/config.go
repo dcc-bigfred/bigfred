@@ -55,7 +55,7 @@ func DefaultFile() File {
 	port := uint16(6379)
 	return File{
 		HTTP:            "0.0.0.0:8080",
-		DB:              "var/db/bigfred.sqlite3",
+		DB:              "var/db/bigfred/bigfred.sqlite3",
 		CorsOrigins:     []string{"http://localhost:5173", "http://127.0.0.1:5173"},
 		LogLevel:        "info",
 		RedisBin:        "valkey-server",

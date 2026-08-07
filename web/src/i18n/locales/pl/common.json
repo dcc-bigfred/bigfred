@@ -51,15 +51,12 @@
     },
     "my": {
       "menuLabel": "Moje",
-      "vehicles": "Pojazdy",
-      "trains": "Składy",
       "templates": "Szablony pojazdów",
       "throttle": "Sterowanie",
       "rentals": "Wypożyczenia",
       "remotes": "Piloty"
     },
     "fleet": {
-      "menuLabel": "Tabor",
       "availableVehicles": "Dostępne pojazdy",
       "availableTrains": "Dostępne składy"
     },

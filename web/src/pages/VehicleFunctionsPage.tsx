@@ -13,7 +13,8 @@ import {
   useVehicleTemplates,
   type FunctionCopySource,
 } from "../api/functions";
-import { useMyVehicles } from "../api/vehicles";
+import { useMe } from "../api/auth";
+import { useVehicleCatalogue } from "../api/vehicles";
 import FunctionListEditor from "../components/functions/FunctionListEditor";
 
 export default function VehicleFunctionsPage() {
@@ -21,7 +22,8 @@ export default function VehicleFunctionsPage() {
   const vehicleId = vehicleIdParam ?? "";
   const navigate = useNavigate();
   const { t } = useTranslation(["vehicle", "function"]);
-  const vehicles = useMyVehicles();
+  const me = useMe().data;
+  const vehicles = useVehicleCatalogue(me?.layoutId ?? null);
   const functions = useVehicleFunctions(vehicleId);
   const templates = useVehicleTemplates();
   const catalogue = useFunctionCatalogue(true);

@@ -92,15 +92,6 @@ func NewTrain(
 	}
 }
 
-// ListOwned returns every train owned by the user with member rows hydrated.
-func (t *Train) ListOwned(ctx context.Context, ownerID uint) ([]TrainDetail, error) {
-	trains, err := t.trains.ListByOwner(ctx, ownerID)
-	if err != nil {
-		return nil, err
-	}
-	return t.hydrateDetails(ctx, trains)
-}
-
 // TrainCatalogueEntry is one row of the global train catalogue.
 type TrainCatalogueEntry struct {
 	Train             domain.Train

@@ -20,11 +20,12 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import AddIcon from "@mui/icons-material/Add";
 import { useTranslation } from "react-i18next";
 
+import { useMe } from "../api/auth";
 import { ApiError } from "../api/client";
 import {
   useCreateTrain,
-  useMyVehicles,
   useUpdateTrain,
+  useVehicleCatalogue,
   type Train,
   type TrainMemberInput,
 } from "../api/vehicles";
@@ -41,6 +42,7 @@ interface Props {
 export default function TrainDialog({ open, train, onClose }: Props) {
   const { t } = useTranslation(["vehicle", "errors", "common"]);
   const isEdit = !!train;
+  const me = useMe().data;
 
   const [name, setName] = useState("");
   const [members, setMembers] = useState<TrainMemberInput[]>([]);
@@ -48,7 +50,7 @@ export default function TrainDialog({ open, train, onClose }: Props) {
 
   const create = useCreateTrain();
   const update = useUpdateTrain();
-  const vehicles = useMyVehicles();
+  const vehicles = useVehicleCatalogue(me?.layoutId ?? null);
 
   useEffect(() => {
     if (!open) return;
@@ -70,14 +72,21 @@ export default function TrainDialog({ open, train, onClose }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, train?.id]);
 
+  const ownerVehicles = useMemo(() => {
+    const ownerId = isEdit && train ? train.ownerId : me?.id;
+    if (ownerId == null || !vehicles.data) return [];
+    return vehicles.data.filter((v) => v.ownerId === ownerId);
+  }, [vehicles.data, isEdit, train, me?.id]);
+
   const availableForPicker = useMemo(() => {
-    if (!vehicles.data) return [];
     const taken = new Set(members.map((m) => m.vehicleId));
-    return vehicles.data.filter((v) => !taken.has(v.id));
-  }, [vehicles.data, members]);
+    return ownerVehicles.filter((v) => !taken.has(v.id));
+  }, [ownerVehicles, members]);
 
   const labelFor = (vehicleId: string) => {
-    const v = vehicles.data?.find((x) => x.id === vehicleId);
+    const v =
+      vehicles.data?.find((x) => x.id === vehicleId) ??
+      ownerVehicles.find((x) => x.id === vehicleId);
     if (!v) return `#${vehicleId}`;
     const dcc = v.dccAddress != null ? ` · DCC ${v.dccAddress}` : "";
     return `${v.name}${dcc}`;
@@ -136,7 +145,7 @@ export default function TrainDialog({ open, train, onClose }: Props) {
 
   const submitting = create.isPending || update.isPending;
   const canSubmit = name.trim().length > 0 && members.length > 0 && !submitting;
-  const noVehicles = vehicles.data && vehicles.data.length === 0;
+  const noVehicles = vehicles.isSuccess && ownerVehicles.length === 0;
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>

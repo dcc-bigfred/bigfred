@@ -128,21 +128,8 @@ export interface DCCAddressRange {
   to: number;
 }
 
-const vehiclesQueryKey = ["vehicles"] as const;
 const vehicleCatalogueQueryKey = ["vehicles", "catalogue"] as const;
 const dccPoolQueryKey = ["dcc-pool", "me"] as const;
-
-// useMyVehicles returns the caller's own vehicle catalogue and re-
-// fetches eagerly whenever the layout dashboard fires a
-// `layout.vehiclesChanged` event so add/remove from the roster
-// stays visually consistent with the catalogue.
-export function useMyVehicles() {
-  return useQuery({
-    queryKey: vehiclesQueryKey,
-    queryFn: () => apiFetch<Vehicle[]>("/api/v1/vehicles"),
-    staleTime: 5 * 1000,
-  });
-}
 
 // useVehicleCatalogue returns every registered vehicle with owner
 // metadata and on-layout flag for the caller's pinned layout.
@@ -215,7 +202,6 @@ export function useCreateVehicle() {
         }),
       }),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: vehiclesQueryKey });
       void qc.invalidateQueries({ queryKey: vehicleCatalogueQueryKey });
     },
   });
@@ -272,7 +258,6 @@ export function useUpdateVehicle() {
       });
     },
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: vehiclesQueryKey });
       void qc.invalidateQueries({ queryKey: vehicleCatalogueQueryKey });
     },
   });
@@ -284,7 +269,6 @@ export function useDeleteVehicle() {
     mutationFn: (id: string) =>
       apiFetch<void>(`/api/v1/vehicles/${id}`, { method: "DELETE" }),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: vehiclesQueryKey });
       void qc.invalidateQueries({ queryKey: vehicleCatalogueQueryKey });
     },
   });
@@ -321,16 +305,7 @@ export interface CatalogueTrain extends Train {
   onLayout: boolean;
 }
 
-const trainsQueryKey = ["trains"] as const;
 const trainCatalogueQueryKey = ["trains", "catalogue"] as const;
-
-export function useMyTrains() {
-  return useQuery({
-    queryKey: trainsQueryKey,
-    queryFn: () => apiFetch<Train[]>("/api/v1/trains"),
-    staleTime: 5 * 1000,
-  });
-}
 
 // useTrainCatalogue returns every registered train with owner
 // metadata and on-layout flag for the caller's pinned layout.
@@ -378,7 +353,6 @@ export function useCreateTrain() {
         body: JSON.stringify(body),
       }),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: trainsQueryKey });
       void qc.invalidateQueries({ queryKey: trainCatalogueQueryKey });
     },
   });
@@ -406,7 +380,6 @@ export function useUpdateTrain() {
       });
     },
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: trainsQueryKey });
       void qc.invalidateQueries({ queryKey: trainCatalogueQueryKey });
     },
   });
@@ -418,7 +391,6 @@ export function useDeleteTrain() {
     mutationFn: (id: string) =>
       apiFetch<void>(`/api/v1/trains/${id}`, { method: "DELETE" }),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: trainsQueryKey });
       void qc.invalidateQueries({ queryKey: trainCatalogueQueryKey });
     },
   });
@@ -622,7 +594,6 @@ export function usePatchTrainMemberSettings() {
         },
       ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: trainsQueryKey });
       void qc.invalidateQueries({ queryKey: ["layouts"] });
     },
   });

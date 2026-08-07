@@ -48,11 +48,22 @@
     "searchLabel": "Suche",
     "searchPlaceholder": "Name, Nummer, DCC-Adresse, Eigentümer…",
     "empty": "Es sind noch keine Fahrzeuge registriert.",
-    "noResults": "Keine Fahrzeuge entsprechen der Suche.",
+    "noResults": "Keine Fahrzeuge zum Anzeigen — versuchen Sie, die Filter zu ändern.",
     "pagination": "{{from}}–{{to}} von {{count}}",
     "onLayout": {
-      "yes": "Ja",
-      "no": "Nein"
+      "yes": "Auf der Anlage",
+      "no": "Nicht auf der Anlage"
+    },
+    "dccLabel": "DCC: {{addr}}",
+    "showOnlyMine": "Nur eigene anzeigen",
+    "filterKind": "Art",
+    "filterEpoch": "Epoche",
+    "filterAll": "Alle",
+    "filterNoEpoch": "Ohne Epoche",
+    "epochChip": "Epoche {{epoch}}",
+    "table": {
+      "vehicle": "Fahrzeug",
+      "details": "Details"
     },
     "columns": {
       "name": "Name",
@@ -72,7 +83,8 @@
     "searchLabel": "Suche",
     "searchPlaceholder": "Name, Eigentümer…",
     "empty": "Es sind noch keine Züge registriert.",
-    "noResults": "Keine Züge entsprechen der Suche.",
+    "noResults": "Keine Züge zum Anzeigen — versuchen Sie, die Filter zu ändern.",
+    "showOnlyMine": "Nur eigene anzeigen",
     "pagination": "{{from}}–{{to}} von {{count}}",
     "onLayout": {
       "yes": "Ja",

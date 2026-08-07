@@ -150,8 +150,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			r.Put("/auth/me/profile", authH.UpdateProfile)
 			r.Get("/auth/me/dcc-pool", vehicleH.ListPool)
 
-			// Vehicle catalogue (own only for now).
-			r.Get("/vehicles", vehicleH.List)
+			// Vehicle catalogue.
 			r.Get("/vehicles/catalogue", vehicleH.ListCatalogue)
 			r.Post("/vehicles", vehicleH.Create)
 			r.Put("/vehicles/by-external-id/{externalId}", vehicleH.UpsertByExternalID)
@@ -177,7 +176,6 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			r.Delete("/vehicle-templates/{id}/functions/{num}", functionH.DeleteTemplate)
 
 			// Train catalogue.
-			r.Get("/trains", trainH.List)
 			r.Get("/trains/catalogue", trainH.ListCatalogue)
 			r.Post("/trains", trainH.Create)
 			r.Put("/trains/{id}", trainH.Update)

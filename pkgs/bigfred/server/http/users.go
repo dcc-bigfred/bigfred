@@ -24,6 +24,26 @@ func NewUserHandler(svc *cmd.User, auth *cmd.Auth, audit cmd.AuditPublisher) *Us
 	return &UserHandler{svc: svc, auth: auth, audit: audit}
 }
 
+// ListDCCPools handles GET /api/v1/dcc-pools — every authenticated
+// caller may see declared address pools (login + ranges only).
+func (h *UserHandler) ListDCCPools(w http.ResponseWriter, r *http.Request) {
+	if _, ok := IdentityFromContext(r.Context()); !ok {
+		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	rows, err := h.svc.ListDCCPoolOverview(r.Context())
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	out := make([]protocol.DCCPoolOverviewResponse, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, protocol.ToDCCPoolOverviewResponse(row))
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(out)
+}
+
 // List handles GET /api/v1/users.
 func (h *UserHandler) List(w http.ResponseWriter, r *http.Request) {
 	actor, ok := IdentityFromContext(r.Context())

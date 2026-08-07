@@ -7,6 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
+	"github.com/keskad/loco/pkgs/bigfred/server/domain"
 	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
 	"github.com/keskad/loco/pkgs/bigfred/server/protocol"
 	"github.com/keskad/loco/pkgs/bigfred/server/service"
@@ -214,6 +215,56 @@ func (h *VehicleHandler) DeleteByExternalID(w http.ResponseWriter, r *http.Reque
 	}
 	h.layoutVehicles.NotifyVehicleRemoved(layoutIDs, existing.ID)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// ClearDCC handles POST /api/v1/vehicles/clear-dcc — clears DCC addresses
+// for the given vehicles in one transaction (owner or effective admin).
+func (h *VehicleHandler) ClearDCC(w http.ResponseWriter, r *http.Request) {
+	actor, ok := IdentityFromContext(r.Context())
+	if !ok {
+		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	var req protocol.VehicleClearDCCRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid_body")
+		return
+	}
+	ids := make([]domain.VehicleID, 0, len(req.VehicleIDs))
+	for _, raw := range req.VehicleIDs {
+		id, ok := domain.ParseVehicleID(raw)
+		if !ok {
+			writeJSONError(w, http.StatusBadRequest, "invalid_id")
+			return
+		}
+		ids = append(ids, id)
+	}
+	eff, err := h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	rows, err := h.svc.ClearDCCAddresses(r.Context(), actor.User.ID, eff, actor.Layout.ID, ids)
+	if err != nil {
+		writeVehicleError(w, err)
+		return
+	}
+	out := make([]protocol.VehicleResponse, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, protocol.ToVehicleResponse(row))
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(out)
+
+	// Broadcast is best-effort: the transaction already committed, so
+	// WS refresh failures must not turn a successful clear into HTTP 500.
+	// Flush so the client receives the body before the loop runs.
+	if f, ok := w.(http.Flusher); ok {
+		f.Flush()
+	}
+	for _, row := range rows {
+		_ = h.layoutVehicles.BroadcastVehicleUpdated(r.Context(), row.ID)
+	}
 }
 
 // ListPool handles GET /api/v1/auth/me/dcc-pool — used by the

@@ -133,26 +133,31 @@ const dccPoolQueryKey = ["dcc-pool", "me"] as const;
 
 // useVehicleCatalogue returns every registered vehicle with owner
 // metadata and on-layout flag for the caller's pinned layout.
-export function useVehicleCatalogue(layoutId: number | null) {
+export function useVehicleCatalogue(
+  layoutId: number | null,
+  options?: { enabled?: boolean },
+) {
   const qc = useQueryClient();
   const { subscribe } = useSocket();
+  const enabled =
+    (options?.enabled ?? true) && layoutId != null && layoutId > 0;
 
   const query = useQuery({
     queryKey: vehicleCatalogueQueryKey,
     queryFn: () => apiFetch<CatalogueVehicle[]>("/api/v1/vehicles/catalogue"),
-    enabled: layoutId != null && layoutId > 0,
+    enabled,
     staleTime: 5 * 1000,
   });
 
   useEffect(() => {
-    if (layoutId == null || layoutId <= 0) return;
+    if (!enabled || layoutId == null || layoutId <= 0) return;
     return subscribe("layout.vehiclesChanged", (payload) => {
       const data = payload as { layoutId?: number };
       if (data.layoutId !== layoutId) return;
       void qc.invalidateQueries({ queryKey: vehicleCatalogueQueryKey });
       void qc.invalidateQueries({ queryKey: layoutVehiclesQueryKey(layoutId) });
     });
-  }, [layoutId, subscribe, qc]);
+  }, [enabled, layoutId, subscribe, qc]);
 
   return query;
 }
@@ -257,6 +262,21 @@ export function useUpdateVehicle() {
         body: JSON.stringify(payload),
       });
     },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: vehicleCatalogueQueryKey });
+    },
+  });
+}
+
+/** Clears DCC addresses for the given vehicles (owner or effective admin). */
+export function useClearVehicleDCC() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vehicleIds: string[]) =>
+      apiFetch<Vehicle[]>("/api/v1/vehicles/clear-dcc", {
+        method: "POST",
+        body: JSON.stringify({ vehicleIds }),
+      }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: vehicleCatalogueQueryKey });
     },

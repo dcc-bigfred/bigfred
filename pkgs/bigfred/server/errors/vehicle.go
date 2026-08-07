@@ -10,6 +10,7 @@ const (
 	CodeDCCAddressTaken            = "dcc_address_taken"
 	CodeVehicleNotOwned            = "vehicle_not_owned"
 	CodeVehicleInUse               = "vehicle_in_use"
+	CodeVehicleIDsRequired         = "vehicle_ids_required"
 	CodeVehicleDccFunctionInvalid   = "vehicle_dcc_function_invalid"
 	CodeVehicleDeadManSwitchInvalid = "vehicle_deadman_switch_invalid"
 	CodeVehicleEpochInvalid         = "vehicle_epoch_invalid"
@@ -23,6 +24,7 @@ var (
 	ErrDCCAddressTaken             = errors.New(CodeDCCAddressTaken)
 	ErrVehicleNotOwned             = errors.New(CodeVehicleNotOwned)
 	ErrVehicleInUse                = errors.New(CodeVehicleInUse)
+	ErrVehicleIDsRequired          = errors.New(CodeVehicleIDsRequired)
 	ErrVehicleDccFunctionInvalid   = errors.New(CodeVehicleDccFunctionInvalid)
 	ErrVehicleDeadManSwitchInvalid = errors.New(CodeVehicleDeadManSwitchInvalid)
 	ErrVehicleEpochInvalid         = errors.New(CodeVehicleEpochInvalid)

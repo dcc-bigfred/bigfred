@@ -17,6 +17,12 @@ type LeaseBrakePort interface {
 	StopLeasedTarget(ctx context.Context, layoutID uint, kind domain.TakeoverTarget, targetID string) error
 }
 
+// AddressBrakePort publishes an emergency stop for known DCC addresses
+// (used when clearing addresses so moving locos stop first).
+type AddressBrakePort interface {
+	StopAddresses(ctx context.Context, layoutID uint, addrs []uint16) error
+}
+
 // LeaseBrake publishes a per-target emergency stop to every command station
 // on the layout.
 type LeaseBrake struct {
@@ -62,12 +68,21 @@ func (b *LeaseBrake) StopLeasedTarget(
 		}
 		return err
 	}
+	return b.StopAddresses(ctx, layoutID, addrs)
+}
+
+// StopAddresses publishes system.estopTarget for the given addresses on every
+// command station of the layout. Best-effort when dcc-bus is unavailable.
+func (b *LeaseBrake) StopAddresses(ctx context.Context, layoutID uint, addrs []uint16) error {
+	if b == nil || b.dccBus == nil || b.layouts == nil {
+		return nil
+	}
 	if len(addrs) == 0 {
 		return nil
 	}
 	csIDs, err := b.layouts.CommandStationIDsForLayout(ctx, layoutID)
 	if err != nil {
-		b.log.WithError(err).WithField("layoutId", layoutID).Warn("lease brake: list command stations")
+		b.log.WithError(err).WithField("layoutId", layoutID).Warn("address brake: list command stations")
 		return err
 	}
 	if len(csIDs) == 0 {
@@ -80,10 +95,8 @@ func (b *LeaseBrake) StopLeasedTarget(
 			b.log.WithError(err).WithFields(logrus.Fields{
 				"layoutId":         layoutID,
 				"commandStationId": csID,
-				"target":           kind,
-				"targetId":         targetID,
 				"addrs":            addrs,
-			}).Warn("lease brake: publish")
+			}).Warn("address brake: publish")
 			lastErr = err
 		}
 	}
@@ -92,9 +105,7 @@ func (b *LeaseBrake) StopLeasedTarget(
 	}
 	b.log.WithFields(logrus.Fields{
 		"layoutId": layoutID,
-		"target":   kind,
-		"targetId": targetID,
 		"addrs":    addrs,
-	}).Info("lease brake triggered")
+	}).Info("address brake triggered")
 	return nil
 }

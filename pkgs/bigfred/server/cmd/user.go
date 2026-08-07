@@ -21,6 +21,15 @@ type UserWithDCCPool struct {
 	DCCPool []domain.DCCAddressRange
 }
 
+// DCCPoolOverviewEntry is a lightweight pool row for any authenticated
+// caller (no role / active / timestamps).
+type DCCPoolOverviewEntry struct {
+	UserID       uint
+	Login        string
+	Organization string
+	DCCPool      []domain.DCCAddressRange
+}
+
 // UserCreateInput is the validated payload of User.Create.
 type UserCreateInput struct {
 	Login        string
@@ -83,6 +92,38 @@ func (u *User) ListWithDCCPools(ctx context.Context, eff domain.EffectiveRoles) 
 			pool = []domain.DCCAddressRange{}
 		}
 		out = append(out, UserWithDCCPool{User: user, DCCPool: pool})
+	}
+	return out, nil
+}
+
+// ListDCCPoolOverview returns every user's DCC pool for any
+// authenticated caller. Unlike ListWithDCCPools it does not require
+// admin and omits sensitive catalogue fields.
+func (u *User) ListDCCPoolOverview(ctx context.Context) ([]DCCPoolOverviewEntry, error) {
+	users, err := u.users.ListAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+	allRanges, err := u.dccPool.ListAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+	byUser := make(map[uint][]domain.DCCAddressRange, len(users))
+	for _, r := range allRanges {
+		byUser[r.UserID] = append(byUser[r.UserID], r)
+	}
+	out := make([]DCCPoolOverviewEntry, 0, len(users))
+	for _, user := range users {
+		pool := byUser[user.ID]
+		if pool == nil {
+			pool = []domain.DCCAddressRange{}
+		}
+		out = append(out, DCCPoolOverviewEntry{
+			UserID:       user.ID,
+			Login:        user.Login,
+			Organization: user.Organization,
+			DCCPool:      pool,
+		})
 	}
 	return out, nil
 }

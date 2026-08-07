@@ -42,6 +42,7 @@ import plRemotes from "./locales/pl/remotes.json";
 import plVersion from "./locales/pl/version.json";
 import plSystem from "./locales/pl/system.json";
 import plHelp from "./locales/pl/help.json";
+import plDccPool from "./locales/pl/dccPool.json";
 
 import enCommon from "./locales/en/common.json";
 import enAuth from "./locales/en/auth.json";
@@ -65,6 +66,7 @@ import enRemotes from "./locales/en/remotes.json";
 import enVersion from "./locales/en/version.json";
 import enSystem from "./locales/en/system.json";
 import enHelp from "./locales/en/help.json";
+import enDccPool from "./locales/en/dccPool.json";
 
 import deCommon from "./locales/de/common.json";
 import deAuth from "./locales/de/auth.json";
@@ -88,6 +90,7 @@ import deRemotes from "./locales/de/remotes.json";
 import deVersion from "./locales/de/version.json";
 import deSystem from "./locales/de/system.json";
 import deHelp from "./locales/de/help.json";
+import deDccPool from "./locales/de/dccPool.json";
 
 // SUPPORTED_LOCALES is the single source of truth. Adding a third
 // locale (e.g. "de") is: append it here → mirror every catalogue
@@ -124,6 +127,7 @@ export const resources = {
     version: plVersion,
     system: plSystem,
     help: plHelp,
+    dccPool: plDccPool,
   },
   en: {
     common: enCommon,
@@ -148,6 +152,7 @@ export const resources = {
     version: enVersion,
     system: enSystem,
     help: enHelp,
+    dccPool: enDccPool,
   },
   de: {
     common: deCommon,
@@ -172,6 +177,7 @@ export const resources = {
     version: deVersion,
     system: deSystem,
     help: deHelp,
+    dccPool: deDccPool,
   },
 } as const;
 
@@ -188,7 +194,7 @@ void i18n
     fallbackLng: "pl",
     supportedLngs: SUPPORTED_LOCALES as unknown as string[],
     defaultNS: "common",
-    ns: ["common", "auth", "errors", "role", "home", "layout", "interlocking", "radio", "vehicle", "user", "sudo", "throttle", "commandStation", "diagnostics", "function", "trainAnnouncements", "audit", "rentals", "remotes", "version", "system", "help"],
+    ns: ["common", "auth", "errors", "role", "home", "layout", "interlocking", "radio", "vehicle", "user", "sudo", "throttle", "commandStation", "diagnostics", "function", "trainAnnouncements", "audit", "rentals", "remotes", "version", "system", "help", "dccPool"],
     interpolation: {
       // React already escapes everything; double-escaping inside
       // i18next would mangle apostrophes and quotes.

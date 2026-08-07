@@ -5,6 +5,8 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sort"
+	"sync"
 	"testing"
 	"time"
 
@@ -574,5 +576,255 @@ func TestVehicleDeleteByExternalID(t *testing.T) {
 	_, err = svc.DeleteByExternalID(ctx, user.ID, driverEff, "nope")
 	if !errors.Is(err, svcerrors.ErrVehicleNotFound) {
 		t.Fatalf("expected ErrVehicleNotFound for missing id, got %v", err)
+	}
+}
+
+func TestClearDCCAddressesOwnOnlyForDriver(t *testing.T) {
+	bundle, cleanup := freshRepo(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	pool := cmd.NewDCCPool(bundle.Repo, bundle.Pool)
+	userSvc := cmd.NewUser(bundle.Repo, bundle.Users, bundle.Vehicles, bundle.Trains, pool)
+	svc := cmd.NewVehicle(bundle.Repo, bundle.Vehicles, pool, bundle.TrainMembers, bundle.LayoutVehicles, bundle.DccFunctions, bundle.Users)
+
+	alice, err := userSvc.Create(ctx, testAdminEff, cmd.UserCreateInput{
+		Login: "alice", PIN: "123456", Role: domain.RoleDriver,
+		DCCPool: []cmd.PoolRange{{From: 100, To: 199}},
+	})
+	if err != nil {
+		t.Fatalf("create alice: %v", err)
+	}
+	bob, err := userSvc.Create(ctx, testAdminEff, cmd.UserCreateInput{
+		Login: "bob", PIN: "123456", Role: domain.RoleDriver,
+		DCCPool: []cmd.PoolRange{{From: 200, To: 299}},
+	})
+	if err != nil {
+		t.Fatalf("create bob: %v", err)
+	}
+
+	addrA := uint16(110)
+	addrB := uint16(210)
+	va, err := svc.Create(ctx, cmd.VehicleCreateInput{
+		OwnerUserID: alice.ID, Name: "Alice loco", Kind: domain.VehicleKindLoco, DCCAddress: &addrA,
+	})
+	if err != nil {
+		t.Fatalf("create alice vehicle: %v", err)
+	}
+	vb, err := svc.Create(ctx, cmd.VehicleCreateInput{
+		OwnerUserID: bob.ID, Name: "Bob loco", Kind: domain.VehicleKindLoco, DCCAddress: &addrB,
+	})
+	if err != nil {
+		t.Fatalf("create bob vehicle: %v", err)
+	}
+
+	driverEff := domain.NewEffectiveRoles(domain.RoleDriver)
+	_, err = svc.ClearDCCAddresses(ctx, alice.ID, driverEff, 0, []domain.VehicleID{va.ID, vb.ID})
+	if !errors.Is(err, svcerrors.ErrVehicleNotOwned) {
+		t.Fatalf("expected ErrVehicleNotOwned, got %v", err)
+	}
+	reloaded, err := svc.Get(ctx, va.ID)
+	if err != nil {
+		t.Fatalf("reload alice vehicle: %v", err)
+	}
+	if reloaded.DCCAddress == nil || *reloaded.DCCAddress != addrA {
+		t.Fatalf("alice address changed after failed clear: %+v", reloaded.DCCAddress)
+	}
+	reloadedB, err := svc.Get(ctx, vb.ID)
+	if err != nil {
+		t.Fatalf("reload bob vehicle: %v", err)
+	}
+	if reloadedB.DCCAddress == nil || *reloadedB.DCCAddress != addrB {
+		t.Fatalf("bob address changed after failed clear: %+v", reloadedB.DCCAddress)
+	}
+
+	cleared, err := svc.ClearDCCAddresses(ctx, alice.ID, driverEff, 0, []domain.VehicleID{va.ID})
+	if err != nil {
+		t.Fatalf("clear own: %v", err)
+	}
+	if len(cleared) != 1 || cleared[0].DCCAddress != nil {
+		t.Fatalf("unexpected clear result: %+v", cleared)
+	}
+	reloaded, err = svc.Get(ctx, va.ID)
+	if err != nil {
+		t.Fatalf("reload after clear: %v", err)
+	}
+	if reloaded.DCCAddress != nil {
+		t.Fatalf("expected nil DCC after clear, got %v", *reloaded.DCCAddress)
+	}
+}
+
+func TestClearDCCAddressesAdminCanClearOthers(t *testing.T) {
+	bundle, cleanup := freshRepo(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	pool := cmd.NewDCCPool(bundle.Repo, bundle.Pool)
+	userSvc := cmd.NewUser(bundle.Repo, bundle.Users, bundle.Vehicles, bundle.Trains, pool)
+	svc := cmd.NewVehicle(bundle.Repo, bundle.Vehicles, pool, bundle.TrainMembers, bundle.LayoutVehicles, bundle.DccFunctions, bundle.Users)
+
+	admin, err := userSvc.Create(ctx, testAdminEff, cmd.UserCreateInput{
+		Login: "admin2", PIN: "123456", Role: domain.RoleAdmin,
+		DCCPool: []cmd.PoolRange{{From: 1, To: 50}},
+	})
+	if err != nil {
+		t.Fatalf("create admin: %v", err)
+	}
+	owner, err := userSvc.Create(ctx, testAdminEff, cmd.UserCreateInput{
+		Login: "owner", PIN: "123456", Role: domain.RoleDriver,
+		DCCPool: []cmd.PoolRange{{From: 100, To: 199}},
+	})
+	if err != nil {
+		t.Fatalf("create owner: %v", err)
+	}
+
+	addr := uint16(150)
+	v, err := svc.Create(ctx, cmd.VehicleCreateInput{
+		OwnerUserID: owner.ID, Name: "Owned", Kind: domain.VehicleKindLoco, DCCAddress: &addr,
+	})
+	if err != nil {
+		t.Fatalf("create vehicle: %v", err)
+	}
+
+	adminEff := domain.NewEffectiveRoles(domain.RoleAdmin)
+	cleared, err := svc.ClearDCCAddresses(ctx, admin.ID, adminEff, 0, []domain.VehicleID{v.ID})
+	if err != nil {
+		t.Fatalf("admin clear: %v", err)
+	}
+	if len(cleared) != 1 || cleared[0].DCCAddress != nil {
+		t.Fatalf("unexpected clear result: %+v", cleared)
+	}
+}
+
+func TestClearDCCAddressesRequiresIDs(t *testing.T) {
+	bundle, cleanup := freshRepo(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	pool := cmd.NewDCCPool(bundle.Repo, bundle.Pool)
+	svc := cmd.NewVehicle(bundle.Repo, bundle.Vehicles, pool, bundle.TrainMembers, bundle.LayoutVehicles, bundle.DccFunctions, bundle.Users)
+	driverEff := domain.NewEffectiveRoles(domain.RoleDriver)
+	if _, err := svc.ClearDCCAddresses(ctx, 1, driverEff, 0, nil); !errors.Is(err, svcerrors.ErrVehicleIDsRequired) {
+		t.Fatalf("expected ErrVehicleIDsRequired, got %v", err)
+	}
+}
+
+type fakeAddressBrake struct {
+	mu    sync.Mutex
+	stops map[uint][]uint16
+}
+
+func (f *fakeAddressBrake) StopAddresses(_ context.Context, layoutID uint, addrs []uint16) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.stops == nil {
+		f.stops = make(map[uint][]uint16)
+	}
+	copied := append([]uint16(nil), addrs...)
+	f.stops[layoutID] = append(f.stops[layoutID], copied...)
+	return nil
+}
+
+func (f *fakeAddressBrake) layouts() []uint {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make([]uint, 0, len(f.stops))
+	for k := range f.stops {
+		out = append(out, k)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	return out
+}
+
+func insertLayout(t *testing.T, ctx context.Context, layouts *repo.Layouts, name string) domain.Layout {
+	t.Helper()
+	now := time.Now().UTC()
+	layout := domain.Layout{
+		Name:             name,
+		IsSystem:         false,
+		Locked:           false,
+		CreatedBy:        0,
+		AdminPINHash:     "x",
+		RadioChatEnabled: true,
+		CreatedAt:        now,
+		UpdatedAt:        now,
+	}
+	if err := layouts.Insert(ctx, &layout); err != nil {
+		t.Fatalf("insert layout %q: %v", name, err)
+	}
+	return layout
+}
+
+func TestClearDCCAddressesStopsEveryHostingLayout(t *testing.T) {
+	bundle, cleanup := freshRepo(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	pool := cmd.NewDCCPool(bundle.Repo, bundle.Pool)
+	userSvc := cmd.NewUser(bundle.Repo, bundle.Users, bundle.Vehicles, bundle.Trains, pool)
+	svc := cmd.NewVehicle(bundle.Repo, bundle.Vehicles, pool, bundle.TrainMembers, bundle.LayoutVehicles, bundle.DccFunctions, bundle.Users)
+
+	brake := &fakeAddressBrake{}
+	svc.SetAddressBrake(brake)
+
+	owner, err := userSvc.Create(ctx, testAdminEff, cmd.UserCreateInput{
+		Login: "owner", PIN: "123456", Role: domain.RoleDriver,
+		DCCPool: []cmd.PoolRange{{From: 100, To: 199}},
+	})
+	if err != nil {
+		t.Fatalf("create owner: %v", err)
+	}
+
+	sessionLayout := insertLayout(t, ctx, bundle.Layouts, "session")
+	otherLayout := insertLayout(t, ctx, bundle.Layouts, "other")
+
+	addr := uint16(150)
+	v, err := svc.Create(ctx, cmd.VehicleCreateInput{
+		OwnerUserID: owner.ID, Name: "Loco", Kind: domain.VehicleKindLoco, DCCAddress: &addr,
+	})
+	if err != nil {
+		t.Fatalf("create vehicle: %v", err)
+	}
+
+	now := time.Now().UTC()
+	for _, layoutID := range []uint{sessionLayout.ID, otherLayout.ID} {
+		row := domain.LayoutVehicle{
+			LayoutID:      layoutID,
+			VehicleID:     v.ID,
+			AddedByUserID: owner.ID,
+			AddedAt:       now,
+		}
+		if err := bundle.LayoutVehicles.Insert(ctx, &row); err != nil {
+			t.Fatalf("roster vehicle on layout %d: %v", layoutID, err)
+		}
+	}
+
+	driverEff := domain.NewEffectiveRoles(domain.RoleDriver)
+	cleared, err := svc.ClearDCCAddresses(ctx, owner.ID, driverEff, sessionLayout.ID, []domain.VehicleID{v.ID})
+	if err != nil {
+		t.Fatalf("clear: %v", err)
+	}
+	if len(cleared) != 1 || cleared[0].DCCAddress != nil {
+		t.Fatalf("unexpected clear result: %+v", cleared)
+	}
+
+	got := brake.layouts()
+	want := []uint{sessionLayout.ID, otherLayout.ID}
+	sort.Slice(want, func(i, j int) bool { return want[i] < want[j] })
+	if len(got) != len(want) {
+		t.Fatalf("stopped layouts = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("stopped layouts = %v, want %v", got, want)
+		}
+	}
+	brake.mu.Lock()
+	defer brake.mu.Unlock()
+	for _, layoutID := range want {
+		addrs := brake.stops[layoutID]
+		if len(addrs) != 1 || addrs[0] != addr {
+			t.Fatalf("layout %d addrs = %v, want [%d]", layoutID, addrs, addr)
+		}
 	}
 }

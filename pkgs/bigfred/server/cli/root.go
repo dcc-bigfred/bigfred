@@ -510,6 +510,9 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 			Layouts: layoutSvc,
 			Log:     log,
 		})
+		if addressBrake, ok := leaseBrake.(cmd.AddressBrakePort); ok {
+			vehicleSvc.SetAddressBrake(addressBrake)
+		}
 	}
 
 	leaseSvc := service.NewLeaseService(service.LeaseConfig{

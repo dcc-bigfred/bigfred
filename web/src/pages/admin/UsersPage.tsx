@@ -12,7 +12,6 @@ import {
   DialogContentText,
   DialogTitle,
   IconButton,
-  MenuItem,
   Paper,
   Stack,
   Table,
@@ -21,7 +20,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  TextField,
   Tooltip,
   Typography,
 } from "@mui/material";
@@ -35,22 +33,15 @@ import { useTranslation } from "react-i18next";
 import { ApiError } from "../../api/client";
 import { useMe, type Role } from "../../api/auth";
 import {
-  USER_MANAGEABLE_ROLES,
-  useCreateUser,
   useDeleteUser,
   useSetUserActive,
-  useUpdateUser,
   useUsers,
   type User,
 } from "../../api/users";
-import UserDccPoolFields, {
-  dccPoolFromApi,
-  emptyDccPoolRange,
-  formatDccPoolSummary,
-  isDccPoolInputValid,
-  parseDccPoolRanges,
-  type DccPoolRangeInput,
-} from "../../components/UserDccPoolFields";
+import UserEditorDialog, {
+  type UserEditorDialogMode,
+} from "../../components/UserEditorDialog";
+import { formatDccPoolSummary } from "../../components/UserDccPoolFields";
 import { getUserName } from "../../utils/getUserName";
 
 // UsersPage is the admin-only management screen for user accounts
@@ -73,44 +64,25 @@ export default function UsersPage() {
   const { t } = useTranslation(["user", "common", "errors", "role"]);
   const me = useMe().data;
   const list = useUsers();
-  const create = useCreateUser();
-  const update = useUpdateUser();
   const remove = useDeleteUser();
   const setActive = useSetUserActive();
 
-  type DialogState =
-    | { kind: "create" }
-    | { kind: "edit"; target: User }
+  type ConfirmState =
     | { kind: "delete"; target: User }
     | { kind: "activate"; target: User; active: boolean }
     | null;
 
-  const [dialog, setDialog] = useState<DialogState>(null);
-  const [loginInput, setLoginInput] = useState("");
-  const [organizationInput, setOrganizationInput] = useState("");
-  const [pinInput, setPinInput] = useState("");
-  const [roleInput, setRoleInput] = useState<Role>("driver");
-  const [dccPoolInput, setDccPoolInput] = useState<DccPoolRangeInput[]>([
-    emptyDccPoolRange(),
-  ]);
+  const [editor, setEditor] = useState<UserEditorDialogMode | null>(null);
+  const [confirm, setConfirm] = useState<ConfirmState>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const closeDialog = () => {
-    setDialog(null);
-    setLoginInput("");
-    setOrganizationInput("");
-    setPinInput("");
-    setRoleInput("driver");
-    setDccPoolInput([emptyDccPoolRange()]);
+  const closeConfirm = () => {
+    setConfirm(null);
     setActionError(null);
-    create.reset();
-    update.reset();
     remove.reset();
     setActive.reset();
   };
 
-  // Translates an ApiError into a localised string. Falls back to the
-  // generic "unknown" message so an unmapped code still surfaces.
   const translateError = (err: unknown): string => {
     if (err instanceof ApiError) {
       const localised = t(`errors:${err.code}` as const, { defaultValue: "" });
@@ -120,93 +92,41 @@ export default function UsersPage() {
     return t("errors:network");
   };
 
-  const openCreate = () => {
-    setDialog({ kind: "create" });
-    setLoginInput("");
-    setOrganizationInput("");
-    setPinInput("");
-    setRoleInput("driver");
-    setDccPoolInput([emptyDccPoolRange()]);
-    setActionError(null);
-  };
-
-  const openEdit = (target: User) => {
-    setDialog({ kind: "edit", target });
-    setLoginInput(target.login);
-    setOrganizationInput(target.organization ?? "");
-    setPinInput("");
-    setRoleInput(target.role);
-    setDccPoolInput(dccPoolFromApi(target.dccPool ?? []));
-    setActionError(null);
-  };
+  const openCreate = () => setEditor({ kind: "create" });
+  const openEdit = (target: User) => setEditor({ kind: "edit", target });
 
   const openDelete = (target: User) => {
-    setDialog({ kind: "delete", target });
+    setConfirm({ kind: "delete", target });
     setActionError(null);
   };
 
   const openSetActive = (target: User, active: boolean) => {
-    setDialog({ kind: "activate", target, active });
+    setConfirm({ kind: "activate", target, active });
     setActionError(null);
   };
 
-  const submitDialog = async () => {
-    if (!dialog) return;
+  const submitConfirm = async () => {
+    if (!confirm) return;
     try {
-      if (dialog.kind === "create") {
-        const dccPool = parseDccPoolRanges(dccPoolInput);
-        if (!dccPool) return;
-        await create.mutateAsync({
-          login: loginInput.trim(),
-          organization: organizationInput.trim(),
-          pin: pinInput,
-          role: roleInput,
-          dccPool,
-        });
-      } else if (dialog.kind === "edit") {
-        const dccPool = parseDccPoolRanges(dccPoolInput);
-        if (!dccPool) return;
-        await update.mutateAsync({
-          id: dialog.target.id,
-          login: loginInput.trim(),
-          organization: organizationInput.trim(),
-          role: roleInput,
-          pin: pinInput || undefined,
-          dccPool,
-        });
-      } else if (dialog.kind === "delete") {
-        await remove.mutateAsync(dialog.target.id);
-      } else if (dialog.kind === "activate") {
+      if (confirm.kind === "delete") {
+        await remove.mutateAsync(confirm.target.id);
+      } else {
         await setActive.mutateAsync({
-          id: dialog.target.id,
-          active: dialog.active,
+          id: confirm.target.id,
+          active: confirm.active,
         });
       }
-      closeDialog();
+      closeConfirm();
     } catch (err) {
       setActionError(translateError(err));
     }
   };
 
   const rows = useMemo(() => list.data ?? [], [list.data]);
-  const submitting =
-    create.isPending ||
-    update.isPending ||
-    remove.isPending ||
-    setActive.isPending;
+  const submitting = remove.isPending || setActive.isPending;
 
   const renderRole = (role: Role) =>
     t(`role:${role}` as const, { defaultValue: role });
-
-  // Validation helpers used by the dialog submit gate so the button
-  // disables before the request even leaves.
-  const trimmedLogin = loginInput.trim();
-  const loginValid = /^[A-Za-z0-9._-]{1,32}$/.test(trimmedLogin);
-  const pinValid = /^[0-9]{4,12}$/.test(pinInput);
-  const dccPoolValid = isDccPoolInputValid(dccPoolInput);
-  const createValid = loginValid && pinValid && dccPoolValid;
-  const editValid =
-    loginValid && (pinInput === "" || pinValid) && dccPoolValid;
 
   return (
     <Container maxWidth="md" sx={{ py: { xs: 3, sm: 5 } }}>
@@ -339,7 +259,9 @@ export default function UsersPage() {
                                     size="small"
                                     onClick={() => openSetActive(u, false)}
                                     disabled={isSelf || submitting}
-                                    aria-label={t("user:admin.actions.deactivate")}
+                                    aria-label={t(
+                                      "user:admin.actions.deactivate",
+                                    )}
                                   >
                                     <LockIcon fontSize="small" />
                                   </IconButton>
@@ -352,7 +274,9 @@ export default function UsersPage() {
                                     size="small"
                                     onClick={() => openSetActive(u, true)}
                                     disabled={submitting}
-                                    aria-label={t("user:admin.actions.activate")}
+                                    aria-label={t(
+                                      "user:admin.actions.activate",
+                                    )}
                                   >
                                     <LockOpenIcon fontSize="small" />
                                   </IconButton>
@@ -391,119 +315,28 @@ export default function UsersPage() {
         </Paper>
       </Stack>
 
-      {/* Create / Edit dialog. Edit hides the PIN helper so the admin
-          knows leaving the field blank keeps the existing PIN. */}
-      <Dialog
-        open={dialog?.kind === "create" || dialog?.kind === "edit"}
-        onClose={closeDialog}
-        fullWidth
-        maxWidth="sm"
-      >
-        <DialogTitle>
-          {dialog?.kind === "edit"
-            ? t("user:admin.dialogs.edit.title", { login: getUserName(dialog.target) })
-            : t("user:admin.dialogs.create.title")}
-        </DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ mt: 1 }}>
-            <TextField
-              label={t("user:admin.dialogs.fields.login")}
-              value={loginInput}
-              onChange={(e) => setLoginInput(e.target.value)}
-              helperText={t("user:admin.dialogs.fields.loginHelp")}
-              autoFocus
-              fullWidth
-              required
-            />
-            <TextField
-              label={t("user:admin.dialogs.fields.organization")}
-              value={organizationInput}
-              onChange={(e) => setOrganizationInput(e.target.value)}
-              helperText={t("user:admin.dialogs.fields.organizationHelp")}
-              fullWidth
-              inputProps={{ maxLength: 128 }}
-            />
-            <TextField
-              select
-              label={t("user:admin.dialogs.fields.role")}
-              value={roleInput}
-              onChange={(e) => setRoleInput(e.target.value as Role)}
-              fullWidth
-            >
-              {USER_MANAGEABLE_ROLES.map((role) => (
-                <MenuItem key={role} value={role}>
-                  {renderRole(role)}
-                </MenuItem>
-              ))}
-            </TextField>
-            <TextField
-              label={t("user:admin.dialogs.fields.pin")}
-              type="password"
-              value={pinInput}
-              onChange={(e) => setPinInput(e.target.value)}
-              helperText={
-                dialog?.kind === "edit"
-                  ? t("user:admin.dialogs.fields.pinEditHelp")
-                  : t("user:admin.dialogs.fields.pinCreateHelp")
-              }
-              placeholder={
-                dialog?.kind === "edit"
-                  ? t("user:admin.dialogs.fields.pinPlaceholder")
-                  : undefined
-              }
-              required={dialog?.kind === "create"}
-              fullWidth
-              inputProps={{ inputMode: "numeric", pattern: "[0-9]*" }}
-            />
-            <UserDccPoolFields
-              value={dccPoolInput}
-              onChange={setDccPoolInput}
-              disabled={submitting}
-            />
-            {actionError && <Alert severity="error">{actionError}</Alert>}
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={closeDialog} disabled={submitting}>
-            {t("common:actions.cancel")}
-          </Button>
-          <Button
-            variant="contained"
-            onClick={submitDialog}
-            disabled={
-              submitting ||
-              (dialog?.kind === "create" && !createValid) ||
-              (dialog?.kind === "edit" && !editValid)
-            }
-          >
-            {dialog?.kind === "edit"
-              ? t("user:admin.dialogs.edit.submit")
-              : t("user:admin.dialogs.create.submit")}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <UserEditorDialog mode={editor} onClose={() => setEditor(null)} />
 
-      {/* Activate / Deactivate confirmation. */}
       <Dialog
-        open={dialog?.kind === "activate"}
-        onClose={closeDialog}
+        open={confirm?.kind === "activate"}
+        onClose={closeConfirm}
         fullWidth
         maxWidth="xs"
       >
         <DialogTitle>
-          {dialog?.kind === "activate" &&
-            (dialog.active
+          {confirm?.kind === "activate" &&
+            (confirm.active
               ? t("user:admin.dialogs.activate.title", {
-                  login: getUserName(dialog.target),
+                  login: getUserName(confirm.target),
                 })
               : t("user:admin.dialogs.deactivate.title", {
-                  login: getUserName(dialog.target),
+                  login: getUserName(confirm.target),
                 }))}
         </DialogTitle>
         <DialogContent>
           <DialogContentText>
-            {dialog?.kind === "activate" &&
-              (dialog.active
+            {confirm?.kind === "activate" &&
+              (confirm.active
                 ? t("user:admin.dialogs.activate.message")
                 : t("user:admin.dialogs.deactivate.message"))}
           </DialogContentText>
@@ -514,35 +347,36 @@ export default function UsersPage() {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={closeDialog} disabled={submitting}>
+          <Button onClick={closeConfirm} disabled={submitting}>
             {t("common:actions.cancel")}
           </Button>
           <Button
             variant="contained"
             color={
-              dialog?.kind === "activate" && !dialog.active ? "warning" : "primary"
+              confirm?.kind === "activate" && !confirm.active
+                ? "warning"
+                : "primary"
             }
-            onClick={submitDialog}
+            onClick={() => void submitConfirm()}
             disabled={submitting}
           >
-            {dialog?.kind === "activate" && dialog.active
+            {confirm?.kind === "activate" && confirm.active
               ? t("user:admin.dialogs.activate.submit")
               : t("user:admin.dialogs.deactivate.submit")}
           </Button>
         </DialogActions>
       </Dialog>
 
-      {/* Delete confirmation. */}
       <Dialog
-        open={dialog?.kind === "delete"}
-        onClose={closeDialog}
+        open={confirm?.kind === "delete"}
+        onClose={closeConfirm}
         fullWidth
         maxWidth="xs"
       >
         <DialogTitle>
-          {dialog?.kind === "delete" &&
+          {confirm?.kind === "delete" &&
             t("user:admin.dialogs.delete.title", {
-              login: getUserName(dialog.target),
+              login: getUserName(confirm.target),
             })}
         </DialogTitle>
         <DialogContent>
@@ -556,13 +390,13 @@ export default function UsersPage() {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={closeDialog} disabled={submitting}>
+          <Button onClick={closeConfirm} disabled={submitting}>
             {t("common:actions.cancel")}
           </Button>
           <Button
             variant="contained"
             color="error"
-            onClick={submitDialog}
+            onClick={() => void submitConfirm()}
             disabled={submitting}
           >
             {t("user:admin.dialogs.delete.submit")}

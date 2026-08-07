@@ -1,0 +1,27 @@
+{
+  "title": "DCC-Adresspools",
+  "helpMessage": "In dieser Ansicht kannst du die Fahrzeugadressierung auf der Anlage einfach planen",
+  "intro": "Jedes Fahrzeug braucht eine zugewiesene DCC-Adresse zur Steuerung. Benutzer haben zugewiesene Adresspools, damit sie sich nicht gegenseitig stören. Verwalte DCC-Adressen, plane die Adressierung, gib Adressen frei — in dieser Ansicht hast du alles unter Kontrolle.",
+  "showVehicles": "Fahrzeuge anzeigen",
+  "releaseSelected": "Ausgewählte Fahrzeuge freigeben",
+  "searchLabel": "Suchen",
+  "searchPlaceholder": "Benutzer- oder Fahrzeugname…",
+  "empty": "Keine deklarierten Adresspools.",
+  "noResults": "Keine Pools passen zur Suche.",
+  "noVehicles": "—",
+  "gap_one": "… ({{count}} Adresse)",
+  "gap_other": "… ({{count}} Adressen)",
+  "releaseConfirm": {
+    "title": "DCC-Adressen freigeben",
+    "body_one": "Möchten Sie die DCC-Adresse wirklich von {{count}} Fahrzeug entfernen? Fahrende Fahrzeuge werden angehalten.",
+    "body_other": "Möchten Sie die DCC-Adresse wirklich von {{count}} Fahrzeugen entfernen? Fahrende Fahrzeuge werden angehalten.",
+    "cancel": "Abbrechen",
+    "confirm": "Ja"
+  },
+  "columns": {
+    "user": "Benutzer",
+    "address": "Adresse",
+    "vehicle": "Fahrzeug",
+    "select": "Auswählen"
+  }
+}

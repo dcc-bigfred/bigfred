@@ -34,6 +34,7 @@ import SystemAdminPage from "./pages/admin/SystemPage";
 import AdminRentalsPage from "./pages/admin/AdminRentalsPage";
 import UsersAdminPage from "./pages/admin/UsersPage";
 import RemotesPage from "./pages/remotes/RemotesPage";
+import DccPoolsPage from "./pages/DccPoolsPage";
 
 // App is the route-tree root. Layout reads top-down:
 //
@@ -70,6 +71,7 @@ const router = createBrowserRouter(
             element={<TemplateFunctionsPage />}
           />
           <Route path="/rentals" element={<RentalsPage />} />
+          <Route path="/dcc-pools" element={<DccPoolsPage />} />
           <Route path="/throttle" element={<ThrottlePage />} />
           <Route path="/remotes" element={<RemotesPage />} />
           <Route path="/remotes/z21" element={<Navigate to="/remotes" replace />} />

@@ -54,7 +54,8 @@
       "templates": "Fahrzeugvorlagen",
       "throttle": "Regler",
       "rentals": "Ausleihen",
-      "remotes": "Handgeräte"
+      "remotes": "Handgeräte",
+      "dccPools": "DCC-Adresspools"
     },
     "fleet": {
       "availableVehicles": "Verfügbare Fahrzeuge",

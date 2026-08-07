@@ -26,6 +26,7 @@ type Vehicle struct {
 	layoutVehicles *repo.LayoutVehicles
 	functions      *repo.DccFunctions
 	users          *repo.Users
+	addressBrake   AddressBrakePort
 	sec            security.VehicleSecurityContext
 }
 
@@ -48,6 +49,11 @@ func NewVehicle(
 		functions:      functions,
 		users:          users,
 	}
+}
+
+// SetAddressBrake wires optional emergency-stop publishing used by ClearDCCAddresses.
+func (v *Vehicle) SetAddressBrake(brake AddressBrakePort) {
+	v.addressBrake = brake
 }
 
 // Get loads a vehicle by primary key.
@@ -333,6 +339,91 @@ func (v *Vehicle) Update(ctx context.Context, actorID uint, vehicleID domain.Veh
 		return domain.Vehicle{}, err
 	}
 	return row, nil
+}
+
+// ClearDCCAddresses clears dcc_address on every listed vehicle in one
+// transaction. Authority matches Update (owner or effective admin/sudo).
+// If any id fails auth or lookup, nothing is written. Moving locos are
+// emergency-stopped on every layout that rosters them (plus the session
+// layout as a defensive fallback; best-effort) before the write.
+func (v *Vehicle) ClearDCCAddresses(
+	ctx context.Context,
+	actorID uint,
+	eff domain.EffectiveRoles,
+	layoutID uint,
+	ids []domain.VehicleID,
+) ([]domain.Vehicle, error) {
+	if len(ids) == 0 {
+		return nil, svcerrors.ErrVehicleIDsRequired
+	}
+
+	rows := make([]domain.Vehicle, 0, len(ids))
+	seen := make(map[domain.VehicleID]struct{}, len(ids))
+	addrs := make([]uint16, 0, len(ids))
+	for _, id := range ids {
+		if _, dup := seen[id]; dup {
+			continue
+		}
+		seen[id] = struct{}{}
+		row, err := v.Get(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		if err := v.checkVehicleMutate(eff, actorID, row.OwnerUserID); err != nil {
+			return nil, err
+		}
+		if row.DCCAddress != nil {
+			addrs = append(addrs, *row.DCCAddress)
+		}
+		rows = append(rows, row)
+	}
+
+	// E-stop must reach every layout that rosters a moving loco, not
+	// only the caller's session layout — a vehicle can be rostered on
+	// several layouts. The session layout is included defensively
+	// in case a roster row is missing. Best-effort: dcc-bus may be down.
+	if v.addressBrake != nil && len(addrs) > 0 {
+		layoutSet := make(map[uint]struct{})
+		if layoutID > 0 {
+			layoutSet[layoutID] = struct{}{}
+		}
+		if v.layoutVehicles != nil {
+			for i := range rows {
+				if rows[i].DCCAddress == nil {
+					continue
+				}
+				joins, err := v.layoutVehicles.ListByVehicle(ctx, rows[i].ID)
+				if err != nil {
+					continue
+				}
+				for _, j := range joins {
+					layoutSet[j.LayoutID] = struct{}{}
+				}
+			}
+		}
+		for lid := range layoutSet {
+			_ = v.addressBrake.StopAddresses(ctx, lid, addrs)
+		}
+	}
+
+	now := time.Now().UTC()
+	err := repo.WithTransaction(ctx, v.db, func(tctx context.Context) error {
+		for i := range rows {
+			if rows[i].DCCAddress == nil {
+				continue
+			}
+			rows[i].DCCAddress = nil
+			rows[i].UpdatedAt = now
+			if err := v.vehicles.Update(tctx, &rows[i]); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return rows, nil
 }
 
 // Delete removes the vehicle when it is not referenced by any train.

@@ -29,13 +29,20 @@ export interface DccPoolRangeBody {
 export const USER_MANAGEABLE_ROLES: Role[] = ["driver", "admin"];
 
 const usersQueryKey = ["users"] as const;
+const dccPoolsQueryKey = ["dcc-pools"] as const;
+
+function invalidateUserCatalogues(qc: ReturnType<typeof useQueryClient>) {
+  void qc.invalidateQueries({ queryKey: usersQueryKey });
+  void qc.invalidateQueries({ queryKey: dccPoolsQueryKey });
+}
 
 // useUsers loads the full user catalogue (admin view).
-export function useUsers() {
+export function useUsers(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: usersQueryKey,
     queryFn: () => apiFetch<User[]>("/api/v1/users"),
     staleTime: 5 * 1000,
+    enabled: options?.enabled ?? true,
   });
 }
 
@@ -58,7 +65,7 @@ export function useCreateUser() {
         body: JSON.stringify(body),
       }),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: usersQueryKey });
+      invalidateUserCatalogues(qc);
     },
   });
 }
@@ -90,7 +97,7 @@ export function useUpdateUser() {
       });
     },
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: usersQueryKey });
+      invalidateUserCatalogues(qc);
     },
   });
 }
@@ -106,7 +113,7 @@ export function useSetUserActive() {
         { method: "POST" },
       ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: usersQueryKey });
+      invalidateUserCatalogues(qc);
     },
   });
 }
@@ -117,7 +124,7 @@ export function useDeleteUser() {
     mutationFn: (id: number) =>
       apiFetch<void>(`/api/v1/users/${id}`, { method: "DELETE" }),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: usersQueryKey });
+      invalidateUserCatalogues(qc);
     },
   });
 }

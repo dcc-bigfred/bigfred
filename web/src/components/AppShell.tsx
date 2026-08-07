@@ -30,6 +30,7 @@ import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import SettingsApplicationsIcon from "@mui/icons-material/SettingsApplications";
 import HelpOutlineIcon from "@mui/icons-material/HelpOutline";
 import LogoutIcon from "@mui/icons-material/Logout";
+import TagIcon from "@mui/icons-material/Tag";
 import { Link, Outlet, useMatch, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
@@ -183,6 +184,12 @@ function AppShellContent() {
         label: t("nav.my.rentals"),
         icon: <HandshakeIcon fontSize="small" />,
         onClick: () => navigate("/rentals"),
+      },
+      {
+        id: "dcc-pools",
+        label: t("nav.my.dccPools"),
+        icon: <TagIcon fontSize="small" />,
+        onClick: () => navigate("/dcc-pools"),
       },
     ];
     if (capabilities.remotesInMenu) {

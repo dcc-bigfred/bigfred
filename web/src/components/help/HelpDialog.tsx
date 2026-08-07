@@ -31,7 +31,7 @@ export default function HelpDialog({
   onDisableRoute: () => void;
   onDisableGlobal: () => void;
 }) {
-  const { t } = useTranslation(["help", "common"]);
+  const { t } = useTranslation(["help", "dccPool", "common"]);
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
@@ -39,7 +39,7 @@ export default function HelpDialog({
       <DialogContent>
         <Typography component="div" variant="body1" sx={{ mb: 2 }}>
           <Trans
-            ns="help"
+            ns={entry.ns ?? "help"}
             i18nKey={entry.i18nKey}
             components={entry.components ?? {}}
           />

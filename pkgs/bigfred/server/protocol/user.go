@@ -13,6 +13,24 @@ type DCCPoolRangeResponse struct {
 	To   uint16 `json:"to"`
 }
 
+// DCCPoolOverviewResponse is one row of GET /api/v1/dcc-pools.
+type DCCPoolOverviewResponse struct {
+	UserID       uint                   `json:"userId"`
+	Login        string                 `json:"login"`
+	Organization string                 `json:"organization"`
+	DCCPool      []DCCPoolRangeResponse `json:"dccPool"`
+}
+
+// ToDCCPoolOverviewResponse maps a cmd overview entry to REST wire shape.
+func ToDCCPoolOverviewResponse(e cmd.DCCPoolOverviewEntry) DCCPoolOverviewResponse {
+	return DCCPoolOverviewResponse{
+		UserID:       e.UserID,
+		Login:        e.Login,
+		Organization: e.Organization,
+		DCCPool:      ToDCCPoolRangeResponses(e.DCCPool),
+	}
+}
+
 // DCCPoolRangeRequest is one user DCC pool range in create/update payloads.
 type DCCPoolRangeRequest struct {
 	From uint16 `json:"from"`

@@ -54,7 +54,8 @@
       "templates": "Vehicle templates",
       "throttle": "Throttle",
       "rentals": "Rentals",
-      "remotes": "Handsets"
+      "remotes": "Handsets",
+      "dccPools": "DCC address pools"
     },
     "fleet": {
       "availableVehicles": "Available vehicles",

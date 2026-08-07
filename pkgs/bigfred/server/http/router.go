@@ -149,10 +149,12 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			r.Put("/auth/me/pin", authH.ChangePIN)
 			r.Put("/auth/me/profile", authH.UpdateProfile)
 			r.Get("/auth/me/dcc-pool", vehicleH.ListPool)
+			r.Get("/dcc-pools", userH.ListDCCPools)
 
 			// Vehicle catalogue.
 			r.Get("/vehicles/catalogue", vehicleH.ListCatalogue)
 			r.Post("/vehicles", vehicleH.Create)
+			r.Post("/vehicles/clear-dcc", vehicleH.ClearDCC)
 			r.Put("/vehicles/by-external-id/{externalId}", vehicleH.UpsertByExternalID)
 			r.Delete("/vehicles/by-external-id/{externalId}", vehicleH.DeleteByExternalID)
 			r.Put("/vehicles/{id}", vehicleH.Update)

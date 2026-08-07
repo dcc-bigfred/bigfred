@@ -45,6 +45,7 @@
   "vehicle_name_required": "Wpisz nazwę pojazdu.",
   "vehicle_kind_invalid": "Wybierz typ pojazdu z listy.",
   "vehicle_not_owned": "Możesz edytować tylko swoje pojazdy.",
+  "vehicle_ids_required": "Wybierz co najmniej jeden pojazd.",
   "vehicle_in_use": "Pojazd jest w składzie – najpierw go odłącz.",
   "vehicle_dcc_function_invalid": "Wybierz funkcję z zakresu F0–F31.",
   "vehicle_deadman_switch_invalid": "Wybierz prawidłową opcję Dead Man's Switch.",

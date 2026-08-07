@@ -54,7 +54,8 @@
       "templates": "Szablony pojazdów",
       "throttle": "Sterowanie",
       "rentals": "Wypożyczenia",
-      "remotes": "Piloty"
+      "remotes": "Piloty",
+      "dccPools": "Pule adresów DCC"
     },
     "fleet": {
       "availableVehicles": "Dostępne pojazdy",

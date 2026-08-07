@@ -45,6 +45,7 @@
   "vehicle_name_required": "Bitte einen Fahrzeugnamen eingeben.",
   "vehicle_kind_invalid": "Bitte eine Fahrzeugart aus der Liste wählen.",
   "vehicle_not_owned": "Sie können nur eigene Fahrzeuge bearbeiten.",
+  "vehicle_ids_required": "Wählen Sie mindestens ein Fahrzeug.",
   "vehicle_in_use": "Dieses Fahrzeug ist Teil eines Zuges — zuerst lösen.",
   "vehicle_dcc_function_invalid": "Funktion im Bereich F0–F31 wählen.",
   "vehicle_deadman_switch_invalid": "Gültige Totmann-Schalter-Option wählen.",

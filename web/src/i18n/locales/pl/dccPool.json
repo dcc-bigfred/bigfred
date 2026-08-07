@@ -1,0 +1,31 @@
+{
+  "title": "Pule adresów DCC",
+  "helpMessage": "W tym widoku możesz w prosty sposób zaplanować adresację pojazdów na makiecie",
+  "intro": "Każdy pojazd do sterowania potrzebuje przypisanego adresu DCC. Użytkownicy mają przypisane pule adresów aby nie kolidować ze sobą. Zarządzaj adresami DCC, planuj adresacje, zwalniaj adresy - w tym widoku masz wszystko pod kontrolą.",
+  "showVehicles": "Pokaż pojazdy",
+  "releaseSelected": "Zwolnij zaznaczone pojazdy",
+  "searchLabel": "Szukaj",
+  "searchPlaceholder": "Nazwa użytkownika lub pojazdu…",
+  "empty": "Brak zadeklarowanych pul adresów.",
+  "noResults": "Brak pul pasujących do wyszukiwania.",
+  "noVehicles": "—",
+  "gap_one": "… ({{count}} adres)",
+  "gap_few": "… ({{count}} adresy)",
+  "gap_many": "… ({{count}} adresów)",
+  "gap_other": "… ({{count}} adresów)",
+  "releaseConfirm": {
+    "title": "Zwolnij adresy DCC",
+    "body_one": "Czy na pewno chcesz usunąć adres DCC dla {{count}} pojazdu? Pojazdy w ruchu zostaną zahamowane.",
+    "body_few": "Czy na pewno chcesz usunąć adres DCC dla {{count}} pojazdów? Pojazdy w ruchu zostaną zahamowane.",
+    "body_many": "Czy na pewno chcesz usunąć adres DCC dla {{count}} pojazdów? Pojazdy w ruchu zostaną zahamowane.",
+    "body_other": "Czy na pewno chcesz usunąć adres DCC dla {{count}} pojazdów? Pojazdy w ruchu zostaną zahamowane.",
+    "cancel": "Cofnij",
+    "confirm": "Tak"
+  },
+  "columns": {
+    "user": "Użytkownik",
+    "address": "Adres",
+    "vehicle": "Pojazd",
+    "select": "Zaznacz"
+  }
+}

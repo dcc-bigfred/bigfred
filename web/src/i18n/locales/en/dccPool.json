@@ -1,0 +1,27 @@
+{
+  "title": "DCC address pools",
+  "helpMessage": "On this page you can easily plan vehicle addressing on the layout",
+  "intro": "Every vehicle needs an assigned DCC address to be controlled. Users have assigned address pools so they do not conflict with each other. Manage DCC addresses, plan addressing, release addresses — this view keeps everything under control.",
+  "showVehicles": "Show vehicles",
+  "releaseSelected": "Release selected vehicles",
+  "searchLabel": "Search",
+  "searchPlaceholder": "User or vehicle name…",
+  "empty": "No declared address pools.",
+  "noResults": "No pools match your search.",
+  "noVehicles": "—",
+  "gap_one": "… ({{count}} address)",
+  "gap_other": "… ({{count}} addresses)",
+  "releaseConfirm": {
+    "title": "Release DCC addresses",
+    "body_one": "Are you sure you want to remove the DCC address from {{count}} vehicle? Vehicles in motion will be stopped.",
+    "body_other": "Are you sure you want to remove the DCC address from {{count}} vehicles? Vehicles in motion will be stopped.",
+    "cancel": "Cancel",
+    "confirm": "Yes"
+  },
+  "columns": {
+    "user": "User",
+    "address": "Address",
+    "vehicle": "Vehicle",
+    "select": "Select"
+  }
+}

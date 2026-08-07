@@ -123,6 +123,11 @@ func (r VehicleUpdateRequest) ToUpdateInput() cmd.VehicleUpdateInput {
 	return in
 }
 
+// VehicleClearDCCRequest is the POST /api/v1/vehicles/clear-dcc body.
+type VehicleClearDCCRequest struct {
+	VehicleIDs []string `json:"vehicleIds"`
+}
+
 // VehicleCatalogueResponse is one row of GET /api/v1/vehicles/catalogue.
 type VehicleCatalogueResponse struct {
 	VehicleResponse

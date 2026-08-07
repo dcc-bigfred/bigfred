@@ -168,3 +168,59 @@ func TestDCCPoolAdminOnly(t *testing.T) {
 		t.Fatalf("expected ErrDCCPoolForbidden on delete, got %v", err)
 	}
 }
+
+func TestListDCCPoolOverviewAvailableToAnyone(t *testing.T) {
+	bundle, cleanup := freshRepo(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	pool := cmd.NewDCCPool(bundle.Repo, bundle.Pool)
+	userSvc := cmd.NewUser(bundle.Repo, bundle.Users, bundle.Vehicles, bundle.Trains, pool)
+
+	alice, err := userSvc.Create(ctx, testAdminEff, cmd.UserCreateInput{
+		Login: "alice", PIN: "123456", Organization: "Klub", Role: domain.RoleDriver,
+		DCCPool: []cmd.PoolRange{{From: 100, To: 199}, {From: 500, To: 510}},
+	})
+	if err != nil {
+		t.Fatalf("create alice: %v", err)
+	}
+	if _, err := userSvc.Create(ctx, testAdminEff, cmd.UserCreateInput{
+		Login: "bob", PIN: "123456", Role: domain.RoleDriver,
+		DCCPool: []cmd.PoolRange{{From: 300, To: 399}},
+	}); err != nil {
+		t.Fatalf("create bob: %v", err)
+	}
+
+	rows, err := userSvc.ListDCCPoolOverview(ctx)
+	if err != nil {
+		t.Fatalf("ListDCCPoolOverview: %v", err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("expected 2 overview rows, got %d", len(rows))
+	}
+
+	byLogin := make(map[string]cmd.DCCPoolOverviewEntry, len(rows))
+	for _, row := range rows {
+		byLogin[row.Login] = row
+	}
+	aliceRow, ok := byLogin["alice"]
+	if !ok {
+		t.Fatal("alice missing from overview")
+	}
+	if aliceRow.UserID != alice.ID {
+		t.Fatalf("alice userId: got %d want %d", aliceRow.UserID, alice.ID)
+	}
+	if aliceRow.Organization != "Klub" {
+		t.Fatalf("alice organization: got %q", aliceRow.Organization)
+	}
+	if len(aliceRow.DCCPool) != 2 {
+		t.Fatalf("alice pool ranges: got %d want 2", len(aliceRow.DCCPool))
+	}
+	bobRow, ok := byLogin["bob"]
+	if !ok {
+		t.Fatal("bob missing from overview")
+	}
+	if len(bobRow.DCCPool) != 1 || bobRow.DCCPool[0].FromAddr != 300 || bobRow.DCCPool[0].ToAddr != 399 {
+		t.Fatalf("bob pool unexpected: %+v", bobRow.DCCPool)
+	}
+}

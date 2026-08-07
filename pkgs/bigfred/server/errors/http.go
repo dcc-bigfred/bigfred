@@ -57,6 +57,8 @@ func VehicleHTTPStatus(err error) (status int, code string) {
 		return http.StatusForbidden, CodeVehicleNotOwned
 	case stderrors.Is(err, ErrVehicleInUse):
 		return http.StatusConflict, CodeVehicleInUse
+	case stderrors.Is(err, ErrVehicleIDsRequired):
+		return http.StatusBadRequest, CodeVehicleIDsRequired
 	case stderrors.Is(err, ErrVehicleDccFunctionInvalid):
 		return http.StatusUnprocessableEntity, CodeVehicleDccFunctionInvalid
 	case stderrors.Is(err, ErrVehicleDeadManSwitchInvalid):

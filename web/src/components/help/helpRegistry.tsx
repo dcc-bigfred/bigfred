@@ -7,9 +7,14 @@ export type HelpI18nKey =
   | "dashboard"
   | "myVehicles"
   | "rentals"
-  | "myTrains";
+  | "myTrains"
+  | "helpMessage";
+
+export type HelpNamespace = "help" | "dccPool";
 
 export type HelpEntry = {
+  /** i18n namespace; defaults to "help". */
+  ns?: HelpNamespace;
   i18nKey: HelpI18nKey;
   components?: Record<string, ReactElement>;
 };
@@ -36,6 +41,10 @@ export const HELP_REGISTRY: Record<string, HelpEntry> = {
   },
   "/my/trains": {
     i18nKey: "myTrains",
+  },
+  "/dcc-pools": {
+    ns: "dccPool",
+    i18nKey: "helpMessage",
   },
 };
 

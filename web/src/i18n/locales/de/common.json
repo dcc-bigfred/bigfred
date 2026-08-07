@@ -51,15 +51,12 @@
     },
     "my": {
       "menuLabel": "Meine",
-      "vehicles": "Fahrzeuge",
-      "trains": "Züge",
       "templates": "Fahrzeugvorlagen",
       "throttle": "Regler",
       "rentals": "Ausleihen",
       "remotes": "Handgeräte"
     },
     "fleet": {
-      "menuLabel": "Fuhrpark",
       "availableVehicles": "Verfügbare Fahrzeuge",
       "availableTrains": "Verfügbare Züge"
     },

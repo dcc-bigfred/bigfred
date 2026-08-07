@@ -13,8 +13,6 @@ import WakeLockKeeper from "./components/WakeLockKeeper";
 import HomePage from "./pages/HomePage";
 import InterlockingPage from "./pages/InterlockingPage";
 import LoginPage from "./pages/LoginPage";
-import MyTrainsPage from "./pages/MyTrainsPage";
-import MyVehiclesPage from "./pages/MyVehiclesPage";
 import AvailableVehiclesPage from "./pages/AvailableVehiclesPage";
 import AvailableTrainsPage from "./pages/AvailableTrainsPage";
 import VehicleFunctionsPage from "./pages/VehicleFunctionsPage";
@@ -61,16 +59,16 @@ const router = createBrowserRouter(
       <Route element={<ProtectedRoute />}>
         <Route element={<AppShell />}>
           <Route path="/" element={<HomePage />} />
-          <Route path="/my/vehicles" element={<MyVehiclesPage />} />
-          <Route path="/fleet/vehicles" element={<AvailableVehiclesPage />} />
-          <Route path="/fleet/trains" element={<AvailableTrainsPage />} />
+          <Route path="/my/vehicles" element={<AvailableVehiclesPage />} />
+          <Route path="/my/trains" element={<AvailableTrainsPage />} />
+          <Route path="/fleet/vehicles" element={<Navigate to="/my/vehicles" replace />} />
+          <Route path="/fleet/trains" element={<Navigate to="/my/trains" replace />} />
           <Route path="/my/vehicles/:vehicleId/functions" element={<VehicleFunctionsPage />} />
           <Route path="/vehicle-templates" element={<VehicleTemplatesPage />} />
           <Route
             path="/vehicle-templates/:templateId/functions"
             element={<TemplateFunctionsPage />}
           />
-          <Route path="/my/trains" element={<MyTrainsPage />} />
           <Route path="/rentals" element={<RentalsPage />} />
           <Route path="/throttle" element={<ThrottlePage />} />
           <Route path="/remotes" element={<RemotesPage />} />

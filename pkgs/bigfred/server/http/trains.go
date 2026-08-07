@@ -27,26 +27,6 @@ func NewTrainHandler(
 	return &TrainHandler{svc: svc, layoutTrains: layoutTrains, auth: auth}
 }
 
-// List handles GET /api/v1/trains — own trains only for now.
-func (h *TrainHandler) List(w http.ResponseWriter, r *http.Request) {
-	id, ok := IdentityFromContext(r.Context())
-	if !ok {
-		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
-		return
-	}
-	rows, err := h.svc.ListOwned(r.Context(), id.User.ID)
-	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
-		return
-	}
-	out := make([]protocol.TrainResponse, 0, len(rows))
-	for _, d := range rows {
-		out = append(out, protocol.ToTrainResponse(d))
-	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(out)
-}
-
 // ListCatalogue handles GET /api/v1/trains/catalogue — every
 // registered train with owner metadata and on-layout flag for the
 // caller's pinned session layout.

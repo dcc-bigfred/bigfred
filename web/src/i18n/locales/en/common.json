@@ -51,15 +51,12 @@
     },
     "my": {
       "menuLabel": "My",
-      "vehicles": "Vehicles",
-      "trains": "Trains",
       "templates": "Vehicle templates",
       "throttle": "Throttle",
       "rentals": "Rentals",
       "remotes": "Handsets"
     },
     "fleet": {
-      "menuLabel": "Fleet",
       "availableVehicles": "Available vehicles",
       "availableTrains": "Available trains"
     },

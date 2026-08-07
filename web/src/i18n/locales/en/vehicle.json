@@ -51,8 +51,19 @@
     "noResults": "No vehicles match your search.",
     "pagination": "{{from}}–{{to}} of {{count}}",
     "onLayout": {
-      "yes": "Yes",
-      "no": "No"
+      "yes": "On layout",
+      "no": "Not on layout"
+    },
+    "dccLabel": "DCC: {{addr}}",
+    "showOnlyMine": "Show only mine",
+    "filterKind": "Kind",
+    "filterEpoch": "Epoch",
+    "filterAll": "All",
+    "filterNoEpoch": "No epoch",
+    "epochChip": "Epoch {{epoch}}",
+    "table": {
+      "vehicle": "Vehicle",
+      "details": "Details"
     },
     "columns": {
       "name": "Name",
@@ -73,6 +84,7 @@
     "searchPlaceholder": "Name, owner…",
     "empty": "No trains have been registered yet.",
     "noResults": "No trains match your search.",
+    "showOnlyMine": "Show only mine",
     "pagination": "{{from}}–{{to}} of {{count}}",
     "onLayout": {
       "yes": "Yes",

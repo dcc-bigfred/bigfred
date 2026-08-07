@@ -74,11 +74,6 @@ func (v *Vehicle) GetByExternalID(ctx context.Context, externalID string) (domai
 	return row, nil
 }
 
-// ListOwned returns every vehicle owned by the user.
-func (v *Vehicle) ListOwned(ctx context.Context, ownerID uint) ([]domain.Vehicle, error) {
-	return v.vehicles.ListByOwner(ctx, ownerID)
-}
-
 // VehicleCatalogueEntry is one row of the global vehicle catalogue.
 type VehicleCatalogueEntry struct {
 	Vehicle           domain.Vehicle

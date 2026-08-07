@@ -81,19 +81,6 @@ func (v *Vehicles) ListAll(ctx context.Context) ([]domain.Vehicle, error) {
 	return rows, nil
 }
 
-// ListByOwner returns every vehicle owned by the user.
-func (v *Vehicles) ListByOwner(ctx context.Context, ownerID uint) ([]domain.Vehicle, error) {
-	var rows []domain.Vehicle
-	err := v.repo.FindAll(ctx, &rows,
-		where.Eq("owner_user_id", ownerID),
-		sort.Asc("name"),
-	)
-	if err != nil {
-		return nil, err
-	}
-	return rows, nil
-}
-
 // ListByIDs returns vehicles by primary-key set.
 func (v *Vehicles) ListByIDs(ctx context.Context, ids []domain.VehicleID) ([]domain.Vehicle, error) {
 	if len(ids) == 0 {

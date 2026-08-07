@@ -51,8 +51,19 @@
     "noResults": "Brak pojazdów pasujących do wyszukiwania.",
     "pagination": "{{from}}–{{to}} z {{count}}",
     "onLayout": {
-      "yes": "Tak",
-      "no": "Nie"
+      "yes": "Na makiecie",
+      "no": "Nie jest na makiecie"
+    },
+    "dccLabel": "DCC: {{addr}}",
+    "showOnlyMine": "Pokaż tylko moje",
+    "filterKind": "Typ",
+    "filterEpoch": "Epoka",
+    "filterAll": "Wszystkie",
+    "filterNoEpoch": "Bez epoki",
+    "epochChip": "Epoka {{epoch}}",
+    "table": {
+      "vehicle": "Pojazd",
+      "details": "Szczegóły"
     },
     "columns": {
       "name": "Nazwa",
@@ -73,6 +84,7 @@
     "searchPlaceholder": "Nazwa, właściciel…",
     "empty": "Nie zarejestrowano jeszcze żadnych składów.",
     "noResults": "Brak składów pasujących do wyszukiwania.",
+    "showOnlyMine": "Pokaż tylko moje",
     "pagination": "{{from}}–{{to}} z {{count}}",
     "onLayout": {
       "yes": "Tak",

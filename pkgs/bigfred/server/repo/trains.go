@@ -59,19 +59,6 @@ func (t *Trains) CountByOwner(ctx context.Context, ownerID uint) (int, error) {
 	return t.repo.Count(ctx, "trains", where.Eq("owner_user_id", ownerID))
 }
 
-// ListByOwner returns every train owned by the user.
-func (t *Trains) ListByOwner(ctx context.Context, ownerID uint) ([]domain.Train, error) {
-	var rows []domain.Train
-	err := t.repo.FindAll(ctx, &rows,
-		where.Eq("owner_user_id", ownerID),
-		sort.Asc("name"),
-	)
-	if err != nil {
-		return nil, err
-	}
-	return rows, nil
-}
-
 // ListAll returns every train in the catalogue (all owners).
 func (t *Trains) ListAll(ctx context.Context) ([]domain.Train, error) {
 	var rows []domain.Train

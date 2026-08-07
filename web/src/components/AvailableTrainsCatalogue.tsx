@@ -2,8 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Box,
+  Button,
+  Checkbox,
   Chip,
-  IconButton,
+  FormControlLabel,
   Paper,
   Stack,
   Table,
@@ -17,10 +19,12 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import EditIcon from "@mui/icons-material/Edit";
+import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
+import EditIcon from "@mui/icons-material/Edit";
 import HandshakeIcon from "@mui/icons-material/Handshake";
 import PlaylistAddIcon from "@mui/icons-material/PlaylistAdd";
+import RefreshIcon from "@mui/icons-material/Refresh";
 import RemoveCircleOutlineIcon from "@mui/icons-material/RemoveCircleOutline";
 import { useTranslation } from "react-i18next";
 
@@ -64,6 +68,7 @@ export default function AvailableTrainsCatalogue({ layoutId }: Props) {
   const deleteTrainMut = useDeleteTrain();
   const grantedLeases = useGrantedLeases();
 
+  const [mineOnly, setMineOnly] = useState(true);
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(0);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -77,7 +82,7 @@ export default function AvailableTrainsCatalogue({ layoutId }: Props) {
 
   useEffect(() => {
     setPage(0);
-  }, [query]);
+  }, [query, mineOnly]);
 
   const isAdmin = hasEffectiveAdmin(me);
   const ownsRow = (ownerId: number) => me?.id === ownerId;
@@ -89,13 +94,20 @@ export default function AvailableTrainsCatalogue({ layoutId }: Props) {
     return s;
   }, [grantedLeases.data]);
 
+  const scopedTrains = useMemo(() => {
+    let list = trains.data ?? [];
+    if (mineOnly && me?.id != null) {
+      list = list.filter((tr) => tr.ownerId === me.id);
+    }
+    return list;
+  }, [trains.data, mineOnly, me?.id]);
+
   const filteredRows = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const rows = trains.data ?? [];
     if (!q) {
-      return rows;
+      return scopedTrains;
     }
-    return rows.filter((tr) => {
+    return scopedTrains.filter((tr) => {
       const ownerLabel = getUserName({
         login: tr.ownerLogin,
         organization: tr.ownerOrganization,
@@ -105,7 +117,7 @@ export default function AvailableTrainsCatalogue({ layoutId }: Props) {
         .toLowerCase();
       return haystack.includes(q);
     });
-  }, [trains.data, query]);
+  }, [scopedTrains, query]);
 
   const pagedRows = useMemo(() => {
     const start = page * ROWS_PER_PAGE;
@@ -134,6 +146,11 @@ export default function AvailableTrainsCatalogue({ layoutId }: Props) {
     deleteTrainMut.mutate(tr.id);
   };
 
+  const onRefresh = () => {
+    void trains.refetch();
+    void grantedLeases.refetch();
+  };
+
   const renderOnLayout = (onLayout: boolean) => (
     <Chip
       size="small"
@@ -148,7 +165,7 @@ export default function AvailableTrainsCatalogue({ layoutId }: Props) {
   );
 
   const emptyMessage =
-    (trains.data ?? []).length === 0
+    scopedTrains.length === 0
       ? t("vehicle:trainCatalogue.empty")
       : t("vehicle:trainCatalogue.noResults");
 
@@ -157,7 +174,50 @@ export default function AvailableTrainsCatalogue({ layoutId }: Props) {
       {mutationError && <Alert severity="error">{mutationError}</Alert>}
 
       <Paper variant="outlined">
-        <Box sx={{ px: 2, py: 1.5, borderBottom: 1, borderColor: "divider" }}>
+        <Box
+          sx={{
+            px: 2,
+            py: 1.5,
+            borderBottom: 1,
+            borderColor: "divider",
+            display: "flex",
+            flexDirection: "column",
+            gap: 1.5,
+          }}
+        >
+          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+            <Box sx={{ flexGrow: 1 }} />
+            <FormControlLabel
+              control={
+                <Checkbox
+                  size="small"
+                  checked={mineOnly}
+                  onChange={(e) => setMineOnly(e.target.checked)}
+                />
+              }
+              label={t("vehicle:trainCatalogue.showOnlyMine")}
+            />
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<RefreshIcon />}
+              onClick={onRefresh}
+              disabled={trains.isFetching}
+            >
+              {t("vehicle:list.refreshButton")}
+            </Button>
+            <Button
+              size="small"
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => {
+                setEditingTrain(null);
+                setDialogOpen(true);
+              }}
+            >
+              {t("vehicle:trainList.addButton")}
+            </Button>
+          </Stack>
           <TextField
             fullWidth
             size="small"
@@ -224,47 +284,53 @@ export default function AvailableTrainsCatalogue({ layoutId }: Props) {
                       </TableCell>
                       <TableCell>{renderOnLayout(tr.onLayout)}</TableCell>
                       <TableCell align="right">
-                        <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                        <Stack
+                          direction="row"
+                          spacing={0.5}
+                          justifyContent="flex-end"
+                          flexWrap="wrap"
+                          useFlexGap
+                        >
                           {tr.onLayout ? (
                             canRemoveFromLayout(me, tr.ownerId) ? (
-                              <Tooltip title={t("vehicle:roster.removeButton")}>
-                                <IconButton
-                                  size="small"
-                                  onClick={() =>
-                                    removeTrainFromRoster.mutate({
-                                      layoutId,
-                                      trainId: tr.id,
-                                    })
-                                  }
-                                  disabled={removeTrainFromRoster.isPending}
-                                  aria-label={t("vehicle:roster.removeButton")}
-                                >
-                                  <RemoveCircleOutlineIcon fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
-                            ) : null
-                          ) : canAddToLayout(me, tr.ownerId) ? (
-                            <Tooltip title={t("vehicle:trainList.actions.addToLayout")}>
-                              <IconButton
+                              <Button
                                 size="small"
+                                variant="text"
+                                startIcon={<RemoveCircleOutlineIcon />}
                                 onClick={() =>
-                                  addTrainToRoster.mutate({
+                                  removeTrainFromRoster.mutate({
                                     layoutId,
                                     trainId: tr.id,
                                   })
                                 }
-                                disabled={addTrainToRoster.isPending}
-                                aria-label={t("vehicle:trainList.actions.addToLayout")}
+                                disabled={removeTrainFromRoster.isPending}
                               >
-                                <PlaylistAddIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
+                                {t("vehicle:roster.removeButton")}
+                              </Button>
+                            ) : null
+                          ) : canAddToLayout(me, tr.ownerId) ? (
+                            <Button
+                              size="small"
+                              variant="text"
+                              startIcon={<PlaylistAddIcon />}
+                              onClick={() =>
+                                addTrainToRoster.mutate({
+                                  layoutId,
+                                  trainId: tr.id,
+                                })
+                              }
+                              disabled={addTrainToRoster.isPending}
+                            >
+                              {t("vehicle:trainList.actions.addToLayout")}
+                            </Button>
                           ) : null}
                           {showLendButton(isAdmin, isOwner) && (
                             <Tooltip title={lendTitle}>
                               <span>
-                                <IconButton
+                                <Button
                                   size="small"
+                                  variant="text"
+                                  startIcon={<HandshakeIcon />}
                                   disabled={!lendable}
                                   onClick={() => {
                                     setLeaseInitialTarget({
@@ -274,36 +340,34 @@ export default function AvailableTrainsCatalogue({ layoutId }: Props) {
                                     });
                                     setLeaseDialogOpen(true);
                                   }}
-                                  aria-label={t("rentals:granted.lend")}
                                 >
-                                  <HandshakeIcon fontSize="small" />
-                                </IconButton>
+                                  {t("rentals:granted.lend")}
+                                </Button>
                               </span>
                             </Tooltip>
                           )}
                           {canMutateTrain(tr.ownerId) && (
                             <>
-                              <Tooltip title={t("vehicle:trainList.actions.edit")}>
-                                <IconButton
-                                  size="small"
-                                  onClick={() => {
-                                    setEditingTrain(tr);
-                                    setDialogOpen(true);
-                                  }}
-                                  aria-label={t("vehicle:trainList.actions.edit")}
-                                >
-                                  <EditIcon fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
-                              <Tooltip title={t("vehicle:trainList.actions.delete")}>
-                                <IconButton
-                                  size="small"
-                                  onClick={() => onDeleteTrain(tr)}
-                                  aria-label={t("vehicle:trainList.actions.delete")}
-                                >
-                                  <DeleteIcon fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
+                              <Button
+                                size="small"
+                                variant="text"
+                                startIcon={<EditIcon />}
+                                onClick={() => {
+                                  setEditingTrain(tr);
+                                  setDialogOpen(true);
+                                }}
+                              >
+                                {t("vehicle:trainList.actions.edit")}
+                              </Button>
+                              <Button
+                                size="small"
+                                variant="text"
+                                color="error"
+                                startIcon={<DeleteIcon />}
+                                onClick={() => onDeleteTrain(tr)}
+                              >
+                                {t("vehicle:trainList.actions.delete")}
+                              </Button>
                             </>
                           )}
                         </Stack>

@@ -31,28 +31,6 @@ func NewVehicleHandler(
 	return &VehicleHandler{svc: svc, layoutVehicles: layoutVehicles, pool: pool, auth: auth}
 }
 
-// List handles GET /api/v1/vehicles — own vehicles only for now.
-// Leasing and signalman-overrides will join the union in the
-// milestone that introduces VehicleLease.
-func (h *VehicleHandler) List(w http.ResponseWriter, r *http.Request) {
-	id, ok := IdentityFromContext(r.Context())
-	if !ok {
-		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
-		return
-	}
-	rows, err := h.svc.ListOwned(r.Context(), id.User.ID)
-	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
-		return
-	}
-	out := make([]protocol.VehicleResponse, 0, len(rows))
-	for _, v := range rows {
-		out = append(out, protocol.ToVehicleResponse(v))
-	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(out)
-}
-
 // ListCatalogue handles GET /api/v1/vehicles/catalogue — every
 // registered vehicle with owner metadata and on-layout flag for the
 // caller's pinned session layout.

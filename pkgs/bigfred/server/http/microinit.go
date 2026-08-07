@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
 	"net/http"
+	"strings"
 
 	"github.com/coder/websocket"
 	miclient "github.com/dcc-bigfred/microinit/go/client"
@@ -75,8 +77,9 @@ func (h *MicroinitHandler) Info(w http.ResponseWriter, _ *http.Request) {
 }
 
 // StreamLogs handles GET /api/v1/admin/microinit/services/{id}/logs/stream (WebSocket).
-// Auth is verified in-handler (cookie / ?token=) like DccBusSlotsProxy — chi
-// RequireRole does not reliably gate the WS upgrade itself.
+// Auth is verified in-handler (cookie / ?token=) like ScanWS — chi
+// RequireRole does not reliably gate the WS upgrade itself. Uses
+// auth.Effective so sudo-elevated admins match the rest of the admin UI.
 func (h *MicroinitHandler) StreamLogs(w http.ResponseWriter, r *http.Request) {
 	if h.auth == nil {
 		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
@@ -92,7 +95,12 @@ func (h *MicroinitHandler) StreamLogs(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
-	if !id.HasRole(domain.RoleAdmin) {
+	eff, err := h.auth.Effective(r.Context(), id.User, id.Layout.ID)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+	if !eff.Has(domain.RoleAdmin) {
 		writeJSONError(w, http.StatusForbidden, "forbidden")
 		return
 	}
@@ -133,8 +141,11 @@ func (h *MicroinitHandler) StreamLogs(w http.ResponseWriter, r *http.Request) {
 	}
 	defer unix.Close()
 
-	// Keepalive: answer client ping frames so useWsConnection's pong watchdog stays happy.
+	// Keepalive + disconnect detection: answer client pings, and when the
+	// WebSocket read fails (client gone), close the microinit follow conn so
+	// the blocking ReadFrame loop below unblocks instead of leaking.
 	go func() {
+		defer unix.Close()
 		for {
 			_, data, err := wsConn.Read(ctx)
 			if err != nil {
@@ -153,15 +164,14 @@ func (h *MicroinitHandler) StreamLogs(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	for {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-		}
-
 		resp, err := h.svc.ReadFrame(unix)
 		if err != nil {
-			if errors.Is(err, io.EOF) {
+			if errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed) || isClosedConn(err) {
+				return
+			}
+			// Client disconnect closes unix from the ping goroutine; treat
+			// resulting read errors as a clean end of stream.
+			if ctx.Err() != nil {
 				return
 			}
 			_ = writeMicroinitWS(wsConn, ctx, microinitWSMessage{Type: "error", Error: "stream_failed"})
@@ -229,4 +239,17 @@ func writeMicroinitWS(conn *websocket.Conn, ctx context.Context, msg microinitWS
 		return err
 	}
 	return conn.Write(ctx, websocket.MessageText, data)
+}
+
+func isClosedConn(err error) bool {
+	if err == nil {
+		return false
+	}
+	var opErr *net.OpError
+	if errors.As(err, &opErr) {
+		return true
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "use of closed network connection") ||
+		strings.Contains(msg, "closed")
 }

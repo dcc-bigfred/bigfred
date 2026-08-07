@@ -37,11 +37,11 @@ func TestAllowedVehiclesSnapshotFoldsVehicleLease(t *testing.T) {
 	owner := insertUser(t, ctx, bundle.Users, "owner", domain.RoleDriver)
 	lessee := insertUser(t, ctx, bundle.Users, "lessee", domain.RoleDriver)
 
-	pool := cmd.NewDCCPool(bundle.Pool)
+	pool := cmd.NewDCCPool(bundle.Repo, bundle.Pool)
 	if _, err := pool.Replace(ctx, testAdminEff, owner.ID, []cmd.PoolRange{{From: 1, To: 9999}}); err != nil {
 		t.Fatalf("seed pool: %v", err)
 	}
-	vehicleSvc := cmd.NewVehicle(bundle.Vehicles, pool, bundle.TrainMembers, bundle.LayoutVehicles, bundle.Users)
+	vehicleSvc := cmd.NewVehicle(bundle.Repo, bundle.Vehicles, pool, bundle.TrainMembers, bundle.LayoutVehicles, bundle.DccFunctions, bundle.Users)
 	addr := uint16(42)
 	vehicle, err := vehicleSvc.Create(ctx, cmd.VehicleCreateInput{
 		OwnerUserID: owner.ID,

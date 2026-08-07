@@ -15,7 +15,7 @@ func TestInterlockingCatalogAdminOnly(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	svc := cmd.NewInterlocking(bundle.Interlockings, bundle.LayoutInterlockings)
+	svc := cmd.NewInterlocking(bundle.Repo, bundle.Interlockings, bundle.LayoutInterlockings)
 
 	adminEff := domain.NewEffectiveRoles(domain.RoleAdmin)
 	driverEff := domain.NewEffectiveRoles(domain.RoleDriver)

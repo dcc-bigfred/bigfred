@@ -103,3 +103,17 @@ func (l *LayoutSignalmen) Delete(ctx context.Context, layoutID, userID uint) err
 	}
 	return l.repo.Delete(ctx, &row)
 }
+
+// DeleteAllForLayout removes every signalman grant for a layout.
+func (l *LayoutSignalmen) DeleteAllForLayout(ctx context.Context, layoutID uint) error {
+	var rows []domain.LayoutSignalman
+	if err := l.repo.FindAll(ctx, &rows, where.Eq("layout_id", layoutID)); err != nil {
+		return err
+	}
+	for i := range rows {
+		if err := l.repo.Delete(ctx, &rows[i]); err != nil {
+			return err
+		}
+	}
+	return nil
+}

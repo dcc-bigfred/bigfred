@@ -96,6 +96,20 @@ func (l *LayoutVehicles) DeleteAllForVehicle(ctx context.Context, vehicleID doma
 	return nil
 }
 
+// DeleteAllForLayout removes every roster row for a layout.
+func (l *LayoutVehicles) DeleteAllForLayout(ctx context.Context, layoutID uint) error {
+	var rows []domain.LayoutVehicle
+	if err := l.repo.FindAll(ctx, &rows, where.Eq("layout_id", layoutID)); err != nil {
+		return err
+	}
+	for i := range rows {
+		if err := l.repo.Delete(ctx, &rows[i]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // LayoutTrains is the persistence adapter for the layout ↔ train
 // roster join table.
 type LayoutTrains struct {
@@ -163,6 +177,20 @@ func (l *LayoutTrains) Delete(ctx context.Context, row *domain.LayoutTrain) erro
 func (l *LayoutTrains) DeleteAllForTrain(ctx context.Context, trainID domain.TrainID) error {
 	var rows []domain.LayoutTrain
 	if err := l.repo.FindAll(ctx, &rows, where.Eq("train_id", trainID)); err != nil {
+		return err
+	}
+	for i := range rows {
+		if err := l.repo.Delete(ctx, &rows[i]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// DeleteAllForLayout removes every train roster row for a layout.
+func (l *LayoutTrains) DeleteAllForLayout(ctx context.Context, layoutID uint) error {
+	var rows []domain.LayoutTrain
+	if err := l.repo.FindAll(ctx, &rows, where.Eq("layout_id", layoutID)); err != nil {
 		return err
 	}
 	for i := range rows {

@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-rel/rel"
+
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
 	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
 	"github.com/keskad/loco/pkgs/bigfred/server/repo"
@@ -20,6 +22,7 @@ type CommandStationRuntime struct {
 
 // CommandStation implements CRUD over the command-station catalogue.
 type CommandStation struct {
+	db             rel.Repository
 	stations       *repo.CommandStations
 	layoutStations *repo.LayoutCommandStations
 	layouts        *repo.Layouts
@@ -28,11 +31,13 @@ type CommandStation struct {
 }
 
 func NewCommandStation(
+	db rel.Repository,
 	stations *repo.CommandStations,
 	layoutStations *repo.LayoutCommandStations,
 	layouts *repo.Layouts,
 ) *CommandStation {
 	return &CommandStation{
+		db:             db,
 		stations:       stations,
 		layoutStations: layoutStations,
 		layouts:        layouts,
@@ -270,10 +275,12 @@ func (s *CommandStation) Delete(ctx context.Context, eff domain.EffectiveRoles, 
 	if atRisk > 0 {
 		return svcerrors.ErrLayoutNeedsAtLeastOneCommandStation
 	}
-	if err := s.layoutStations.DeleteAllForCommandStation(ctx, id); err != nil {
-		return err
-	}
-	return s.stations.Delete(ctx, &row)
+	return repo.WithTransaction(ctx, s.db, func(tctx context.Context) error {
+		if err := s.layoutStations.DeleteAllForCommandStation(tctx, id); err != nil {
+			return err
+		}
+		return s.stations.Delete(tctx, &row)
+	})
 }
 
 func (s *CommandStation) afterCatalogMutation(ctx context.Context, row domain.CommandStation) {

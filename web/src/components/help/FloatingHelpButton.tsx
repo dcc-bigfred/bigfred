@@ -32,8 +32,22 @@ export default function FloatingHelpButton() {
     setPosition,
     disableRoute,
     disableGlobal,
+    openRequestId,
+    routeDisabled,
+    globalDisabled,
   } = useHelpVisibility();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const lastOpenRequest = useRef(0);
+
+  useEffect(() => {
+    if (openRequestId === 0 || openRequestId === lastOpenRequest.current) {
+      return;
+    }
+    lastOpenRequest.current = openRequestId;
+    if (entry) {
+      setDialogOpen(true);
+    }
+  }, [openRequestId, entry]);
 
   const dragging = useRef(false);
   const moved = useRef(false);
@@ -100,35 +114,41 @@ export default function FloatingHelpButton() {
     [],
   );
 
-  if (!visible || !entry) return null;
+  // Keep dialog mountable when opening from the account menu after a re-enable,
+  // even for one frame before `visible` flips true.
+  if ((!visible && !dialogOpen) || !entry) return null;
 
   return (
     <>
-      <Fab
-        color="primary"
-        size="medium"
-        aria-label={t("help:dialog.title")}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
-        sx={{
-          position: "fixed",
-          left: position.x,
-          top: position.y,
-          zIndex: 1150,
-          touchAction: "none",
-          cursor: "grab",
-          "&:active": { cursor: "grabbing" },
-        }}
-      >
-        <HelpOutlineIcon />
-      </Fab>
+      {visible ? (
+        <Fab
+          color="primary"
+          size="medium"
+          aria-label={t("help:dialog.title")}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+          sx={{
+            position: "fixed",
+            left: position.x,
+            top: position.y,
+            zIndex: 1150,
+            touchAction: "none",
+            cursor: "grab",
+            "&:active": { cursor: "grabbing" },
+          }}
+        >
+          <HelpOutlineIcon />
+        </Fab>
+      ) : null}
       <HelpDialog
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
         entry={entry}
         pathname={pathname}
+        routeDisabled={routeDisabled}
+        globalDisabled={globalDisabled}
         onDisableRoute={() => {
           disableRoute(pathname);
           setDialogOpen(false);

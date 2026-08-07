@@ -5,6 +5,8 @@ import (
 	"errors"
 	"time"
 
+	"github.com/go-rel/rel"
+
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
 	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
 	"github.com/keskad/loco/pkgs/bigfred/server/repo"
@@ -14,16 +16,19 @@ import (
 
 // Interlocking implements CRUD over the interlocking catalogue.
 type Interlocking struct {
+	db                  rel.Repository
 	interlockings       *repo.Interlockings
 	layoutInterlockings *repo.LayoutInterlockings
 	sec                 security.InterlockingSecurityContext
 }
 
 func NewInterlocking(
+	db rel.Repository,
 	interlockings *repo.Interlockings,
 	layoutInterlockings *repo.LayoutInterlockings,
 ) *Interlocking {
 	return &Interlocking{
+		db:                  db,
 		interlockings:       interlockings,
 		layoutInterlockings: layoutInterlockings,
 	}
@@ -132,10 +137,12 @@ func (s *Interlocking) Delete(ctx context.Context, eff domain.EffectiveRoles, id
 	if err != nil {
 		return err
 	}
-	if err := s.layoutInterlockings.DeleteAllForInterlocking(ctx, id); err != nil {
-		return err
-	}
-	return s.interlockings.Delete(ctx, &row)
+	return repo.WithTransaction(ctx, s.db, func(tctx context.Context) error {
+		if err := s.layoutInterlockings.DeleteAllForInterlocking(tctx, id); err != nil {
+			return err
+		}
+		return s.interlockings.Delete(tctx, &row)
+	})
 }
 
 func (s *Interlocking) checkCatalogManage(eff domain.EffectiveRoles) error {

@@ -1,6 +1,8 @@
 package service
 
 import (
+	"github.com/go-rel/rel"
+
 	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
 	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
 	"github.com/keskad/loco/pkgs/bigfred/server/repo"
@@ -24,6 +26,7 @@ type InterlockingOccupancyService struct {
 }
 
 func NewInterlockingOccupancyService(
+	db rel.Repository,
 	interlockings *repo.Interlockings,
 	layoutInterlockings *repo.LayoutInterlockings,
 	sessions *repo.InterlockingSessions,
@@ -37,7 +40,7 @@ func NewInterlockingOccupancyService(
 		hubPort = interlockingOccupancyHub{hub: hub}
 	}
 	return &InterlockingOccupancyService{InterlockingOccupancy: cmd.NewInterlockingOccupancy(
-		interlockings, layoutInterlockings, sessions, users, auth, hubPort, presence,
+		db, interlockings, layoutInterlockings, sessions, users, auth, hubPort, presence,
 	)}
 }
 

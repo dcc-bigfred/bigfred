@@ -15,8 +15,8 @@ func TestDCCPoolReplaceRejectsEmptyPool(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	pool := cmd.NewDCCPool(bundle.Pool)
-	userSvc := cmd.NewUser(bundle.Users, bundle.Vehicles, bundle.Trains, pool)
+	pool := cmd.NewDCCPool(bundle.Repo, bundle.Pool)
+	userSvc := cmd.NewUser(bundle.Repo, bundle.Users, bundle.Vehicles, bundle.Trains, pool)
 
 	row, err := userSvc.Create(ctx, testAdminEff, cmd.UserCreateInput{
 		Login: "alice", PIN: "123456", Role: domain.RoleDriver,
@@ -37,8 +37,8 @@ func TestDCCPoolReplaceRejectsOutOfBounds(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	pool := cmd.NewDCCPool(bundle.Pool)
-	userSvc := cmd.NewUser(bundle.Users, bundle.Vehicles, bundle.Trains, pool)
+	pool := cmd.NewDCCPool(bundle.Repo, bundle.Pool)
+	userSvc := cmd.NewUser(bundle.Repo, bundle.Users, bundle.Vehicles, bundle.Trains, pool)
 
 	row, err := userSvc.Create(ctx, testAdminEff, cmd.UserCreateInput{
 		Login: "alice", PIN: "123456", Role: domain.RoleDriver,
@@ -66,8 +66,8 @@ func TestDCCPoolReplaceRejectsOverlapWithOtherUser(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	pool := cmd.NewDCCPool(bundle.Pool)
-	userSvc := cmd.NewUser(bundle.Users, bundle.Vehicles, bundle.Trains, pool)
+	pool := cmd.NewDCCPool(bundle.Repo, bundle.Pool)
+	userSvc := cmd.NewUser(bundle.Repo, bundle.Users, bundle.Vehicles, bundle.Trains, pool)
 
 	alice, err := userSvc.Create(ctx, testAdminEff, cmd.UserCreateInput{
 		Login: "alice", PIN: "123456", Role: domain.RoleDriver,
@@ -100,8 +100,8 @@ func TestUserCreateRequiresDCCPool(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	pool := cmd.NewDCCPool(bundle.Pool)
-	userSvc := cmd.NewUser(bundle.Users, bundle.Vehicles, bundle.Trains, pool)
+	pool := cmd.NewDCCPool(bundle.Repo, bundle.Pool)
+	userSvc := cmd.NewUser(bundle.Repo, bundle.Users, bundle.Vehicles, bundle.Trains, pool)
 
 	_, err := userSvc.Create(ctx, testAdminEff, cmd.UserCreateInput{
 		Login: "alice", PIN: "123456", Role: domain.RoleDriver,
@@ -116,8 +116,8 @@ func TestUserCreateDoesNotPersistWhenPoolOverlaps(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	pool := cmd.NewDCCPool(bundle.Pool)
-	userSvc := cmd.NewUser(bundle.Users, bundle.Vehicles, bundle.Trains, pool)
+	pool := cmd.NewDCCPool(bundle.Repo, bundle.Pool)
+	userSvc := cmd.NewUser(bundle.Repo, bundle.Users, bundle.Vehicles, bundle.Trains, pool)
 
 	if _, err := userSvc.Create(ctx, testAdminEff, cmd.UserCreateInput{
 		Login: "alice", PIN: "123456", Role: domain.RoleDriver,
@@ -148,8 +148,8 @@ func TestDCCPoolAdminOnly(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	pool := cmd.NewDCCPool(bundle.Pool)
-	userSvc := cmd.NewUser(bundle.Users, bundle.Vehicles, bundle.Trains, pool)
+	pool := cmd.NewDCCPool(bundle.Repo, bundle.Pool)
+	userSvc := cmd.NewUser(bundle.Repo, bundle.Users, bundle.Vehicles, bundle.Trains, pool)
 
 	driverEff := domain.NewEffectiveRoles(domain.RoleDriver)
 

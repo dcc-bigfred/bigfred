@@ -150,14 +150,16 @@ func (h *VehicleHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 		return
 	}
-	if _, err := h.svc.Delete(r.Context(), actor.User.ID, vehicleID, eff); err != nil {
-		writeVehicleError(w, err)
-		return
-	}
-	if err := h.layoutVehicles.PurgeVehicle(r.Context(), vehicleID); err != nil {
+	layoutIDs, err := h.layoutVehicles.LayoutIDsHostingVehicle(r.Context(), vehicleID)
+	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 		return
 	}
+	if _, err := h.svc.DeleteAll(r.Context(), actor.User.ID, vehicleID, eff); err != nil {
+		writeVehicleError(w, err)
+		return
+	}
+	h.layoutVehicles.NotifyVehicleRemoved(layoutIDs, vehicleID)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -218,15 +220,21 @@ func (h *VehicleHandler) DeleteByExternalID(w http.ResponseWriter, r *http.Reque
 		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 		return
 	}
-	row, err := h.svc.DeleteByExternalID(r.Context(), actor.User.ID, eff, externalID)
+	existing, err := h.svc.GetByExternalID(r.Context(), externalID)
 	if err != nil {
 		writeVehicleError(w, err)
 		return
 	}
-	if err := h.layoutVehicles.PurgeVehicle(r.Context(), row.ID); err != nil {
+	layoutIDs, err := h.layoutVehicles.LayoutIDsHostingVehicle(r.Context(), existing.ID)
+	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 		return
 	}
+	if _, err := h.svc.DeleteByExternalID(r.Context(), actor.User.ID, eff, externalID); err != nil {
+		writeVehicleError(w, err)
+		return
+	}
+	h.layoutVehicles.NotifyVehicleRemoved(layoutIDs, existing.ID)
 	w.WriteHeader(http.StatusNoContent)
 }
 

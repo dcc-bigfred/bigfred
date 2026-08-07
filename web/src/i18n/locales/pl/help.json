@@ -4,8 +4,8 @@
     "disableForRoute": "Nie pokazuj dla tej podstrony",
     "disableGlobal": "Nie pokazuj na żadnej podstronie"
   },
-  "dashboard": "Aby jeździć na makiecie potrzebujesz dodać pojazd w zakładce \"Pojazdy\" wraz z adresem DCC, następnie kliknąć <addIcon></addIcon> aby dodać (zaakceptować) do obecnej makiety. Gdy pojazd jest dodany na samej górze ekranu wybierz <throttleIcon></throttleIcon>",
-  "myVehicles": "By móc jeździć pojazdem na makiecie trzeba go dodać (zaakceptować) do obecnej makiety ikonką <addIcon></addIcon>. Tuż po dodaniu pojazd może nie mieć żadnych funkcji przypisanych - aby je przypisać użyj <functionsIcon></functionsIcon>, gdzie możesz je nadać własnoręcznie lub skopiować z innego pojazdu bądź z gotowego szablonu.",
+  "dashboard": "Aby jeździć na makiecie potrzebujesz utworzyć pojazd w zakładce \"Pojazdy\" wraz z adresem DCC, następnie kliknąć <addIcon></addIcon> aby umieścić go na makiecie. Aby przejść do kokpitu sterowania wybierz <throttleIcon></throttleIcon>, lub Menu -> Sterowanie",
+  "myVehicles": "Aby móc jeździć pojazdem trzeba go umieścić na makiecie przyciskiem <addIcon></addIcon>. Jeśli pojazd nie ma żadnych funkcji np. F0, F1, ... - aby je przypisać użyj <functionsIcon></functionsIcon>, gdzie możesz je wpisać własnoręcznie lub skopiować z innego pojazdu bądź z gotowego szablonu.",
   "rentals": "Możesz wypożyczyć innej osobie pojazd czasowo, bądź inna osoba może wypożyczyć swój pojazd Tobie. Przejmując kontrolę nad pojazdem druga osoba ją czasowo traci - choć właściciel/ka wciąż może tą kontrolę w dowolnym momencie przywrócić. Zmiana osoby kierującej pojazdem zahamowuje pojazd.",
   "myTrains": "Połącz kilka pojazdów w jeden skład, dzięki czemu uzyskasz możliwość sterowania kilkoma lokomotywami na raz oraz możliwość włączenia świateł w wagonach w jednym widoku stereowania. Uwaga - obowiązują globalne limity ilości sterowanych pojazdów oraz zajętych slotów LocoNet ustawione przez administratora makiety"
 }

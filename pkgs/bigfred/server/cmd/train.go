@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/go-rel/rel"
+
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
 	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
 	"github.com/keskad/loco/pkgs/bigfred/server/helpers"
@@ -62,6 +64,7 @@ type TrainDetail struct {
 // Train implements the CRUD lifecycle for domain.Train (§4.1).
 // Every member vehicle must be owned by the caller (goal 7).
 type Train struct {
+	db           rel.Repository
 	trains       *repo.Trains
 	members      *repo.TrainMembers
 	vehicles     *repo.Vehicles
@@ -72,6 +75,7 @@ type Train struct {
 
 // NewTrain constructs a Train use-case handler.
 func NewTrain(
+	db rel.Repository,
 	t *repo.Trains,
 	m *repo.TrainMembers,
 	v *repo.Vehicles,
@@ -79,6 +83,7 @@ func NewTrain(
 	users *repo.Users,
 ) *Train {
 	return &Train{
+		db:           db,
 		trains:       t,
 		members:      m,
 		vehicles:     v,
@@ -232,13 +237,16 @@ func (t *Train) Create(ctx context.Context, in TrainCreateInput) (TrainDetail, e
 			CreatedAt:   now,
 			UpdatedAt:   now,
 		}
-		if err := t.trains.Insert(ctx, &row); err != nil {
+		err = repo.WithTransaction(ctx, t.db, func(tctx context.Context) error {
+			if err := t.trains.Insert(tctx, &row); err != nil {
+				return err
+			}
+			return t.replaceMembers(tctx, row.ID, in.Members)
+		})
+		if err != nil {
 			if helpers.IsUniqueViolation(err) {
 				continue
 			}
-			return TrainDetail{}, err
-		}
-		if err := t.replaceMembers(ctx, row.ID, in.Members); err != nil {
 			return TrainDetail{}, err
 		}
 		return t.Get(ctx, row.ID)
@@ -283,13 +291,18 @@ func (t *Train) Update(ctx context.Context, actorID uint, trainID domain.TrainID
 		if err := t.validateMembers(ctx, tr.OwnerUserID, *in.Members); err != nil {
 			return TrainDetail{}, err
 		}
-		if err := t.replaceMembers(ctx, tr.ID, *in.Members); err != nil {
-			return TrainDetail{}, err
-		}
 	}
 
 	tr.UpdatedAt = time.Now().UTC()
-	if err := t.trains.Update(ctx, &tr); err != nil {
+	err = repo.WithTransaction(ctx, t.db, func(tctx context.Context) error {
+		if in.Members != nil {
+			if err := t.replaceMembers(tctx, tr.ID, *in.Members); err != nil {
+				return err
+			}
+		}
+		return t.trains.Update(tctx, &tr)
+	})
+	if err != nil {
 		return TrainDetail{}, err
 	}
 	return t.Get(ctx, tr.ID)
@@ -307,10 +320,42 @@ func (t *Train) Delete(ctx context.Context, actorID uint, trainID domain.TrainID
 	if err := t.checkTrainMutate(eff, actorID, tr.OwnerUserID); err != nil {
 		return domain.Train{}, err
 	}
-	if err := t.members.DeleteAllForTrain(ctx, tr.ID); err != nil {
+	err = repo.WithTransaction(ctx, t.db, func(tctx context.Context) error {
+		if err := t.members.DeleteAllForTrain(tctx, tr.ID); err != nil {
+			return err
+		}
+		return t.trains.Delete(tctx, &tr)
+	})
+	if err != nil {
 		return domain.Train{}, err
 	}
-	if err := t.trains.Delete(ctx, &tr); err != nil {
+	return tr, nil
+}
+
+// DeleteAll removes a train, its members, and every layout roster join.
+func (t *Train) DeleteAll(ctx context.Context, actorID uint, trainID domain.TrainID, eff domain.EffectiveRoles) (domain.Train, error) {
+	tr, err := t.trains.FindByID(ctx, trainID)
+	if err != nil {
+		if errors.Is(err, repo.ErrTrainNotFound) {
+			return domain.Train{}, svcerrors.ErrTrainNotFound
+		}
+		return domain.Train{}, err
+	}
+	if err := t.checkTrainMutate(eff, actorID, tr.OwnerUserID); err != nil {
+		return domain.Train{}, err
+	}
+	err = repo.WithTransaction(ctx, t.db, func(tctx context.Context) error {
+		if err := t.members.DeleteAllForTrain(tctx, tr.ID); err != nil {
+			return err
+		}
+		if t.layoutTrains != nil {
+			if err := t.layoutTrains.DeleteAllForTrain(tctx, tr.ID); err != nil {
+				return err
+			}
+		}
+		return t.trains.Delete(tctx, &tr)
+	})
+	if err != nil {
 		return domain.Train{}, err
 	}
 	return tr, nil

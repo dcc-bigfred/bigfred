@@ -69,6 +69,7 @@
       "apiKeys": "API keys",
       "changePin": "Change password",
       "version": "Version",
+      "help": "Help",
       "logout": "Log out"
     }
   },

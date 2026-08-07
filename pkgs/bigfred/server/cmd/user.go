@@ -5,6 +5,8 @@ import (
 	"errors"
 	"time"
 
+	"github.com/go-rel/rel"
+
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
 	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
 	"github.com/keskad/loco/pkgs/bigfred/server/helpers"
@@ -39,6 +41,7 @@ type UserUpdateInput struct {
 
 // User implements the admin-only user catalogue described in §4.1 / §7a.5.
 type User struct {
+	db       rel.Repository
 	users    *repo.Users
 	vehicles *repo.Vehicles
 	trains   *repo.Trains
@@ -47,8 +50,8 @@ type User struct {
 }
 
 // NewUser constructs a User use-case handler.
-func NewUser(users *repo.Users, vehicles *repo.Vehicles, trains *repo.Trains, dccPool DCCPoolManagerPort) *User {
-	return &User{users: users, vehicles: vehicles, trains: trains, dccPool: dccPool}
+func NewUser(db rel.Repository, users *repo.Users, vehicles *repo.Vehicles, trains *repo.Trains, dccPool DCCPoolManagerPort) *User {
+	return &User{db: db, users: users, vehicles: vehicles, trains: trains, dccPool: dccPool}
 }
 
 // List returns every user in the catalogue.
@@ -136,10 +139,14 @@ func (u *User) Create(ctx context.Context, eff domain.EffectiveRoles, in UserCre
 		CreatedAt:    now,
 		UpdatedAt:    now,
 	}
-	if err := u.users.Insert(ctx, &row); err != nil {
-		return domain.User{}, err
-	}
-	if _, err := u.dccPool.Replace(ctx, eff, row.ID, in.DCCPool); err != nil {
+	err = repo.WithTransaction(ctx, u.db, func(tctx context.Context) error {
+		if err := u.users.Insert(tctx, &row); err != nil {
+			return err
+		}
+		_, err := u.dccPool.Replace(tctx, eff, row.ID, in.DCCPool)
+		return err
+	})
+	if err != nil {
 		return domain.User{}, err
 	}
 	return row, nil
@@ -190,13 +197,19 @@ func (u *User) Update(ctx context.Context, eff domain.EffectiveRoles, id uint, i
 		}
 		row.PINHash = hash
 	}
+	row.UpdatedAt = time.Now().UTC()
 	if in.DCCPool != nil {
-		if _, err := u.dccPool.Replace(ctx, eff, row.ID, *in.DCCPool); err != nil {
+		err = repo.WithTransaction(ctx, u.db, func(tctx context.Context) error {
+			if _, err := u.dccPool.Replace(tctx, eff, row.ID, *in.DCCPool); err != nil {
+				return err
+			}
+			return u.users.Update(tctx, &row)
+		})
+		if err != nil {
 			return domain.User{}, err
 		}
+		return row, nil
 	}
-
-	row.UpdatedAt = time.Now().UTC()
 	if err := u.users.Update(ctx, &row); err != nil {
 		return domain.User{}, err
 	}
@@ -267,10 +280,12 @@ func (u *User) Delete(ctx context.Context, eff domain.EffectiveRoles, actorID, i
 	if nt > 0 {
 		return svcerrors.ErrUserHasTrains
 	}
-	if err := u.dccPool.DeleteForUser(ctx, eff, row.ID); err != nil {
-		return err
-	}
-	return u.users.Delete(ctx, &row)
+	return repo.WithTransaction(ctx, u.db, func(tctx context.Context) error {
+		if err := u.dccPool.DeleteForUser(tctx, eff, row.ID); err != nil {
+			return err
+		}
+		return u.users.Delete(tctx, &row)
+	})
 }
 
 func (u *User) checkManageUsers(eff domain.EffectiveRoles) error {

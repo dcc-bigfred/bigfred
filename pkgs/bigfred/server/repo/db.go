@@ -36,7 +36,12 @@ import (
 // is disabled so adapter-query lines do not clutter production logs.
 // When m is non-nil, query latency is also exported via OpenTelemetry.
 func Open(path string, log *logrus.Logger, m *metrics.Metrics) (rel.Repository, *sql.DB, error) {
-	dsn := fmt.Sprintf("file:%s?_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)", path)
+	dsn := fmt.Sprintf(
+		"file:%s?_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)"+
+			"&_pragma=synchronous(NORMAL)&_pragma=wal_autocheckpoint(2000)"+
+			"&_pragma=journal_size_limit(16777216)&_pragma=mmap_size(33554432)",
+		path,
+	)
 
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
@@ -57,6 +62,11 @@ func Open(path string, log *logrus.Logger, m *metrics.Metrics) (rel.Repository, 
 		repository.Instrumentation(nil)
 	}
 	return repository, db, nil
+}
+
+// WithTransaction runs fn inside a REL transaction on r.
+func WithTransaction(ctx context.Context, r rel.Repository, fn func(ctx context.Context) error) error {
+	return r.Transaction(ctx, fn)
 }
 
 func sqlInstrumenter(log *logrus.Logger) rel.Instrumenter {

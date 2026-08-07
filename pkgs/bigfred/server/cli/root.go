@@ -233,6 +233,9 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	layoutInterlockings := repo.NewLayoutInterlockings(repository)
 	layoutSignalmen := repo.NewLayoutSignalmen(repository)
 	interlockingSessions := repo.NewInterlockingSessions(repository)
+	if err := interlockingSessions.EndAllStale(ctx, time.Now().UTC()); err != nil {
+		log.WithError(err).Warn("end stale interlocking sessions")
+	}
 	dccPools := repo.NewDCCAddressRanges(repository)
 	vehicles := repo.NewVehicles(repository)
 	dccFunctions := repo.NewDccFunctions(repository)
@@ -245,15 +248,15 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	commandStations := repo.NewCommandStations(repository)
 	layoutCommandStations := repo.NewLayoutCommandStations(repository)
 
-	layoutSvc := cmd.NewLayout(layouts, interlockings, layoutInterlockings, commandStations, layoutCommandStations)
-	commandStationSvc := cmd.NewCommandStation(commandStations, layoutCommandStations, layouts)
-	interlockingSvc := cmd.NewInterlocking(interlockings, layoutInterlockings)
-	dccPoolSvc := cmd.NewDCCPool(dccPools)
-	vehicleSvc := cmd.NewVehicle(vehicles, dccPoolSvc, trainMembers, layoutVehicles, users)
+	layoutSvc := cmd.NewLayout(repository, layouts, interlockings, layoutInterlockings, commandStations, layoutCommandStations, layoutVehicles, layoutTrains, layoutSignalmen)
+	commandStationSvc := cmd.NewCommandStation(repository, commandStations, layoutCommandStations, layouts)
+	interlockingSvc := cmd.NewInterlocking(repository, interlockings, layoutInterlockings)
+	dccPoolSvc := cmd.NewDCCPool(repository, dccPools)
+	vehicleSvc := cmd.NewVehicle(repository, vehicles, dccPoolSvc, trainMembers, layoutVehicles, dccFunctions, users)
 	functionSvc := cmd.NewFunction(dccFunctions, vehicles, vehicleTemplates, users)
 	vehicleTemplateSvc := cmd.NewVehicleTemplate(vehicleTemplates, users, dccFunctions)
-	trainSvc := cmd.NewTrain(trains, trainMembers, vehicles, layoutTrains, users)
-	userSvc := cmd.NewUser(users, vehicles, trains, dccPoolSvc)
+	trainSvc := cmd.NewTrain(repository, trains, trainMembers, vehicles, layoutTrains, users)
+	userSvc := cmd.NewUser(repository, users, vehicles, trains, dccPoolSvc)
 
 	redisAddr := f.RedisAddr
 	if redisAddr == "" {
@@ -404,7 +407,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		return err == nil && eff.Has(domain.RoleAdmin)
 	})
 	occupancySvc := service.NewInterlockingOccupancyService(
-		interlockings, layoutInterlockings, interlockingSessions, users,
+		repository, interlockings, layoutInterlockings, interlockingSessions, users,
 		authSvc, hub, presenceSvc,
 	)
 	layoutVehicleSvc := service.NewLayoutVehicleService(
@@ -722,6 +725,9 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 	// after srv.Shutdown returns, so we stop accepting requests first.
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		return fmt.Errorf("shutdown: %w", err)
+	}
+	if _, err := sqlDB.ExecContext(shutdownCtx, `PRAGMA wal_checkpoint(TRUNCATE)`); err != nil {
+		log.WithError(err).Warn("sqlite wal checkpoint")
 	}
 	return nil
 }

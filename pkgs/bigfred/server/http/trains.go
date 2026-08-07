@@ -148,14 +148,16 @@ func (h *TrainHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 		return
 	}
-	if _, err := h.svc.Delete(r.Context(), actor.User.ID, trainID, eff); err != nil {
-		writeTrainError(w, err)
-		return
-	}
-	if err := h.layoutTrains.PurgeTrain(r.Context(), trainID); err != nil {
+	layoutIDs, err := h.layoutTrains.LayoutIDsHostingTrain(r.Context(), trainID)
+	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 		return
 	}
+	if _, err := h.svc.DeleteAll(r.Context(), actor.User.ID, trainID, eff); err != nil {
+		writeTrainError(w, err)
+		return
+	}
+	h.layoutTrains.NotifyTrainRemoved(layoutIDs, trainID)
 	w.WriteHeader(http.StatusNoContent)
 }
 

@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-rel/rel"
+
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
 	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
 	"github.com/keskad/loco/pkgs/bigfred/server/helpers"
@@ -20,11 +22,15 @@ const DefaultAdminPIN = "0000"
 
 // Layout implements layout CRUD + lifecycle rules (§3a.1, §4.1).
 type Layout struct {
+	db                    rel.Repository
 	layouts               *repo.Layouts
 	interlockings         *repo.Interlockings
 	layoutInterlockings   *repo.LayoutInterlockings
 	commandStations       *repo.CommandStations
 	layoutCommandStations *repo.LayoutCommandStations
+	layoutVehicles        *repo.LayoutVehicles
+	layoutTrains          *repo.LayoutTrains
+	layoutSignalmen       *repo.LayoutSignalmen
 	sec                   security.LayoutSecurityContext
 	sessionCtl            LayoutSessionPort
 }
@@ -32,18 +38,26 @@ type Layout struct {
 // NewLayout constructs a service bound to a Layouts
 // repository.
 func NewLayout(
+	db rel.Repository,
 	layouts *repo.Layouts,
 	interlockings *repo.Interlockings,
 	layoutInterlockings *repo.LayoutInterlockings,
 	commandStations *repo.CommandStations,
 	layoutCommandStations *repo.LayoutCommandStations,
+	layoutVehicles *repo.LayoutVehicles,
+	layoutTrains *repo.LayoutTrains,
+	layoutSignalmen *repo.LayoutSignalmen,
 ) *Layout {
 	return &Layout{
+		db:                    db,
 		layouts:               layouts,
 		interlockings:         interlockings,
 		layoutInterlockings:   layoutInterlockings,
 		commandStations:       commandStations,
 		layoutCommandStations: layoutCommandStations,
+		layoutVehicles:        layoutVehicles,
+		layoutTrains:          layoutTrains,
+		layoutSignalmen:       layoutSignalmen,
 	}
 }
 
@@ -226,16 +240,19 @@ func (s *Layout) Create(ctx context.Context, eff domain.EffectiveRoles, in Layou
 		CreatedAt:          now,
 		UpdatedAt:          now,
 	}
-	if err := s.layouts.Insert(ctx, &layout); err != nil {
-		return domain.Layout{}, err
-	}
-	if err := s.setInterlockings(ctx, layout.ID, in.CreatedBy, in.InterlockingIDs); err != nil {
-		return domain.Layout{}, err
-	}
-	if err := s.setCommandStations(ctx, layout.ID, in.CreatedBy, in.CommandStationIDs); err != nil {
-		return domain.Layout{}, err
-	}
-	if err := s.validateMaxVehiclesAgainstLayoutCS(ctx, layout.ID, layout.EffectiveMaxVehiclesPerUser()); err != nil {
+	err = repo.WithTransaction(ctx, s.db, func(tctx context.Context) error {
+		if err := s.layouts.Insert(tctx, &layout); err != nil {
+			return err
+		}
+		if err := s.setInterlockings(tctx, layout.ID, in.CreatedBy, in.InterlockingIDs); err != nil {
+			return err
+		}
+		if err := s.setCommandStations(tctx, layout.ID, in.CreatedBy, in.CommandStationIDs); err != nil {
+			return err
+		}
+		return s.validateMaxVehiclesAgainstLayoutCS(tctx, layout.ID, layout.EffectiveMaxVehiclesPerUser())
+	})
+	if err != nil {
 		return domain.Layout{}, err
 	}
 	return layout, nil
@@ -430,7 +447,30 @@ func (s *Layout) Delete(ctx context.Context, eff domain.EffectiveRoles, id uint)
 	if layout.IsSystem {
 		return svcerrors.ErrSystemLayoutUndeletable
 	}
-	return s.layouts.Delete(ctx, &layout)
+	return repo.WithTransaction(ctx, s.db, func(tctx context.Context) error {
+		if err := s.layoutCommandStations.DeleteAllForLayout(tctx, id); err != nil {
+			return err
+		}
+		if err := s.layoutInterlockings.DeleteAllForLayout(tctx, id); err != nil {
+			return err
+		}
+		if s.layoutVehicles != nil {
+			if err := s.layoutVehicles.DeleteAllForLayout(tctx, id); err != nil {
+				return err
+			}
+		}
+		if s.layoutTrains != nil {
+			if err := s.layoutTrains.DeleteAllForLayout(tctx, id); err != nil {
+				return err
+			}
+		}
+		if s.layoutSignalmen != nil {
+			if err := s.layoutSignalmen.DeleteAllForLayout(tctx, id); err != nil {
+				return err
+			}
+		}
+		return s.layouts.Delete(tctx, &layout)
+	})
 }
 
 // SetLocked toggles the Locked flag. Idempotent on either branch.
@@ -533,7 +573,9 @@ func (s *Layout) SetCommandStations(ctx context.Context, eff domain.EffectiveRol
 	if layout.IsSystem {
 		return nil, svcerrors.ErrSystemLayoutCommandStationsImmutable
 	}
-	if err := s.setCommandStations(ctx, layoutID, addedBy, commandStationIDs); err != nil {
+	if err := repo.WithTransaction(ctx, s.db, func(tctx context.Context) error {
+		return s.setCommandStations(tctx, layoutID, addedBy, commandStationIDs)
+	}); err != nil {
 		return nil, err
 	}
 	if s.sessionCtl != nil {
@@ -552,7 +594,9 @@ func (s *Layout) SetInterlockings(ctx context.Context, eff domain.EffectiveRoles
 	if _, err := s.Get(ctx, layoutID); err != nil {
 		return nil, err
 	}
-	if err := s.setInterlockings(ctx, layoutID, addedBy, interlockingIDs); err != nil {
+	if err := repo.WithTransaction(ctx, s.db, func(tctx context.Context) error {
+		return s.setInterlockings(tctx, layoutID, addedBy, interlockingIDs)
+	}); err != nil {
 		return nil, err
 	}
 	return s.ListInterlockings(ctx, layoutID)

@@ -18,12 +18,12 @@ func TestTrainAdminCanMutateOthersTrain(t *testing.T) {
 	owner := insertUser(t, ctx, bundle.Users, "owner", domain.RoleDriver)
 	admin := insertUser(t, ctx, bundle.Users, "admin", domain.RoleAdmin)
 
-	pool := cmd.NewDCCPool(bundle.Pool)
+	pool := cmd.NewDCCPool(bundle.Repo, bundle.Pool)
 	if _, err := pool.Replace(ctx, testAdminEff, owner.ID, []cmd.PoolRange{{From: 1, To: 9999}}); err != nil {
 		t.Fatalf("seed owner pool: %v", err)
 	}
-	vSvc := cmd.NewVehicle(bundle.Vehicles, pool, bundle.TrainMembers, bundle.LayoutVehicles, bundle.Users)
-	tSvc := cmd.NewTrain(bundle.Trains, bundle.TrainMembers, bundle.Vehicles, bundle.LayoutTrains, bundle.Users)
+	vSvc := cmd.NewVehicle(bundle.Repo, bundle.Vehicles, pool, bundle.TrainMembers, bundle.LayoutVehicles, bundle.DccFunctions, bundle.Users)
+	tSvc := cmd.NewTrain(bundle.Repo, bundle.Trains, bundle.TrainMembers, bundle.Vehicles, bundle.LayoutTrains, bundle.Users)
 
 	addr := uint16(42)
 	v, err := vSvc.Create(ctx, cmd.VehicleCreateInput{
@@ -70,9 +70,9 @@ func TestTrainNonOwnerDriverCannotMutateOthersTrain(t *testing.T) {
 	owner := insertUser(t, ctx, bundle.Users, "owner", domain.RoleDriver)
 	other := insertUser(t, ctx, bundle.Users, "other", domain.RoleDriver)
 
-	pool := cmd.NewDCCPool(bundle.Pool)
-	vSvc := cmd.NewVehicle(bundle.Vehicles, pool, bundle.TrainMembers, bundle.LayoutVehicles, bundle.Users)
-	tSvc := cmd.NewTrain(bundle.Trains, bundle.TrainMembers, bundle.Vehicles, bundle.LayoutTrains, bundle.Users)
+	pool := cmd.NewDCCPool(bundle.Repo, bundle.Pool)
+	vSvc := cmd.NewVehicle(bundle.Repo, bundle.Vehicles, pool, bundle.TrainMembers, bundle.LayoutVehicles, bundle.DccFunctions, bundle.Users)
+	tSvc := cmd.NewTrain(bundle.Repo, bundle.Trains, bundle.TrainMembers, bundle.Vehicles, bundle.LayoutTrains, bundle.Users)
 
 	v, err := vSvc.Create(ctx, cmd.VehicleCreateInput{
 		OwnerUserID: owner.ID,
@@ -113,12 +113,12 @@ func TestUpdateMemberMultiplier(t *testing.T) {
 	ctx := context.Background()
 	owner := insertUser(t, ctx, bundle.Users, "owner", domain.RoleDriver)
 
-	pool := cmd.NewDCCPool(bundle.Pool)
+	pool := cmd.NewDCCPool(bundle.Repo, bundle.Pool)
 	if _, err := pool.Replace(ctx, testAdminEff, owner.ID, []cmd.PoolRange{{From: 1, To: 9999}}); err != nil {
 		t.Fatalf("seed owner pool: %v", err)
 	}
-	vSvc := cmd.NewVehicle(bundle.Vehicles, pool, bundle.TrainMembers, bundle.LayoutVehicles, bundle.Users)
-	tSvc := cmd.NewTrain(bundle.Trains, bundle.TrainMembers, bundle.Vehicles, bundle.LayoutTrains, bundle.Users)
+	vSvc := cmd.NewVehicle(bundle.Repo, bundle.Vehicles, pool, bundle.TrainMembers, bundle.LayoutVehicles, bundle.DccFunctions, bundle.Users)
+	tSvc := cmd.NewTrain(bundle.Repo, bundle.Trains, bundle.TrainMembers, bundle.Vehicles, bundle.LayoutTrains, bundle.Users)
 
 	leadAddr := uint16(10)
 	lead, err := vSvc.Create(ctx, cmd.VehicleCreateInput{

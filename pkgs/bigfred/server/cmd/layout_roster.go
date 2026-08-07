@@ -371,6 +371,48 @@ func (r *LayoutRoster) BroadcastVehicleUpdated(ctx context.Context, vehicleID do
 	return nil
 }
 
+// LayoutIDsHostingVehicle returns every layout that currently rosters the vehicle.
+// Call before a cascade catalogue delete so WS clients can be notified after the
+// join rows are gone.
+func (r *LayoutRoster) LayoutIDsHostingVehicle(ctx context.Context, vehicleID domain.VehicleID) ([]uint, error) {
+	rows, err := r.layoutVehicles.ListByVehicle(ctx, vehicleID)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]uint, 0, len(rows))
+	for _, row := range rows {
+		ids = append(ids, row.LayoutID)
+	}
+	return ids, nil
+}
+
+// NotifyVehicleRemoved broadcasts layout.vehiclesChanged "removed" for the given layouts.
+func (r *LayoutRoster) NotifyVehicleRemoved(layoutIDs []uint, vehicleID domain.VehicleID) {
+	for _, layoutID := range layoutIDs {
+		r.broadcastVehicleChanged(layoutID, vehicleID, "removed")
+	}
+}
+
+// LayoutIDsHostingTrain returns every layout that currently rosters the train.
+func (r *LayoutRoster) LayoutIDsHostingTrain(ctx context.Context, trainID domain.TrainID) ([]uint, error) {
+	rows, err := r.layoutTrains.ListByTrain(ctx, trainID)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]uint, 0, len(rows))
+	for _, row := range rows {
+		ids = append(ids, row.LayoutID)
+	}
+	return ids, nil
+}
+
+// NotifyTrainRemoved broadcasts layout.trainsChanged "removed" for the given layouts.
+func (r *LayoutRoster) NotifyTrainRemoved(layoutIDs []uint, trainID domain.TrainID) {
+	for _, layoutID := range layoutIDs {
+		r.broadcastTrainChanged(layoutID, trainID, "removed")
+	}
+}
+
 // BroadcastTrainUpdated notifies dashboards and republishes Redis train snapshots.
 func (r *LayoutRoster) BroadcastTrainUpdated(ctx context.Context, trainID domain.TrainID) error {
 	rows, err := r.layoutTrains.ListByTrain(ctx, trainID)

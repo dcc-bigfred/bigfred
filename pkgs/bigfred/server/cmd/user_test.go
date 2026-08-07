@@ -16,8 +16,8 @@ var testUserPool = []cmd.PoolRange{{From: 1000, To: 1999}}
 var testAdminEff = domain.NewEffectiveRoles(domain.RoleAdmin)
 
 func userSvc(bundle repo.UsersBundle) *cmd.User {
-	pool := cmd.NewDCCPool(bundle.Pool)
-	return cmd.NewUser(bundle.Users, bundle.Vehicles, bundle.Trains, pool)
+	pool := cmd.NewDCCPool(bundle.Repo, bundle.Pool)
+	return cmd.NewUser(bundle.Repo, bundle.Users, bundle.Vehicles, bundle.Trains, pool)
 }
 
 func TestUserCreateAcceptsAdminAndDriver(t *testing.T) {
@@ -117,7 +117,7 @@ func TestUserDeleteRefusedWhenOwnsVehicles(t *testing.T) {
 
 	ctx := context.Background()
 	svc := userSvc(bundle)
-	pool := cmd.NewDCCPool(bundle.Pool)
+	pool := cmd.NewDCCPool(bundle.Repo, bundle.Pool)
 	admin := insertUser(t, ctx, bundle.Users, "admin", domain.RoleAdmin)
 
 	created, err := svc.Create(ctx, testAdminEff, cmd.UserCreateInput{
@@ -127,7 +127,7 @@ func TestUserDeleteRefusedWhenOwnsVehicles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create user: %v", err)
 	}
-	vSvc := cmd.NewVehicle(bundle.Vehicles, pool, bundle.TrainMembers, bundle.LayoutVehicles, bundle.Users)
+	vSvc := cmd.NewVehicle(bundle.Repo, bundle.Vehicles, pool, bundle.TrainMembers, bundle.LayoutVehicles, bundle.DccFunctions, bundle.Users)
 	addr := uint16(42)
 	if _, err := vSvc.Create(ctx, cmd.VehicleCreateInput{
 		OwnerUserID: created.ID, Name: "Loco", Kind: domain.VehicleKindLoco, DCCAddress: &addr,
@@ -146,7 +146,7 @@ func TestUserDeleteRefusedWhenOwnsTrains(t *testing.T) {
 
 	ctx := context.Background()
 	svc := userSvc(bundle)
-	pool := cmd.NewDCCPool(bundle.Pool)
+	pool := cmd.NewDCCPool(bundle.Repo, bundle.Pool)
 	admin := insertUser(t, ctx, bundle.Users, "admin", domain.RoleAdmin)
 
 	created, err := svc.Create(ctx, testAdminEff, cmd.UserCreateInput{
@@ -156,7 +156,7 @@ func TestUserDeleteRefusedWhenOwnsTrains(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create user: %v", err)
 	}
-	vSvc := cmd.NewVehicle(bundle.Vehicles, pool, bundle.TrainMembers, bundle.LayoutVehicles, bundle.Users)
+	vSvc := cmd.NewVehicle(bundle.Repo, bundle.Vehicles, pool, bundle.TrainMembers, bundle.LayoutVehicles, bundle.DccFunctions, bundle.Users)
 	addr := uint16(42)
 	v, err := vSvc.Create(ctx, cmd.VehicleCreateInput{
 		OwnerUserID: created.ID, Name: "Loco", Kind: domain.VehicleKindLoco, DCCAddress: &addr,
@@ -164,7 +164,7 @@ func TestUserDeleteRefusedWhenOwnsTrains(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create vehicle: %v", err)
 	}
-	tSvc := cmd.NewTrain(bundle.Trains, bundle.TrainMembers, bundle.Vehicles, bundle.LayoutTrains, bundle.Users)
+	tSvc := cmd.NewTrain(bundle.Repo, bundle.Trains, bundle.TrainMembers, bundle.Vehicles, bundle.LayoutTrains, bundle.Users)
 	if _, err := tSvc.Create(ctx, cmd.TrainCreateInput{
 		OwnerUserID: created.ID,
 		Name:        "Express",

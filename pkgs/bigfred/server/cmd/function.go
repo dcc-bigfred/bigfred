@@ -437,9 +437,11 @@ func (f *Function) ReorderTemplateSlots(
 	if d := f.sec.CanEditTemplateFunctions(eff, actorID, tpl.OwnerUserID); !d.Allowed {
 		return svcerrors.ErrTemplateNotOwned
 	}
-	return f.applyReorder(ctx, func(ctx context.Context, num uint8) (domain.DccFunction, error) {
-		return f.functions.FindByTemplateAndNum(ctx, tpl.ID, num)
-	}, positions)
+	return f.functions.Transaction(ctx, func(ctx context.Context) error {
+		return f.applyReorder(ctx, func(ctx context.Context, num uint8) (domain.DccFunction, error) {
+			return f.functions.FindByTemplateAndNum(ctx, tpl.ID, num)
+		}, positions)
+	})
 }
 
 func (f *Function) loadVehicle(ctx context.Context, id domain.VehicleID) (domain.Vehicle, error) {

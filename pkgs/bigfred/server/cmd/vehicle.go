@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/go-rel/rel"
+
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
 	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
 	"github.com/keskad/loco/pkgs/bigfred/server/helpers"
@@ -17,27 +19,33 @@ import (
 // Vehicle implements the CRUD lifecycle for domain.Vehicle (§4.1).
 // Pool checks compose via DCCPoolPort; authority via security.
 type Vehicle struct {
+	db             rel.Repository
 	vehicles       *repo.Vehicles
 	pool           DCCPoolPort
 	trainMembers   *repo.TrainMembers
 	layoutVehicles *repo.LayoutVehicles
+	functions      *repo.DccFunctions
 	users          *repo.Users
 	sec            security.VehicleSecurityContext
 }
 
 // NewVehicle constructs a Vehicle use-case handler.
 func NewVehicle(
+	db rel.Repository,
 	v *repo.Vehicles,
 	pool DCCPoolPort,
 	members *repo.TrainMembers,
 	layoutVehicles *repo.LayoutVehicles,
+	functions *repo.DccFunctions,
 	users *repo.Users,
 ) *Vehicle {
 	return &Vehicle{
+		db:             db,
 		vehicles:       v,
 		pool:           pool,
 		trainMembers:   members,
 		layoutVehicles: layoutVehicles,
+		functions:      functions,
 		users:          users,
 	}
 }
@@ -45,6 +53,18 @@ func NewVehicle(
 // Get loads a vehicle by primary key.
 func (v *Vehicle) Get(ctx context.Context, id domain.VehicleID) (domain.Vehicle, error) {
 	row, err := v.vehicles.FindByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, repo.ErrVehicleNotFound) {
+			return domain.Vehicle{}, svcerrors.ErrVehicleNotFound
+		}
+		return domain.Vehicle{}, err
+	}
+	return row, nil
+}
+
+// GetByExternalID loads a vehicle by Hydrus/external id.
+func (v *Vehicle) GetByExternalID(ctx context.Context, externalID string) (domain.Vehicle, error) {
+	row, err := v.vehicles.FindByExternalID(ctx, externalID)
 	if err != nil {
 		if errors.Is(err, repo.ErrVehicleNotFound) {
 			return domain.Vehicle{}, svcerrors.ErrVehicleNotFound
@@ -342,6 +362,41 @@ func (v *Vehicle) Delete(ctx context.Context, actorID uint, vehicleID domain.Veh
 	return row, nil
 }
 
+// DeleteAll removes a vehicle together with its functions and layout roster joins.
+func (v *Vehicle) DeleteAll(ctx context.Context, actorID uint, vehicleID domain.VehicleID, eff domain.EffectiveRoles) (domain.Vehicle, error) {
+	row, err := v.Get(ctx, vehicleID)
+	if err != nil {
+		return domain.Vehicle{}, err
+	}
+	if err := v.checkVehicleMutate(eff, actorID, row.OwnerUserID); err != nil {
+		return domain.Vehicle{}, err
+	}
+	n, err := v.trainMembers.CountReferencingVehicle(ctx, row.ID)
+	if err != nil {
+		return domain.Vehicle{}, err
+	}
+	if n > 0 {
+		return domain.Vehicle{}, svcerrors.ErrVehicleInUse
+	}
+	err = repo.WithTransaction(ctx, v.db, func(tctx context.Context) error {
+		if v.functions != nil {
+			if err := v.functions.DeleteAllByVehicleID(tctx, row.ID); err != nil {
+				return err
+			}
+		}
+		if v.layoutVehicles != nil {
+			if err := v.layoutVehicles.DeleteAllForVehicle(tctx, row.ID); err != nil {
+				return err
+			}
+		}
+		return v.vehicles.Delete(tctx, &row)
+	})
+	if err != nil {
+		return domain.Vehicle{}, err
+	}
+	return row, nil
+}
+
 // toUpdateInput projects a full create payload onto the tri-state update
 // input, marking every field as "set". The sync client always sends the
 // complete vehicle, mirroring the web dialog's always-overwrite semantics.
@@ -389,7 +444,7 @@ func (v *Vehicle) UpsertByExternalID(ctx context.Context, actorID uint, eff doma
 }
 
 // DeleteByExternalID removes the vehicle identified by external id, reusing
-// Delete for the ownership + train-reference guards.
+// DeleteAll for the ownership + train-reference guards and cascade cleanup.
 func (v *Vehicle) DeleteByExternalID(ctx context.Context, actorID uint, eff domain.EffectiveRoles, externalID string) (domain.Vehicle, error) {
 	existing, err := v.vehicles.FindByExternalID(ctx, externalID)
 	if err != nil {
@@ -398,7 +453,7 @@ func (v *Vehicle) DeleteByExternalID(ctx context.Context, actorID uint, eff doma
 		}
 		return domain.Vehicle{}, err
 	}
-	return v.Delete(ctx, actorID, existing.ID, eff)
+	return v.DeleteAll(ctx, actorID, existing.ID, eff)
 }
 
 func (v *Vehicle) checkVehicleMutate(eff domain.EffectiveRoles, actorID, ownerUserID uint) error {

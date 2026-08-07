@@ -28,6 +28,7 @@ import VpnKeyIcon from "@mui/icons-material/VpnKey";
 import LockResetIcon from "@mui/icons-material/LockReset";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import SettingsApplicationsIcon from "@mui/icons-material/SettingsApplications";
+import HelpOutlineIcon from "@mui/icons-material/HelpOutline";
 import LogoutIcon from "@mui/icons-material/Logout";
 import { Link, Outlet, useMatch, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -36,6 +37,10 @@ import { useLogout, useMe } from "../api/auth";
 import { capabilities } from "../capabilities";
 import { getUserName } from "../utils/getUserName";
 import { SocketProvider } from "../context/SocketContext";
+import {
+  HelpVisibilityProvider,
+  useHelpVisibility,
+} from "../hooks/useHelpVisibility";
 import { useSessionExpiryRedirect } from "../hooks/useSessionExpiryRedirect";
 import LanguageMenu from "./LanguageMenu";
 import FloatingHelpButton from "./help/FloatingHelpButton";
@@ -66,7 +71,9 @@ export default function AppShell() {
 
   return (
     <SocketProvider enabled={!!me}>
-      <AppShellContent />
+      <HelpVisibilityProvider>
+        <AppShellContent />
+      </HelpVisibilityProvider>
     </SocketProvider>
   );
 }
@@ -81,6 +88,7 @@ function AppShellContent() {
   const hideAppTitle = useMediaQuery(theme.breakpoints.down("lg"));
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const onThrottlePage = Boolean(useMatch("/throttle"));
+  const { requestOpenHelp } = useHelpVisibility();
 
   // Throttle is a fixed-viewport route (AppShell clips to 100dvh). Ensure
   // document scroll is never left locked after leaving — a stale body overflow
@@ -254,6 +262,12 @@ function AppShellContent() {
       },
       { id: "divider-1", divider: true },
       {
+        id: "help",
+        label: t("nav.account.help"),
+        icon: <HelpOutlineIcon fontSize="small" />,
+        onClick: () => requestOpenHelp(),
+      },
+      {
         id: "logout",
         label: t("nav.account.logout"),
         icon: <LogoutIcon fontSize="small" />,
@@ -264,7 +278,7 @@ function AppShellContent() {
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, logout.isPending],
+    [t, logout.isPending, requestOpenHelp],
   );
 
   const isAdmin = me?.effectiveRole === "admin";

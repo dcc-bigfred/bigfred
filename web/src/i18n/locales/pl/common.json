@@ -69,6 +69,7 @@
       "apiKeys": "Klucze API",
       "changePin": "Zmień hasło",
       "version": "Wersja",
+      "help": "Pomoc",
       "logout": "Wyloguj"
     }
   },

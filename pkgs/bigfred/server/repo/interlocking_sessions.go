@@ -99,3 +99,18 @@ func (i *InterlockingSessions) EndAllForUser(ctx context.Context, userID uint, e
 	}
 	return nil
 }
+
+// EndAllStale closes every open interlocking session. Used at server
+// startup so a crash cannot leave stale occupation rows behind.
+func (i *InterlockingSessions) EndAllStale(ctx context.Context, now time.Time) error {
+	rows, err := i.ListActive(ctx)
+	if err != nil {
+		return err
+	}
+	for idx := range rows {
+		if err := i.End(ctx, &rows[idx], now); err != nil {
+			return err
+		}
+	}
+	return nil
+}

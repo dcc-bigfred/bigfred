@@ -17,6 +17,8 @@ export default function HelpDialog({
   open,
   onClose,
   entry,
+  routeDisabled,
+  globalDisabled,
   onDisableRoute,
   onDisableGlobal,
 }: {
@@ -24,6 +26,8 @@ export default function HelpDialog({
   onClose: () => void;
   entry: HelpEntry;
   pathname: string;
+  routeDisabled: boolean;
+  globalDisabled: boolean;
   onDisableRoute: () => void;
   onDisableGlobal: () => void;
 }) {
@@ -54,6 +58,7 @@ export default function HelpDialog({
           <FormControlLabel
             control={
               <Checkbox
+                checked={routeDisabled}
                 onChange={(_, checked) => {
                   if (checked) onDisableRoute();
                 }}
@@ -64,6 +69,7 @@ export default function HelpDialog({
           <FormControlLabel
             control={
               <Checkbox
+                checked={globalDisabled}
                 onChange={(_, checked) => {
                   if (checked) onDisableGlobal();
                 }}

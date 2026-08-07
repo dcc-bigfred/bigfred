@@ -18,11 +18,15 @@ import (
 func freshLayoutSvc(t *testing.T, ctx context.Context, bundle repo.UsersBundle) *cmd.Layout {
 	t.Helper()
 	svc := cmd.NewLayout(
+		bundle.Repo,
 		bundle.Layouts,
 		bundle.Interlockings,
 		bundle.LayoutInterlockings,
 		bundle.CommandStations,
 		bundle.LayoutCommandStations,
+		bundle.LayoutVehicles,
+		bundle.LayoutTrains,
+		bundle.LayoutSignalmen,
 	)
 	if _, err := svc.EnsureSystemLayout(ctx); err != nil {
 		t.Fatalf("seed system layout: %v", err)

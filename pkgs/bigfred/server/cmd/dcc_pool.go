@@ -5,6 +5,8 @@ import (
 	"errors"
 	"sort"
 
+	"github.com/go-rel/rel"
+
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
 	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
 	"github.com/keskad/loco/pkgs/bigfred/server/repo"
@@ -18,12 +20,13 @@ const (
 
 // DCCPool orchestrates per-user DCC address pools.
 type DCCPool struct {
+	db   rel.Repository
 	pool *repo.DCCAddressRanges
 	sec  security.DCCPoolSecurityContext
 }
 
-func NewDCCPool(pool *repo.DCCAddressRanges) *DCCPool {
-	return &DCCPool{pool: pool}
+func NewDCCPool(db rel.Repository, pool *repo.DCCAddressRanges) *DCCPool {
+	return &DCCPool{db: db, pool: pool}
 }
 
 func (s *DCCPool) List(ctx context.Context, userID uint) ([]domain.DCCAddressRange, error) {
@@ -52,21 +55,26 @@ func (s *DCCPool) Replace(ctx context.Context, eff domain.EffectiveRoles, userID
 		return nil, err
 	}
 
-	if err := s.pool.DeleteAllForUser(ctx, userID); err != nil {
-		return nil, err
-	}
-
 	sort.SliceStable(clean, func(i, j int) bool { return clean[i].From < clean[j].From })
 
-	for _, r := range clean {
-		row := domain.DCCAddressRange{
-			UserID:   userID,
-			FromAddr: r.From,
-			ToAddr:   r.To,
+	err = repo.WithTransaction(ctx, s.db, func(tctx context.Context) error {
+		if err := s.pool.DeleteAllForUser(tctx, userID); err != nil {
+			return err
 		}
-		if err := s.pool.Insert(ctx, &row); err != nil {
-			return nil, err
+		for _, r := range clean {
+			row := domain.DCCAddressRange{
+				UserID:   userID,
+				FromAddr: r.From,
+				ToAddr:   r.To,
+			}
+			if err := s.pool.Insert(tctx, &row); err != nil {
+				return err
+			}
 		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	return s.pool.ListByUser(ctx, userID)
 }

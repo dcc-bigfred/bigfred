@@ -5,6 +5,8 @@ import (
 	"errors"
 	"time"
 
+	"github.com/go-rel/rel"
+
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
 	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
 	"github.com/keskad/loco/pkgs/bigfred/server/repo"
@@ -33,6 +35,7 @@ type JoinResult struct {
 
 // InterlockingOccupancy handles join/leave and occupant enrichment.
 type InterlockingOccupancy struct {
+	db                  rel.Repository
 	interlockings       *repo.Interlockings
 	layoutInterlockings *repo.LayoutInterlockings
 	sessions            *repo.InterlockingSessions
@@ -45,6 +48,7 @@ type InterlockingOccupancy struct {
 }
 
 func NewInterlockingOccupancy(
+	db rel.Repository,
 	interlockings *repo.Interlockings,
 	layoutInterlockings *repo.LayoutInterlockings,
 	sessions *repo.InterlockingSessions,
@@ -54,6 +58,7 @@ func NewInterlockingOccupancy(
 	presence InterlockingOccupancyPresencePort,
 ) *InterlockingOccupancy {
 	return &InterlockingOccupancy{
+		db:                  db,
 		interlockings:       interlockings,
 		layoutInterlockings: layoutInterlockings,
 		sessions:            sessions,
@@ -218,34 +223,44 @@ func (s *InterlockingOccupancy) Join(ctx context.Context, in JoinInput) (JoinRes
 	}
 
 	var displaced *OccupantInfo
-	if current != nil && current.SignalmanUserID != in.Actor.ID {
-		if user, err := s.users.FindByID(ctx, current.SignalmanUserID); err == nil {
-			displaced = &OccupantInfo{
-				UserID:       user.ID,
-				Login:        user.Login,
-				Organization: user.Organization,
+	var displacedUserID uint
+	displacedUserIDSet := false
+	err = repo.WithTransaction(ctx, s.db, func(tctx context.Context) error {
+		if current != nil && current.SignalmanUserID != in.Actor.ID {
+			if user, err := s.users.FindByID(tctx, current.SignalmanUserID); err == nil {
+				displaced = &OccupantInfo{
+					UserID:       user.ID,
+					Login:        user.Login,
+					Organization: user.Organization,
+				}
 			}
+			if err := s.sessions.End(tctx, current, now); err != nil {
+				return err
+			}
+			displacedUserID = current.SignalmanUserID
+			displacedUserIDSet = true
 		}
-		if err := s.sessions.End(ctx, current, now); err != nil {
-			return JoinResult{}, err
+
+		if err := s.sessions.EndAllForUser(tctx, in.Actor.ID, now); err != nil {
+			return err
 		}
-		if s.takeover != nil {
-			_ = s.takeover.ReleaseAllForSignalman(ctx, current.SignalmanUserID, "signalman_left")
+
+		sess := domain.InterlockingSession{
+			InterlockingID:  in.InterlockingID,
+			SignalmanUserID: in.Actor.ID,
+			StartedAt:       now,
 		}
+		return s.sessions.Insert(tctx, &sess)
+	})
+	if err != nil {
+		return JoinResult{}, err
+	}
+
+	if displacedUserIDSet && s.takeover != nil {
+		_ = s.takeover.ReleaseAllForSignalman(ctx, displacedUserID, "signalman_left")
+	}
+	if displaced != nil {
 		s.broadcastOccupant(in.LayoutID, in.InterlockingID, nil, "displaced")
-	}
-
-	if err := s.sessions.EndAllForUser(ctx, in.Actor.ID, now); err != nil {
-		return JoinResult{}, err
-	}
-
-	sess := domain.InterlockingSession{
-		InterlockingID:  in.InterlockingID,
-		SignalmanUserID: in.Actor.ID,
-		StartedAt:       now,
-	}
-	if err := s.sessions.Insert(ctx, &sess); err != nil {
-		return JoinResult{}, err
 	}
 
 	occupant := OccupantInfo{

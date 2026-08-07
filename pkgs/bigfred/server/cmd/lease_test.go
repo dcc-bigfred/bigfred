@@ -60,11 +60,11 @@ func setupLeasedVehicleFixture(t *testing.T) (
 	admin = insertUser(t, ctx, bundle.Users, "admin", domain.RoleAdmin)
 	lessee = insertUser(t, ctx, bundle.Users, "eve", domain.RoleDriver)
 
-	pool := cmd.NewDCCPool(bundle.Pool)
+	pool := cmd.NewDCCPool(bundle.Repo, bundle.Pool)
 	if _, err := pool.Replace(ctx, testAdminEff, owner.ID, []cmd.PoolRange{{From: 1, To: 9999}}); err != nil {
 		t.Fatalf("seed pool: %v", err)
 	}
-	vehicleSvc := cmd.NewVehicle(bundle.Vehicles, pool, bundle.TrainMembers, bundle.LayoutVehicles, bundle.Users)
+	vehicleSvc := cmd.NewVehicle(bundle.Repo, bundle.Vehicles, pool, bundle.TrainMembers, bundle.LayoutVehicles, bundle.DccFunctions, bundle.Users)
 	addr := uint16(42)
 	var err error
 	vehicle, err = vehicleSvc.Create(ctx, cmd.VehicleCreateInput{

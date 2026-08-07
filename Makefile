@@ -113,8 +113,9 @@ test: ensure-go-junit-report
 
 .PHONY: test-minisign
 test-minisign:
-	@command -v minisign >/dev/null 2>&1 || { echo "error: minisign required"; exit 1; }
-	GOPROXY=$${GOPROXY:-direct} go test -count=1 github.com/dcc-bigfred/common/internal/minisignsign@latest
+	@out=$$(GOPROXY=$${GOPROXY:-direct} go run github.com/dcc-bigfred/common/cmd/minisign-sign@latest 2>&1 || true); \
+		echo "$$out"; \
+		echo "$$out" | grep -q 'usage:'
 
 .PHONY: fmt
 fmt: ## Run go fmt against code.

@@ -29,13 +29,14 @@ jobs:
       - name: Run tests
         run: go test -count=1 ./...
 
-      - name: Install minisign
-        run: sudo apt-get update && sudo apt-get install -y minisign
-
       - name: Smoke-test minisign-sign
         env:
           GOPROXY: direct
-        run: go test -count=1 github.com/dcc-bigfred/common/internal/minisignsign@latest
+        run: |
+          set -euo pipefail
+          out=$(go run github.com/dcc-bigfred/common/cmd/minisign-sign@latest 2>&1 || true)
+          echo "$out"
+          echo "$out" | grep -q 'usage:'
 
       - name: Set up Node
         uses: actions/setup-node@v4

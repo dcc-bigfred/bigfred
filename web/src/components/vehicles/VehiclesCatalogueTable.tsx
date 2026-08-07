@@ -45,6 +45,11 @@ export type VehiclesCatalogueTableProps = {
   title?: string;
   emptyLabel: string;
   noResultsLabel?: string;
+  /**
+   * Count before parent filters (mine/kind/epoch). When set and greater than 0
+   * while `rows` is empty, shows `noResultsLabel` instead of `emptyLabel`.
+   */
+  sourceCount?: number;
   showOnLayoutChip?: boolean;
   renderActions: (row: VehiclesCatalogueRow) => ReactNode;
 };
@@ -137,6 +142,7 @@ export default function VehiclesCatalogueTable({
   title,
   emptyLabel,
   noResultsLabel,
+  sourceCount,
   showOnLayoutChip = false,
   renderActions,
 }: VehiclesCatalogueTableProps) {
@@ -173,8 +179,11 @@ export default function VehiclesCatalogueTable({
     return filteredRows.slice(start, start + VEHICLES_CATALOGUE_ROWS_PER_PAGE);
   }, [filteredRows, page]);
 
+  // Prefer catalogue size before parent filters so mine/kind/epoch empty
+  // states use noResultsLabel, not "nothing registered yet".
+  const baseCount = sourceCount ?? rows.length;
   const emptyMessage =
-    rows.length === 0 ? emptyLabel : (noResultsLabel ?? emptyLabel);
+    baseCount === 0 ? emptyLabel : (noResultsLabel ?? emptyLabel);
 
   const showHeaderBar = Boolean(title || headerExtra || showSearch);
 

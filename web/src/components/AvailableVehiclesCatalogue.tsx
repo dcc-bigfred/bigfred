@@ -243,6 +243,7 @@ export default function AvailableVehiclesCatalogue({ layoutId }: Props) {
         headerExtra={headerExtra}
         emptyLabel={t("vehicle:catalogue.empty")}
         noResultsLabel={t("vehicle:catalogue.noResults")}
+        sourceCount={(vehicles.data ?? []).length}
         renderActions={(row) => {
           const v = vehicleById.get(row.id);
           if (!v) return null;

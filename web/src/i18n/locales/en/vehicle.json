@@ -48,7 +48,7 @@
     "searchLabel": "Search",
     "searchPlaceholder": "Name, number, DCC address, owner…",
     "empty": "No vehicles have been registered yet.",
-    "noResults": "No vehicles match your search.",
+    "noResults": "No vehicles to show — try changing the filters.",
     "pagination": "{{from}}–{{to}} of {{count}}",
     "onLayout": {
       "yes": "On layout",
@@ -83,7 +83,7 @@
     "searchLabel": "Search",
     "searchPlaceholder": "Name, owner…",
     "empty": "No trains have been registered yet.",
-    "noResults": "No trains match your search.",
+    "noResults": "No trains to show — try changing the filters.",
     "showOnlyMine": "Show only mine",
     "pagination": "{{from}}–{{to}} of {{count}}",
     "onLayout": {

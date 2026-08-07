@@ -48,7 +48,7 @@
     "searchLabel": "Szukaj",
     "searchPlaceholder": "Nazwa, numer, adres DCC, właściciel…",
     "empty": "Nie zarejestrowano jeszcze żadnych pojazdów.",
-    "noResults": "Brak pojazdów pasujących do wyszukiwania.",
+    "noResults": "Brak pojazdów do pokazania, spróbuj zmienić filtry.",
     "pagination": "{{from}}–{{to}} z {{count}}",
     "onLayout": {
       "yes": "Na makiecie",
@@ -83,7 +83,7 @@
     "searchLabel": "Szukaj",
     "searchPlaceholder": "Nazwa, właściciel…",
     "empty": "Nie zarejestrowano jeszcze żadnych składów.",
-    "noResults": "Brak składów pasujących do wyszukiwania.",
+    "noResults": "Brak składów do pokazania, spróbuj zmienić filtry.",
     "showOnlyMine": "Pokaż tylko moje",
     "pagination": "{{from}}–{{to}} z {{count}}",
     "onLayout": {

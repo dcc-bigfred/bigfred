@@ -48,7 +48,7 @@
     "searchLabel": "Suche",
     "searchPlaceholder": "Name, Nummer, DCC-Adresse, Eigentümer…",
     "empty": "Es sind noch keine Fahrzeuge registriert.",
-    "noResults": "Keine Fahrzeuge entsprechen der Suche.",
+    "noResults": "Keine Fahrzeuge zum Anzeigen — versuchen Sie, die Filter zu ändern.",
     "pagination": "{{from}}–{{to}} von {{count}}",
     "onLayout": {
       "yes": "Auf der Anlage",
@@ -83,7 +83,7 @@
     "searchLabel": "Suche",
     "searchPlaceholder": "Name, Eigentümer…",
     "empty": "Es sind noch keine Züge registriert.",
-    "noResults": "Keine Züge entsprechen der Suche.",
+    "noResults": "Keine Züge zum Anzeigen — versuchen Sie, die Filter zu ändern.",
     "showOnlyMine": "Nur eigene anzeigen",
     "pagination": "{{from}}–{{to}} von {{count}}",
     "onLayout": {

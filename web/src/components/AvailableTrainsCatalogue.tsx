@@ -165,7 +165,7 @@ export default function AvailableTrainsCatalogue({ layoutId }: Props) {
   );
 
   const emptyMessage =
-    scopedTrains.length === 0
+    (trains.data ?? []).length === 0
       ? t("vehicle:trainCatalogue.empty")
       : t("vehicle:trainCatalogue.noResults");
 

@@ -192,6 +192,7 @@ func (m *manager) Paths() (string, string) { return m.supervisor.Socket, m.super
 
 type TelemetryConfig = microinit.TelemetryConfig
 type RedisConfig = microinit.RedisConfig
+type MicrodnsConfig = microinit.MicrodnsConfig
 type InfraConfig = microinit.InfraConfig
 type RDBSavePoint = microinit.RDBSavePoint
 
@@ -207,12 +208,12 @@ func ResolveRDBSavePoints(noPersist bool, values []string) ([]RDBSavePoint, erro
 	return microinit.ResolveRDBSavePoints(noPersist, values)
 }
 
-// EnsureInfra writes redis/alloy drop-ins only when those services are absent
-// or already labeled created-by=bigfred. Foreign services are left alone; any
-// leftover bigfred drop-in for a foreign name is removed.
+// EnsureInfra writes redis/alloy/microdns drop-ins only when those services are
+// absent or already labeled created-by=bigfred. Foreign services are left alone;
+// any leftover bigfred drop-in for a foreign name is removed.
 //
-// Alloy setup is best-effort: failures are logged as warnings and do not fail
-// bootstrap. Redis remains required when managed.
+// Alloy and microdns setup are best-effort: failures are logged as warnings and
+// do not fail bootstrap. Redis remains required when managed.
 func EnsureInfra(ctx context.Context, mgr ServiceManager, log *logrus.Logger, cfg InfraConfig) error {
 	if !cfg.Redis.Disable {
 		if err := ensureOwnedInfra(ctx, mgr, GroupInfra, "redis", func() (microinit.ServiceDef, error) {
@@ -230,6 +231,15 @@ func EnsureInfra(ctx context.Context, mgr ServiceManager, log *logrus.Logger, cf
 		}); err != nil {
 			if log != nil {
 				log.WithError(err).WithField("service", "alloy").Warn("microinit alloy setup failed; continuing without managed telemetry")
+			}
+		}
+	}
+	if !cfg.Microdns.Disable {
+		if err := ensureOwnedInfra(ctx, mgr, GroupInfra, "microdns", func() (microinit.ServiceDef, error) {
+			return microinit.MicrodnsServiceDef(cfg.Microdns)
+		}); err != nil {
+			if log != nil {
+				log.WithError(err).WithField("service", "microdns").Warn("microinit microdns setup failed; continuing without managed mDNS")
 			}
 		}
 	}

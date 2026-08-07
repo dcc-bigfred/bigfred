@@ -111,13 +111,51 @@ func RedisServiceDef(cfg RedisConfig) (ServiceDef, error) {
 	}, CreatedByBigfred), nil
 }
 
-type TelemetryConfig struct {
-	Enable                                          bool
-	AlloyBin, ConfigPath, StoragePath, OTLPEndpoint string
-}
 type InfraConfig struct {
 	Redis     RedisConfig
 	Telemetry TelemetryConfig
+	Microdns  MicrodnsConfig
+}
+
+type MicrodnsConfig struct {
+	Bin        string
+	ConfigPath string
+	Disable    bool
+}
+
+// MicrodnsServiceDef builds the microinit drop-in for the microdns LAN
+// advertiser. Seeds microdns.json when missing (same rules as EnsureMicrodnsConfig).
+func MicrodnsServiceDef(cfg MicrodnsConfig) (ServiceDef, error) {
+	bin := cfg.Bin
+	if bin == "" {
+		bin = "microdns"
+	}
+	configPath := cfg.ConfigPath
+	if configPath == "" {
+		configPath = datadir.Path("etc", "microdns.json")
+	}
+	if err := ensureMicrodnsConfigFile(configPath); err != nil {
+		return ServiceDef{}, err
+	}
+	return WithCreatedBy(ServiceDef{
+		Name:             "microdns",
+		Enabled:          BoolPtr(true),
+		Daemon:           BoolPtr(true),
+		RestartPolicy:    RestartAlways,
+		RestartBackoff:   IntPtr(60),
+		StartWaitSecs:    IntPtr(1),
+		ShutdownWaitSecs: IntPtr(5),
+		StartCmd: fmt.Sprintf(
+			"exec %s --config %s",
+			config.ShellQuote(bin),
+			config.ShellQuote(configPath),
+		),
+	}, CreatedByBigfred), nil
+}
+
+type TelemetryConfig struct {
+	Enable                                          bool
+	AlloyBin, ConfigPath, StoragePath, OTLPEndpoint string
 }
 
 const DefaultOTLPEndpoint = "127.0.0.1:4317"

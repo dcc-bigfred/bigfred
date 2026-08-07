@@ -48,6 +48,30 @@ func TestRedisServiceDefDefaultDataDir(t *testing.T) {
 	}
 }
 
+func TestMicrodnsServiceDefWritesConfig(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("BIGFRED_DATA_DIR", root)
+	t.Setenv("DATA_DIR", "")
+
+	svc, err := MicrodnsServiceDef(MicrodnsConfig{Bin: "microdns"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if svc.Name != "microdns" {
+		t.Fatalf("Name = %q", svc.Name)
+	}
+	if !strings.Contains(svc.StartCmd, "microdns") || !strings.Contains(svc.StartCmd, "microdns.json") {
+		t.Fatalf("StartCmd = %q", svc.StartCmd)
+	}
+	if svc.Labels[LabelCreatedBy] != CreatedByBigfred {
+		t.Fatalf("labels: %+v", svc.Labels)
+	}
+	path := filepath.Join(root, "etc", "microdns.json")
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("expected config at %s: %v", path, err)
+	}
+}
+
 func TestPrepareAlloyTelemetryRendersValidBlocks(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("BIGFRED_DATA_DIR", root)

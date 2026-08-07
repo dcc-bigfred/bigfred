@@ -47,6 +47,9 @@ func applyConfig(f *Flags, cfg *config.File, changed func(string) bool) {
 	if !changed("microinit-bin") && cfg.MicroinitBin != "" {
 		f.MicroinitBin = cfg.MicroinitBin
 	}
+	if !changed("microdns-bin") && cfg.MicrodnsBin != "" {
+		f.MicrodnsBin = cfg.MicrodnsBin
+	}
 	if !changed("log-level") && cfg.LogLevel != "" {
 		f.LogLevel = cfg.LogLevel
 	}

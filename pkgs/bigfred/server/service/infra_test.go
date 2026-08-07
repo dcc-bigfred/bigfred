@@ -60,6 +60,25 @@ func TestEnsureInfraAlloySetupFailureIsNonFatal(t *testing.T) {
 	}
 }
 
+func TestEnsureInfraMicrodnsSetupFailureIsNonFatal(t *testing.T) {
+	t.Setenv("BIGFRED_DATA_DIR", t.TempDir())
+	t.Setenv("DATA_DIR", "")
+
+	log := logrus.New()
+	log.SetLevel(logrus.WarnLevel)
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+
+	mgr := &alloySetupStub{hasService: false}
+	err := EnsureInfra(context.Background(), mgr, log, InfraConfig{
+		Redis:    RedisConfig{Disable: true},
+		Microdns: MicrodnsConfig{Bin: "microdns"},
+	})
+	if err != nil {
+		t.Fatalf("EnsureInfra: %v", err)
+	}
+}
+
 func TestEnsureInfraRedisSetupFailureIsFatal(t *testing.T) {
 	t.Setenv("BIGFRED_DATA_DIR", t.TempDir())
 	t.Setenv("DATA_DIR", "")

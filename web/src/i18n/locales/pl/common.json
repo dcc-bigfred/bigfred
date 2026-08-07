@@ -46,7 +46,8 @@
       "logs": "Logi",
       "auditLog": "Dziennik audytu",
       "rentals": "Wypożyczenia",
-      "systemPower": "Wyłącz system"
+      "systemPower": "Wyłącz system",
+      "system": "System"
     },
     "my": {
       "menuLabel": "Moje",

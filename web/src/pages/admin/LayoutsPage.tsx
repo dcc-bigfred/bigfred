@@ -37,6 +37,8 @@ import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
 
 import { ApiError } from "../../api/client";
+import { useMe } from "../../api/auth";
+import { useLayoutSupervisordSync } from "../../api/presence";
 import {
   useAdminLayouts,
   useCreateLayout,
@@ -71,6 +73,8 @@ import {
 export default function LayoutsPage() {
   const { t } = useTranslation(["layout", "common", "errors", "sudo"]);
   const [searchParams, setSearchParams] = useSearchParams();
+  const me = useMe().data;
+  useLayoutSupervisordSync(me?.layoutId ?? null);
   const list = useAdminLayouts();
   const interlockingsCatalog = useInterlockingsCatalogue();
   const commandStationsCatalog = useCommandStationsCatalogue();

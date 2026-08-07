@@ -32,6 +32,7 @@ import CommandStationsAdminPage from "./pages/admin/CommandStationsPage";
 import ConnectionWizardAdminPage from "./pages/admin/ConnectionWizardPage";
 import SlotsDiagnosticsAdminPage from "./pages/admin/SlotsDiagnosticsPage";
 import DiagnosticsAdminPage from "./pages/admin/DiagnosticsPage";
+import SystemAdminPage from "./pages/admin/SystemPage";
 import AdminRentalsPage from "./pages/admin/AdminRentalsPage";
 import UsersAdminPage from "./pages/admin/UsersPage";
 import RemotesPage from "./pages/remotes/RemotesPage";
@@ -100,6 +101,7 @@ const router = createBrowserRouter(
               element={<SlotsDiagnosticsAdminPage />}
             />
             <Route path="/admin/logs" element={<DiagnosticsAdminPage />} />
+            <Route path="/admin/system" element={<SystemAdminPage />} />
             <Route path="/admin/rentals" element={<AdminRentalsPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

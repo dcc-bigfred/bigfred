@@ -1,4 +1,6 @@
 import SettingsIcon from "@mui/icons-material/Settings";
+import PeopleIcon from "@mui/icons-material/People";
+import AccountTreeIcon from "@mui/icons-material/AccountTree";
 import {
   Alert,
   Box,
@@ -74,7 +76,18 @@ export default function HomePage() {
         ) : (
           <>
             <Paper variant="outlined">
-              <Box sx={{ px: 2, py: 1.5, borderBottom: 1, borderColor: "divider" }}>
+              <Box
+                sx={{
+                  px: 2,
+                  py: 1.5,
+                  borderBottom: 1,
+                  borderColor: "divider",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 1,
+                }}
+              >
+                <PeopleIcon fontSize="small" color="action" aria-hidden />
                 <Typography variant="h6">{t("home:onlineUsers.title")}</Typography>
               </Box>
               <TableContainer>
@@ -138,6 +151,7 @@ export default function HomePage() {
                   gap: 1,
                 }}
               >
+                <AccountTreeIcon fontSize="small" color="action" aria-hidden />
                 <Typography variant="h6" sx={{ flexGrow: 1 }}>
                   {t("home:interlockings.title")}
                 </Typography>

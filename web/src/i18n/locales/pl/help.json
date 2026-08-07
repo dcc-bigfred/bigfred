@@ -1,0 +1,11 @@
+{
+  "dialog": {
+    "title": "Pomoc",
+    "disableForRoute": "Nie pokazuj dla tej podstrony",
+    "disableGlobal": "Nie pokazuj na żadnej podstronie"
+  },
+  "dashboard": "Pulpit pokazuje użytkowników online, nastawnie oraz Twoje składy i pojazdy. Użyj <addIcon></addIcon>, aby dodać pojazd lub skład, oraz <throttleIcon></throttleIcon> w pasku górnym, aby otworzyć sterownik.",
+  "myVehicles": "Tutaj zarządzasz swoimi pojazdami. Użyj <addIcon></addIcon>, aby dodać nowy pojazd, oraz <functionsIcon></functionsIcon>, aby skonfigurować funkcje dekodera.",
+  "rentals": "Wypożyczenia pozwalają udostępniać pojazdy i składy innym użytkownikom na makiecie oraz przejmować te, które ktoś wypożyczył Tobie.",
+  "myTrains": "Moje składy to zestawy pojazdów, którymi jeździsz razem. Możesz tworzyć nowe składy, edytować kolejność i uruchamiać je ze sterownika."
+}

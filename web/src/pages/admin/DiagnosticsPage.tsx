@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Box,
   Button,
+  Chip,
   CircularProgress,
   Container,
   FormControl,
@@ -11,136 +12,83 @@ import {
   Paper,
   Select,
   Stack,
-  TextField,
   Typography,
 } from "@mui/material";
-import RefreshIcon from "@mui/icons-material/Refresh";
+import PauseIcon from "@mui/icons-material/Pause";
+import PlayArrowIcon from "@mui/icons-material/PlayArrow";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
 
-import { ApiError } from "../../api/client";
-import {
-  fetchDiagnosticContent,
-  useDiagnosticSources,
-  type DiagnosticEntry,
-} from "../../api/diagnostics";
-
-function formatBytes(n: number): string {
-  if (n < 1024) {
-    return `${n} B`;
-  }
-  if (n < 1024 * 1024) {
-    return `${(n / 1024).toFixed(1)} KiB`;
-  }
-  return `${(n / (1024 * 1024)).toFixed(1)} MiB`;
-}
+import { useMicroinitLogStream } from "../../api/microinitLogs";
+import { useMicroinitServices } from "../../api/system";
 
 export default function DiagnosticsPage() {
   const { t } = useTranslation(["diagnostics", "common", "errors"]);
   const [searchParams] = useSearchParams();
-  const sources = useDiagnosticSources();
+  const services = useMicroinitServices();
 
-  const [groupId, setGroupId] = useState("");
-  const [fileId, setFileId] = useState("");
-  const [tailLines, setTailLines] = useState(500);
-  const [content, setContent] = useState("");
-  const [meta, setMeta] = useState<{
-    fileName: string;
-    size: number;
-    truncated: boolean;
-  } | null>(null);
-  const [loadingContent, setLoadingContent] = useState(false);
-  const [contentError, setContentError] = useState<string | null>(null);
+  const preferredService = searchParams.get("service") ?? "";
+  const [serviceName, setServiceName] = useState("");
+  const appliedPref = useRef(false);
 
-  const groups = sources.data?.groups ?? [];
-  const preferredGroup = searchParams.get("group") ?? "";
-  const preferredFile = searchParams.get("file") ?? "";
-  // Apply deep-link prefs once so a later sources refetch does not
-  // overwrite a manual group/file selection.
-  const appliedGroupPref = useRef(false);
-  const appliedFilePref = useRef(false);
-
-  const entries: DiagnosticEntry[] = useMemo(() => {
-    const g = groups.find((x) => x.id === groupId);
-    return g?.entries ?? [];
-  }, [groups, groupId]);
+  const serviceList = useMemo(
+    () => services.data ?? [],
+    [services.data],
+  );
 
   useEffect(() => {
-    if (groups.length === 0) {
-      return;
-    }
+    if (serviceList.length === 0) return;
     if (
-      !appliedGroupPref.current &&
-      preferredGroup &&
-      groups.some((g) => g.id === preferredGroup)
+      !appliedPref.current &&
+      preferredService &&
+      serviceList.some((s) => s.name === preferredService)
     ) {
-      setGroupId(preferredGroup);
-      appliedGroupPref.current = true;
+      setServiceName(preferredService);
+      appliedPref.current = true;
       return;
     }
-    setGroupId((current) =>
-      current && groups.some((g) => g.id === current) ? current : groups[0].id,
+    // Deep-link may name a service not yet listed — still select it.
+    if (!appliedPref.current && preferredService) {
+      setServiceName(preferredService);
+      appliedPref.current = true;
+      return;
+    }
+    setServiceName((current) =>
+      current &&
+      (serviceList.some((s) => s.name === current) || current === preferredService)
+        ? current
+        : serviceList[0]?.name ?? "",
     );
-  }, [groups, preferredGroup]);
+  }, [serviceList, preferredService]);
 
+  const stream = useMicroinitLogStream(
+    serviceName || null,
+    Boolean(serviceName),
+  );
+
+  const preRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
-    if (entries.length === 0) {
-      setFileId("");
-      return;
-    }
-    if (
-      !appliedFilePref.current &&
-      preferredFile &&
-      entries.some((e) => e.id === preferredFile)
-    ) {
-      setFileId(preferredFile);
-      appliedFilePref.current = true;
-      return;
-    }
-    setFileId((current) =>
-      current && entries.some((e) => e.id === current) ? current : entries[0].id,
-    );
-  }, [entries, preferredFile]);
+    if (stream.paused) return;
+    const el = preRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [stream.lines, stream.paused]);
 
-  const loadContent = useCallback(async () => {
-    if (!fileId) {
-      return;
+  const stateLabel = (() => {
+    switch (stream.state) {
+      case "connecting":
+        return t("diagnostics:live.connecting");
+      case "live":
+        return t("diagnostics:live.connected");
+      case "error":
+        return t("diagnostics:live.error");
+      case "closed":
+        return t("diagnostics:live.reconnecting");
+      default:
+        return t("diagnostics:live.idle");
     }
-    setLoadingContent(true);
-    setContentError(null);
-    try {
-      const res = await fetchDiagnosticContent(fileId, tailLines);
-      setContent(res.content);
-      setMeta({
-        fileName: res.fileName,
-        size: res.size,
-        truncated: res.truncated,
-      });
-    } catch (e) {
-      setContent("");
-      setMeta(null);
-      if (e instanceof ApiError) {
-        const localised = t(`errors:${e.code}` as const, { defaultValue: "" });
-        setContentError(
-          localised || t("errors:unknown", { code: e.code }),
-        );
-      } else {
-        setContentError(t("errors:network"));
-      }
-    } finally {
-      setLoadingContent(false);
-    }
-  }, [fileId, tailLines, t]);
-
-  useEffect(() => {
-    void loadContent();
-  }, [loadContent]);
-
-  const groupLabel = (id: string, backendLabel: string) =>
-    t(`sources.${id}.label`, { defaultValue: backendLabel });
-
-  const entryLabel = (id: string, backendLabel: string) =>
-    t(`entries.${id}`, { defaultValue: backendLabel });
+  })();
 
   return (
     <Container maxWidth="lg" sx={{ py: 3 }}>
@@ -148,101 +96,92 @@ export default function DiagnosticsPage() {
         {t("title")}
       </Typography>
 
-      {sources.isLoading && (
+      {services.isLoading && (
         <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
           <CircularProgress />
         </Box>
       )}
 
-      {sources.isError && (
+      {services.isError && (
         <Alert severity="error" sx={{ mb: 2 }}>
-          {t("common:networkError")}
+          {t("diagnostics:unavailable")}
         </Alert>
       )}
 
-      {sources.isSuccess && (
+      {(services.isSuccess || preferredService) && (
         <Stack spacing={2}>
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            spacing={2}
+            alignItems={{ sm: "center" }}
+          >
             <FormControl fullWidth size="small">
-              <InputLabel id="diag-group-label">{t("groupLabel")}</InputLabel>
+              <InputLabel id="diag-service-label">
+                {t("diagnostics:serviceLabel")}
+              </InputLabel>
               <Select
-                labelId="diag-group-label"
-                label={t("groupLabel")}
-                value={groupId}
-                onChange={(e) => setGroupId(e.target.value)}
+                labelId="diag-service-label"
+                label={t("diagnostics:serviceLabel")}
+                value={serviceName}
+                onChange={(e) => setServiceName(e.target.value)}
               >
-                {groups.map((g) => (
-                  <MenuItem key={g.id} value={g.id}>
-                    {groupLabel(g.id, g.label)}
+                {serviceList.length === 0 && serviceName ? (
+                  <MenuItem value={serviceName}>{serviceName}</MenuItem>
+                ) : null}
+                {serviceList.map((s) => (
+                  <MenuItem key={s.name} value={s.name}>
+                    {s.name}
+                    {s.state ? ` (${s.state})` : ""}
                   </MenuItem>
                 ))}
               </Select>
             </FormControl>
 
-            <FormControl fullWidth size="small" disabled={entries.length === 0}>
-              <InputLabel id="diag-file-label">{t("fileLabel")}</InputLabel>
-              <Select
-                labelId="diag-file-label"
-                label={t("fileLabel")}
-                value={fileId}
-                onChange={(e) => setFileId(e.target.value)}
-              >
-                {entries.length === 0 ? (
-                  <MenuItem value="" disabled>
-                    {t("noFiles")}
-                  </MenuItem>
-                ) : (
-                  entries.map((e) => (
-                    <MenuItem key={e.id} value={e.id}>
-                      {entryLabel(e.id, e.label)}
-                    </MenuItem>
-                  ))
-                )}
-              </Select>
-            </FormControl>
-
-            <TextField
+            <Chip
               size="small"
-              type="number"
-              label={t("tailLines")}
-              value={tailLines}
-              onChange={(e) =>
-                setTailLines(Math.max(1, Number(e.target.value) || 500))
+              color={
+                stream.state === "live"
+                  ? "success"
+                  : stream.state === "error"
+                    ? "error"
+                    : "default"
               }
-              inputProps={{ min: 1, max: 10000 }}
-              sx={{ minWidth: 140 }}
+              label={stateLabel}
+              sx={{ flexShrink: 0 }}
             />
 
             <Button
               variant="outlined"
-              startIcon={
-                loadingContent ? (
-                  <CircularProgress size={18} />
-                ) : (
-                  <RefreshIcon />
-                )
-              }
-              onClick={() => void loadContent()}
-              disabled={!fileId || loadingContent}
-              sx={{ alignSelf: { sm: "center" }, flexShrink: 0 }}
+              size="small"
+              startIcon={stream.paused ? <PlayArrowIcon /> : <PauseIcon />}
+              onClick={() => stream.setPaused(!stream.paused)}
+              disabled={!serviceName}
+              sx={{ flexShrink: 0 }}
             >
-              {t("refresh")}
+              {stream.paused
+                ? t("diagnostics:live.resume")
+                : t("diagnostics:live.pause")}
+            </Button>
+
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<DeleteOutlineIcon />}
+              onClick={stream.clear}
+              disabled={!serviceName}
+              sx={{ flexShrink: 0 }}
+            >
+              {t("diagnostics:live.clear")}
             </Button>
           </Stack>
 
-          {contentError && (
-            <Alert severity="warning">{contentError}</Alert>
-          )}
-
-          {meta && (
-            <Typography variant="caption" color="text.secondary">
-              {meta.fileName} · {formatBytes(meta.size)}
-              {meta.truncated ? ` · ${t("truncated")}` : ""}
-            </Typography>
+          {stream.error && (
+            <Alert severity="warning">{stream.error}</Alert>
           )}
 
           <Paper
             variant="outlined"
+            ref={preRef}
             sx={{
               p: 2,
               bgcolor: "grey.900",
@@ -261,9 +200,11 @@ export default function DiagnosticsPage() {
                 wordBreak: "break-word",
               }}
             >
-              {loadingContent && !content
-                ? t("common:loading")
-                : content || t("empty")}
+              {stream.lines.length === 0
+                ? stream.state === "connecting"
+                  ? t("common:loading")
+                  : t("diagnostics:empty")
+                : stream.lines.join("\n")}
             </Box>
           </Paper>
         </Stack>

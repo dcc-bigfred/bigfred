@@ -3,6 +3,8 @@ package service
 import (
 	"errors"
 	"fmt"
+	"net"
+	"time"
 
 	miclient "github.com/dcc-bigfred/microinit/go/client"
 )
@@ -22,6 +24,12 @@ var (
 type SystemInfo struct {
 	Mode        string `json:"mode"`
 	CanShutdown bool   `json:"canShutdown"`
+}
+
+// SystemPorts reports whether optional local admin UIs are reachable.
+type SystemPorts struct {
+	OsUI    bool `json:"osUI"`
+	Grafana bool `json:"grafana"`
 }
 
 // MicroinitPower is the subset of the microinit Go client used for host power.
@@ -89,6 +97,23 @@ func (s *SystemControl) RequestShutdown(mode string) error {
 		return ErrSystemNotInit
 	}
 	return s.power.ShutdownMode(mode)
+}
+
+// Ports probes loopback TCP ports for bigfred-os-ui (8090) and Grafana (3000).
+func (s *SystemControl) Ports() SystemPorts {
+	return SystemPorts{
+		OsUI:    tcpPortOpen("127.0.0.1:8090", 200*time.Millisecond),
+		Grafana: tcpPortOpen("127.0.0.1:3000", 200*time.Millisecond),
+	}
+}
+
+func tcpPortOpen(addr string, timeout time.Duration) bool {
+	conn, err := net.DialTimeout("tcp", addr, timeout)
+	if err != nil {
+		return false
+	}
+	_ = conn.Close()
+	return true
 }
 
 // normalizeDaemonMode maps wire values to "init" or "supervise".

@@ -1,0 +1,11 @@
+{
+  "dialog": {
+    "title": "Hilfe",
+    "disableForRoute": "Für diese Seite nicht anzeigen",
+    "disableGlobal": "Auf keiner Seite anzeigen"
+  },
+  "dashboard": "Das Dashboard zeigt Online-Benutzer, Stellwerke sowie Ihre Züge und Fahrzeuge. Mit <addIcon></addIcon> fügen Sie Fahrzeuge oder Züge hinzu, mit <throttleIcon></throttleIcon> in der Leiste öffnen Sie den Fahrregler.",
+  "myVehicles": "Hier verwalten Sie Ihre Fahrzeuge. Mit <addIcon></addIcon> fügen Sie ein Fahrzeug hinzu, mit <functionsIcon></functionsIcon> konfigurieren Sie Decoderfunktionen.",
+  "rentals": "Ausleihen ermöglichen das Teilen von Fahrzeugen und Zügen mit anderen Benutzern sowie die Übernahme ausgeliehener Einheiten.",
+  "myTrains": "Meine Züge sind Fahrzeuggruppen, die Sie gemeinsam fahren. Erstellen Sie Züge, ändern Sie die Reihenfolge und steuern Sie sie vom Fahrregler."
+}

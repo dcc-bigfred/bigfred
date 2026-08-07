@@ -32,9 +32,12 @@ type Phase =
 export default function SystemPowerDialog({
   open,
   onClose,
+  presetMode,
 }: {
   open: boolean;
   onClose: () => void;
+  /** When set, confirm phase only offers this single power action. */
+  presetMode?: SystemShutdownMode;
 }) {
   const { t } = useTranslation("common");
   const [phase, setPhase] = useState<Phase>("loading");
@@ -144,22 +147,26 @@ export default function SystemPowerDialog({
             <Button onClick={onClose} disabled={actionsLocked}>
               {t("actions.cancel")}
             </Button>
-            <Button
-              color="error"
-              variant="contained"
-              disabled={actionsLocked}
-              onClick={() => void run("poweroff")}
-            >
-              {t("systemPower.shutdown")}
-            </Button>
-            <Button
-              color="warning"
-              variant="contained"
-              disabled={actionsLocked}
-              onClick={() => void run("reboot")}
-            >
-              {t("systemPower.restart")}
-            </Button>
+            {(presetMode == null || presetMode === "poweroff") && (
+              <Button
+                color="error"
+                variant="contained"
+                disabled={actionsLocked}
+                onClick={() => void run("poweroff")}
+              >
+                {t("systemPower.shutdown")}
+              </Button>
+            )}
+            {(presetMode == null || presetMode === "reboot") && (
+              <Button
+                color="warning"
+                variant="contained"
+                disabled={actionsLocked}
+                onClick={() => void run("reboot")}
+              >
+                {t("systemPower.restart")}
+              </Button>
+            )}
           </>
         ) : null}
       </DialogActions>

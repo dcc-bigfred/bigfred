@@ -673,6 +673,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		CommandStations:  commandStationSvc,
 		Diagnostics:      diagSvc,
 		System:           service.NewSystemControl(supSvc),
+		Microinit:        service.NewMicroinitControl(supSvc),
 		Hub:              hub,
 		DccBus:           dccBusSvc,
 		Radio:            radioSvc,

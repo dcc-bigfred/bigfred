@@ -1,0 +1,11 @@
+{
+  "dialog": {
+    "title": "Help",
+    "disableForRoute": "Don't show for this page",
+    "disableGlobal": "Don't show on any page"
+  },
+  "dashboard": "The dashboard shows online users, interlockings, and your trains and vehicles. Use <addIcon></addIcon> to add a vehicle or train, and <throttleIcon></throttleIcon> in the top bar to open the throttle.",
+  "myVehicles": "Manage your vehicles here. Use <addIcon></addIcon> to add a vehicle and <functionsIcon></functionsIcon> to configure decoder functions.",
+  "rentals": "Rentals let you share vehicles and trains with other users on the layout, and take ones rented to you.",
+  "myTrains": "My trains are sets of vehicles you run together. Create trains, edit order, and drive them from the throttle."
+}

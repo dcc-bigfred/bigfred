@@ -1,0 +1,11 @@
+{
+  "dialog": {
+    "title": "Help",
+    "disableForRoute": "Don't show for this page",
+    "disableGlobal": "Don't show on any page"
+  },
+  "dashboard": "To drive on the layout you need to add a vehicle in the \"Vehicles\" tab with a DCC address, then click <addIcon></addIcon> to add (accept) it to the current layout. Once the vehicle is added, choose <throttleIcon></throttleIcon> at the top of the screen",
+  "myVehicles": "To drive a vehicle on the layout you must add (accept) it to the current layout with the <addIcon></addIcon> icon. Right after adding, the vehicle may have no functions assigned — to assign them use <functionsIcon></functionsIcon>, where you can set them manually or copy from another vehicle or a ready-made template.",
+  "rentals": "You can temporarily rent a vehicle to someone else, or someone else can rent their vehicle to you. When another person takes control of a vehicle, the previous person temporarily loses it — though the owner can always reclaim that control. Changing who is driving a vehicle stops it.",
+  "myTrains": "Combine several vehicles into one train so you can control multiple locomotives at once and turn on coach lights in a single control view. Note — global limits on the number of controlled vehicles and occupied LocoNet slots set by the layout administrator apply"
+}

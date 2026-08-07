@@ -46,7 +46,8 @@
       "logs": "Protokolle",
       "auditLog": "Audit-Protokoll",
       "rentals": "Ausleihen",
-      "systemPower": "System ausschalten"
+      "systemPower": "System ausschalten",
+      "system": "System"
     },
     "my": {
       "menuLabel": "Meine",

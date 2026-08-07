@@ -20,7 +20,6 @@ import AccountTreeIcon from "@mui/icons-material/AccountTree";
 import DirectionsRailwayIcon from "@mui/icons-material/DirectionsRailway";
 import ViewListIcon from "@mui/icons-material/ViewList";
 import HistoryIcon from "@mui/icons-material/History";
-import BugReportIcon from "@mui/icons-material/BugReport";
 import PersonIcon from "@mui/icons-material/Person";
 import HandshakeIcon from "@mui/icons-material/Handshake";
 import TrainIcon from "@mui/icons-material/Train";
@@ -28,7 +27,7 @@ import TuneIcon from "@mui/icons-material/Tune";
 import VpnKeyIcon from "@mui/icons-material/VpnKey";
 import LockResetIcon from "@mui/icons-material/LockReset";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
-import PowerSettingsNewIcon from "@mui/icons-material/PowerSettingsNew";
+import SettingsApplicationsIcon from "@mui/icons-material/SettingsApplications";
 import LogoutIcon from "@mui/icons-material/Logout";
 import { Link, Outlet, useMatch, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -39,7 +38,7 @@ import { getUserName } from "../utils/getUserName";
 import { SocketProvider } from "../context/SocketContext";
 import { useSessionExpiryRedirect } from "../hooks/useSessionExpiryRedirect";
 import LanguageMenu from "./LanguageMenu";
-import SystemPowerDialog from "./SystemPowerDialog";
+import FloatingHelpButton from "./help/FloatingHelpButton";
 import { useSudoMobileMenuItems } from "./SudoIndicator";
 import MobileNavDrawer, { type MobileNavSection } from "./MobileNavDrawer";
 import TopBarMenu, { type TopBarMenuItem } from "./TopBarMenu";
@@ -81,7 +80,6 @@ function AppShellContent() {
   const isCompactNav = useMediaQuery(theme.breakpoints.down("md"));
   const hideAppTitle = useMediaQuery(theme.breakpoints.down("lg"));
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [systemPowerOpen, setSystemPowerOpen] = useState(false);
   const onThrottlePage = Boolean(useMatch("/throttle"));
 
   // Throttle is a fixed-viewport route (AppShell clips to 100dvh). Ensure
@@ -141,12 +139,6 @@ function AppShellContent() {
         onClick: () => navigate("/admin/dcc-bus/slots"),
       },
       {
-        id: "logs",
-        label: t("nav.administration.logs"),
-        icon: <BugReportIcon fontSize="small" />,
-        onClick: () => navigate("/admin/logs"),
-      },
-      {
         id: "rentals",
         label: t("nav.administration.rentals"),
         icon: <HandshakeIcon fontSize="small" />,
@@ -154,10 +146,10 @@ function AppShellContent() {
       },
       { id: "divider-system", divider: true },
       {
-        id: "systemPower",
-        label: t("nav.administration.systemPower"),
-        icon: <PowerSettingsNewIcon fontSize="small" />,
-        onClick: () => setSystemPowerOpen(true),
+        id: "system",
+        label: t("nav.administration.system"),
+        icon: <SettingsApplicationsIcon fontSize="small" />,
+        onClick: () => navigate("/admin/system"),
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -478,10 +470,7 @@ function AppShellContent() {
             identityLine={accountCaption ?? undefined}
           />
           {sudoMobileDialogs}
-          <SystemPowerDialog
-            open={systemPowerOpen}
-            onClose={() => setSystemPowerOpen(false)}
-          />
+          <FloatingHelpButton />
         </>
       )}
 

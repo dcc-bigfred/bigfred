@@ -1,27 +1,16 @@
 {
-  "title": "Protokolle",
-  "groupLabel": "Quelle",
-  "fileLabel": "Datei",
-  "tailLines": "Letzte Zeilen",
-  "refresh": "Aktualisieren",
-  "truncated": "nur Ende angezeigt",
-  "empty": "(leer oder fehlende Datei)",
-  "noFiles": "Keine Protokolldateien",
-  "sources": {
-    "supervisord": {
-      "label": "Supervisord"
-    },
-    "redis": {
-      "label": "Redis"
-    },
-    "dcc-bus": {
-      "label": "dcc-bus"
-    }
-  },
-  "entries": {
-    "supervisord.log": "Hauptprotokoll supervisord",
-    "supervisord.config": "supervisord.conf",
-    "redis.stdout": "stdout",
-    "redis.stderr": "stderr"
+  "title": "Logs",
+  "serviceLabel": "Dienst",
+  "empty": "(keine Logs)",
+  "unavailable": "Keine Verbindung zu microinit",
+  "live": {
+    "idle": "Leerlauf",
+    "connecting": "Verbinden…",
+    "connected": "Live",
+    "error": "Stream-Fehler",
+    "reconnecting": "Neu verbinden…",
+    "pause": "Pause",
+    "resume": "Fortsetzen",
+    "clear": "Leeren"
   }
 }

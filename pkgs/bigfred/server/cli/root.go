@@ -53,6 +53,7 @@ type Flags struct {
 
 	MicroinitSocket string
 	MicroinitBin    string
+	MicrodnsBin     string
 
 	// Redis. By default loco-server spawns its own redis-server via
 	// supervisord on RedisBindAddr:RedisPort; pass --redis-external
@@ -127,6 +128,8 @@ real-time throttle commands.`,
 		"microinit IPC socket path (default $BIGFRED_DATA_DIR/run/microinit.sock)")
 	cmd.Flags().StringVar(&f.MicroinitBin, "microinit-bin", "microinit",
 		"microinit binary path (PATH-relative or absolute)")
+	cmd.Flags().StringVar(&f.MicrodnsBin, "microdns-bin", "microdns",
+		"microdns binary path (PATH-relative or absolute) used by the managed daemon")
 	cmd.Flags().StringVar(&f.LogLevel, "log-level", "info",
 		"logrus level (debug, info, warn, error). BIGFRED_LOG_LEVEL env overrides this flag.")
 
@@ -319,16 +322,12 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 				Disable:       !redisMgmt.Managed,
 			},
 			Telemetry: telemetryCfg,
+			Microdns: microinit.MicrodnsConfig{
+				Bin:     f.MicrodnsBin,
+				Disable: !platform.SupportsMicrodns(),
+			},
 		}); err != nil {
 			return fmt.Errorf("ensure microinit infrastructure: %w", err)
-		}
-		// microdns.json is best-effort: seed a default only when absent so
-		// operator edits are preserved; never block startup on write failure.
-		// Android phone builds do not ship microdns — skip seeding entirely.
-		if platform.SupportsMicrodns() {
-			if err := microinit.EnsureMicrodnsConfig(); err != nil {
-				log.WithError(err).Warn("microdns config seed failed; continuing without default template")
-			}
 		}
 		if f.EnableTelemetry {
 			log.WithFields(logrus.Fields{
@@ -673,6 +672,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		CommandStations:  commandStationSvc,
 		Diagnostics:      diagSvc,
 		System:           service.NewSystemControl(supSvc),
+		Microinit:        service.NewMicroinitControl(supSvc),
 		Hub:              hub,
 		DccBus:           dccBusSvc,
 		Radio:            radioSvc,

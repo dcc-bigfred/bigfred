@@ -1,0 +1,11 @@
+{
+  "dialog": {
+    "title": "Hilfe",
+    "disableForRoute": "Für diese Seite nicht anzeigen",
+    "disableGlobal": "Auf keiner Seite anzeigen"
+  },
+  "dashboard": "Um auf der Anlage zu fahren, musst du ein Fahrzeug im Reiter „Fahrzeuge“ mit DCC-Adresse hinzufügen und dann <addIcon></addIcon> klicken, um es zur aktuellen Anlage hinzuzufügen (zu akzeptieren). Wenn das Fahrzeug hinzugefügt ist, wähle oben auf dem Bildschirm <throttleIcon></throttleIcon>",
+  "myVehicles": "Um ein Fahrzeug auf der Anlage fahren zu können, musst du es mit dem Symbol <addIcon></addIcon> zur aktuellen Anlage hinzufügen (akzeptieren). Direkt nach dem Hinzufügen hat das Fahrzeug möglicherweise keine Funktionen — zum Zuweisen nutze <functionsIcon></functionsIcon>, wo du sie manuell setzen oder von einem anderen Fahrzeug bzw. einer Vorlage kopieren kannst.",
+  "rentals": "Du kannst einer anderen Person zeitweise ein Fahrzeug ausleihen, oder eine andere Person kann dir ihres ausleihen. Übernimmt jemand die Kontrolle, verliert die andere Person sie vorübergehend — der/die Eigentümer/in kann sie jederzeit zurückholen. Ein Wechsel der steuernden Person hält das Fahrzeug an.",
+  "myTrains": "Verbinde mehrere Fahrzeuge zu einem Zug, um mehrere Lokomotiven gleichzeitig zu steuern und Wagenlichter in einer Steueransicht einzuschalten. Hinweis — es gelten globale Limits für die Anzahl gesteuerter Fahrzeuge und belegter LocoNet-Slots, die der Anlagenadministrator setzt"
+}

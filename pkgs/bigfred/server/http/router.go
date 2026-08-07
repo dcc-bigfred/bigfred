@@ -36,6 +36,7 @@ type RouterConfig struct {
 	CommandStations  *cmd.CommandStation
 	Diagnostics      *service.DiagnosticsService
 	System           *service.SystemControl
+	Microinit        *service.MicroinitControl
 	Hub              *ws.Hub
 	DccBus           *service.DccBusService
 	Radio            *service.RadioService
@@ -103,6 +104,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	}
 	diagnosticsH := NewDiagnosticsHandler(cfg.Diagnostics)
 	systemH := NewSystemHandler(cfg.System)
+	microinitH := NewMicroinitHandler(cfg.Microinit, cfg.Auth)
 	radioH := NewRadioHandler(cfg.Radio)
 	auditH := NewAuditHandler(cfg.Audit)
 	leaseH := NewLeaseHandler(cfg.Leases, cfg.Auth)
@@ -270,6 +272,11 @@ func NewRouter(cfg RouterConfig) http.Handler {
 
 				r.Get("/admin/system", systemH.Get)
 				r.Post("/admin/system/shutdown", systemH.Shutdown)
+				r.Get("/admin/system/ports", systemH.Ports)
+
+				r.Get("/admin/microinit/services", microinitH.ListServices)
+				r.Get("/admin/microinit/info", microinitH.Info)
+				r.Get("/admin/microinit/services/{id}/logs/stream", microinitH.StreamLogs)
 
 				if cfg.DccBus != nil {
 					slotsProxy := NewDccBusSlotsProxy(cfg.Auth, cfg.DccBus)

@@ -1,0 +1,30 @@
+{
+  "title": "System",
+  "actions": {
+    "reboot": "Restart hub",
+    "poweroff": "Shut down hub",
+    "logs": "View logs",
+    "osPanel": "Open OS management panel",
+    "grafana": "View telemetry in Grafana",
+    "powerUnavailable": "Host power control is only available in microinit init mode",
+    "portClosed": "Service is not reachable on this port"
+  },
+  "refreshDccBus": "Refresh dcc-bus list",
+  "dccBusSection": "dcc-bus daemons",
+  "dccBusEmpty": "No command stations",
+  "microinit": {
+    "title": "microinit",
+    "unavailable": "microinit is unavailable",
+    "version": "Version",
+    "mode": "Mode",
+    "uptime": "Uptime",
+    "services": "Services",
+    "empty": "No services",
+    "colName": "Name",
+    "colState": "State",
+    "colPid": "PID",
+    "colRestarts": "Restarts",
+    "colEnabled": "Enabled",
+    "colLogs": "Logs"
+  }
+}

@@ -46,7 +46,8 @@
       "logs": "Logs",
       "auditLog": "Audit log",
       "rentals": "Rentals",
-      "systemPower": "Shut down system"
+      "systemPower": "Shut down system",
+      "system": "System"
     },
     "my": {
       "menuLabel": "My",

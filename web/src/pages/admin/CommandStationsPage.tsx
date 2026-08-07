@@ -40,6 +40,8 @@ import { Link as RouterLink, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
 import { ApiError } from "../../api/client";
+import { useMe } from "../../api/auth";
+import { useLayoutSupervisordSync } from "../../api/presence";
 import {
   COMMAND_STATION_KINDS,
   COMMAND_STATION_SPEED_STEPS,
@@ -57,9 +59,9 @@ import {
   DEFAULT_COMMAND_STATION_IDLE_TIMEOUT_SECS,
   type CommandStation,
   type CommandStationKind,
-  type DccBusProgramStatus,
   type DccBusSupervisordAction,
 } from "../../api/command_stations";
+import DccBusProgramList from "../../components/dcc-bus/DccBusProgramList";
 
 function isLoconetKind(kind: CommandStationKind): boolean {
   return kind === "loconet_serial" || kind === "loconet_tcp";
@@ -68,6 +70,8 @@ function isLoconetKind(kind: CommandStationKind): boolean {
 export default function CommandStationsPage() {
   const { t } = useTranslation(["commandStation", "common", "errors"]);
   const navigate = useNavigate();
+  const me = useMe().data;
+  useLayoutSupervisordSync(me?.layoutId ?? null);
   const list = useCommandStationsCatalogue();
   const create = useCreateCommandStation();
   const update = useUpdateCommandStation();
@@ -725,10 +729,6 @@ export default function CommandStationsPage() {
   );
 }
 
-function dccBusStderrFileId(layoutId: number, commandStationId: number): string {
-  return `dcc-bus.dcc-bus-${layoutId}-${commandStationId}.stderr.log`;
-}
-
 function DccBusSupervisordDialog({
   target,
   onClose,
@@ -779,10 +779,9 @@ function DccBusSupervisordDialog({
   };
 
   const openLogs = (layoutId: number) => {
-    const file = dccBusStderrFileId(layoutId, target.id);
     onClose();
     navigate(
-      `/admin/logs?group=${encodeURIComponent("dcc-bus")}&file=${encodeURIComponent(file)}`,
+      `/admin/logs?service=${encodeURIComponent(`dcc-bus-${layoutId}-${target.id}`)}`,
     );
   };
 
@@ -793,30 +792,19 @@ function DccBusSupervisordDialog({
       </DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
-          {status.isLoading ? (
-            <CircularProgress size={24} />
-          ) : status.isError ? (
-            <Alert severity="error">
-              {formatError(status.error)}
-            </Alert>
-          ) : programs.length === 0 ? (
-            <Alert severity="info">
-              {t("commandStation:admin.supervisord.noPrograms")}
-            </Alert>
-          ) : (
-            programs.map((program) => (
-              <DccBusProgramRow
-                key={program.layoutId}
-                program={program}
-                pendingLayoutId={pendingLayoutId}
-                error={
-                  failedLayoutId === program.layoutId ? actionError : null
-                }
-                onAction={(next) => void runAction(program.layoutId, next)}
-                onViewLogs={() => openLogs(program.layoutId)}
-              />
-            ))
-          )}
+          <DccBusProgramList
+            programs={programs}
+            pendingLayoutId={pendingLayoutId}
+            errorByLayoutId={
+              failedLayoutId != null && actionError
+                ? { [failedLayoutId]: actionError }
+                : undefined
+            }
+            loading={status.isLoading}
+            listError={status.isError ? formatError(status.error) : null}
+            onAction={(layoutId, next) => void runAction(layoutId, next)}
+            onViewLogs={openLogs}
+          />
         </Stack>
       </DialogContent>
       <DialogActions>
@@ -825,90 +813,5 @@ function DccBusSupervisordDialog({
         </Button>
       </DialogActions>
     </Dialog>
-  );
-}
-
-function DccBusProgramRow({
-  program,
-  pendingLayoutId,
-  error,
-  onAction,
-  onViewLogs,
-}: {
-  program: DccBusProgramStatus;
-  pendingLayoutId: number | null;
-  error: string | null;
-  onAction: (action: DccBusSupervisordAction) => void;
-  onViewLogs: () => void;
-}) {
-  const { t } = useTranslation(["commandStation"]);
-  const layoutLabel = program.layoutName || `#${program.layoutId}`;
-  const busy = pendingLayoutId === program.layoutId;
-  const running = program.running;
-
-  return (
-    <Stack
-      spacing={1}
-      sx={{
-        border: 1,
-        borderColor: "divider",
-        borderRadius: 1,
-        p: 1.5,
-      }}
-    >
-      <Stack
-        direction="row"
-        spacing={1}
-        alignItems="center"
-        justifyContent="space-between"
-        flexWrap="wrap"
-        useFlexGap
-      >
-        <Typography variant="subtitle2">{layoutLabel}</Typography>
-        <Chip
-          size="small"
-          color={running ? "success" : "default"}
-          label={
-            running
-              ? t("commandStation:admin.supervisord.statusOn")
-              : t("commandStation:admin.supervisord.statusOff")
-          }
-        />
-      </Stack>
-      <Typography variant="caption" color="text.secondary">
-        {program.name}
-        {program.pid != null && program.pid > 0 ? ` · pid ${program.pid}` : ""}
-      </Typography>
-      {error && <Alert severity="error">{error}</Alert>}
-      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-        <Button
-          variant="contained"
-          size="small"
-          disabled={busy || running}
-          onClick={() => onAction("start")}
-        >
-          {t("commandStation:admin.supervisord.start")}
-        </Button>
-        <Button
-          variant="outlined"
-          size="small"
-          disabled={busy || !running}
-          onClick={() => onAction("stop")}
-        >
-          {t("commandStation:admin.supervisord.stop")}
-        </Button>
-        <Button
-          variant="outlined"
-          size="small"
-          disabled={busy}
-          onClick={() => onAction("restart")}
-        >
-          {t("commandStation:admin.supervisord.restart")}
-        </Button>
-        <Button variant="text" size="small" onClick={onViewLogs}>
-          {t("commandStation:admin.supervisord.viewLogs")}
-        </Button>
-      </Stack>
-    </Stack>
   );
 }

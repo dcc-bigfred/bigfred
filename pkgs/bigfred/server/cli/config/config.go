@@ -34,6 +34,7 @@ type File struct {
 	NoSupervisor                  *bool
 	MicroinitSocket               string
 	MicroinitBin                  string
+	MicrodnsBin                   string
 	LogLevel                      string
 	RedisBin                      string
 	RedisBindAddr                 string
@@ -59,6 +60,7 @@ func DefaultFile() File {
 		CorsOrigins:     []string{"http://localhost:5173", "http://127.0.0.1:5173"},
 		LogLevel:        "info",
 		RedisBin:        "valkey-server",
+		MicrodnsBin:     "microdns",
 		RedisBindAddr:   "127.0.0.1",
 		RedisPort:       &port,
 		TelemetryConfig: service.DefaultTelemetryConfigPath(),
@@ -134,6 +136,8 @@ func Parse(text string) File {
 			f.MicroinitSocket = value
 		case "MICROINIT_BIN", "MICROINITBIN":
 			f.MicroinitBin = value
+		case "MICRODNS_BIN", "MICRODNSBIN":
+			f.MicrodnsBin = value
 		case "LOG_LEVEL", "LOGLEVEL":
 			f.LogLevel = value
 		case "REDIS_BIN", "REDISBIN":

@@ -68,3 +68,14 @@ func (h *SystemHandler) Shutdown(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// Ports handles GET /api/v1/admin/system/ports.
+func (h *SystemHandler) Ports(w http.ResponseWriter, _ *http.Request) {
+	if h.svc == nil {
+		writeJSONError(w, http.StatusServiceUnavailable, "system_unavailable")
+		return
+	}
+	ports := h.svc.Ports()
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(ports)
+}

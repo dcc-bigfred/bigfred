@@ -16,6 +16,8 @@ import {
   Typography,
 } from "@mui/material";
 import RemoveCircleOutlineIcon from "@mui/icons-material/RemoveCircleOutline";
+import DirectionsRailwayIcon from "@mui/icons-material/DirectionsRailway";
+import TrainIcon from "@mui/icons-material/Train";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 
@@ -90,6 +92,7 @@ export default function RosterSection({ layoutId }: Props) {
             gap: 1,
           }}
         >
+          <DirectionsRailwayIcon fontSize="small" color="action" aria-hidden />
           <Typography variant="h6" sx={{ flexGrow: 1 }}>
             {t("vehicle:roster.trains.title")}
           </Typography>
@@ -177,6 +180,7 @@ export default function RosterSection({ layoutId }: Props) {
             gap: 1,
           }}
         >
+          <TrainIcon fontSize="small" color="action" aria-hidden />
           <Typography variant="h6" sx={{ flexGrow: 1 }}>
             {t("vehicle:roster.vehicles.title")}
           </Typography>

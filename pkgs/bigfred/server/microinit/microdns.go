@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"path/filepath"
 
 	"github.com/dcc-bigfred/microinit/go/config"
 
@@ -30,15 +31,20 @@ func EnsureMicrodnsConfig() error {
 	if !platform.SupportsMicrodns() {
 		return nil
 	}
-	path := datadir.Path("etc", "microdns.json")
+	return ensureMicrodnsConfigFile(datadir.Path("etc", "microdns.json"))
+}
+
+func ensureMicrodnsConfigFile(path string) error {
 	if _, err := os.Stat(path); err == nil {
 		return nil
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	// Validate the default so a typo fails tests / startup seed, not microdns.
 	if !json.Valid([]byte(defaultMicrodnsConfig)) {
 		return errors.New("microdns: default config is not valid JSON")
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
 	}
 	return config.WriteFileAtomically(path, []byte(defaultMicrodnsConfig))
 }

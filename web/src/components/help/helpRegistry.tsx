@@ -1,5 +1,5 @@
 import type { ReactElement } from "react";
-import AddIcon from "@mui/icons-material/Add";
+import PlaylistAddIcon from "@mui/icons-material/PlaylistAdd";
 import SpeedIcon from "@mui/icons-material/Speed";
 import TuneIcon from "@mui/icons-material/Tune";
 
@@ -20,14 +20,14 @@ export const HELP_REGISTRY: Record<string, HelpEntry> = {
   "/": {
     i18nKey: "dashboard",
     components: {
-      addIcon: <AddIcon sx={iconSx} color="action" />,
+      addIcon: <PlaylistAddIcon sx={iconSx} color="action" />,
       throttleIcon: <SpeedIcon sx={iconSx} color="action" />,
     },
   },
   "/my/vehicles": {
     i18nKey: "myVehicles",
     components: {
-      addIcon: <AddIcon sx={iconSx} color="action" />,
+      addIcon: <PlaylistAddIcon sx={iconSx} color="action" />,
       functionsIcon: <TuneIcon sx={iconSx} color="action" />,
     },
   },

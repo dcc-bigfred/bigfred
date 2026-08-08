@@ -7,7 +7,12 @@ import { useHelpVisibility } from "../../hooks/useHelpVisibility";
 import HelpDialog from "./HelpDialog";
 
 const FAB_SIZE = 56;
-const DRAG_THRESHOLD_PX = 6;
+const DRAG_THRESHOLD_MOUSE_PX = 6;
+const DRAG_THRESHOLD_TOUCH_PX = 16;
+
+function dragThresholdFor(pointerType: string): number {
+  return pointerType === "touch" ? DRAG_THRESHOLD_TOUCH_PX : DRAG_THRESHOLD_MOUSE_PX;
+}
 
 function clampPosition(
   x: number,
@@ -49,9 +54,16 @@ export default function FloatingHelpButton() {
     }
   }, [openRequestId, entry]);
 
-  const dragging = useRef(false);
+  // pressing: finger/mouse down, not yet a drag. moved: threshold crossed → drag.
+  const pressing = useRef(false);
   const moved = useRef(false);
-  const start = useRef({ pointerX: 0, pointerY: 0, originX: 0, originY: 0 });
+  const start = useRef({
+    pointerX: 0,
+    pointerY: 0,
+    originX: 0,
+    originY: 0,
+    threshold: DRAG_THRESHOLD_MOUSE_PX,
+  });
   const posRef = useRef(position);
   posRef.current = position;
 
@@ -67,13 +79,14 @@ export default function FloatingHelpButton() {
   const onPointerDown = useCallback(
     (e: React.PointerEvent<HTMLButtonElement>) => {
       if (e.button !== 0) return;
-      dragging.current = true;
+      pressing.current = true;
       moved.current = false;
       start.current = {
         pointerX: e.clientX,
         pointerY: e.clientY,
         originX: posRef.current.x,
         originY: posRef.current.y,
+        threshold: dragThresholdFor(e.pointerType),
       };
       e.currentTarget.setPointerCapture(e.pointerId);
     },
@@ -82,13 +95,17 @@ export default function FloatingHelpButton() {
 
   const onPointerMove = useCallback(
     (e: React.PointerEvent<HTMLButtonElement>) => {
-      if (!dragging.current) return;
+      if (!pressing.current) return;
       const dx = e.clientX - start.current.pointerX;
       const dy = e.clientY - start.current.pointerY;
-      if (
-        Math.abs(dx) > DRAG_THRESHOLD_PX ||
-        Math.abs(dy) > DRAG_THRESHOLD_PX
-      ) {
+      if (!moved.current) {
+        if (
+          Math.abs(dx) <= start.current.threshold &&
+          Math.abs(dy) <= start.current.threshold
+        ) {
+          // Still a tap candidate — keep FAB still.
+          return;
+        }
         moved.current = true;
       }
       setPosition(
@@ -100,8 +117,8 @@ export default function FloatingHelpButton() {
 
   const onPointerUp = useCallback(
     (e: React.PointerEvent<HTMLButtonElement>) => {
-      if (!dragging.current) return;
-      dragging.current = false;
+      if (!pressing.current) return;
+      pressing.current = false;
       try {
         e.currentTarget.releasePointerCapture(e.pointerId);
       } catch {

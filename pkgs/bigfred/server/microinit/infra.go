@@ -106,6 +106,7 @@ func RedisServiceDef(cfg RedisConfig) (ServiceDef, error) {
 		RestartPolicy:    RestartAlways,
 		StartWaitSecs:    IntPtr(2),
 		ShutdownWaitSecs: IntPtr(10),
+		OrderPriority:    IntPtr(100),
 		StartCmd:         "exec " + strings.Join(args, " "),
 		LivenessProbe:    &LivenessProbe{TCPAddr: net.JoinHostPort(bind, strconv.Itoa(int(port))), Interval: 10},
 	}, CreatedByBigfred), nil
@@ -145,6 +146,7 @@ func MicrodnsServiceDef(cfg MicrodnsConfig) (ServiceDef, error) {
 		RestartBackoff:   IntPtr(60),
 		StartWaitSecs:    IntPtr(1),
 		ShutdownWaitSecs: IntPtr(5),
+		OrderPriority:    IntPtr(110),
 		StartCmd: fmt.Sprintf(
 			"exec %s --config %s",
 			config.ShellQuote(bin),
@@ -187,6 +189,7 @@ func AlloyServiceDef(cfg TelemetryConfig) (ServiceDef, error) {
 		RestartPolicy:    RestartOnError,
 		StartWaitSecs:    IntPtr(2),
 		ShutdownWaitSecs: IntPtr(10),
+		OrderPriority:    IntPtr(130),
 		StartCmd: fmt.Sprintf(
 			"exec %s run --storage.path=%s %s",
 			config.ShellQuote(bin), config.ShellQuote(storage), config.ShellQuote(AlloyRunConfigPath(cfg)),

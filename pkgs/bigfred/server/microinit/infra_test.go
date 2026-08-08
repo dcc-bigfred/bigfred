@@ -34,6 +34,9 @@ func TestRedisServiceDefCreatesDataDir(t *testing.T) {
 	if svc.RestartPolicy != RestartAlways {
 		t.Fatalf("RestartPolicy = %q, want %q", svc.RestartPolicy, RestartAlways)
 	}
+	if svc.OrderPriority == nil || *svc.OrderPriority != 100 {
+		t.Fatalf("OrderPriority = %v, want 100", svc.OrderPriority)
+	}
 }
 
 func TestRedisServiceDefDefaultDataDir(t *testing.T) {
@@ -65,6 +68,9 @@ func TestMicrodnsServiceDefWritesConfig(t *testing.T) {
 	}
 	if svc.Labels[LabelCreatedBy] != CreatedByBigfred {
 		t.Fatalf("labels: %+v", svc.Labels)
+	}
+	if svc.OrderPriority == nil || *svc.OrderPriority != 110 {
+		t.Fatalf("OrderPriority = %v, want 110", svc.OrderPriority)
 	}
 	path := filepath.Join(root, "etc", "microdns.json")
 	if _, err := os.Stat(path); err != nil {

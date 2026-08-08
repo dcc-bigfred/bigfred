@@ -625,6 +625,7 @@ func (d *DccBusService) buildServiceDef(ctx context.Context, name string, layout
 		RestartPolicy:    microinit.RestartOnError,
 		StartWaitSecs:    microinit.IntPtr(1),
 		ShutdownWaitSecs: microinit.IntPtr(35),
+		OrderPriority:    microinit.IntPtr(350),
 		StartCmd:         "exec " + strings.Join(args, " "),
 	}
 	if d.cfg.ManagedRedis {

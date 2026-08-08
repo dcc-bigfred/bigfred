@@ -16,8 +16,8 @@ github.com/creack/goselect v0.1.2/go.mod h1:a/NhLweNvqIYMuxcMOuWY516Cimucms3DglD
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
-github.com/dcc-bigfred/microinit/go v0.5.1-0.20260808173513-340a48672843 h1:DZSIEldbiSAHyW+PMZvxJkGpWeP2LQ0JwmiUvzJt3jo=
-github.com/dcc-bigfred/microinit/go v0.5.1-0.20260808173513-340a48672843/go.mod h1:pWmLbG5Xl+PEx0nr0t70gc+Ztizk/+LuJcBvz00dtys=
+github.com/dcc-bigfred/microinit/go v0.5.1-0.20260808183938-3d44aecd02c5 h1:zftTDpb6kcIoATlB7FMeVLiCwtUyyHDIBuLnJgehHqU=
+github.com/dcc-bigfred/microinit/go v0.5.1-0.20260808183938-3d44aecd02c5/go.mod h1:pWmLbG5Xl+PEx0nr0t70gc+Ztizk/+LuJcBvz00dtys=
 github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f h1:lO4WD4F/rVNCu3HqELle0jiPLLBs70cWOduZpkS1E78=
 github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f/go.mod h1:cuUVRXasLTGF7a8hSLbxyZXjz+1KgoB3wDUb6vlszIc=
 github.com/dustin/go-humanize v1.0.1 h1:GzkhY7T5VNhEkwH0PVJgjz+fX1rhBrR7pRT3mDkpeCY=

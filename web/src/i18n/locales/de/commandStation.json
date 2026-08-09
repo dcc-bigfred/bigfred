@@ -77,6 +77,12 @@
           "instruction": "Boot-Stop ist ein einmaliger Notstopp aller Anlagenfahrzeuge direkt nach dem Start von dcc-bus. Nützlich, wenn Loks nach einem Neustart nicht mit der alten Geschwindigkeit weiterfahren sollen. Jede Änderung der Zentraleneinstellungen startet die Verbindung neu — das löst ebenfalls Boot-Stop aus.",
           "alert": "Mit aktivem Boot-Stop erhalten Fahrzeuge bei jedem Neustart von BigFred / dcc-bus einen Notstopp."
         },
+        "programming": {
+          "label": "Programmierung",
+          "title": "Decoder-Programmierung",
+          "instruction": "Lege fest, ob diese Zentrale Decoder programmieren darf (CVs lesen und schreiben, Adresse ändern), und wähle das Gleis, das dafür standardmäßig genutzt wird. Du kannst die Zentrale außerdem im Reglerbild ausblenden, damit niemand versehentlich darauf fährt — praktisch für eine reine Programmierzentrale.",
+          "alert": "CVs auf einer laufenden Anlage zu schreiben ist destruktiv. Lass die Programmierung aus, wenn du diese Zentrale nicht wirklich dafür nutzt."
+        },
         "slots": {
           "label": "Slots",
           "title": "LocoNet-Slot-Zuweisung",
@@ -94,6 +100,10 @@
       "z21": "Z21 (UDP)",
       "loconet_serial": "LocoNet (seriell)",
       "loconet_tcp": "LocoNet (TCP)"
+    },
+    "programmingTrack": {
+      "prog": "Programmiergleis (prog)",
+      "pom": "Hauptgleis (POM)"
     },
     "dialogs": {
       "create": {
@@ -136,7 +146,13 @@
         "bootStopEnabled": "Boot-Stop aller Fahrzeuge",
         "bootStopEnabledHelp": "Wenn aktiviert, sendet dcc-bus nach dem Start einmal einen Notstopp an jedes im System angelegte Fahrzeug.",
         "singleVehicleControl": "Nur ein Fahrzeug gleichzeitig steuerbar",
-        "singleVehicleControlHelp": "Wenn aktiviert, stoppt die Auswahl oder Fahrt eines anderen Fahrzeugs/Zugs die übrigen fahrenden Fahrzeuge des Benutzers (Geschwindigkeit > 1). Verliehene Fahrzeuge werden nicht gestoppt."
+        "singleVehicleControlHelp": "Wenn aktiviert, stoppt die Auswahl oder Fahrt eines anderen Fahrzeugs/Zugs die übrigen fahrenden Fahrzeuge des Benutzers (Geschwindigkeit > 1). Verliehene Fahrzeuge werden nicht gestoppt.",
+        "programming": "Decoder-Programmierung",
+        "programmingHelp": "Erlaubt das Lesen und Schreiben von Decoder-CVs sowie das Ändern der DCC-Adresse über diese Zentrale. Standardmäßig aus, weil CV-Schreibvorgänge auf einer laufenden Anlage destruktiv sind.",
+        "defaultProgrammingTrackOutput": "Standard-Programmiergleisausgang",
+        "defaultProgrammingTrackOutputHelp": "Gleis, das genutzt wird, wenn eine Programmieranfrage es nicht angibt: der separate Programmiergleisausgang (prog) oder das Hauptgleis (POM, Programmierung auf dem Hauptgleis).",
+        "hideInThrottle": "Im Reglerbild ausblenden",
+        "hideInThrottleHelp": "Die Zentrale erscheint nicht in der Zentralenauswahl des Reglers. Für eine reine Programmierzentrale, auf der niemand fahren soll."
       }
     },
     "empty": "Keine Zentralen anzuzeigen.",

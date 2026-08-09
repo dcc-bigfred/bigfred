@@ -49,6 +49,13 @@ type RouterConfig struct {
 	// (5173) than the API, so cookies must be allowed cross-origin.
 	AllowedOrigins []string
 
+	// OAuthClients, when set, supplies drop-in OAuth clients and extra
+	// CORS origins (corsEnabled:true only).
+	OAuthClients *cmd.OAuthClientsRegistry
+
+	// OAuth implements authorization-code SSO.
+	OAuth *cmd.OAuth
+
 	// SecureCookie controls the `Secure` flag on the session cookie.
 	// Set to false ONLY when the server is reachable over http://
 	// (i.e. local development).
@@ -77,9 +84,9 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	r.Use(chimiddleware.Recoverer)
 
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   cfg.AllowedOrigins,
+		AllowOriginFunc:  corsAllowOriginFunc(cfg.AllowedOrigins, cfg.OAuthClients),
 		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Content-Type", "Authorization"},
+		AllowedHeaders:   []string{"Content-Type", "Authorization", ImpersonateAsHeader},
 		ExposedHeaders:   []string{"Content-Type"},
 		AllowCredentials: true,
 		MaxAge:           300,
@@ -130,6 +137,12 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		r.Post("/auth/login", authH.Login)
 		r.Post("/auth/logout", authH.Logout)
 
+		if cfg.OAuth != nil {
+			oauthH := NewOAuthHandler(cfg.OAuth, cfg.Auth)
+			r.Get("/auth/oauth/authorize", oauthH.Authorize)
+			r.Post("/auth/oauth/token", oauthH.Token)
+		}
+
 		// Public layout dropdown for the login form (§7a.1). Lives
 		// outside RequireAuth so an unauthenticated client can fetch
 		// the list before submitting credentials.
@@ -142,6 +155,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		// Authenticated routes share the RequireAuth middleware.
 		r.Group(func(r chi.Router) {
 			r.Use(RequireAuth(cfg.Auth, cfg.Metrics))
+			r.Use(MaybeImpersonate(cfg.Auth, cfg.Users))
 
 			r.Get("/audit-log", auditH.List)
 
@@ -307,4 +321,35 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	}
 
 	return r
+}
+
+func corsAllowOriginFunc(static []string, clients *cmd.OAuthClientsRegistry) func(r *http.Request, origin string) bool {
+	allowed := make(map[string]struct{}, len(static))
+	for _, o := range static {
+		if o == "" {
+			continue
+		}
+		allowed[o] = struct{}{}
+	}
+	return func(_ *http.Request, origin string) bool {
+		if origin == "" {
+			return true
+		}
+		if _, ok := allowed[origin]; ok {
+			return true
+		}
+		if clients != nil {
+			for _, o := range clients.CorsOrigins() {
+				if o == origin {
+					return true
+				}
+			}
+		}
+		// Mirror previous empty-list behavior used in some local setups:
+		// if no static origins configured and no oauth cors, allow all.
+		if len(allowed) == 0 && (clients == nil || len(clients.CorsOrigins()) == 0) {
+			return true
+		}
+		return false
+	}
 }

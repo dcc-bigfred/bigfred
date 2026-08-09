@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
@@ -16,11 +17,13 @@ import (
 // handler and the auth middleware agree on it.
 const SessionCookieName = "bigfred_session"
 
+// ImpersonateAsHeader is the admin-only subject switch for authenticated APIs.
+const ImpersonateAsHeader = "X-BigFred-Impersonate-As"
+
 // RequireAuth is the chi middleware that enforces an authenticated
 // session for the wrapped handler chain. It reads the JWT from the
-// session cookie (falling back to a `?token=` query parameter to
-// support WS upgrades per §7a.1), verifies it via AuthService and
-// attaches the resulting Identity to the request context.
+// session cookie (falling back to Bearer / `?token=`), verifies it via
+// AuthService and attaches the resulting Identity to the request context.
 func RequireAuth(auth *cmd.Auth, m *metrics.Metrics) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -54,18 +57,21 @@ func RequireAuth(auth *cmd.Auth, m *metrics.Metrics) func(http.Handler) http.Han
 
 // RequireRole composes on top of RequireAuth: it returns 403 when the
 // authenticated user's effective role inside their active layout
-// isn't in the allow-list. Per §7a.7 a sudo admin grants the same
-// authority as a permanent admin everywhere, so the gate consults
-// AuthService.Effective rather than the JWT-pinned permanent role.
+// isn't in the allow-list. When impersonation is active, Effective is
+// computed for the **actor** (real caller), not the subject.
 func RequireRole(auth *cmd.Auth, roles ...domain.Role) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			id, ok := IdentityFromContext(r.Context())
+			actor, ok := ActorFromContext(r.Context())
 			if !ok {
-				writeJSONError(w, http.StatusUnauthorized, "unauthorized")
-				return
+				id, idOK := IdentityFromContext(r.Context())
+				if !idOK {
+					writeJSONError(w, http.StatusUnauthorized, "unauthorized")
+					return
+				}
+				actor = id
 			}
-			eff, err := auth.Effective(r.Context(), id.User, id.Layout.ID)
+			eff, err := auth.Effective(r.Context(), actor.User, actor.Layout.ID)
 			if err != nil {
 				writeJSONError(w, http.StatusInternalServerError, "internal_error")
 				return
@@ -81,20 +87,60 @@ func RequireRole(auth *cmd.Auth, roles ...domain.Role) func(http.Handler) http.H
 	}
 }
 
+// MaybeImpersonate switches Identity to the named user when the admin
+// sends ImpersonateAsHeader. Actor remains available via ActorFromContext.
+func MaybeImpersonate(auth *cmd.Auth, users *cmd.User) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			login := strings.TrimSpace(r.Header.Get(ImpersonateAsHeader))
+			if login == "" {
+				next.ServeHTTP(w, r)
+				return
+			}
+			id, ok := IdentityFromContext(r.Context())
+			if !ok {
+				writeJSONError(w, http.StatusUnauthorized, "unauthorized")
+				return
+			}
+			eff, err := auth.Effective(r.Context(), id.User, id.Layout.ID)
+			if err != nil {
+				writeJSONError(w, http.StatusInternalServerError, "internal_error")
+				return
+			}
+			if !eff.Has(domain.RoleAdmin) {
+				writeJSONError(w, http.StatusForbidden, svcerrors.CodeImpersonationForbidden)
+				return
+			}
+			subject, err := users.FindByLogin(r.Context(), login)
+			if err != nil {
+				status, code := svcerrors.UserHTTPStatus(err)
+				writeJSONError(w, status, code)
+				return
+			}
+			if !subject.Active {
+				writeJSONError(w, http.StatusForbidden, svcerrors.CodeAccountDeactivated)
+				return
+			}
+			ctx := WithActor(r.Context(), id)
+			ctx = WithIdentity(ctx, cmd.Identity{User: subject, Layout: id.Layout})
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
 // readSessionToken extracts the session JWT from a request, preferring
-// the cookie (set by /auth/login) and falling back to a `?token=`
-// query parameter so a WebSocket upgrade can authenticate without
-// custom headers.
+// the cookie, then Authorization: Bearer, then `?token=`.
 func readSessionToken(r *http.Request) string {
 	if c, err := r.Cookie(SessionCookieName); err == nil && c.Value != "" {
 		return c.Value
 	}
+	if h := r.Header.Get("Authorization"); strings.HasPrefix(h, "Bearer ") {
+		return strings.TrimSpace(strings.TrimPrefix(h, "Bearer "))
+	}
 	return r.URL.Query().Get("token")
 }
 
-// writeJSONError renders {"error": "..."} with the given status. The
-// machine-readable code lets the frontend localise without parsing
-// English prose.
+// writeJSONError renders {"error": "..."} with the given status.
 func writeJSONError(w http.ResponseWriter, status int, code string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

@@ -57,9 +57,12 @@ import {
   DEFAULT_COMMAND_STATION_SPEED_STEPS,
   DEFAULT_COMMAND_STATION_MAX_LOCONET_SLOTS,
   DEFAULT_COMMAND_STATION_IDLE_TIMEOUT_SECS,
+  DEFAULT_PROGRAMMING_TRACK_OUTPUT,
+  PROGRAMMING_TRACK_OUTPUTS,
   type CommandStation,
   type CommandStationKind,
   type DccBusSupervisordAction,
+  type ProgrammingTrackOutput,
 } from "../../api/command_stations";
 import DccBusProgramList from "../../components/dcc-bus/DccBusProgramList";
 
@@ -114,6 +117,12 @@ export default function CommandStationsPage() {
   const [singleVehicleControlInput, setSingleVehicleControlInput] = useState(false);
   const [allocatePhysicalSlotsInput, setAllocatePhysicalSlotsInput] =
     useState(true);
+  const [programmingInput, setProgrammingInput] = useState(false);
+  const [hideInThrottleInput, setHideInThrottleInput] = useState(false);
+  const [
+    defaultProgrammingTrackOutputInput,
+    setDefaultProgrammingTrackOutputInput,
+  ] = useState<ProgrammingTrackOutput>(DEFAULT_PROGRAMMING_TRACK_OUTPUT);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const closeDialog = () => {
@@ -133,6 +142,9 @@ export default function CommandStationsPage() {
     setBootStopEnabledInput(false);
     setSingleVehicleControlInput(false);
     setAllocatePhysicalSlotsInput(true);
+    setProgrammingInput(false);
+    setHideInThrottleInput(false);
+    setDefaultProgrammingTrackOutputInput(DEFAULT_PROGRAMMING_TRACK_OUTPUT);
     setActionError(null);
     create.reset();
     update.reset();
@@ -165,6 +177,9 @@ export default function CommandStationsPage() {
     setBootStopEnabledInput(false);
     setSingleVehicleControlInput(false);
     setAllocatePhysicalSlotsInput(true);
+    setProgrammingInput(false);
+    setHideInThrottleInput(false);
+    setDefaultProgrammingTrackOutputInput(DEFAULT_PROGRAMMING_TRACK_OUTPUT);
     setActionError(null);
   };
 
@@ -189,6 +204,11 @@ export default function CommandStationsPage() {
     setBootStopEnabledInput(target.bootStopEnabled);
     setSingleVehicleControlInput(target.singleVehicleControl);
     setAllocatePhysicalSlotsInput(target.allocatePhysicalSlots ?? true);
+    setProgrammingInput(target.programming);
+    setHideInThrottleInput(target.hideInThrottle);
+    setDefaultProgrammingTrackOutputInput(
+      target.defaultProgrammingTrackOutput ?? DEFAULT_PROGRAMMING_TRACK_OUTPUT,
+    );
     setActionError(null);
   };
 
@@ -214,6 +234,9 @@ export default function CommandStationsPage() {
         idleTimeoutSecs: idleTimeoutSecsInput,
         bootStopEnabled: bootStopEnabledInput,
         singleVehicleControl: singleVehicleControlInput,
+        programming: programmingInput,
+        hideInThrottle: hideInThrottleInput,
+        defaultProgrammingTrackOutput: defaultProgrammingTrackOutputInput,
         ...(isLoconetKind(kindInput)
           ? {
               maxLoconetSlots: maxLoconetSlotsInput,
@@ -581,6 +604,63 @@ export default function CommandStationsPage() {
             />
             <Typography variant="body2" color="text.secondary">
               {t("commandStation:admin.dialogs.fields.singleVehicleControlHelp")}
+            </Typography>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={programmingInput}
+                  onChange={(e) => setProgrammingInput(e.target.checked)}
+                />
+              }
+              label={t("commandStation:admin.dialogs.fields.programming")}
+            />
+            <Typography variant="body2" color="text.secondary">
+              {t("commandStation:admin.dialogs.fields.programmingHelp")}
+            </Typography>
+            {programmingInput && (
+              <FormControl fullWidth>
+                <InputLabel>
+                  {t(
+                    "commandStation:admin.dialogs.fields.defaultProgrammingTrackOutput",
+                  )}
+                </InputLabel>
+                <Select
+                  value={defaultProgrammingTrackOutputInput}
+                  label={t(
+                    "commandStation:admin.dialogs.fields.defaultProgrammingTrackOutput",
+                  )}
+                  onChange={(e) =>
+                    setDefaultProgrammingTrackOutputInput(
+                      e.target.value as ProgrammingTrackOutput,
+                    )
+                  }
+                >
+                  {PROGRAMMING_TRACK_OUTPUTS.map((track) => (
+                    <MenuItem key={track} value={track}>
+                      {t(`commandStation:admin.programmingTrack.${track}`)}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
+            {programmingInput && (
+              <Typography variant="body2" color="text.secondary">
+                {t(
+                  "commandStation:admin.dialogs.fields.defaultProgrammingTrackOutputHelp",
+                )}
+              </Typography>
+            )}
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={hideInThrottleInput}
+                  onChange={(e) => setHideInThrottleInput(e.target.checked)}
+                />
+              }
+              label={t("commandStation:admin.dialogs.fields.hideInThrottle")}
+            />
+            <Typography variant="body2" color="text.secondary">
+              {t("commandStation:admin.dialogs.fields.hideInThrottleHelp")}
             </Typography>
             <FormControlLabel
               control={

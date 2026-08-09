@@ -22,6 +22,9 @@ type CommandStationResponse struct {
 	BootStopEnabled         bool                      `json:"bootStopEnabled"`
 	SingleVehicleControl    bool                      `json:"singleVehicleControl"`
 	AllocatePhysicalSlots   bool                      `json:"allocatePhysicalSlots"`
+	Programming                   bool   `json:"programming"`
+	HideInThrottle                bool   `json:"hideInThrottle"`
+	DefaultProgrammingTrackOutput string `json:"defaultProgrammingTrackOutput"`
 }
 
 func ToCommandStationResponse(cs domain.CommandStation) CommandStationResponse {
@@ -39,6 +42,9 @@ func ToCommandStationResponse(cs domain.CommandStation) CommandStationResponse {
 		WithrottleServerEnabled: cs.WithrottleServerEnabled,
 		BootStopEnabled:         cs.BootStopEnabled,
 		SingleVehicleControl:    cs.SingleVehicleControl,
+		Programming:                   cs.Programming,
+		HideInThrottle:                cs.HideInThrottle,
+		DefaultProgrammingTrackOutput: cs.EffectiveDefaultProgrammingTrackOutput(),
 	}
 	if cs.Kind.IsLocoNet() {
 		resp.MaxLoconetSlots = cs.EffectiveMaxLoconetSlots()
@@ -64,6 +70,9 @@ type CommandStationCreateRequest struct {
 	BootStopEnabled         bool                      `json:"bootStopEnabled"`
 	SingleVehicleControl    bool                      `json:"singleVehicleControl"`
 	AllocatePhysicalSlots   *bool                     `json:"allocatePhysicalSlots"`
+	Programming                   bool   `json:"programming"`
+	HideInThrottle                bool   `json:"hideInThrottle"`
+	DefaultProgrammingTrackOutput string `json:"defaultProgrammingTrackOutput"`
 }
 
 func (r CommandStationCreateRequest) ToCreateInput() cmd.CommandStationCreateInput {
@@ -83,6 +92,9 @@ func (r CommandStationCreateRequest) ToCreateInput() cmd.CommandStationCreateInp
 		BootStopEnabled:         r.BootStopEnabled,
 		SingleVehicleControl:    r.SingleVehicleControl,
 		AllocatePhysicalSlots:   r.AllocatePhysicalSlots,
+		Programming:                   r.Programming,
+		HideInThrottle:                r.HideInThrottle,
+		DefaultProgrammingTrackOutput: r.DefaultProgrammingTrackOutput,
 	}
 }
 
@@ -102,6 +114,9 @@ type CommandStationUpdateRequest struct {
 	BootStopEnabled         *bool                      `json:"bootStopEnabled"`
 	SingleVehicleControl    *bool                      `json:"singleVehicleControl"`
 	AllocatePhysicalSlots   *bool                      `json:"allocatePhysicalSlots"`
+	Programming                   *bool   `json:"programming"`
+	HideInThrottle                *bool   `json:"hideInThrottle"`
+	DefaultProgrammingTrackOutput *string `json:"defaultProgrammingTrackOutput"`
 }
 
 func (r CommandStationUpdateRequest) ToUpdateInput() cmd.CommandStationUpdateInput {
@@ -121,5 +136,8 @@ func (r CommandStationUpdateRequest) ToUpdateInput() cmd.CommandStationUpdateInp
 		BootStopEnabled:         r.BootStopEnabled,
 		SingleVehicleControl:    r.SingleVehicleControl,
 		AllocatePhysicalSlots:   r.AllocatePhysicalSlots,
+		Programming:                   r.Programming,
+		HideInThrottle:                r.HideInThrottle,
+		DefaultProgrammingTrackOutput: r.DefaultProgrammingTrackOutput,
 	}
 }

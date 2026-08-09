@@ -10,6 +10,11 @@ type Result struct {
 	Members     []protocol.TrainSetSpeedMemberAck
 	EvictedAddr uint16
 	DrivenAddrs []uint16
+	// CVs, LocoAddress and LongAddress are populated by the decoder
+	// programming use cases (loco.cvRead / cvWrite / addrGet / addrSet).
+	CVs         []protocol.CVEntry
+	LocoAddress uint16
+	LongAddress bool
 }
 
 // OKResult returns a successful action result.

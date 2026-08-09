@@ -96,6 +96,48 @@ type SystemEStopPayload struct {
 	Reason string `json:"reason,omitempty"`
 }
 
+// CVEntry is one configuration-variable slot: the CV number and its
+// value. Used both as a write instruction and as a read result.
+type CVEntry struct {
+	CV    uint16 `json:"cv"`
+	Value uint8  `json:"value"`
+}
+
+// LocoCVWritePayload programs one or more CVs on a decoder. `Mode`
+// selects the programming track ("prog") or programming-on-main
+// ("pom"); empty falls back to the daemon's --default-programming-track.
+type LocoCVWritePayload struct {
+	Address uint16    `json:"address"`
+	CVs     []CVEntry `json:"cvs"`
+	Mode    string    `json:"mode,omitempty"` // "pom"|"prog"
+}
+
+// LocoCVReadPayload reads the listed CVs back from a decoder. POM
+// reads need a RailCom-capable command station; programming-track
+// reads do not.
+type LocoCVReadPayload struct {
+	Address uint16   `json:"address"`
+	CVs     []uint16 `json:"cvs"`
+	Mode    string   `json:"mode,omitempty"`
+}
+
+// LocoAddrSetPayload rewrites a decoder's DCC address. The daemon
+// derives the CV1 / CV17 / CV18 / CV29 writes from the requested
+// address, preserving every CV29 bit other than the long-address bit.
+type LocoAddrSetPayload struct {
+	Address uint16 `json:"address"`
+	Mode    string `json:"mode,omitempty"`
+	Verify  bool   `json:"verify,omitempty"`
+}
+
+// LocoAddrGetPayload reads a decoder's currently programmed address.
+// `Address` is only meaningful in "pom" mode, where it addresses the
+// decoder being interrogated.
+type LocoAddrGetPayload struct {
+	Address uint16 `json:"address,omitempty"`
+	Mode    string `json:"mode,omitempty"`
+}
+
 // -------- Server → Client frames --------
 
 // DccBusOpenedPayload is the welcome frame the daemon sends right
@@ -144,6 +186,13 @@ type AckPayload struct {
 	Members     []TrainSetSpeedMemberAck `json:"members,omitempty"`
 	EvictedAddr uint16                   `json:"evictedAddr,omitempty"`
 	DrivenAddrs []uint16                 `json:"drivenAddrs,omitempty"`
+	// CVs carries the CVs read back (loco.cvRead) or the CVs the
+	// daemon actually wrote (loco.cvWrite, loco.addrSet).
+	CVs []CVEntry `json:"cvs,omitempty"`
+	// LocoAddress and LongAddress report the decoder address decoded
+	// from CV1/CV17/CV18/CV29 on loco.addrGet and loco.addrSet.
+	LocoAddress uint16 `json:"locoAddress,omitempty"`
+	LongAddress bool   `json:"longAddress,omitempty"`
 }
 
 // -------- Frame type catalogue --------
@@ -164,9 +213,22 @@ const (
 	TypeSystemEStop       = "system.estop"
 	TypeSystemRadioStop   = "system.radioStop"
 	TypeSystemEStopTarget = "system.estopTarget"
+	TypeLocoCVWrite       = "loco.cvWrite"
+	TypeLocoCVRead        = "loco.cvRead"
+	TypeLocoAddrSet       = "loco.addrSet"
+	TypeLocoAddrGet       = "loco.addrGet"
 
 	TypeDccBusOpened = "dcc-bus.opened"
 	TypeLocoState    = "loco.state"
 	TypeLocoError    = "loco.error"
 	TypeAck          = "ack"
+)
+
+// Programming track selectors accepted in the `mode` field of the
+// CV / address frames. They mirror commandstation.Mode on the wire:
+// POM programs a decoder on the main track while it is running,
+// Prog uses the command station's isolated programming output.
+const (
+	ProgrammingModePOM  = "pom"
+	ProgrammingModeProg = "prog"
 )

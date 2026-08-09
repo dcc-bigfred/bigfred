@@ -28,6 +28,15 @@ export const DEFAULT_COMMAND_STATION_MAX_LOCONET_SLOTS = 80;
 export const DEFAULT_COMMAND_STATION_IDLE_TIMEOUT_SECS = 60;
 export const DEFAULT_LAYOUT_MAX_VEHICLES_PER_USER = 8;
 
+export type ProgrammingTrackOutput = "pom" | "prog";
+
+export const PROGRAMMING_TRACK_OUTPUTS: ProgrammingTrackOutput[] = [
+  "prog",
+  "pom",
+];
+
+export const DEFAULT_PROGRAMMING_TRACK_OUTPUT: ProgrammingTrackOutput = "prog";
+
 export interface CommandStation {
   id: number;
   name: string;
@@ -45,6 +54,9 @@ export interface CommandStation {
   bootStopEnabled: boolean;
   singleVehicleControl: boolean;
   allocatePhysicalSlots?: boolean;
+  programming: boolean;
+  hideInThrottle: boolean;
+  defaultProgrammingTrackOutput: ProgrammingTrackOutput;
 }
 
 const commandStationsCatalogueQueryKey = [
@@ -80,6 +92,9 @@ export function useCreateCommandStation() {
       bootStopEnabled?: boolean;
       singleVehicleControl?: boolean;
       allocatePhysicalSlots?: boolean;
+      programming?: boolean;
+      hideInThrottle?: boolean;
+      defaultProgrammingTrackOutput?: ProgrammingTrackOutput;
     }) =>
       apiFetch<CommandStation>("/api/v1/command-stations", {
         method: "POST",
@@ -111,6 +126,9 @@ export function useUpdateCommandStation() {
       bootStopEnabled?: boolean;
       singleVehicleControl?: boolean;
       allocatePhysicalSlots?: boolean;
+      programming?: boolean;
+      hideInThrottle?: boolean;
+      defaultProgrammingTrackOutput?: ProgrammingTrackOutput;
     }) =>
       apiFetch<CommandStation>(`/api/v1/command-stations/${args.id}`, {
         method: "PUT",
@@ -130,6 +148,9 @@ export function useUpdateCommandStation() {
           bootStopEnabled: args.bootStopEnabled,
           singleVehicleControl: args.singleVehicleControl,
           allocatePhysicalSlots: args.allocatePhysicalSlots,
+          programming: args.programming,
+          hideInThrottle: args.hideInThrottle,
+          defaultProgrammingTrackOutput: args.defaultProgrammingTrackOutput,
         }),
       }),
     onSuccess: () => {

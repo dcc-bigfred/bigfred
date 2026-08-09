@@ -91,17 +91,24 @@ type UserCreateRequest struct {
 	Organization string                `json:"organization"`
 	Role         domain.Role           `json:"role"`
 	DCCPool      []DCCPoolRangeRequest `json:"dccPool"`
+	// AutoAllocateDccCount asks the server to pick that many free DCC
+	// addresses instead of sending an explicit dccPool.
+	AutoAllocateDccCount *int `json:"autoAllocateDccCount,omitempty"`
 }
 
 // ToCreateInput maps the HTTP body to cmd input.
 func (r UserCreateRequest) ToCreateInput() cmd.UserCreateInput {
-	return cmd.UserCreateInput{
+	in := cmd.UserCreateInput{
 		Login:        r.Login,
 		PIN:          r.PIN,
 		Organization: r.Organization,
 		Role:         r.Role,
 		DCCPool:      ToPoolRanges(r.DCCPool),
 	}
+	if r.AutoAllocateDccCount != nil {
+		in.AutoAllocateDccCount = *r.AutoAllocateDccCount
+	}
+	return in
 }
 
 // UserUpdateRequest mirrors optional fields exposed by cmd.User.Update.

@@ -60,6 +60,9 @@ type Flags struct {
 	SingleVehicleControl bool
 	AllocatePhysicalSlots bool
 
+	EnableProgramming       bool
+	DefaultProgrammingTrack string
+
 	AllowedOrigins []string
 }
 
@@ -90,6 +93,10 @@ should rarely be invoked manually.`,
 			if err != nil {
 				return fmt.Errorf("dcc-bus station config: %w", err)
 			}
+			progTrack, err := ProgrammingTrackFromFlag(f.DefaultProgrammingTrack)
+			if err != nil {
+				return fmt.Errorf("dcc-bus programming config: %w", err)
+			}
 			cfg := dccbus.Config{
 				LayoutID:         f.LayoutID,
 				CommandStationID: f.CommandStationID,
@@ -119,6 +126,8 @@ should rarely be invoked manually.`,
 				BootStopEnabled:        f.BootStopEnabled,
 				SingleVehicleControl:   f.SingleVehicleControl,
 				AllocatePhysicalSlots:  f.AllocatePhysicalSlots,
+				EnableProgramming:       f.EnableProgramming,
+				DefaultProgrammingTrack: progTrack,
 			}
 			d, err := dccbus.New(c.Context(), log, cfg)
 			if err != nil {
@@ -161,6 +170,8 @@ should rarely be invoked manually.`,
 	cmd.Flags().BoolVar(&f.BootStopEnabled, FlagBootStopEnabled, false, "emergency-stop all roster locomotives once after daemon start")
 	cmd.Flags().BoolVar(&f.SingleVehicleControl, FlagSingleVehicleControl, false, "stop the user's other moving vehicles when driving a different one")
 	cmd.Flags().BoolVar(&f.AllocatePhysicalSlots, FlagAllocatePhysicalSlots, true, "allocate LocoNet slots like a physical FRED (exclusive IN_USE; disable to piggyback)")
+	cmd.Flags().BoolVar(&f.EnableProgramming, FlagEnableProgramming, false, "accept decoder CV and address programming frames (loco.cvRead/cvWrite/addrGet/addrSet)")
+	cmd.Flags().StringVar(&f.DefaultProgrammingTrack, FlagDefaultProgrammingTrack, DefaultProgrammingTrack, "programming track used when a frame omits `mode`: pom (main track) or prog (programming track)")
 
 	cmd.AddCommand(newScanCommand(log))
 

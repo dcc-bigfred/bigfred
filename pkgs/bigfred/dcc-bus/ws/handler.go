@@ -43,6 +43,14 @@ type Router interface {
 	// HandleEStop fires the data-plane emergency stop scoped to
 	// this daemon's command station.
 	HandleEStop(ctx context.Context, sess *Session, payload protocol.SystemEStopPayload, requestID string) Outcome
+	// HandleLocoCVWrite programs decoder CVs on the resolved track.
+	HandleLocoCVWrite(ctx context.Context, sess *Session, payload protocol.LocoCVWritePayload, requestID string) Outcome
+	// HandleLocoCVRead reads decoder CVs back from the resolved track.
+	HandleLocoCVRead(ctx context.Context, sess *Session, payload protocol.LocoCVReadPayload, requestID string) Outcome
+	// HandleLocoAddrSet rewrites the decoder's DCC address.
+	HandleLocoAddrSet(ctx context.Context, sess *Session, payload protocol.LocoAddrSetPayload, requestID string) Outcome
+	// HandleLocoAddrGet decodes the decoder's programmed DCC address.
+	HandleLocoAddrGet(ctx context.Context, sess *Session, payload protocol.LocoAddrGetPayload, requestID string) Outcome
 	// HandleSessionClose is called once when the session goes away
 	// (any reason: WS close, error, ctx cancellation). It is the
 	// router's chance to fire the dead-man's plan and drop user-
@@ -65,6 +73,9 @@ type Server struct {
 	csID          uint
 	metrics       *Metrics
 	slotsDiag     *SlotsDiagHandler
+	// programmingEnabled mirrors --enable-programming. When false the
+	// CV / address frames are rejected here, before any driver call.
+	programmingEnabled bool
 
 	// AllowedOrigins is forwarded verbatim to websocket.AcceptOptions.
 	// Empty slice means InsecureSkipVerify = true (acceptable when
@@ -87,6 +98,9 @@ type ServerConfig struct {
 	AllowedOrigins []string
 	Metrics        *Metrics
 	SlotsDiag      *SlotsDiagHandler
+	// ProgrammingEnabled opens the loco.cvRead / cvWrite / addrGet /
+	// addrSet frames. Off by default.
+	ProgrammingEnabled bool
 }
 
 // NewServer returns a ready-to-mount Server. Heartbeat and dead-man
@@ -122,6 +136,7 @@ func NewServer(cfg ServerConfig) *Server {
 		AllowedOrigins: cfg.AllowedOrigins,
 		metrics:        cfg.Metrics,
 		slotsDiag:      cfg.SlotsDiag,
+		programmingEnabled: cfg.ProgrammingEnabled,
 	}
 }
 
@@ -405,6 +420,84 @@ func (s *Server) dispatch(ctx context.Context, sess *Session, env contract.Envel
 			_ = json.Unmarshal(env.Payload, &p)
 		}
 		out = s.router.HandleEStop(ctx, sess, p, env.ID)
+
+	case protocol.TypeLocoCVWrite:
+		var p protocol.LocoCVWritePayload
+		if err := json.Unmarshal(env.Payload, &p); err != nil {
+			out = s.ackOrFail(ctx, sess, env.ID, false, errors.WsCodeBadPayload)
+			break
+		}
+		if !(validation.LocoCVWrite{}).Valid(p) {
+			out = s.ackOrFail(ctx, sess, env.ID, false, errors.WsCodeBadPayload)
+			break
+		}
+		if !s.programmingEnabled {
+			out = s.ackOrFail(ctx, sess, env.ID, false, errors.CodeProgrammingDisabled)
+			break
+		}
+		s.dispatchAsync(ctx, sess, env, func() Outcome {
+			return s.router.HandleLocoCVWrite(ctx, sess, p, env.ID)
+		})
+		return
+
+	case protocol.TypeLocoCVRead:
+		var p protocol.LocoCVReadPayload
+		if err := json.Unmarshal(env.Payload, &p); err != nil {
+			out = s.ackOrFail(ctx, sess, env.ID, false, errors.WsCodeBadPayload)
+			break
+		}
+		if !(validation.LocoCVRead{}).Valid(p) {
+			out = s.ackOrFail(ctx, sess, env.ID, false, errors.WsCodeBadPayload)
+			break
+		}
+		if !s.programmingEnabled {
+			out = s.ackOrFail(ctx, sess, env.ID, false, errors.CodeProgrammingDisabled)
+			break
+		}
+		s.dispatchAsync(ctx, sess, env, func() Outcome {
+			return s.router.HandleLocoCVRead(ctx, sess, p, env.ID)
+		})
+		return
+
+	case protocol.TypeLocoAddrSet:
+		var p protocol.LocoAddrSetPayload
+		if err := json.Unmarshal(env.Payload, &p); err != nil {
+			out = s.ackOrFail(ctx, sess, env.ID, false, errors.WsCodeBadPayload)
+			break
+		}
+		if !(validation.LocoAddrSet{}).Valid(p) {
+			out = s.ackOrFail(ctx, sess, env.ID, false, errors.WsCodeBadPayload)
+			break
+		}
+		if !s.programmingEnabled {
+			out = s.ackOrFail(ctx, sess, env.ID, false, errors.CodeProgrammingDisabled)
+			break
+		}
+		s.dispatchAsync(ctx, sess, env, func() Outcome {
+			return s.router.HandleLocoAddrSet(ctx, sess, p, env.ID)
+		})
+		return
+
+	case protocol.TypeLocoAddrGet:
+		var p protocol.LocoAddrGetPayload
+		if env.Payload != nil {
+			if err := json.Unmarshal(env.Payload, &p); err != nil {
+				out = s.ackOrFail(ctx, sess, env.ID, false, errors.WsCodeBadPayload)
+				break
+			}
+		}
+		if !(validation.LocoAddrGet{}).Valid(p) {
+			out = s.ackOrFail(ctx, sess, env.ID, false, errors.WsCodeBadPayload)
+			break
+		}
+		if !s.programmingEnabled {
+			out = s.ackOrFail(ctx, sess, env.ID, false, errors.CodeProgrammingDisabled)
+			break
+		}
+		s.dispatchAsync(ctx, sess, env, func() Outcome {
+			return s.router.HandleLocoAddrGet(ctx, sess, p, env.ID)
+		})
+		return
 
 	default:
 		out = s.handleUnknown(ctx, sess, env.Type)

@@ -51,6 +51,33 @@ func TestAppendSingleVehicleControlFlag(t *testing.T) {
 	}
 }
 
+func TestProgrammingTrackFromFlag(t *testing.T) {
+	for _, tc := range []struct {
+		in      string
+		want    string
+		wantErr bool
+	}{
+		{in: "", want: DefaultProgrammingTrack},
+		{in: "pom", want: "pom"},
+		{in: " PROG ", want: "prog"},
+		{in: "service", wantErr: true},
+	} {
+		got, err := ProgrammingTrackFromFlag(tc.in)
+		if tc.wantErr {
+			if err == nil {
+				t.Fatalf("%q: expected an error, got %q", tc.in, got)
+			}
+			continue
+		}
+		if err != nil {
+			t.Fatalf("%q: %v", tc.in, err)
+		}
+		if got != tc.want {
+			t.Fatalf("%q = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
 func stringsJoin(ss []string) string {
 	out := ""
 	for i, s := range ss {

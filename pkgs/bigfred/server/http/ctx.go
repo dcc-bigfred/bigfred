@@ -1,6 +1,3 @@
-// Package httpapi implements the HTTP transport layer of the BigFred
-// server. It is named `httpapi` (not `http`) so the import doesn't
-// shadow the stdlib `net/http` import inside its own files.
 package httpapi
 
 import (
@@ -14,6 +11,8 @@ import (
 // context. Handlers retrieve it via IdentityFromContext.
 type identityCtxKey struct{}
 
+type actorCtxKey struct{}
+
 // WithIdentity returns a derived context that carries id. Used by the
 // auth middleware exclusively.
 func WithIdentity(ctx context.Context, id cmd.Identity) context.Context {
@@ -21,8 +20,20 @@ func WithIdentity(ctx context.Context, id cmd.Identity) context.Context {
 }
 
 // IdentityFromContext returns the authenticated user's identity, or
-// (zero, false) if the request is anonymous.
+// (zero, false) if the request is anonymous. Under impersonation this
+// is the **subject**.
 func IdentityFromContext(ctx context.Context) (cmd.Identity, bool) {
 	id, ok := ctx.Value(identityCtxKey{}).(cmd.Identity)
+	return id, ok
+}
+
+// WithActor stores the real caller when impersonating.
+func WithActor(ctx context.Context, id cmd.Identity) context.Context {
+	return context.WithValue(ctx, actorCtxKey{}, id)
+}
+
+// ActorFromContext returns the real caller when impersonation is active.
+func ActorFromContext(ctx context.Context) (cmd.Identity, bool) {
+	id, ok := ctx.Value(actorCtxKey{}).(cmd.Identity)
 	return id, ok
 }

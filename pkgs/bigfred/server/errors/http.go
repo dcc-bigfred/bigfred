@@ -148,6 +148,10 @@ func UserHTTPStatus(err error) (status int, code string) {
 		return http.StatusUnprocessableEntity, CodeDCCPoolRangeInvalid
 	case stderrors.Is(err, ErrDCCPoolOverlap):
 		return http.StatusConflict, CodeDCCPoolOverlap
+	case stderrors.Is(err, ErrDCCPoolAutoAllocateConflict):
+		return http.StatusConflict, CodeDCCPoolAutoAllocateConflict
+	case stderrors.Is(err, ErrDCCPoolExhausted):
+		return http.StatusConflict, CodeDCCPoolExhausted
 	case stderrors.Is(err, ErrDCCPoolForbidden), stderrors.Is(err, ErrUserForbidden):
 		return http.StatusForbidden, CodeUserForbidden
 	default:
@@ -324,6 +328,8 @@ func CommandStationHTTPStatus(err error) (status int, code string) {
 		return http.StatusUnprocessableEntity, CodeCommandStationMaxLoconetSlotsInvalid
 	case stderrors.Is(err, ErrCommandStationIdleTimeoutInvalid):
 		return http.StatusUnprocessableEntity, CodeCommandStationIdleTimeoutInvalid
+	case stderrors.Is(err, ErrCommandStationProgrammingTrackInvalid):
+		return http.StatusUnprocessableEntity, CodeCommandStationProgrammingTrackInvalid
 	case stderrors.Is(err, ErrLayoutNeedsAtLeastOneCommandStation):
 		return http.StatusConflict, CodeLayoutNeedsAtLeastOneCommandStation
 	default:

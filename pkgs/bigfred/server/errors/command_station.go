@@ -15,6 +15,7 @@ const (
 	CodeCommandStationInboundPortConflict    = "command_station_inbound_port_conflict"
 	CodeCommandStationMaxLoconetSlotsInvalid  = "command_station_max_loconet_slots_invalid"
 	CodeCommandStationIdleTimeoutInvalid     = "command_station_idle_timeout_invalid"
+	CodeCommandStationProgrammingTrackInvalid = "command_station_programming_track_invalid"
 	CodeCommandStationForbidden              = "forbidden"
 	CodeLayoutNeedsAtLeastOneCommandStation  = "layout_needs_at_least_one_command_station"
 	CodeSystemLayoutCommandStationsImmutable = "default_layout_command_stations_immutable"
@@ -33,6 +34,7 @@ var (
 	ErrCommandStationInboundPortConflict    = errors.New(CodeCommandStationInboundPortConflict)
 	ErrCommandStationMaxLoconetSlotsInvalid = errors.New(CodeCommandStationMaxLoconetSlotsInvalid)
 	ErrCommandStationIdleTimeoutInvalid     = errors.New(CodeCommandStationIdleTimeoutInvalid)
+	ErrCommandStationProgrammingTrackInvalid = errors.New(CodeCommandStationProgrammingTrackInvalid)
 	ErrCommandStationForbidden              = errors.New(CodeCommandStationForbidden)
 	ErrLayoutNeedsAtLeastOneCommandStation  = errors.New(CodeLayoutNeedsAtLeastOneCommandStation)
 	ErrSystemLayoutCommandStationsImmutable = errors.New(CodeSystemLayoutCommandStationsImmutable)

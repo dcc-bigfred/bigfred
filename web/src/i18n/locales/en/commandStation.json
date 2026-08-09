@@ -77,6 +77,12 @@
           "instruction": "Boot-stop is a one-shot emergency stop of all layout vehicles right after dcc-bus starts. Useful when you do not want locomotives to resume their previous speed after a restart. Any change to command-station settings restarts the connection, which also triggers boot-stop.",
           "alert": "With boot-stop enabled, every BigFred / dcc-bus restart will emergency-stop vehicles."
         },
+        "programming": {
+          "label": "Programming",
+          "title": "Decoder programming",
+          "instruction": "Decide whether this command station may program decoders (read and write CVs, change the address) and pick the track those operations use by default. You can also hide the station from the throttle so nobody drives on it by accident — handy for a dedicated programming station.",
+          "alert": "Writing CVs on a live layout is destructive. Leave programming off unless you actually use this station for it."
+        },
         "slots": {
           "label": "Slots",
           "title": "LocoNet slot allocation",
@@ -94,6 +100,10 @@
       "z21": "Z21 (UDP)",
       "loconet_serial": "LocoNet (serial)",
       "loconet_tcp": "LocoNet (TCP)"
+    },
+    "programmingTrack": {
+      "prog": "Programming track (prog)",
+      "pom": "Main track (POM)"
     },
     "dialogs": {
       "create": {
@@ -136,7 +146,13 @@
         "bootStopEnabled": "Boot-stop all vehicles",
         "bootStopEnabledHelp": "When enabled, dcc-bus sends emergency stop to every vehicle in the system once after start.",
         "singleVehicleControl": "Only one vehicle can be controlled at a time",
-        "singleVehicleControlHelp": "When enabled, selecting or driving a different vehicle or consist stops the user's other moving vehicles (speed > 1). Lent-out vehicles are not stopped."
+        "singleVehicleControlHelp": "When enabled, selecting or driving a different vehicle or consist stops the user's other moving vehicles (speed > 1). Lent-out vehicles are not stopped.",
+        "programming": "Decoder programming",
+        "programmingHelp": "Allows reading and writing decoder CVs and changing the DCC address through this command station. Off by default because writing CVs on a live layout is destructive.",
+        "defaultProgrammingTrackOutput": "Default programming track output",
+        "defaultProgrammingTrackOutputHelp": "Track used when a programming request does not say which one: the isolated programming output (prog) or the main track (POM, programming on the main).",
+        "hideInThrottle": "Hide in throttle view",
+        "hideInThrottleHelp": "Keeps the station out of the command-station picker in the throttle. Use it for a dedicated programming station nobody should drive on."
       }
     },
     "empty": "No command stations to show.",

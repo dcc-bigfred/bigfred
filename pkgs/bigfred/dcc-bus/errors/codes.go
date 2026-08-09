@@ -48,4 +48,12 @@ const (
 	// CodePartialFailure is returned when train.setSpeed succeeds for
 	// some members but not all.
 	CodePartialFailure = "partial_failure"
+
+	// CodeProgrammingDisabled is returned for every CV / address frame
+	// when the daemon was started without --enable-programming.
+	CodeProgrammingDisabled = "programming_disabled"
+
+	// CodeProgrammingFailed is returned when the decoder or command
+	// station rejects a CV read/write (no ack, RailCom silence, ...).
+	CodeProgrammingFailed = "programming_failed"
 )

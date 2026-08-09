@@ -111,6 +111,62 @@ func TestUserCreateRequiresDCCPool(t *testing.T) {
 	}
 }
 
+func TestUserCreateAutoAllocatesDCCPool(t *testing.T) {
+	bundle, cleanup := freshRepo(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	pool := cmd.NewDCCPool(bundle.Repo, bundle.Pool)
+	userSvc := cmd.NewUser(bundle.Repo, bundle.Users, bundle.Vehicles, bundle.Trains, pool)
+
+	if _, err := userSvc.Create(ctx, testAdminEff, cmd.UserCreateInput{
+		Login: "alice", PIN: "123456", Role: domain.RoleDriver,
+		DCCPool: []cmd.PoolRange{{From: 51, To: 52}},
+	}); err != nil {
+		t.Fatalf("create alice: %v", err)
+	}
+
+	bob, err := userSvc.Create(ctx, testAdminEff, cmd.UserCreateInput{
+		Login: "bob", PIN: "123456", Role: domain.RoleDriver,
+		AutoAllocateDccCount: 3,
+	})
+	if err != nil {
+		t.Fatalf("create bob: %v", err)
+	}
+
+	rows, err := userSvc.GetDCCPool(ctx, bob.ID)
+	if err != nil {
+		t.Fatalf("get bob pool: %v", err)
+	}
+	want := []cmd.PoolRange{{From: 50, To: 50}, {From: 53, To: 54}}
+	if len(rows) != len(want) {
+		t.Fatalf("bob pool: got %+v want %+v", rows, want)
+	}
+	for i, r := range rows {
+		if r.FromAddr != want[i].From || r.ToAddr != want[i].To {
+			t.Fatalf("bob pool range %d: got %d-%d want %d-%d", i, r.FromAddr, r.ToAddr, want[i].From, want[i].To)
+		}
+	}
+}
+
+func TestUserCreateRejectsAutoAllocateWithExplicitPool(t *testing.T) {
+	bundle, cleanup := freshRepo(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	pool := cmd.NewDCCPool(bundle.Repo, bundle.Pool)
+	userSvc := cmd.NewUser(bundle.Repo, bundle.Users, bundle.Vehicles, bundle.Trains, pool)
+
+	_, err := userSvc.Create(ctx, testAdminEff, cmd.UserCreateInput{
+		Login: "alice", PIN: "123456", Role: domain.RoleDriver,
+		DCCPool:              []cmd.PoolRange{{From: 100, To: 199}},
+		AutoAllocateDccCount: 5,
+	})
+	if !errors.Is(err, svcerrors.ErrDCCPoolAutoAllocateConflict) {
+		t.Fatalf("expected ErrDCCPoolAutoAllocateConflict, got %v", err)
+	}
+}
+
 func TestUserCreateDoesNotPersistWhenPoolOverlaps(t *testing.T) {
 	bundle, cleanup := freshRepo(t)
 	defer cleanup()

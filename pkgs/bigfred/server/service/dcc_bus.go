@@ -611,6 +611,10 @@ func (d *DccBusService) buildServiceDef(ctx context.Context, name string, layout
 	if cs.SingleVehicleControl {
 		args = append(args, "--"+dccbuscli.FlagSingleVehicleControl)
 	}
+	if cs.Programming {
+		args = append(args, "--"+dccbuscli.FlagEnableProgramming)
+	}
+	args = append(args, "--"+dccbuscli.FlagDefaultProgrammingTrack, cs.EffectiveDefaultProgrammingTrackOutput())
 	for _, origin := range d.cfg.AllowedOrigins {
 		args = append(args, "--allowed-origin", origin)
 	}

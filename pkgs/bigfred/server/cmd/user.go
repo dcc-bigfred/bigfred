@@ -37,6 +37,10 @@ type UserCreateInput struct {
 	Organization string
 	Role         domain.Role
 	DCCPool      []PoolRange
+	// AutoAllocateDccCount asks the server to carve out that many free DCC
+	// addresses for the new user instead of declaring DCCPool by hand.
+	// Mutually exclusive with DCCPool.
+	AutoAllocateDccCount int
 }
 
 // UserUpdateInput is the validated payload of User.Update.
@@ -66,6 +70,18 @@ func NewUser(db rel.Repository, users *repo.Users, vehicles *repo.Vehicles, trai
 // List returns every user in the catalogue.
 func (u *User) List(ctx context.Context) ([]domain.User, error) {
 	return u.users.ListAll(ctx)
+}
+
+// FindByLogin resolves a catalogue user by login (impersonation).
+func (u *User) FindByLogin(ctx context.Context, login string) (domain.User, error) {
+	user, err := u.users.FindByLogin(ctx, login)
+	if err != nil {
+		if errors.Is(err, repo.ErrUserNotFound) {
+			return domain.User{}, svcerrors.ErrUserNotFound
+		}
+		return domain.User{}, err
+	}
+	return user, nil
 }
 
 // ListWithDCCPools returns every user together with their DCC pool rows.
@@ -156,12 +172,28 @@ func (u *User) Create(ctx context.Context, eff domain.EffectiveRoles, in UserCre
 		return domain.User{}, svcerrors.ErrUserRoleInvalid
 	}
 
+	if in.AutoAllocateDccCount > 0 && len(in.DCCPool) > 0 {
+		return domain.User{}, svcerrors.ErrDCCPoolAutoAllocateConflict
+	}
+
 	if _, err := u.users.FindByLogin(ctx, login); err == nil {
 		return domain.User{}, svcerrors.ErrUserLoginTaken
 	} else if !errors.Is(err, repo.ErrUserNotFound) {
 		return domain.User{}, err
 	}
-	if err := u.dccPool.Validate(ctx, 0, in.DCCPool); err != nil {
+
+	pool := in.DCCPool
+	if in.AutoAllocateDccCount > 0 {
+		existing, err := u.dccPool.ListAll(ctx)
+		if err != nil {
+			return domain.User{}, err
+		}
+		pool, err = allocateFreeDCCAddresses(in.AutoAllocateDccCount, existing)
+		if err != nil {
+			return domain.User{}, err
+		}
+	}
+	if err := u.dccPool.Validate(ctx, 0, pool); err != nil {
 		return domain.User{}, err
 	}
 
@@ -184,7 +216,7 @@ func (u *User) Create(ctx context.Context, eff domain.EffectiveRoles, in UserCre
 		if err := u.users.Insert(tctx, &row); err != nil {
 			return err
 		}
-		_, err := u.dccPool.Replace(tctx, eff, row.ID, in.DCCPool)
+		_, err := u.dccPool.Replace(tctx, eff, row.ID, pool)
 		return err
 	})
 	if err != nil {

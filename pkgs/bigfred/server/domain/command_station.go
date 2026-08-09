@@ -113,8 +113,21 @@ type CommandStation struct {
 	// false, BigFred may piggyback on slots already IN_USE by another throttle.
 	// Meaningful only for LocoNet kinds.
 	AllocatePhysicalSlots bool `db:"allocate_physical_slots"`
-	CreatedAt             time.Time
-	UpdatedAt             time.Time
+	// Programming opens the decoder CV / address programming frames on the
+	// dcc-bus daemon. Off by default: writing CVs on a live layout is
+	// destructive, so the station has to be opted in explicitly.
+	Programming bool `db:"programming"`
+	// HideInThrottle keeps the station out of the throttle's available
+	// command-station list. Useful for a dedicated programming station that
+	// nobody should accidentally drive on.
+	HideInThrottle bool `db:"hide_in_throttle"`
+	// DefaultProgrammingTrackOutput selects the track that CV / address
+	// frames use when they omit `mode`: ProgrammingTrackPOM (main track) or
+	// ProgrammingTrackProg (isolated programming output). Empty means
+	// DefaultCommandStationProgrammingTrackOutput.
+	DefaultProgrammingTrackOutput string `db:"default_programming_track_output"`
+	CreatedAt                     time.Time
+	UpdatedAt                     time.Time
 }
 
 // Table tells REL which physical table backs this struct.
@@ -133,6 +146,29 @@ const (
 	DefaultCommandStationIdleTimeoutSecs = 60
 	MaxLocoNetPhysicalSlots              = 117
 )
+
+// Programming track outputs a command station can default to for CV and
+// address frames that do not carry an explicit mode.
+const (
+	// ProgrammingTrackPOM programs a decoder on the main track while it runs.
+	ProgrammingTrackPOM = "pom"
+	// ProgrammingTrackProg uses the isolated programming output.
+	ProgrammingTrackProg = "prog"
+
+	// DefaultCommandStationProgrammingTrackOutput is the safe default: the
+	// isolated programming output cannot disturb locos on the main track.
+	DefaultCommandStationProgrammingTrackOutput = ProgrammingTrackProg
+)
+
+// IsValidProgrammingTrackOutput reports whether v is a supported default
+// programming track output.
+func IsValidProgrammingTrackOutput(v string) bool {
+	switch v {
+	case ProgrammingTrackPOM, ProgrammingTrackProg:
+		return true
+	}
+	return false
+}
 
 // EffectiveSpeedSteps returns the catalogue DCC speed-step count, applying
 // the default when the stored value is zero.
@@ -223,6 +259,15 @@ func (cs CommandStation) EffectiveAllocatePhysicalSlots() bool {
 		return false
 	}
 	return cs.AllocatePhysicalSlots
+}
+
+// EffectiveDefaultProgrammingTrackOutput returns the configured default
+// programming track, applying the product default for pre-migration rows.
+func (cs CommandStation) EffectiveDefaultProgrammingTrackOutput() string {
+	if !IsValidProgrammingTrackOutput(cs.DefaultProgrammingTrackOutput) {
+		return DefaultCommandStationProgrammingTrackOutput
+	}
+	return cs.DefaultProgrammingTrackOutput
 }
 
 // LayoutCommandStation is the join row binding a CommandStation to a

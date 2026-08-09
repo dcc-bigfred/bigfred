@@ -125,3 +125,16 @@ func SanitiseCommandStationIdleTimeoutSecs(secs uint) error {
 	}
 	return nil
 }
+
+// SanitiseCommandStationProgrammingTrackOutput normalises the default
+// programming track output. Empty selects the catalogue default ("prog").
+func SanitiseCommandStationProgrammingTrackOutput(track string) (string, error) {
+	track = strings.ToLower(strings.TrimSpace(track))
+	if track == "" {
+		return domain.DefaultCommandStationProgrammingTrackOutput, nil
+	}
+	if !domain.IsValidProgrammingTrackOutput(track) {
+		return "", svcerrors.ErrCommandStationProgrammingTrackInvalid
+	}
+	return track, nil
+}

@@ -390,6 +390,21 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 
 	authSvc := cmd.NewAuth(users, layoutSvc, layoutSignalmen, sudoElevations, cmd.AuthConfig{JWTSecret: secret})
 
+	oauthClients, err := cmd.NewOAuthClientsRegistry(cmd.DefaultOAuthClientsDir(), log)
+	if err != nil {
+		log.WithError(err).Warn("oauth-clients: registry unavailable")
+		oauthClients = nil
+	}
+	var oauthSvc *cmd.OAuth
+	if oauthClients != nil && redisReady {
+		oauthStop := make(chan struct{})
+		defer close(oauthStop)
+		if err := oauthClients.StartWatch(oauthStop); err != nil {
+			log.WithError(err).Warn("oauth-clients: watch unavailable")
+		}
+		oauthSvc = cmd.NewOAuth(authSvc, oauthClients, redisSvc.Client())
+	}
+
 	hub := ws.NewHub()
 	hub.SetMetrics(serverMetrics)
 	if serverMetrics != nil {
@@ -686,6 +701,8 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		Leases:           leaseSvc,
 		Remote:           remoteSvc,
 		AllowedOrigins:   f.AllowedOrigins,
+		OAuthClients:     oauthClients,
+		OAuth:            oauthSvc,
 		SecureCookie:     f.SecureCookie,
 		StaticFS:         staticFS,
 		Metrics:          serverMetrics,

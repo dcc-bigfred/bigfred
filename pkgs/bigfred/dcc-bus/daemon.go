@@ -22,6 +22,7 @@ import (
 	"github.com/keskad/loco/pkgs/bigfred/contract"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/auth"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/cmd"
+	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/protocol"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/service/station"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/slotlease"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/state"
@@ -89,6 +90,14 @@ type Config struct {
 	// AllocatePhysicalSlots enables PE 1.0 exclusive LocoNet slot allocation
 	// (default true). When false, BigFred may piggyback on IN_USE slots.
 	AllocatePhysicalSlots bool
+
+	// EnableProgramming opens the decoder CV / address frames. Off by
+	// default: writing CVs on a live layout is destructive, so an
+	// operator has to opt the daemon in explicitly.
+	EnableProgramming bool
+	// DefaultProgrammingTrack is "pom" or "prog" and applies to frames
+	// that omit `mode`. Empty means "prog".
+	DefaultProgrammingTrack string
 }
 
 // Daemon is the assembled dcc-bus instance.
@@ -144,6 +153,9 @@ func New(ctx context.Context, log *logrus.Logger, cfg Config) (*Daemon, error) {
 	}
 	if cfg.DeadmanSecs <= 0 {
 		cfg.DeadmanSecs = 6
+	}
+	if cfg.DefaultProgrammingTrack == "" {
+		cfg.DefaultProgrammingTrack = protocol.ProgrammingModeProg
 	}
 
 	cs := cfg.CommandStation
@@ -314,6 +326,8 @@ func New(ctx context.Context, log *logrus.Logger, cfg Config) (*Daemon, error) {
 		BootStopEnabled:           cfg.BootStopEnabled,
 		SingleVehicleControl:      cfg.SingleVehicleControl,
 		SlotMetrics:               slotMetrics,
+		ProgrammingEnabled:        cfg.EnableProgramming,
+		DefaultProgrammingTrack:   cfg.DefaultProgrammingTrack,
 	})
 	if err != nil {
 		_ = st.CleanUp()
@@ -364,6 +378,7 @@ func New(ctx context.Context, log *logrus.Logger, cfg Config) (*Daemon, error) {
 		DeadmanSecs:    cfg.DeadmanSecs,
 		AllowedOrigins: cfg.AllowedOrigins,
 		Metrics:        wsMetrics,
+		ProgrammingEnabled: cfg.EnableProgramming,
 		SlotsDiag: ws.NewSlotsDiagHandler(ws.SlotsDiagConfig{
 			Leaser:         router.SlotLeaser(),
 			Metrics:        slotMetrics,

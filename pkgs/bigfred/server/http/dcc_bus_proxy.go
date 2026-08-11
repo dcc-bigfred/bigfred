@@ -1,17 +1,19 @@
 package httpapi
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
+	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
 	"github.com/keskad/loco/pkgs/bigfred/server/metrics"
-
 	"github.com/keskad/loco/pkgs/bigfred/server/service"
 )
 
@@ -19,6 +21,10 @@ import (
 // so the SPA only ever talks to loco-server. JWT is verified before
 // forwarding; the layout pinning makes sure a session for layout L
 // cannot reach a daemon serving layout L'.
+//
+// When an admin sends ImpersonateAsHeader, the proxy mints a subject
+// JWT (same layout) for the daemon so drive commands run as the
+// participant — matching MaybeImpersonate on REST.
 type DccBusProxy struct {
 	auth    *cmd.Auth
 	dccBus  *service.DccBusService
@@ -63,6 +69,25 @@ func (p *DccBusProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	layoutID = id.Layout.ID
 
+	daemonToken := token
+	if login := strings.TrimSpace(r.Header.Get(ImpersonateAsHeader)); login != "" {
+		minted, _, err := p.auth.IssueImpersonatedToken(r.Context(), id, login)
+		if err != nil {
+			if errors.Is(err, svcerrors.ErrImpersonationForbidden) {
+				writeJSONError(w, http.StatusForbidden, svcerrors.CodeImpersonationForbidden)
+				return
+			}
+			if errors.Is(err, svcerrors.ErrAccountDeactivated) {
+				writeJSONError(w, http.StatusForbidden, svcerrors.CodeAccountDeactivated)
+				return
+			}
+			status, code := svcerrors.UserHTTPStatus(err)
+			writeJSONError(w, status, code)
+			return
+		}
+		daemonToken = minted
+	}
+
 	csIDStr := chi.URLParam(r, "commandStationId")
 	csID64, err := strconv.ParseUint(csIDStr, 10, 64)
 	if err != nil || csID64 == 0 {
@@ -100,11 +125,10 @@ func (p *DccBusProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		req.URL.Scheme = target.Scheme
 		req.URL.Host = target.Host
 		req.URL.Path = "/ws"
-		// Forward the JWT as a query param so the daemon's
-		// authenticator (which doesn't share AuthService's cookie
-		// jar) can verify the same token.
+		// Forward the (possibly impersonated) JWT as a query param so
+		// the daemon's authenticator can verify the same token.
 		q := req.URL.Query()
-		q.Set("token", token)
+		q.Set("token", daemonToken)
 		req.URL.RawQuery = q.Encode()
 		req.Host = target.Host
 	}

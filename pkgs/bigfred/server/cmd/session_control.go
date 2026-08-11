@@ -385,13 +385,20 @@ func (s *SessionControl) availableStationsForClient(ctx context.Context, c Contr
 	return out
 }
 
+// listAvailableStations returns the stations a throttle on layoutID may
+// drive on. Stations flagged HideInThrottle (e.g. a dedicated programming
+// station) are filtered out.
 func (s *SessionControl) listAvailableStations(ctx context.Context, layoutID uint) ([]domain.CommandStation, error) {
 	layout, err := s.layoutRows.FindByID(ctx, layoutID)
 	if err != nil {
 		return nil, err
 	}
 	if layout.IsSystem {
-		return s.cs.ListAll(ctx)
+		all, err := s.cs.ListAll(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return visibleInThrottle(all), nil
 	}
 	rows, err := s.layoutCS.ListByLayout(ctx, layoutID)
 	if err != nil {
@@ -404,7 +411,22 @@ func (s *SessionControl) listAvailableStations(ctx context.Context, layoutID uin
 	for _, r := range rows {
 		ids = append(ids, r.CommandStationID)
 	}
-	return s.cs.ListByIDs(ctx, ids)
+	stations, err := s.cs.ListByIDs(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	return visibleInThrottle(stations), nil
+}
+
+func visibleInThrottle(rows []domain.CommandStation) []domain.CommandStation {
+	out := make([]domain.CommandStation, 0, len(rows))
+	for _, row := range rows {
+		if row.HideInThrottle {
+			continue
+		}
+		out = append(out, row)
+	}
+	return out
 }
 
 func (s *SessionControl) commandStationAttached(ctx context.Context, layoutID, commandStationID uint) bool {

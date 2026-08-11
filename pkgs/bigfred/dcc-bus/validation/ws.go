@@ -54,6 +54,71 @@ func (LocoSubscribe) Valid(p protocol.LocoSubscribePayload) bool {
 	return true
 }
 
+// maxCVNum is the highest CV number addressable by NMRA S-9.2.2
+// indexed/paged addressing.
+const maxCVNum = 1024
+
+// validProgrammingMode reports whether mode is empty (use the daemon
+// default) or one of the two track selectors.
+func validProgrammingMode(mode string) bool {
+	switch mode {
+	case "", protocol.ProgrammingModePOM, protocol.ProgrammingModeProg:
+		return true
+	default:
+		return false
+	}
+}
+
+// LocoCVWrite validates loco.cvWrite payloads.
+type LocoCVWrite struct{}
+
+// Valid reports whether the mode is known and every CV number is in range.
+func (LocoCVWrite) Valid(p protocol.LocoCVWritePayload) bool {
+	if !validProgrammingMode(p.Mode) || len(p.CVs) == 0 {
+		return false
+	}
+	for _, entry := range p.CVs {
+		if entry.CV == 0 || entry.CV > maxCVNum {
+			return false
+		}
+	}
+	return true
+}
+
+// LocoCVRead validates loco.cvRead payloads.
+type LocoCVRead struct{}
+
+// Valid reports whether the mode is known and every CV number is in range.
+func (LocoCVRead) Valid(p protocol.LocoCVReadPayload) bool {
+	if !validProgrammingMode(p.Mode) || len(p.CVs) == 0 {
+		return false
+	}
+	for _, cv := range p.CVs {
+		if cv == 0 || cv > maxCVNum {
+			return false
+		}
+	}
+	return true
+}
+
+// LocoAddrSet validates loco.addrSet payloads.
+type LocoAddrSet struct{}
+
+// Valid reports whether the mode is known and the address is a legal
+// DCC address (NMRA S-9.2.2 long-address ceiling).
+func (LocoAddrSet) Valid(p protocol.LocoAddrSetPayload) bool {
+	return validProgrammingMode(p.Mode) && p.Address >= 1 && p.Address <= 10239
+}
+
+// LocoAddrGet validates loco.addrGet payloads.
+type LocoAddrGet struct{}
+
+// Valid reports whether the mode is known. The address is optional —
+// it is only needed for POM reads, which the router enforces.
+func (LocoAddrGet) Valid(p protocol.LocoAddrGetPayload) bool {
+	return validProgrammingMode(p.Mode)
+}
+
 // SetSpeed validates loco.setSpeed wire payloads against speedSteps.
 type SetSpeed struct {
 	SpeedSteps uint

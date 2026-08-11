@@ -27,6 +27,17 @@ interface LocationState {
   from?: { pathname?: string };
 }
 
+/** Same-origin authorize path only — blocks open redirects. */
+function isSafeSSOReturnTo(returnTo: string): boolean {
+  if (!returnTo.startsWith("/api/v1/auth/oauth/authorize")) {
+    return false;
+  }
+  if (returnTo.includes("://") || returnTo.includes("//")) {
+    return false;
+  }
+  return true;
+}
+
 // renderLayoutLabel resolves the user-visible label of a layout row
 // from the dropdown payload (§7a.1). The bootstrap system row stores
 // a stable Name ("default") that is NEVER rendered directly — instead
@@ -45,8 +56,8 @@ export default function LoginPage() {
   const [login, setLogin] = useState("");
   const [pin, setPin] = useState("");
   // `layoutId === 0` means "not yet picked"; the effect below selects
-  // the system layout as soon as the dropdown payload arrives, so the
-  // value is 0 only during the brief loading window.
+  // the system layout (or a layout_id from the SSO return URL) as soon
+  // as the dropdown payload arrives.
   const [layoutId, setLayoutId] = useState<number>(0);
 
   const loginMut = useLogin();
@@ -61,16 +72,24 @@ export default function LoginPage() {
 
   const systemLabel = t("layout:system_default_label");
 
-  // Pre-select the system layout on first paint, matching §7a.1:
-  // "It is also the dropdown's default pre-selected entry on first
-  // paint, so a user who never touches the selector simply lands in
-  // the system layout."
+  const preferredLayoutId = useMemo(() => {
+    const raw = new URLSearchParams(location.search).get("layout_id");
+    const n = raw ? Number(raw) : 0;
+    return Number.isInteger(n) && n > 0 ? n : 0;
+  }, [location.search]);
+
+  // Pre-select preferred layout_id from SSO (wizard) or the system
+  // layout on first paint (§7a.1).
   useEffect(() => {
     if (layoutId !== 0) return;
     if (!layouts.data || layouts.data.length === 0) return;
+    if (preferredLayoutId && layouts.data.some((l) => l.id === preferredLayoutId)) {
+      setLayoutId(preferredLayoutId);
+      return;
+    }
     const sys = layouts.data.find((l) => l.isSystem);
     setLayoutId(sys?.id ?? layouts.data[0].id);
-  }, [layouts.data, layoutId]);
+  }, [layouts.data, layoutId, preferredLayoutId]);
 
   // Memoise the dropdown options so MUI's Select doesn't re-render
   // every keystroke in the login/PIN fields.
@@ -82,8 +101,14 @@ export default function LoginPage() {
     }));
   }, [layouts.data, systemLabel]);
 
-  // Already authenticated → straight to the protected app.
+  // Already authenticated → SSO return_to (silent) or protected app.
   if (me.data) {
+    const params = new URLSearchParams(location.search);
+    const returnTo = params.get("return_to");
+    if (returnTo && isSafeSSOReturnTo(returnTo)) {
+      window.location.assign(returnTo);
+      return null;
+    }
     const dest =
       (location.state as LocationState | undefined)?.from?.pathname ?? "/";
     return <Navigate to={dest} replace />;

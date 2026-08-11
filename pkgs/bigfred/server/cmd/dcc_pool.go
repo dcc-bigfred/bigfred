@@ -16,6 +16,10 @@ import (
 const (
 	minDCCAddress = uint16(1)
 	maxDCCAddress = uint16(9999)
+	// autoAllocateFirstDCCAddress is where automatic pool allocation starts
+	// scanning. Addresses below it are left free for ad-hoc / factory-default
+	// decoders (3 is the DCC factory address).
+	autoAllocateFirstDCCAddress = uint16(50)
 )
 
 // DCCPool orchestrates per-user DCC address pools.
@@ -160,4 +164,45 @@ func validatePoolRanges(userID uint, ranges []PoolRange, existing []domain.DCCAd
 
 func poolRangesOverlap(a, b PoolRange) bool {
 	return a.From <= b.To && b.From <= a.To
+}
+
+// allocateFreeDCCAddresses picks count addresses that no user owns yet,
+// scanning upwards from autoAllocateFirstDCCAddress, and returns them
+// merged into as few contiguous ranges as possible. It returns
+// ErrDCCPoolExhausted when fewer than count addresses remain free.
+func allocateFreeDCCAddresses(count int, existing []domain.DCCAddressRange) ([]PoolRange, error) {
+	if count <= 0 {
+		return nil, nil
+	}
+	occupied := make(map[uint16]struct{})
+	for _, r := range existing {
+		from, to := r.FromAddr, r.ToAddr
+		if from < minDCCAddress {
+			from = minDCCAddress
+		}
+		if to > maxDCCAddress {
+			to = maxDCCAddress
+		}
+		for addr := from; addr <= to; addr++ {
+			occupied[addr] = struct{}{}
+		}
+	}
+
+	out := make([]PoolRange, 0, count)
+	remaining := count
+	for addr := autoAllocateFirstDCCAddress; addr <= maxDCCAddress && remaining > 0; addr++ {
+		if _, taken := occupied[addr]; taken {
+			continue
+		}
+		if n := len(out); n > 0 && out[n-1].To == addr-1 {
+			out[n-1].To = addr
+		} else {
+			out = append(out, PoolRange{From: addr, To: addr})
+		}
+		remaining--
+	}
+	if remaining > 0 {
+		return nil, svcerrors.ErrDCCPoolExhausted
+	}
+	return out, nil
 }

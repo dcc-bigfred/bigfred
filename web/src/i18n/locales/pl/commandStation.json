@@ -77,6 +77,12 @@
           "instruction": "Boot-stop to jednorazowe awaryjne zatrzymanie wszystkich pojazdów z makiety zaraz po starcie dcc-bus. Przydatne, gdy po restarcie nie chcesz, żeby lokomotywy ruszyły z poprzednią prędkością. Każda zmiana ustawień centralki powoduje restart połączenia, co również uruchamia boot-stop.",
           "alert": "Po włączeniu boot-stop przy każdym restarcie BigFred / dcc-bus pojazdy dostaną emergency stop."
         },
+        "programming": {
+          "label": "Programowanie",
+          "title": "Programowanie dekoderów",
+          "instruction": "Zdecyduj, czy ta centralka może programować dekodery (odczyt i zapis CV, zmiana adresu) i wybierz tor, z którego te operacje mają domyślnie korzystać. Możesz też ukryć centralkę w widoku manipulatora, aby nikt przez przypadek nie jeździł na niej pociągami — przydatne dla centralki dedykowanej do programowania.",
+          "alert": "Zapis CV na działającej makiecie jest destrukcyjny. Zostaw programowanie wyłączone, jeśli faktycznie nie używasz tej centralki do tego celu."
+        },
         "slots": {
           "label": "Sloty",
           "title": "Alokacja slotów LocoNet",
@@ -94,6 +100,10 @@
       "z21": "Z21 (UDP)",
       "loconet_serial": "LocoNet (serial)",
       "loconet_tcp": "LocoNet (TCP)"
+    },
+    "programmingTrack": {
+      "prog": "Tor programujący (prog)",
+      "pom": "Tor główny (POM)"
     },
     "dialogs": {
       "create": {
@@ -136,7 +146,13 @@
         "bootStopEnabled": "Boot-stop wszystkich pojazdów",
         "bootStopEnabledHelp": "Po włączeniu dcc-bus raz po starcie wysyła emergency stop do każdej lokomotywy dodanej w systemie",
         "singleVehicleControl": "Tylko jeden pojazd może być sterowany w jednym czasie",
-        "singleVehicleControlHelp": "Gdy włączone, wybór lub jazda innym pojazdem/składem zatrzymuje pozostałe pojazdy użytkownika (prędkość > 1). Wypożyczone pojazdy nie są zatrzymywane."
+        "singleVehicleControlHelp": "Gdy włączone, wybór lub jazda innym pojazdem/składem zatrzymuje pozostałe pojazdy użytkownika (prędkość > 1). Wypożyczone pojazdy nie są zatrzymywane.",
+        "programming": "Programowanie dekoderów",
+        "programmingHelp": "Pozwala odczytywać i zapisywać CV dekodera oraz zmieniać adres DCC przez tę centralkę. Domyślnie wyłączone, bo zapis CV na działającej makiecie jest destrukcyjny.",
+        "defaultProgrammingTrackOutput": "Domyślne wyjście toru programującego",
+        "defaultProgrammingTrackOutputHelp": "Tor używany, gdy żądanie programowania nie wskazuje wprost: wydzielone wyjście toru programującego (prog) albo tor główny (POM, programowanie na torze głównym).",
+        "hideInThrottle": "Ukryj w widoku manipulatora",
+        "hideInThrottleHelp": "Centralka nie pojawi się na liście wyboru centralki w manipulatorze. Użyj dla centralki dedykowanej do programowania, na której nikt nie powinien jeździć."
       }
     },
     "empty": "Brak centralki do wyświetlenia.",

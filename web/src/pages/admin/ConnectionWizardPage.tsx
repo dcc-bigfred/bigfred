@@ -5,10 +5,14 @@ import {
   Button,
   CircularProgress,
   Container,
+  FormControl,
   FormControlLabel,
   FormHelperText,
+  InputLabel,
   Link,
+  MenuItem,
   Paper,
+  Select,
   Stack,
   Step,
   StepLabel,
@@ -37,6 +41,8 @@ import {
   DEFAULT_COMMAND_STATION_MAX_LOCONET_SLOTS,
   DEFAULT_COMMAND_STATION_POLL_INTERVAL_MS,
   DEFAULT_COMMAND_STATION_SPEED_STEPS,
+  DEFAULT_PROGRAMMING_TRACK_OUTPUT,
+  PROGRAMMING_TRACK_OUTPUTS,
   commandStationScanWsUrl,
   isSerialAutodetectUri,
   kindFromConnectionUri,
@@ -46,6 +52,7 @@ import {
   type CommandStation,
   type DetectedConnection,
   type CommandStationKind,
+  type ProgrammingTrackOutput,
   type ScanWsFrame,
 } from "../../api/command_stations";
 import { capabilities } from "../../capabilities";
@@ -54,7 +61,13 @@ function isLoconetKind(kind: CommandStationKind): boolean {
   return kind === "loconet_serial" || kind === "loconet_tcp";
 }
 
-type WizardStepId = "select" | "remotes" | "bootstop" | "slots" | "layout";
+type WizardStepId =
+  | "select"
+  | "remotes"
+  | "bootstop"
+  | "programming"
+  | "slots"
+  | "layout";
 
 export default function ConnectionWizardPage() {
   const { t } = useTranslation(["commandStation", "common", "errors"]);
@@ -81,6 +94,10 @@ export default function ConnectionWizardPage() {
     capabilities.remotesConfigurable,
   );
   const [bootStopEnabled, setBootStopEnabled] = useState(false);
+  const [programming, setProgramming] = useState(false);
+  const [hideInThrottle, setHideInThrottle] = useState(false);
+  const [defaultProgrammingTrackOutput, setDefaultProgrammingTrackOutput] =
+    useState<ProgrammingTrackOutput>(DEFAULT_PROGRAMMING_TRACK_OUTPUT);
   const [allocatePhysicalSlots, setAllocatePhysicalSlots] = useState(true);
   const [attachToLayout, setAttachToLayout] = useState(true);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -94,7 +111,12 @@ export default function ConnectionWizardPage() {
   const showSlotsStep = selectedKind != null && isLoconetKind(selectedKind);
 
   const steps = useMemo((): WizardStepId[] => {
-    const base: WizardStepId[] = ["select", "remotes", "bootstop"];
+    const base: WizardStepId[] = [
+      "select",
+      "remotes",
+      "bootstop",
+      "programming",
+    ];
     if (showSlotsStep) base.push("slots");
     base.push("layout");
     return base;
@@ -255,6 +277,9 @@ export default function ConnectionWizardPage() {
         idleTimeoutSecs: DEFAULT_COMMAND_STATION_IDLE_TIMEOUT_SECS,
         bootStopEnabled,
         singleVehicleControl: false,
+        programming,
+        hideInThrottle,
+        defaultProgrammingTrackOutput,
         ...(isLoconetKind(kind)
           ? {
               maxLoconetSlots: DEFAULT_COMMAND_STATION_MAX_LOCONET_SLOTS,
@@ -531,6 +556,71 @@ export default function ConnectionWizardPage() {
                     "commandStation:admin.dialogs.fields.bootStopEnabled",
                   )}
                 />
+              </>
+            )}
+
+            {activeStep === "programming" && (
+              <>
+                <Alert severity="warning">
+                  {t("commandStation:admin.wizard.steps.programming.alert")}
+                </Alert>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={programming}
+                      onChange={(_, v) => setProgramming(v)}
+                    />
+                  }
+                  label={t("commandStation:admin.dialogs.fields.programming")}
+                />
+                <FormHelperText sx={{ mt: -1, ml: 4 }}>
+                  {t("commandStation:admin.dialogs.fields.programmingHelp")}
+                </FormHelperText>
+                {programming && (
+                  <FormControl fullWidth>
+                    <InputLabel>
+                      {t(
+                        "commandStation:admin.dialogs.fields.defaultProgrammingTrackOutput",
+                      )}
+                    </InputLabel>
+                    <Select
+                      value={defaultProgrammingTrackOutput}
+                      label={t(
+                        "commandStation:admin.dialogs.fields.defaultProgrammingTrackOutput",
+                      )}
+                      onChange={(e) =>
+                        setDefaultProgrammingTrackOutput(
+                          e.target.value as ProgrammingTrackOutput,
+                        )
+                      }
+                    >
+                      {PROGRAMMING_TRACK_OUTPUTS.map((track) => (
+                        <MenuItem key={track} value={track}>
+                          {t(`commandStation:admin.programmingTrack.${track}`)}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                    <FormHelperText>
+                      {t(
+                        "commandStation:admin.dialogs.fields.defaultProgrammingTrackOutputHelp",
+                      )}
+                    </FormHelperText>
+                  </FormControl>
+                )}
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={hideInThrottle}
+                      onChange={(_, v) => setHideInThrottle(v)}
+                    />
+                  }
+                  label={t(
+                    "commandStation:admin.dialogs.fields.hideInThrottle",
+                  )}
+                />
+                <FormHelperText sx={{ mt: -1, ml: 4 }}>
+                  {t("commandStation:admin.dialogs.fields.hideInThrottleHelp")}
+                </FormHelperText>
               </>
             )}
 

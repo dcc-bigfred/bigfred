@@ -96,6 +96,48 @@ type SystemEStopPayload struct {
 	Reason string `json:"reason,omitempty"`
 }
 
+// CVEntry is one configuration-variable slot: the CV number and its
+// value. Used both as a write instruction and as a read result.
+type CVEntry struct {
+	CV    uint16 `json:"cv"`
+	Value uint8  `json:"value"`
+}
+
+// LocoCVWritePayload programs one or more CVs on a decoder. `Mode`
+// selects the programming track ("prog") or programming-on-main
+// ("pom"); empty falls back to the daemon's --default-programming-track.
+type LocoCVWritePayload struct {
+	Address uint16    `json:"address"`
+	CVs     []CVEntry `json:"cvs"`
+	Mode    string    `json:"mode,omitempty"` // "pom"|"prog"
+}
+
+// LocoCVReadPayload reads the listed CVs back from a decoder. POM
+// reads need a RailCom-capable command station; programming-track
+// reads do not.
+type LocoCVReadPayload struct {
+	Address uint16   `json:"address"`
+	CVs     []uint16 `json:"cvs"`
+	Mode    string   `json:"mode,omitempty"`
+}
+
+// LocoAddrSetPayload rewrites a decoder's DCC address. The daemon
+// derives the CV1 / CV17 / CV18 / CV29 writes from the requested
+// address, preserving every CV29 bit other than the long-address bit.
+type LocoAddrSetPayload struct {
+	Address uint16 `json:"address"`
+	Mode    string `json:"mode,omitempty"`
+	Verify  bool   `json:"verify,omitempty"`
+}
+
+// LocoAddrGetPayload reads a decoder's currently programmed address.
+// `Address` is only meaningful in "pom" mode, where it addresses the
+// decoder being interrogated.
+type LocoAddrGetPayload struct {
+	Address uint16 `json:"address,omitempty"`
+	Mode    string `json:"mode,omitempty"`
+}
+
 // -------- Server → Client frames --------
 
 // DccBusOpenedPayload is the welcome frame the daemon sends right
@@ -128,6 +170,23 @@ type LocoErrorPayload struct {
 	DrivenAddrs []uint16 `json:"drivenAddrs,omitempty"`
 }
 
+// ControlProgrammingRejectedPayload is published on the dcc-bus event
+// channel when a programming command (loco.cvWrite / cvRead / addrSet /
+// addrGet) arriving on the Redis control channel is rejected by the
+// router. The control channel is fire-and-forget, so this event is the
+// server's only signal that the command did not run — loco-server can
+// log it, surface it to an admin HUD, or retry against a different
+// station.
+type ControlProgrammingRejectedPayload struct {
+	// FrameType is the original control frame type (loco.cvWrite, …).
+	FrameType string `json:"frameType"`
+	// Code is the machine-readable rejection code
+	// (errors.CodeProgrammingDisabled / CodeProgrammingFailed / …).
+	Code string `json:"code"`
+	// Address is the decoder address the command targeted, when known.
+	Address uint16 `json:"address,omitempty"`
+}
+
 // TrainSetSpeedMemberAck is one member result inside a train.setSpeed ack.
 type TrainSetSpeedMemberAck struct {
 	Addr  uint16 `json:"addr"`
@@ -144,6 +203,13 @@ type AckPayload struct {
 	Members     []TrainSetSpeedMemberAck `json:"members,omitempty"`
 	EvictedAddr uint16                   `json:"evictedAddr,omitempty"`
 	DrivenAddrs []uint16                 `json:"drivenAddrs,omitempty"`
+	// CVs carries the CVs read back (loco.cvRead) or the CVs the
+	// daemon actually wrote (loco.cvWrite, loco.addrSet).
+	CVs []CVEntry `json:"cvs,omitempty"`
+	// LocoAddress and LongAddress report the decoder address decoded
+	// from CV1/CV17/CV18/CV29 on loco.addrGet and loco.addrSet.
+	LocoAddress uint16 `json:"locoAddress,omitempty"`
+	LongAddress bool   `json:"longAddress,omitempty"`
 }
 
 // -------- Frame type catalogue --------
@@ -164,9 +230,30 @@ const (
 	TypeSystemEStop       = "system.estop"
 	TypeSystemRadioStop   = "system.radioStop"
 	TypeSystemEStopTarget = "system.estopTarget"
+	TypeLocoCVWrite       = "loco.cvWrite"
+	TypeLocoCVRead        = "loco.cvRead"
+	TypeLocoAddrSet       = "loco.addrSet"
+	TypeLocoAddrGet       = "loco.addrGet"
+
+	// TypeControlProgrammingRejected is published on the dcc-bus event
+	// channel when a programming command arriving on the Redis control
+	// channel (dcc-bus:cmd) is rejected by the router (e.g. programming
+	// disabled, no command station, decoder error). The control channel
+	// is fire-and-forget, so this event is the only feedback the server
+	// gets that the command did not run.
+	TypeControlProgrammingRejected = "control.programming.rejected"
 
 	TypeDccBusOpened = "dcc-bus.opened"
 	TypeLocoState    = "loco.state"
 	TypeLocoError    = "loco.error"
 	TypeAck          = "ack"
+)
+
+// Programming track selectors accepted in the `mode` field of the
+// CV / address frames. They mirror commandstation.Mode on the wire:
+// POM programs a decoder on the main track while it is running,
+// Prog uses the command station's isolated programming output.
+const (
+	ProgrammingModePOM  = "pom"
+	ProgrammingModeProg = "prog"
 )

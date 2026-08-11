@@ -32,3 +32,18 @@ func TestMomentarySeedValues(t *testing.T) {
 		t.Fatalf("light: got momentary=%d durationMs=%d", m, d)
 	}
 }
+
+func TestForceMomentarySeed(t *testing.T) {
+	t.Parallel()
+	force := forceMomentaryOverride{3: 1000, 4: 1000}
+	fn := templateFunctionSeed{3, "F3", "unspecified"}
+	m, d := fn.momentaryValues(force)
+	if m != 1 || d != 1000 {
+		t.Fatalf("force momentary: got momentary=%d durationMs=%d", m, d)
+	}
+	fn = templateFunctionSeed{0, "F0", "light"}
+	m, d = fn.momentaryValues(force)
+	if m != 0 || d != defaultMomentaryDurationMs {
+		t.Fatalf("non-force: got momentary=%d durationMs=%d", m, d)
+	}
+}

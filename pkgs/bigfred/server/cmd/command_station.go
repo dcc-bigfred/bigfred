@@ -79,7 +79,10 @@ type CommandStationCreateInput struct {
 	BootStopEnabled         bool
 	SingleVehicleControl    bool
 	// AllocatePhysicalSlots nil means default true for LocoNet kinds.
-	AllocatePhysicalSlots *bool
+	AllocatePhysicalSlots         *bool
+	Programming                   bool
+	HideInThrottle                bool
+	DefaultProgrammingTrackOutput string
 }
 
 func (s *CommandStation) Create(ctx context.Context, eff domain.EffectiveRoles, in CommandStationCreateInput) (domain.CommandStation, error) {
@@ -95,6 +98,10 @@ func (s *CommandStation) Create(ctx context.Context, eff domain.EffectiveRoles, 
 		return domain.CommandStation{}, err
 	}
 	pollInterval, err := validation.SanitiseCommandStationPollInterval(in.PollIntervalMs)
+	if err != nil {
+		return domain.CommandStation{}, err
+	}
+	progTrack, err := validation.SanitiseCommandStationProgrammingTrackOutput(in.DefaultProgrammingTrackOutput)
 	if err != nil {
 		return domain.CommandStation{}, err
 	}
@@ -118,6 +125,9 @@ func (s *CommandStation) Create(ctx context.Context, eff domain.EffectiveRoles, 
 		WithrottleServerEnabled: in.WithrottleServerEnabled,
 		BootStopEnabled:         in.BootStopEnabled,
 		SingleVehicleControl:    in.SingleVehicleControl,
+		Programming:                   in.Programming,
+		HideInThrottle:                in.HideInThrottle,
+		DefaultProgrammingTrackOutput: progTrack,
 		CreatedAt:        now,
 		UpdatedAt:        now,
 	}
@@ -150,6 +160,9 @@ type CommandStationUpdateInput struct {
 	BootStopEnabled         *bool
 	SingleVehicleControl    *bool
 	AllocatePhysicalSlots   *bool
+	Programming                   *bool
+	HideInThrottle                *bool
+	DefaultProgrammingTrackOutput *string
 }
 
 func (s *CommandStation) Update(ctx context.Context, eff domain.EffectiveRoles, id uint, in CommandStationUpdateInput) (domain.CommandStation, error) {
@@ -230,6 +243,19 @@ func (s *CommandStation) Update(ctx context.Context, eff domain.EffectiveRoles, 
 	}
 	if in.SingleVehicleControl != nil {
 		row.SingleVehicleControl = *in.SingleVehicleControl
+	}
+	if in.Programming != nil {
+		row.Programming = *in.Programming
+	}
+	if in.HideInThrottle != nil {
+		row.HideInThrottle = *in.HideInThrottle
+	}
+	if in.DefaultProgrammingTrackOutput != nil {
+		progTrack, err := validation.SanitiseCommandStationProgrammingTrackOutput(*in.DefaultProgrammingTrackOutput)
+		if err != nil {
+			return domain.CommandStation{}, err
+		}
+		row.DefaultProgrammingTrackOutput = progTrack
 	}
 	if in.AllocatePhysicalSlots != nil || in.Kind != nil {
 		// When kind changes to LocoNet without an explicit value, default ON.

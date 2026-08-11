@@ -124,6 +124,10 @@ func register(m *migrator.Migrator) {
 	m.Register(migrationVersion(20260716, 1), addCommandStationAllocatePhysicalSlotsColumnUp, addCommandStationAllocatePhysicalSlotsColumnDown)
 	m.Register(migrationVersion(20260720, 1), addVehicleCatalogMetaColumnsUp, addVehicleCatalogMetaColumnsDown)
 	m.Register(migrationVersion(20260721, 1), replaceVehicleExternalIDUniqueIndexUp, replaceVehicleExternalIDUniqueIndexDown)
+	m.Register(migrationVersion(20260808, 1), addCommandStationProgrammingColumnUp, addCommandStationProgrammingColumnDown)
+	m.Register(migrationVersion(20260808, 2), addCommandStationHideInThrottleColumnUp, addCommandStationHideInThrottleColumnDown)
+	m.Register(migrationVersion(20260808, 3), addCommandStationDefaultProgrammingTrackOutputColumnUp, addCommandStationDefaultProgrammingTrackOutputColumnDown)
+	m.Register(migrationVersion(20260809, 1), seedBasicTemplateUp, seedBasicTemplateDown)
 }
 
 // createCommandStationsUp installs the `command_stations` catalogue
@@ -888,6 +892,36 @@ func addCommandStationAllocatePhysicalSlotsColumnUp(s *rel.Schema) {
 }
 
 func addCommandStationAllocatePhysicalSlotsColumnDown(s *rel.Schema) {
+	// SQLite cannot DROP COLUMN in older schemas; leave columns in place.
+}
+
+// addCommandStationProgrammingColumnUp opens decoder CV / address programming
+// on the dcc-bus daemon spawned for this station (off by default).
+func addCommandStationProgrammingColumnUp(s *rel.Schema) {
+	s.Exec(rel.Raw(`ALTER TABLE command_stations ADD COLUMN programming INTEGER NOT NULL DEFAULT 0`))
+}
+
+func addCommandStationProgrammingColumnDown(s *rel.Schema) {
+	// SQLite cannot DROP COLUMN in older schemas; leave columns in place.
+}
+
+// addCommandStationHideInThrottleColumnUp hides the station from the throttle's
+// available command-station list (e.g. a dedicated programming station).
+func addCommandStationHideInThrottleColumnUp(s *rel.Schema) {
+	s.Exec(rel.Raw(`ALTER TABLE command_stations ADD COLUMN hide_in_throttle INTEGER NOT NULL DEFAULT 0`))
+}
+
+func addCommandStationHideInThrottleColumnDown(s *rel.Schema) {
+	// SQLite cannot DROP COLUMN in older schemas; leave columns in place.
+}
+
+// addCommandStationDefaultProgrammingTrackOutputColumnUp records which track
+// CV / address frames land on when they omit `mode` ("pom" or "prog").
+func addCommandStationDefaultProgrammingTrackOutputColumnUp(s *rel.Schema) {
+	s.Exec(rel.Raw(`ALTER TABLE command_stations ADD COLUMN default_programming_track_output TEXT NOT NULL DEFAULT 'prog'`))
+}
+
+func addCommandStationDefaultProgrammingTrackOutputColumnDown(s *rel.Schema) {
 	// SQLite cannot DROP COLUMN in older schemas; leave columns in place.
 }
 

@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/protocol"
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
 )
 
@@ -25,7 +26,28 @@ const (
 	FlagBootStopEnabled    = "enable-boot-stop"
 	FlagSingleVehicleControl = "enable-single-vehicle-control"
 	FlagAllocatePhysicalSlots = "allocate-physical-slots"
+	FlagEnableProgramming       = "enable-programming"
+	FlagDefaultProgrammingTrack = "default-programming-track"
 )
+
+// DefaultProgrammingTrack is the track CV / address frames land on when
+// they omit `mode`. It mirrors domain.DefaultCommandStationProgrammingTrackOutput:
+// the isolated programming output cannot disturb locos on the main track.
+const DefaultProgrammingTrack = protocol.ProgrammingModeProg
+
+// ProgrammingTrackFromFlag normalises --default-programming-track. An
+// empty value falls back to DefaultProgrammingTrack.
+func ProgrammingTrackFromFlag(track string) (string, error) {
+	switch t := strings.ToLower(strings.TrimSpace(track)); t {
+	case "":
+		return DefaultProgrammingTrack, nil
+	case protocol.ProgrammingModePOM, protocol.ProgrammingModeProg:
+		return t, nil
+	default:
+		return "", fmt.Errorf("unsupported %s %q (want %q or %q)",
+			FlagDefaultProgrammingTrack, track, protocol.ProgrammingModePOM, protocol.ProgrammingModeProg)
+	}
+}
 
 // AppendStationFlags appends command-station connection flags for cs.
 func AppendStationFlags(args []string, cs domain.CommandStation) []string {

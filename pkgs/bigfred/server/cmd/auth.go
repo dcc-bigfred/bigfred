@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -219,6 +220,44 @@ func (a *Auth) IssueToken(id Identity) (string, time.Time, error) {
 		return "", time.Time{}, err
 	}
 	return signed, expiry, nil
+}
+
+// IssueImpersonatedToken signs a session JWT for login when actor is an
+// effective admin in the pinned layout (same gate as MaybeImpersonate).
+// Layout stays the actor's — participants inherit the organizer makieta.
+func (a *Auth) IssueImpersonatedToken(ctx context.Context, actor Identity, login string) (string, time.Time, error) {
+	login = strings.TrimSpace(login)
+	if login == "" {
+		return "", time.Time{}, svcerrors.ErrUserNotFound
+	}
+	eff, err := a.Effective(ctx, actor.User, actor.Layout.ID)
+	if err != nil {
+		return "", time.Time{}, err
+	}
+	if !eff.Has(domain.RoleAdmin) {
+		return "", time.Time{}, svcerrors.ErrImpersonationForbidden
+	}
+	subject, err := a.users.FindByLogin(ctx, login)
+	if err != nil {
+		if errors.Is(err, repo.ErrUserNotFound) {
+			return "", time.Time{}, svcerrors.ErrUserNotFound
+		}
+		return "", time.Time{}, err
+	}
+	if !subject.Active {
+		return "", time.Time{}, svcerrors.ErrAccountDeactivated
+	}
+	return a.IssueToken(Identity{User: subject, Layout: actor.Layout})
+}
+
+// IdentityForLayout returns a session identity for user pinned to layoutID
+// (rejects locked layouts the same way as Login).
+func (a *Auth) IdentityForLayout(ctx context.Context, user domain.User, layoutID uint) (Identity, error) {
+	layout, err := a.layouts.ValidateForLogin(ctx, layoutID)
+	if err != nil {
+		return Identity{}, err
+	}
+	return Identity{User: user, Layout: layout}, nil
 }
 
 // VerifyToken parses and verifies a previously issued session token.

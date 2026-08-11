@@ -10,11 +10,16 @@ import (
 const defaultMomentaryDurationMs = 1000
 
 // templateFunctionSeed is one F-slot inserted by a vehicle-template seed migration.
+// Keep exactly three fields so existing positional composite literals keep compiling.
 type templateFunctionSeed struct {
 	num  uint8
 	name string
 	icon string
 }
+
+// forceMomentaryOverride maps function number → momentary duration (ms).
+// Duration <= 0 means defaultMomentaryDurationMs.
+type forceMomentaryOverride map[uint8]int
 
 func sqlLiteral(s string) string {
 	return strings.ReplaceAll(s, "'", "''")
@@ -31,7 +36,28 @@ func momentarySeedValues(icon string) (momentary int, durationMs int) {
 	return 0, defaultMomentaryDurationMs
 }
 
+func (fn templateFunctionSeed) momentaryValues(force forceMomentaryOverride) (momentary int, durationMs int) {
+	if force != nil {
+		if d, ok := force[fn.num]; ok {
+			if d <= 0 {
+				d = defaultMomentaryDurationMs
+			}
+			return 1, d
+		}
+	}
+	return momentarySeedValues(fn.icon)
+}
+
 func seedTemplateFunctions(s *rel.Schema, templateName string, functions []templateFunctionSeed) {
+	seedTemplateFunctionsWithForce(s, templateName, functions, nil)
+}
+
+func seedTemplateFunctionsWithForce(
+	s *rel.Schema,
+	templateName string,
+	functions []templateFunctionSeed,
+	force forceMomentaryOverride,
+) {
 	name := sqlLiteral(templateName)
 	s.Exec(rel.Raw(fmt.Sprintf(`
 		INSERT INTO vehicle_templates (name, description, owner_user_id, version, created_at, updated_at)
@@ -41,7 +67,7 @@ func seedTemplateFunctions(s *rel.Schema, templateName string, functions []templ
 
 	var parts []string
 	for _, fn := range functions {
-		momentary, durationMs := momentarySeedValues(fn.icon)
+		momentary, durationMs := fn.momentaryValues(force)
 		parts = append(parts, fmt.Sprintf(
 			`SELECT NULL, t.id, %d, '%s', '%s', %d, %d, %d, datetime('now'), datetime('now')
 			 FROM vehicle_templates t

@@ -75,6 +75,13 @@ type Router struct {
 	bootStopDone bool
 	bootStopEnabled bool
 	singleVehicleControl bool
+
+	programmingEnabled      bool
+	defaultProgrammingTrack string
+	// progMu serialises decoder programming sequences: CV batches and
+	// address rewrites are multi-round-trip and must not interleave on
+	// a single command station.
+	progMu sync.Mutex
 }
 
 // Config carries the inputs Router needs at construction time.
@@ -100,6 +107,11 @@ type Config struct {
 	BootStopEnabled           bool
 	SingleVehicleControl      bool
 	SlotMetrics               slotlease.Recorder
+	// ProgrammingEnabled opens the CV / address use cases. When false
+	// every programming frame is rejected with programming_disabled.
+	ProgrammingEnabled bool
+	// DefaultProgrammingTrack is "pom" or "prog"; empty means "prog".
+	DefaultProgrammingTrack string
 }
 
 // NewRouter assembles the router and seeds roster caches from Redis.
@@ -136,6 +148,8 @@ func NewRouter(_ context.Context, cfg Config) (*Router, error) {
 		slotMetrics:        slotlease.RecorderOrNoop(cfg.SlotMetrics),
 		bootStopEnabled:    cfg.BootStopEnabled,
 		singleVehicleControl: cfg.SingleVehicleControl,
+		programmingEnabled:      cfg.ProgrammingEnabled,
+		defaultProgrammingTrack: normalizeProgrammingTrack(cfg.DefaultProgrammingTrack),
 	}
 	r.dcc.LogFields = r.stationLogFields
 	r.reconcileBootSlots(cfg)

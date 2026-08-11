@@ -55,6 +55,22 @@ func (a *RouterAdapter) HandleEStop(ctx context.Context, sess *Session, payload 
 	return deliver(ctx, sess, requestID, a.inner.HandleEStop(ctx, actor(sess), NewResponder(sess), payload, requestID))
 }
 
+func (a *RouterAdapter) HandleLocoCVWrite(ctx context.Context, sess *Session, payload protocol.LocoCVWritePayload, requestID string) Outcome {
+	return deliver(ctx, sess, requestID, a.inner.HandleLocoCVWrite(ctx, actor(sess), NewResponder(sess), payload, requestID))
+}
+
+func (a *RouterAdapter) HandleLocoCVRead(ctx context.Context, sess *Session, payload protocol.LocoCVReadPayload, requestID string) Outcome {
+	return deliver(ctx, sess, requestID, a.inner.HandleLocoCVRead(ctx, actor(sess), NewResponder(sess), payload, requestID))
+}
+
+func (a *RouterAdapter) HandleLocoAddrSet(ctx context.Context, sess *Session, payload protocol.LocoAddrSetPayload, requestID string) Outcome {
+	return deliver(ctx, sess, requestID, a.inner.HandleLocoAddrSet(ctx, actor(sess), NewResponder(sess), payload, requestID))
+}
+
+func (a *RouterAdapter) HandleLocoAddrGet(ctx context.Context, sess *Session, payload protocol.LocoAddrGetPayload, requestID string) Outcome {
+	return deliver(ctx, sess, requestID, a.inner.HandleLocoAddrGet(ctx, actor(sess), NewResponder(sess), payload, requestID))
+}
+
 func (a *RouterAdapter) HandleSessionClose(ctx context.Context, sess *Session, reason string) {
 	a.inner.HandleSessionClose(ctx, cmd.Actor{
 		UserID:                 sess.UserID,
@@ -75,6 +91,9 @@ func deliver(ctx context.Context, sess *Session, requestID string, res cmd.Resul
 			Members:     res.Members,
 			EvictedAddr: res.EvictedAddr,
 			DrivenAddrs: res.DrivenAddrs,
+			CVs:         res.CVs,
+			LocoAddress: res.LocoAddress,
+			LongAddress: res.LongAddress,
 		}
 		if err := NewResponder(sess).SendAck(ctx, requestID, ack); err != nil {
 			return Fail(errors.WsCodeSendFailed)

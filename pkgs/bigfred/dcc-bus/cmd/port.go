@@ -44,6 +44,25 @@ type Responder interface {
 	SendAck(ctx context.Context, requestID string, payload protocol.AckPayload) error
 }
 
+// noopResponder satisfies Responder for commands that arrive without a
+// client to answer — the Redis control channel is fire-and-forget.
+type noopResponder struct{}
+
+func (noopResponder) Subscribe(...uint16)              {}
+func (noopResponder) Unsubscribe(...uint16)            {}
+func (noopResponder) SubscribedAddrs() []uint16        { return nil }
+func (noopResponder) OldestSubscribed() (uint16, bool) { return 0, false }
+func (noopResponder) SelectedAddr() uint16             { return 0 }
+func (noopResponder) SetSelected(uint16)               {}
+func (noopResponder) ClearSelected()                   {}
+
+func (noopResponder) SendLocoState(context.Context, contract.LocoStateWire) error { return nil }
+func (noopResponder) SendLocoError(context.Context, uint16, string, string) error { return nil }
+func (noopResponder) SendLocoErrorPayload(context.Context, protocol.LocoErrorPayload) error {
+	return nil
+}
+func (noopResponder) SendAck(context.Context, string, protocol.AckPayload) error { return nil }
+
 // SessionView is a snapshot of one live browser session used for fan-out
 // and dead-man bookkeeping without importing the ws package.
 type SessionView struct {

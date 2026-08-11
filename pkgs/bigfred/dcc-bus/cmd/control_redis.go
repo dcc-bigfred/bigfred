@@ -86,8 +86,12 @@ func (r *Router) HandleControlCommand(ctx context.Context, raw []byte) {
 var controlActor = Actor{Source: "server"}
 
 // logControlProgramming reports the outcome of a control-channel
-// programming command. The channel is fire-and-forget, so the daemon
-// log is the only place a rejection can surface.
+// programming command. The channel is fire-and-forget, so on rejection
+// the daemon publishes a control.programming.rejected event on its
+// event channel — that is the server's only signal that the command
+// did not run (loco-server can log it, surface it to an admin HUD, or
+// retry against a different station). On success the daemon log is
+// enough; no event is emitted.
 func (r *Router) logControlProgramming(frameType string, res Result) {
 	if res.OK {
 		return
@@ -96,6 +100,14 @@ func (r *Router) logControlProgramming(frameType string, res Result) {
 		"type": frameType,
 		"code": res.Code,
 	}).Warn("dcc-bus control programming command rejected")
+	if r.redis != nil {
+		_ = r.redis.Publish(context.Background(), protocol.TypeControlProgrammingRejected,
+			protocol.ControlProgrammingRejectedPayload{
+				FrameType: frameType,
+				Code:      res.Code,
+				Address:   res.LocoAddress,
+			})
+	}
 }
 
 func (r *Router) applyControlSetSpeed(ctx context.Context, p contract.LocoSetSpeedWire) {

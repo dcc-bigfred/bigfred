@@ -80,12 +80,8 @@ func (r *OAuthClientsRegistry) StartWatch(stop <-chan struct{}) error {
 				if !ok {
 					return
 				}
-				if ev.Op&(fsnotify.Write|fsnotify.Create|fsnotify.Remove|fsnotify.Rename) == 0 {
+				if !shouldReloadOnOAuthClientEvent(ev) {
 					continue
-				}
-				if !strings.HasSuffix(strings.ToLower(ev.Name), ".json") &&
-					filepath.Ext(ev.Name) != "" {
-					// still reload on dir events that may affect json files
 				}
 				debounce.Reset(300 * time.Millisecond)
 			case <-debounce.C:
@@ -101,6 +97,24 @@ func (r *OAuthClientsRegistry) StartWatch(stop <-chan struct{}) error {
 		}
 	}()
 	return nil
+}
+
+// shouldReloadOnOAuthClientEvent reports whether a filesystem event from the
+// OAuth clients drop-in directory should trigger a reload. Only write/create/
+// remove/rename events on .json files (or directory-level events with no
+// file extension) reload the registry; unrelated files (editor swap files,
+// READMEs, temp backups) are ignored.
+func shouldReloadOnOAuthClientEvent(ev fsnotify.Event) bool {
+	if ev.Op&(fsnotify.Write|fsnotify.Create|fsnotify.Remove|fsnotify.Rename) == 0 {
+		return false
+	}
+	// Directory-level events (empty Name or no extension) still trigger a
+	// reload because they may rename or remove JSON files inside the
+	// watched directory.
+	if filepath.Ext(ev.Name) != "" && !strings.HasSuffix(strings.ToLower(ev.Name), ".json") {
+		return false
+	}
+	return true
 }
 
 func (r *OAuthClientsRegistry) reload() error {

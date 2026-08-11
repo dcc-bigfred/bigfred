@@ -170,6 +170,23 @@ type LocoErrorPayload struct {
 	DrivenAddrs []uint16 `json:"drivenAddrs,omitempty"`
 }
 
+// ControlProgrammingRejectedPayload is published on the dcc-bus event
+// channel when a programming command (loco.cvWrite / cvRead / addrSet /
+// addrGet) arriving on the Redis control channel is rejected by the
+// router. The control channel is fire-and-forget, so this event is the
+// server's only signal that the command did not run — loco-server can
+// log it, surface it to an admin HUD, or retry against a different
+// station.
+type ControlProgrammingRejectedPayload struct {
+	// FrameType is the original control frame type (loco.cvWrite, …).
+	FrameType string `json:"frameType"`
+	// Code is the machine-readable rejection code
+	// (errors.CodeProgrammingDisabled / CodeProgrammingFailed / …).
+	Code string `json:"code"`
+	// Address is the decoder address the command targeted, when known.
+	Address uint16 `json:"address,omitempty"`
+}
+
 // TrainSetSpeedMemberAck is one member result inside a train.setSpeed ack.
 type TrainSetSpeedMemberAck struct {
 	Addr  uint16 `json:"addr"`
@@ -217,6 +234,14 @@ const (
 	TypeLocoCVRead        = "loco.cvRead"
 	TypeLocoAddrSet       = "loco.addrSet"
 	TypeLocoAddrGet       = "loco.addrGet"
+
+	// TypeControlProgrammingRejected is published on the dcc-bus event
+	// channel when a programming command arriving on the Redis control
+	// channel (dcc-bus:cmd) is rejected by the router (e.g. programming
+	// disabled, no command station, decoder error). The control channel
+	// is fire-and-forget, so this event is the only feedback the server
+	// gets that the command did not run.
+	TypeControlProgrammingRejected = "control.programming.rejected"
 
 	TypeDccBusOpened = "dcc-bus.opened"
 	TypeLocoState    = "loco.state"

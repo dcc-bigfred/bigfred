@@ -12,6 +12,7 @@ import (
 
 func TestGet_defaultsWithoutSection(t *testing.T) {
 	info := Get()
+	require.Equal(t, "bigfred", info.Product)
 	require.Equal(t, "dev", info.Version)
 	require.Empty(t, info.TagCommit)
 	// buildCommit / buildTime may be empty in unit tests (no ldflags).

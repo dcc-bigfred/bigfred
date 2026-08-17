@@ -24,6 +24,7 @@ var (
 
 // Info is the public version payload returned by GET /api/v1/version.
 type Info struct {
+	Product     string `json:"product"`
 	Version     string `json:"version"`
 	TagCommit   string `json:"tagCommit"`
 	BuildCommit string `json:"buildCommit"`
@@ -44,6 +45,7 @@ var (
 func Get() Info {
 	once.Do(func() {
 		info = Info{
+			Product:     "bigfred",
 			Version:     "dev",
 			BuildCommit: buildCommit,
 			BuildTime:   buildTime,

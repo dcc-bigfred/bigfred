@@ -10,6 +10,7 @@ import (
 
 	"github.com/keskad/loco/pkgs/bigfred/contract"
 	"github.com/keskad/loco/pkgs/bigfred/remotepairing"
+	"github.com/keskad/loco/pkgs/bigfred/remotes/inbound"
 	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
 	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
 	"github.com/keskad/loco/pkgs/bigfred/server/validation"
@@ -124,24 +125,30 @@ func (h *HandsetPairingHandler) Start(w http.ResponseWriter, r *http.Request) {
 	req.DeviceID = strings.TrimSpace(req.DeviceID)
 	ip := handsetClientIP(r)
 	if !h.limiter.allow(ip, req.Login, time.Now()) {
-		h.auditResult(r, 0, req.Login, req.DeviceID, ip, "rate_limited")
+		h.auditResult(r, 0, 0, req.Login, req.DeviceID, ip, "rate_limited")
 		writeJSONError(w, http.StatusTooManyRequests, "rate_limited")
 		return
 	}
-	if req.Login == "" || validation.ValidateUserPIN(req.PIN) != nil || !validHandsetDeviceID(req.DeviceID) {
-		h.auditResult(r, 0, req.Login, req.DeviceID, ip, "invalid_request")
+	if req.Login == "" || !validHandsetDeviceID(req.DeviceID) {
+		h.auditResult(r, 0, 0, req.Login, req.DeviceID, ip, "invalid_request")
 		writeJSONError(w, http.StatusBadRequest, "invalid_request")
 		return
 	}
+	if err := validation.ValidateUserPIN(req.PIN); err != nil {
+		h.auditResult(r, 0, 0, req.Login, req.DeviceID, ip, "invalid_pin")
+		status, code := svcerrors.UserHTTPStatus(err)
+		writeJSONError(w, status, code)
+		return
+	}
 	if h.auth == nil || h.layouts == nil || h.remote == nil {
-		h.auditResult(r, 0, req.Login, req.DeviceID, ip, "not_configured")
+		h.auditResult(r, 0, 0, req.Login, req.DeviceID, ip, "not_configured")
 		writeJSONError(w, http.StatusServiceUnavailable, "remote_not_configured")
 		return
 	}
 
 	layouts, err := h.layouts.ListSelectable(r.Context())
 	if err != nil {
-		h.auditResult(r, 0, req.Login, req.DeviceID, ip, "internal_error")
+		h.auditResult(r, 0, 0, req.Login, req.DeviceID, ip, "internal_error")
 		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 		return
 	}
@@ -153,12 +160,12 @@ func (h *HandsetPairingHandler) Start(w http.ResponseWriter, r *http.Request) {
 		}
 		stations, listErr := h.layouts.ListCommandStations(r.Context(), layout.ID)
 		if listErr != nil {
-			h.auditResult(r, 0, req.Login, req.DeviceID, ip, "internal_error")
+			h.auditResult(r, 0, 0, req.Login, req.DeviceID, ip, "internal_error")
 			writeJSONError(w, http.StatusInternalServerError, "internal_error")
 			return
 		}
 		for _, station := range stations {
-			if station.WithrottleServerEnabled {
+			if station.WithrottleServerEnabled && !station.HideInThrottle {
 				layoutID = layout.ID
 				commandStationID = station.ID
 				break
@@ -169,13 +176,13 @@ func (h *HandsetPairingHandler) Start(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if commandStationID == 0 {
-		h.auditResult(r, 0, req.Login, req.DeviceID, ip, "server_disabled")
-		writeJSONError(w, http.StatusServiceUnavailable, "remote_server_disabled")
+		h.auditResult(r, 0, 0, req.Login, req.DeviceID, ip, "server_disabled")
+		writeRemoteError(w, svcerrors.ErrWithrottleServerDisabled)
 		return
 	}
 	identity, err := h.auth.Login(r.Context(), req.Login, req.PIN, layoutID)
 	if err != nil {
-		h.auditResult(r, 0, req.Login, req.DeviceID, ip, "invalid_credentials")
+		h.auditResult(r, layoutID, 0, req.Login, req.DeviceID, ip, "invalid_credentials")
 		status, code := svcerrors.AuthHTTPStatus(err)
 		writeJSONError(w, status, code)
 		return
@@ -190,15 +197,15 @@ func (h *HandsetPairingHandler) Start(w http.ResponseWriter, r *http.Request) {
 		cmd.RemoteStartPairingInput{
 			UserLogin:         identity.User.Login,
 			AllowAllVehicles:  true,
-			ExpectedClientKey: contract.RemoteProtocolWithrottle + ":" + req.DeviceID,
+			ExpectedClientKey: inbound.ClientKey(contract.RemoteProtocolWithrottle, req.DeviceID),
 		},
 	)
 	if err != nil {
-		h.auditResult(r, identity.User.ID, identity.User.Login, req.DeviceID, ip, "failed")
+		h.auditResult(r, layoutID, identity.User.ID, identity.User.Login, req.DeviceID, ip, "failed")
 		writeRemoteError(w, err)
 		return
 	}
-	h.auditResult(r, identity.User.ID, identity.User.Login, req.DeviceID, ip, "success")
+	h.auditResult(r, layoutID, identity.User.ID, identity.User.Login, req.DeviceID, ip, "success")
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(handsetPairingResponse{
@@ -229,13 +236,13 @@ func handsetClientIP(r *http.Request) string {
 	return r.RemoteAddr
 }
 
-func (h *HandsetPairingHandler) auditResult(r *http.Request, userID uint, login, deviceID, ip, result string) {
+func (h *HandsetPairingHandler) auditResult(r *http.Request, layoutID, userID uint, login, deviceID, ip, result string) {
 	if h.audit == nil {
 		return
 	}
 	_ = h.audit.Publish(
 		r.Context(),
-		0,
+		layoutID,
 		cmd.AuditActor{UserID: userID, Login: login},
 		"audit_handset_pairing",
 		map[string]string{"deviceId": deviceID, "ip": ip, "result": result},

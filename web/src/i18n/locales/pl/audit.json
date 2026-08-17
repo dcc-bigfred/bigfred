@@ -24,6 +24,7 @@
     "audit_roster_vehicle_added": "{{actorLogin}} dodał pojazd \"{{vehicle}}\" do makiety",
     "audit_roster_vehicle_removed": "{{actorLogin}} usunął pojazd \"{{vehicle}}\" z makiety",
     "audit_roster_train_added": "{{actorLogin}} dodał skład \"{{train}}\" do makiety",
-    "audit_roster_train_removed": "{{actorLogin}} usunął skład \"{{train}}\" z makiety"
+    "audit_roster_train_removed": "{{actorLogin}} usunął skład \"{{train}}\" z makiety",
+    "audit_handset_pairing": "{{actorLogin}}: parowanie urządzenia {{deviceId}} — {{result}}"
   }
 }

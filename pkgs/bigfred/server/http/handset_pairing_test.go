@@ -1,6 +1,9 @@
 package httpapi
 
 import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -34,5 +37,44 @@ func TestValidHandsetDeviceID(t *testing.T) {
 		if validHandsetDeviceID(invalid) {
 			t.Fatalf("%q should be invalid", invalid)
 		}
+	}
+}
+
+func TestHandsetPairingRejectsInvalidPINWithoutEcho(t *testing.T) {
+	h := NewHandsetPairingHandler(nil, nil, nil, nil)
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/remotes/handset-pairing",
+		strings.NewReader(`{"login":"ops","pin":"12x","deviceId":"4242"}`),
+	)
+	req.RemoteAddr = "10.0.0.1:1234"
+	rec := httptest.NewRecorder()
+	h.Start(rec, req)
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "user_pin_invalid") {
+		t.Fatalf("body=%s", rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), "12x") {
+		t.Fatal("response echoed PIN")
+	}
+}
+
+func TestHandsetPairingRouteIsPublic(t *testing.T) {
+	router := NewRouter(RouterConfig{})
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/remotes/handset-pairing",
+		strings.NewReader(`{"login":"ops","pin":"1234","deviceId":"4242"}`),
+	)
+	req.RemoteAddr = "10.0.0.1:1234"
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "remote_not_configured") {
+		t.Fatalf("body=%s", rec.Body.String())
 	}
 }

@@ -19,9 +19,9 @@ import (
 )
 
 var (
-	ErrDuplicatePair      = errors.New("remotepairing: duplicate pairing code among pending requests")
-	ErrInvalidPairingCV   = errors.New("remotepairing: invalid pairing CV value")
-	ErrUserAlreadyPaired  = errors.New("remotepairing: user already has an active handset session")
+	ErrDuplicatePair     = errors.New("remotepairing: duplicate pairing code among pending requests")
+	ErrInvalidPairingCV  = errors.New("remotepairing: invalid pairing CV value")
+	ErrUserAlreadyPaired = errors.New("remotepairing: user already has an active handset session")
 )
 
 const maxPairGenerationAttempts = 32
@@ -112,7 +112,7 @@ return 1
 
 // touchSeenBatchScript atomically updates lastSeenAt on many active
 // sessions in one round-trip. KEYS are active keys; ARGV[1] is the TTL
-// in ms (or '' to preserve each key's existing TTL); ARGV[i+1] is the
+// in ms (or an empty string to preserve each key's existing TTL); ARGV[i+1] is the
 // lastSeenAt for KEYS[i]. Missing keys are skipped silently (evicted
 // concurrently). Used by the coordinator's batched seen-flusher (WS-1b).
 var touchSeenBatchScript = redis.NewScript(`
@@ -324,14 +324,15 @@ type CreateZ21PairingInput struct {
 
 // CreateWithrottlePairingInput carries the user-selected vehicle scope for WiThrottle pairing.
 type CreateWithrottlePairingInput struct {
-	LayoutID         uint
-	CommandStationID uint
-	UserID           uint
-	UserLogin        string
-	VehicleIDs       []string
-	AllowedAddrs     []uint16
-	AllowAllVehicles bool
-	HandsetBrakeSecs uint
+	LayoutID          uint
+	CommandStationID  uint
+	UserID            uint
+	UserLogin         string
+	VehicleIDs        []string
+	AllowedAddrs      []uint16
+	AllowAllVehicles  bool
+	HandsetBrakeSecs  uint
+	ExpectedClientKey string
 }
 
 // CreateWithrottlePairingRequest generates a unique 6-digit code and stores a WiThrottle pending req.
@@ -362,19 +363,20 @@ func (s *Store) CreateWithrottlePairingRequest(ctx context.Context, in CreateWit
 		}
 
 		req := contract.RemotePendingWire{
-			LayoutID:         in.LayoutID,
-			CommandStationID: in.CommandStationID,
-			Protocol:         contract.RemoteProtocolWithrottle,
-			UserID:           in.UserID,
-			UserLogin:        in.UserLogin,
-			ReqID:            reqID,
-			DisplayLabel:     contract.WithrottlePairingDisplayLabel(code),
-			VehicleIDs:       append([]string(nil), in.VehicleIDs...),
-			AllowedAddrs:     append([]uint16(nil), in.AllowedAddrs...),
-			AllowAllVehicles: in.AllowAllVehicles,
-			HandsetBrakeSecs: contract.NormaliseHandsetBrakeSecs(in.HandsetBrakeSecs),
-			CreatedAt:        now,
-			PairingCode:      code,
+			LayoutID:          in.LayoutID,
+			CommandStationID:  in.CommandStationID,
+			Protocol:          contract.RemoteProtocolWithrottle,
+			UserID:            in.UserID,
+			UserLogin:         in.UserLogin,
+			ReqID:             reqID,
+			DisplayLabel:      contract.WithrottlePairingDisplayLabel(code),
+			VehicleIDs:        append([]string(nil), in.VehicleIDs...),
+			AllowedAddrs:      append([]uint16(nil), in.AllowedAddrs...),
+			AllowAllVehicles:  in.AllowAllVehicles,
+			HandsetBrakeSecs:  contract.NormaliseHandsetBrakeSecs(in.HandsetBrakeSecs),
+			CreatedAt:         now,
+			PairingCode:       code,
+			ExpectedClientKey: in.ExpectedClientKey,
 		}
 		payload, err := contract.MarshalRemotePending(req)
 		if err != nil {
@@ -491,6 +493,9 @@ func (s *Store) CompletePairing(ctx context.Context, layoutID, commandStationID 
 	req, err := contract.UnmarshalRemotePending([]byte(raw))
 	if err != nil {
 		return contract.RemoteSessionWire{}, false, "", err
+	}
+	if req.ExpectedClientKey != "" && req.ExpectedClientKey != clientKey {
+		return contract.RemoteSessionWire{}, false, "", nil
 	}
 
 	active := contract.RemoteSessionWire{

@@ -117,6 +117,8 @@ type RemotePendingWire struct {
 	PairingCV4 int `json:"pairingCV4,omitempty"`
 	// WiThrottle-only 6-digit pairing code (omitempty for other protocols).
 	PairingCode string `json:"pairingCode,omitempty"`
+	// ExpectedClientKey restricts completion to a pre-declared handset (optional).
+	ExpectedClientKey string `json:"expectedClientKey,omitempty"`
 }
 
 // RemoteSessionWire is stored at RemotePairingActiveKey until idle evict or logoff.

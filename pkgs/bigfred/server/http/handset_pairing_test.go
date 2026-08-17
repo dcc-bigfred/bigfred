@@ -1,0 +1,38 @@
+package httpapi
+
+import (
+	"testing"
+	"time"
+)
+
+func TestHandsetPairingLimiterKeysByIPAndLogin(t *testing.T) {
+	now := time.Unix(100, 0)
+	limiter := newHandsetPairingLimiter()
+	for i := 0; i < handsetPairingAttempts; i++ {
+		if !limiter.allow("10.0.0.1", "alice", now) {
+			t.Fatalf("attempt %d unexpectedly rejected", i)
+		}
+	}
+	if limiter.allow("10.0.0.1", "bob", now) {
+		t.Fatal("IP limit should reject a different login")
+	}
+	if limiter.allow("10.0.0.2", "ALICE", now) {
+		t.Fatal("login limit should be case-insensitive across IPs")
+	}
+	if !limiter.allow("10.0.0.1", "alice", now.Add(handsetPairingWindow)) {
+		t.Fatal("window should reset")
+	}
+}
+
+func TestValidHandsetDeviceID(t *testing.T) {
+	for _, valid := range []string{"1", "4242", "000042"} {
+		if !validHandsetDeviceID(valid) {
+			t.Fatalf("%q should be valid", valid)
+		}
+	}
+	for _, invalid := range []string{"", "device", "42-42"} {
+		if validHandsetDeviceID(invalid) {
+			t.Fatalf("%q should be invalid", invalid)
+		}
+	}
+}

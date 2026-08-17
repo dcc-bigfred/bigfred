@@ -5,10 +5,10 @@ import (
 	"errors"
 
 	"github.com/keskad/loco/pkgs/bigfred/contract"
+	"github.com/keskad/loco/pkgs/bigfred/remotepairing"
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
 	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
 	"github.com/keskad/loco/pkgs/bigfred/server/repo"
-	"github.com/keskad/loco/pkgs/bigfred/remotepairing"
 )
 
 // WithrottleRemote manages handset pairing for one layout command station.
@@ -38,26 +38,27 @@ func NewWithrottleRemote(
 
 // WithrottleRemoteStatus is the domain view of WiThrottle pairing state.
 type WithrottleRemoteStatus struct {
-	Paired                 bool
-	ClientKey              string
-	PairedAt               int64
-	LastSeenAt             int64
-	AllowAllVehicles       bool
-	AllowedVehicles      []RemoteVehicleRef
-	PendingReq             bool
-	PairingCode            string
-	DisplayLabel           string
-	ExpiresAt              int64
-	HandsetBrakeSecs       uint
+	Paired                  bool
+	ClientKey               string
+	PairedAt                int64
+	LastSeenAt              int64
+	AllowAllVehicles        bool
+	AllowedVehicles         []RemoteVehicleRef
+	PendingReq              bool
+	PairingCode             string
+	DisplayLabel            string
+	ExpiresAt               int64
+	HandsetBrakeSecs        uint
 	WithrottleServerEnabled bool
 }
 
 // WithrottleRemoteStartPairingInput carries vehicle scope for a new pairing code.
 type WithrottleRemoteStartPairingInput struct {
-	UserLogin        string
-	VehicleIDs       []string
-	AllowAllVehicles bool
-	HandsetBrakeSecs uint
+	UserLogin         string
+	VehicleIDs        []string
+	AllowAllVehicles  bool
+	HandsetBrakeSecs  uint
+	ExpectedClientKey string
 }
 
 // WithrottleRemoteUpdateSessionInput updates scope on an active session.
@@ -128,14 +129,15 @@ func (s *WithrottleRemote) StartPairing(ctx context.Context, layoutID, csID, use
 		return contract.RemotePendingWire{}, svcerrors.ErrZ21HandsetBrakeSecsInvalid
 	}
 	req, err := s.pairing.CreateWithrottlePairingRequest(ctx, remotepairing.CreateWithrottlePairingInput{
-		LayoutID:         layoutID,
-		CommandStationID: csID,
-		UserID:           userID,
-		UserLogin:        in.UserLogin,
-		VehicleIDs:       vehicleIDs,
-		AllowedAddrs:     addrs,
-		AllowAllVehicles: in.AllowAllVehicles,
-		HandsetBrakeSecs: brakeSecs,
+		LayoutID:          layoutID,
+		CommandStationID:  csID,
+		UserID:            userID,
+		UserLogin:         in.UserLogin,
+		VehicleIDs:        vehicleIDs,
+		AllowedAddrs:      addrs,
+		AllowAllVehicles:  in.AllowAllVehicles,
+		HandsetBrakeSecs:  brakeSecs,
+		ExpectedClientKey: in.ExpectedClientKey,
 	})
 	return req, MapUserAlreadyPaired(err)
 }

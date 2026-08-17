@@ -77,6 +77,32 @@ func TestCreateAndPairViaCV3CV4(t *testing.T) {
 	}
 }
 
+func TestWithrottlePairingCanRestrictExpectedClient(t *testing.T) {
+	store, _ := newTestStore(t)
+	ctx := context.Background()
+	req, err := store.CreateWithrottlePairingRequest(ctx, remotepairing.CreateWithrottlePairingInput{
+		LayoutID:          1,
+		CommandStationID:  2,
+		UserID:            9,
+		UserLogin:         "alice",
+		AllowAllVehicles:  true,
+		ExpectedClientKey: "withrottle:4242",
+	})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if _, ok, _, err := store.PairViaWithrottleCode(
+		ctx, 1, 2, req.PairingCode, "withrottle:other", contract.NowMS(),
+	); err != nil || ok {
+		t.Fatalf("wrong client: ok=%v err=%v", ok, err)
+	}
+	if _, ok, _, err := store.PairViaWithrottleCode(
+		ctx, 1, 2, req.PairingCode, "withrottle:4242", contract.NowMS(),
+	); err != nil || !ok {
+		t.Fatalf("expected client: ok=%v err=%v", ok, err)
+	}
+}
+
 func TestPairRejectsInvalidCV(t *testing.T) {
 	store, _ := newTestStore(t)
 	ctx := context.Background()

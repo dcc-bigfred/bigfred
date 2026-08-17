@@ -5,10 +5,10 @@ import (
 	"errors"
 
 	"github.com/keskad/loco/pkgs/bigfred/contract"
-	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
-	"github.com/keskad/loco/pkgs/bigfred/server/domain"
-	"github.com/keskad/loco/pkgs/bigfred/server/repo"
 	"github.com/keskad/loco/pkgs/bigfred/remotepairing"
+	"github.com/keskad/loco/pkgs/bigfred/server/domain"
+	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
+	"github.com/keskad/loco/pkgs/bigfred/server/repo"
 )
 
 // Remote manages inbound handset pairing across protocols on one command station.
@@ -62,10 +62,11 @@ type RemoteVehicleRef struct {
 
 // RemoteStartPairingInput carries vehicle scope for a new pairing code.
 type RemoteStartPairingInput struct {
-	UserLogin        string
-	VehicleIDs       []string
-	AllowAllVehicles bool
-	HandsetBrakeSecs uint
+	UserLogin         string
+	VehicleIDs        []string
+	AllowAllVehicles  bool
+	HandsetBrakeSecs  uint
+	ExpectedClientKey string
 }
 
 // RemoteUpdateSessionInput updates scope on an active session.
@@ -167,10 +168,11 @@ func (s *Remote) StartPairing(ctx context.Context, layoutID, csID, userID uint, 
 			return contract.RemotePendingWire{}, errors.New("remote service not configured")
 		}
 		req, err := s.withrottle.StartPairing(ctx, layoutID, csID, userID, WithrottleRemoteStartPairingInput{
-			UserLogin:        in.UserLogin,
-			VehicleIDs:       in.VehicleIDs,
-			AllowAllVehicles: in.AllowAllVehicles,
-			HandsetBrakeSecs: in.HandsetBrakeSecs,
+			UserLogin:         in.UserLogin,
+			VehicleIDs:        in.VehicleIDs,
+			AllowAllVehicles:  in.AllowAllVehicles,
+			HandsetBrakeSecs:  in.HandsetBrakeSecs,
+			ExpectedClientKey: in.ExpectedClientKey,
 		})
 		if err != nil {
 			return contract.RemotePendingWire{}, err

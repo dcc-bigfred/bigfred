@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
 	"net"
 	"net/http"
@@ -12,6 +13,7 @@ import (
 	"github.com/keskad/loco/pkgs/bigfred/remotepairing"
 	"github.com/keskad/loco/pkgs/bigfred/remotes/inbound"
 	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
+	"github.com/keskad/loco/pkgs/bigfred/server/domain"
 	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
 	"github.com/keskad/loco/pkgs/bigfred/server/validation"
 )
@@ -19,6 +21,7 @@ import (
 const (
 	handsetPairingWindow   = time.Minute
 	handsetPairingAttempts = 5
+	handsetSessionAttempts = 30
 	maxHandsetPairingBody  = 4096
 	maxHandsetDeviceIDLen  = 32
 	maxHandsetRateKeys     = 1024
@@ -56,6 +59,10 @@ func newHandsetPairingLimiter() *handsetPairingLimiter {
 }
 
 func (l *handsetPairingLimiter) allow(ip, login string, now time.Time) bool {
+	return l.allowAt(ip, login, now, handsetPairingAttempts)
+}
+
+func (l *handsetPairingLimiter) allowAt(ip, login string, now time.Time, max int) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	ipBucket := currentHandsetBucket(l.byIP[ip], now)
@@ -69,7 +76,7 @@ func (l *handsetPairingLimiter) allow(ip, login string, now time.Time) bool {
 	if _, ok := l.byLogin[loginKey]; !ok && len(l.byLogin) >= maxHandsetRateKeys {
 		return false
 	}
-	if ipBucket.count >= handsetPairingAttempts || loginBucket.count >= handsetPairingAttempts {
+	if ipBucket.count >= max || loginBucket.count >= max {
 		return false
 	}
 	ipBucket.count++
@@ -152,28 +159,11 @@ func (h *HandsetPairingHandler) Start(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusInternalServerError, "internal_error")
 		return
 	}
-	var layoutID uint
-	var commandStationID uint
-	for _, layout := range layouts {
-		if layout.IsSystem {
-			continue
-		}
-		stations, listErr := h.layouts.ListCommandStations(r.Context(), layout.ID)
-		if listErr != nil {
-			h.auditResult(r, 0, 0, req.Login, req.DeviceID, ip, "internal_error")
-			writeJSONError(w, http.StatusInternalServerError, "internal_error")
-			return
-		}
-		for _, station := range stations {
-			if station.WithrottleServerEnabled && !station.HideInThrottle {
-				layoutID = layout.ID
-				commandStationID = station.ID
-				break
-			}
-		}
-		if commandStationID != 0 {
-			break
-		}
+	layoutID, commandStationID, err := selectHandsetWithrottleStation(r.Context(), h.layouts, layouts)
+	if err != nil {
+		h.auditResult(r, 0, 0, req.Login, req.DeviceID, ip, "internal_error")
+		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		return
 	}
 	if commandStationID == 0 {
 		h.auditResult(r, 0, 0, req.Login, req.DeviceID, ip, "server_disabled")
@@ -214,6 +204,24 @@ func (h *HandsetPairingHandler) Start(w http.ResponseWriter, r *http.Request) {
 		LayoutID:         layoutID,
 		CommandStationID: commandStationID,
 	})
+}
+
+func selectHandsetWithrottleStation(ctx context.Context, layouts *cmd.Layout, listed []domain.Layout) (layoutID, commandStationID uint, err error) {
+	for _, layout := range listed {
+		if layout.IsSystem {
+			continue
+		}
+		stations, listErr := layouts.ListCommandStations(ctx, layout.ID)
+		if listErr != nil {
+			return 0, 0, listErr
+		}
+		for _, station := range stations {
+			if station.WithrottleServerEnabled && !station.HideInThrottle {
+				return layout.ID, station.ID, nil
+			}
+		}
+	}
+	return 0, 0, nil
 }
 
 func validHandsetDeviceID(id string) bool {

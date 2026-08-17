@@ -2,6 +2,7 @@ package withrottle
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -46,9 +47,13 @@ func rosterEntries(session *contract.RemoteSessionWire, allowed contract.Allowed
 		return nil
 	}
 	if session.AllowAllVehicles {
+		// Allow-all is every vehicle this user may drive, not the layout dump.
 		seen := make(map[uint16]struct{}, len(allowed.Vehicles))
 		out := make([]rosterEntry, 0, len(allowed.Vehicles))
 		for _, v := range allowed.Vehicles {
+			if !userMayDrive(session.UserID, v) {
+				continue
+			}
 			if _, dup := seen[v.Addr]; dup {
 				continue
 			}
@@ -59,6 +64,7 @@ func rosterEntries(session *contract.RemoteSessionWire, allowed contract.Allowed
 				isLong: v.Addr >= 128,
 			})
 		}
+		sortRosterByAddr(out)
 		return out
 	}
 	addrAllow := make(map[uint16]struct{}, len(session.AllowedAddrs))
@@ -106,7 +112,17 @@ func rosterEntries(session *contract.RemoteSessionWire, allowed contract.Allowed
 			})
 		}
 	}
+	sortRosterByAddr(out)
 	return out
+}
+
+func sortRosterByAddr(out []rosterEntry) {
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].addr != out[j].addr {
+			return out[i].addr < out[j].addr
+		}
+		return out[i].name < out[j].name
+	})
 }
 
 func rosterDisplayName(v contract.AllowedVehicle) string {
@@ -117,4 +133,14 @@ func rosterDisplayName(v contract.AllowedVehicle) string {
 		return v.VehicleID
 	}
 	return fmt.Sprintf("Loco %d", v.Addr)
+}
+
+// userMayDrive matches dcc-bus CanDrive: membership in ControllerUserIDs.
+func userMayDrive(userID uint, v contract.AllowedVehicle) bool {
+	for _, id := range v.ControllerUserIDs {
+		if id == userID {
+			return true
+		}
+	}
+	return false
 }

@@ -82,10 +82,10 @@ type Config struct {
 	WithrottlePairingAddr   uint16
 	WithrottleHeartbeatSecs float64
 
-	MaxVehiclesPerUser int
-	MaxLoconetSlots    int
-	IdleTimeoutSecs    uint
-	BootStopEnabled    bool
+	MaxVehiclesPerUser   int
+	MaxLoconetSlots      int
+	IdleTimeoutSecs      uint
+	BootStopEnabled      bool
 	SingleVehicleControl bool
 	// AllocatePhysicalSlots enables PE 1.0 exclusive LocoNet slot allocation
 	// (default true). When false, BigFred may piggyback on IN_USE slots.
@@ -102,8 +102,8 @@ type Config struct {
 
 // Daemon is the assembled dcc-bus instance.
 type Daemon struct {
-	cfg             Config
-	log             *logrus.Logger
+	cfg Config
+	log *logrus.Logger
 
 	redis           *state.Redis
 	rds             *redis.Client
@@ -305,20 +305,20 @@ func New(ctx context.Context, log *logrus.Logger, cfg Config) (*Daemon, error) {
 	}
 
 	router, err := cmd.NewRouter(ctx, cmd.Config{
-		Station:          st,
-		Hub:              ws.HubPort(hub),
-		Redis:            red,
-		Log:              log,
-		LayoutID:         cfg.LayoutID,
-		CommandStationID: cfg.CommandStationID,
-		StationName:      cs.Name,
-		StationKind:      cs.Kind,
-		StationURI:       cs.ConnectionURI,
-		SpeedSteps:       cs.SpeedSteps,
-		PollIntervalMs:   cfg.PollIntervalMs,
-		AllowedVehicles:  allowedSnap,
-		DefinedTrains:    trainSnap,
-		VehicleFunctions: fnSnap,
+		Station:                   st,
+		Hub:                       ws.HubPort(hub),
+		Redis:                     red,
+		Log:                       log,
+		LayoutID:                  cfg.LayoutID,
+		CommandStationID:          cfg.CommandStationID,
+		StationName:               cs.Name,
+		StationKind:               cs.Kind,
+		StationURI:                cs.ConnectionURI,
+		SpeedSteps:                cs.SpeedSteps,
+		PollIntervalMs:            cfg.PollIntervalMs,
+		AllowedVehicles:           allowedSnap,
+		DefinedTrains:             trainSnap,
+		VehicleFunctions:          fnSnap,
 		MaxVehiclesPerUser:        cfg.MaxVehiclesPerUser,
 		MaxLoconetSlots:           cfg.MaxLoconetSlots,
 		RemoteIdleTimeout:         remoteIdle,
@@ -367,17 +367,17 @@ func New(ctx context.Context, log *logrus.Logger, cfg Config) (*Daemon, error) {
 	}
 
 	wsSrv := ws.NewServer(ws.ServerConfig{
-		Verifier:       verifier,
-		Hub:            hub,
-		Router:         ws.NewRouterAdapter(router),
-		Log:            log,
-		LayoutID:       cfg.LayoutID,
-		CommandStation: cfg.CommandStationID,
-		SpeedSteps:     cs.SpeedSteps,
-		HeartbeatSecs:  cfg.HeartbeatSecs,
-		DeadmanSecs:    cfg.DeadmanSecs,
-		AllowedOrigins: cfg.AllowedOrigins,
-		Metrics:        wsMetrics,
+		Verifier:           verifier,
+		Hub:                hub,
+		Router:             ws.NewRouterAdapter(router),
+		Log:                log,
+		LayoutID:           cfg.LayoutID,
+		CommandStation:     cfg.CommandStationID,
+		SpeedSteps:         cs.SpeedSteps,
+		HeartbeatSecs:      cfg.HeartbeatSecs,
+		DeadmanSecs:        cfg.DeadmanSecs,
+		AllowedOrigins:     cfg.AllowedOrigins,
+		Metrics:            wsMetrics,
 		ProgrammingEnabled: cfg.EnableProgramming,
 		SlotsDiag: ws.NewSlotsDiagHandler(ws.SlotsDiagConfig{
 			Leaser:         router.SlotLeaser(),
@@ -604,6 +604,7 @@ func (d *Daemon) startRemoteGateways(ctx context.Context) error {
 		remotes.RegisterGatewayFactory(withrottle.GatewayName, withrottle.NewGateway)
 		coordinator.RegisterPolicy(contract.RemoteProtocolWithrottle, remotes.ProtocolPolicy{
 			IdleEvict:        withrottle.IdleEvictAfter * time.Second,
+			StickyIdleEvict:  contract.RemoteStickySessionIdle,
 			HeartbeatTimeout: withrottle.HeartbeatTimeout(heartbeatSecs),
 		})
 		gw, err := remotes.NewGateway(ctx, withrottle.GatewayName, remotes.GatewayConfig{

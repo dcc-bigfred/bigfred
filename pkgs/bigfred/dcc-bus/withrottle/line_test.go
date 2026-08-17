@@ -2,6 +2,7 @@ package withrottle
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/keskad/loco/pkgs/bigfred/contract"
@@ -26,19 +27,40 @@ func TestParseFunctionAction(t *testing.T) {
 }
 
 func TestBuildRosterLineAllowAll(t *testing.T) {
-	session := &contract.RemoteSessionWire{AllowAllVehicles: true}
+	session := &contract.RemoteSessionWire{AllowAllVehicles: true, UserID: 9}
 	allowed := contract.AllowedVehicles{
 		Vehicles: []contract.AllowedVehicle{
-			{VehicleID: "A", Addr: 3},
-			{VehicleID: "B", Addr: 128},
+			{VehicleID: "A", Addr: 3, ControllerUserIDs: []uint{9}},
+			{VehicleID: "B", Addr: 128, ControllerUserIDs: []uint{2}},
 		},
 	}
 	line := BuildRosterLine(session, allowed, 10239, true)
-	if line == "RL0" {
-		t.Fatalf("allow-all should list layout vehicles, got %q", line)
+	if !strings.HasPrefix(line, "RL1") {
+		t.Fatalf("allow-all should list only this user's vehicles, got %q", line)
 	}
-	if want := "RL2"; line[:3] != want {
-		t.Fatalf("count prefix: got %q want %s", line[:3], want)
+	if strings.Contains(line, "128") {
+		t.Fatalf("foreign loco must not appear: %q", line)
+	}
+	if !strings.Contains(line, "}|{3}|{S") {
+		t.Fatalf("expected addr 3 short, got %q", line)
+	}
+}
+
+func TestBuildRosterLineSortedByAddr(t *testing.T) {
+	session := &contract.RemoteSessionWire{AllowAllVehicles: true, UserID: 9}
+	allowed := contract.AllowedVehicles{
+		Vehicles: []contract.AllowedVehicle{
+			{VehicleID: "C", Addr: 42, ControllerUserIDs: []uint{9}},
+			{VehicleID: "A", Addr: 3, ControllerUserIDs: []uint{9}},
+			{VehicleID: "B", Addr: 200, ControllerUserIDs: []uint{9}},
+		},
+	}
+	line := BuildRosterLine(session, allowed, 10239, true)
+	want := "RL3" + entrySep + "A" + segmentSep + "3" + segmentSep + "S" +
+		entrySep + "C" + segmentSep + "42" + segmentSep + "S" +
+		entrySep + "B" + segmentSep + "200" + segmentSep + "L"
+	if line != want {
+		t.Fatalf("roster must be DCC address order:\n got %q\nwant %q", line, want)
 	}
 }
 

@@ -11,6 +11,7 @@ import (
 func (r *Router) HandleSetFunction(ctx context.Context, actor Actor, resp Responder, p contract.LocoSetFunctionWire, _ string) Result {
 	vehicle, onLayout := r.roster.AllowedVehicle(p.Address)
 	if d := r.drive.CanDrive(actor.UserID, vehicle, onLayout); !d.Allowed {
+		_ = resp.SendLocoError(ctx, p.Address, d.Reason, "")
 		return FailResult(d.Reason)
 	}
 	if err := r.reserveDriveLease(actor, p.Address); err != nil {

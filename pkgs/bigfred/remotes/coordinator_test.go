@@ -11,8 +11,8 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/keskad/loco/pkgs/bigfred/contract"
-	"github.com/keskad/loco/pkgs/bigfred/remotes/inbound"
 	"github.com/keskad/loco/pkgs/bigfred/remotepairing"
+	"github.com/keskad/loco/pkgs/bigfred/remotes/inbound"
 )
 
 func TestCoordinatorBuildSnapshotIPStickiness(t *testing.T) {
@@ -60,11 +60,10 @@ func TestBuildSnapshotSessionExpiresAt(t *testing.T) {
 		t.Fatal("expected SessionExpiresAt set for sticky paired client")
 	}
 
-	// Non-sticky policy must omit SessionExpiresAt.
 	c.RegisterPolicy(contract.RemoteProtocolZ21, ProtocolPolicy{IPStickiness: false, StickyIdleEvict: 30 * time.Minute})
 	snap = c.BuildSnapshot()
-	if snap.Clients[0].SessionExpiresAt != 0 {
-		t.Fatalf("expected no SessionExpiresAt for non-sticky, got %d", snap.Clients[0].SessionExpiresAt)
+	if snap.Clients[0].SessionExpiresAt == 0 {
+		t.Fatal("expected SessionExpiresAt for paired non-sticky client (idle TTL)")
 	}
 }
 

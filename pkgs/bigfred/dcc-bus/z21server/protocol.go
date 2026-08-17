@@ -26,8 +26,8 @@ const (
 const IdleEvictAfter = 60
 
 // StickySessionIdleEvictAfter is the idle window before an IP-sticky paired
-// handset is unpaired (seconds).
-const StickySessionIdleEvictAfter = 30 * 60
+// handset is unpaired (seconds). Matches contract.RemoteStickySessionIdle.
+const StickySessionIdleEvictAfter = 72 * 60 * 60
 
 // SweeperInterval is how often the server scans clients.
 const SweeperInterval = 3

@@ -1,6 +1,7 @@
 package z21server
 
 import (
+	"bytes"
 	"encoding/binary"
 	"net"
 	"testing"
@@ -29,11 +30,22 @@ func TestIsSetTrackPowerOff(t *testing.T) {
 	}
 }
 
+func TestIsSetTrackPowerOn(t *testing.T) {
+	t.Parallel()
+	pkt := []byte{0x07, 0x00, 0x40, 0x00, 0x21, 0x81, 0xA0}
+	if !isSetTrackPowerOn(HeaderXBus, pkt) {
+		t.Fatal("expected LAN_X_SET_TRACK_POWER_ON")
+	}
+	if isSetTrackPowerOn(HeaderXBus, []byte{0x07, 0x00, 0x40, 0x00, 0x21, 0x80, 0xA1}) {
+		t.Fatal("track power off is not track power on")
+	}
+}
+
 func TestBuildBCStoppedReply(t *testing.T) {
 	t.Parallel()
 	reply := buildBCStoppedReply()
-	if len(reply) != 6 {
-		t.Fatalf("len = %d, want 6", len(reply))
+	if len(reply) != 7 {
+		t.Fatalf("len = %d, want 7", len(reply))
 	}
 	if binary.LittleEndian.Uint16(reply[2:4]) != HeaderXBus {
 		t.Fatalf("header = %x", reply[2:4])
@@ -41,8 +53,21 @@ func TestBuildBCStoppedReply(t *testing.T) {
 	if reply[4] != 0x81 {
 		t.Fatalf("x[0] = %#x, want 0x81", reply[4])
 	}
-	if reply[5] != xorSum([]byte{0x81}) {
-		t.Fatalf("checksum = %#x", reply[5])
+	if reply[5] != 0x00 {
+		t.Fatalf("DB0 = %#x, want 0", reply[5])
+	}
+	if reply[6] != xorSum([]byte{0x81, 0x00}) {
+		t.Fatalf("checksum = %#x", reply[6])
+	}
+}
+
+func TestBuildTrackPowerBroadcasts(t *testing.T) {
+	t.Parallel()
+	if got := buildBCTrackPowerReply(false); !bytes.Equal(got, []byte{0x07, 0x00, 0x40, 0x00, 0x61, 0x00, 0x61}) {
+		t.Fatalf("off = % X", got)
+	}
+	if got := buildBCTrackPowerReply(true); !bytes.Equal(got, []byte{0x07, 0x00, 0x40, 0x00, 0x61, 0x01, 0x60}) {
+		t.Fatalf("on = % X", got)
 	}
 }
 

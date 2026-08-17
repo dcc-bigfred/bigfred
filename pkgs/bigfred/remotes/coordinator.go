@@ -9,15 +9,15 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/keskad/loco/pkgs/bigfred/contract"
-	"github.com/keskad/loco/pkgs/bigfred/remotes/inbound"
 	"github.com/keskad/loco/pkgs/bigfred/remotepairing"
+	"github.com/keskad/loco/pkgs/bigfred/remotes/inbound"
 )
 
 const (
 	defaultSweeperInterval   = 3 * time.Second
 	defaultClientsPublishMin = 2 * time.Second
 	defaultIdleEvict         = 60 * time.Second
-	defaultStickyIdleEvict   = 30 * time.Minute
+	defaultStickyIdleEvict   = 72 * time.Hour
 	// syncSubscribeRetry is the backoff before re-subscribing to the
 	// session-sync channel after a receive error.
 	syncSubscribeRetry = 2 * time.Second
@@ -248,8 +248,8 @@ func (c *Coordinator) flushSeen(ctx context.Context) {
 	if len(dirty) == 0 {
 		return
 	}
-	// Group by protocol so each group can use its policy's TTL (sticky
-	// sessions refresh the idle window; non-sticky preserve existing TTL).
+	// Group by protocol so each group refreshes the idle window (paired
+	// WiThrottle and Z21 sessions both keep a long last-seen TTL).
 	type bucket struct {
 		keys []string
 		ts   []int64
@@ -261,11 +261,8 @@ func (c *Coordinator) flushSeen(ctx context.Context) {
 		policy := c.policyFor(protocol)
 		b, ok := buckets[protocol]
 		if !ok {
-			b = &bucket{}
+			b = &bucket{ttl: policy.StickyIdleEvict}
 			buckets[protocol] = b
-			if policy.IPStickiness {
-				b.ttl = policy.StickyIdleEvict
-			}
 		}
 		b.keys = append(b.keys, key)
 		b.ts = append(b.ts, ts)
@@ -483,13 +480,7 @@ func (c *Coordinator) BuildSnapshot() contract.RemoteClientsSnapshotWire {
 		if cl.Session != nil {
 			w.UserID = cl.Session.UserID
 			w.UserLogin = cl.Session.UserLogin
-			// Surface the sticky-session expiry so the admin UI can show
-			// when an IP-sticky handset will be evicted without activity.
-			// Non-sticky sessions omit the field (UI only renders it when
-			// ipStickiness is on).
-			if policy.IPStickiness {
-				w.SessionExpiresAt = cl.LastSeen.Add(policy.StickyIdleEvict).UnixMilli()
-			}
+			w.SessionExpiresAt = cl.LastSeen.Add(policy.StickyIdleEvict).UnixMilli()
 		}
 		out = append(out, w)
 	}

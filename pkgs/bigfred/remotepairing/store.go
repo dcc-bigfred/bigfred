@@ -458,6 +458,37 @@ func (s *Store) GetActiveByClientKey(ctx context.Context, layoutID, commandStati
 	return active, true, nil
 }
 
+// GetActiveByClientKeyTTL loads a paired session and its remaining Redis TTL.
+func (s *Store) GetActiveByClientKeyTTL(ctx context.Context, layoutID, commandStationID uint, clientKey string) (contract.RemoteSessionWire, time.Duration, bool, error) {
+	key := contract.RemotePairingActiveKey(layoutID, commandStationID, clientKey)
+	pipe := s.client.TxPipeline()
+	get := pipe.Get(ctx, key)
+	pttl := pipe.PTTL(ctx, key)
+	_, err := pipe.Exec(ctx)
+	if err != nil && err != redis.Nil {
+		return contract.RemoteSessionWire{}, 0, false, err
+	}
+	raw, err := get.Result()
+	if err == redis.Nil {
+		return contract.RemoteSessionWire{}, 0, false, nil
+	}
+	if err != nil {
+		return contract.RemoteSessionWire{}, 0, false, err
+	}
+	active, err := contract.UnmarshalRemoteSession([]byte(raw))
+	if err != nil {
+		return contract.RemoteSessionWire{}, 0, false, err
+	}
+	ttl, err := pttl.Result()
+	if err != nil {
+		return active, 0, true, nil
+	}
+	if ttl < 0 {
+		return active, 0, true, nil
+	}
+	return active, ttl, true, nil
+}
+
 // ListActiveByUser returns the active session for userID, if any (at most one).
 func (s *Store) ListActiveByUser(ctx context.Context, layoutID, commandStationID, userID uint) ([]contract.RemoteSessionWire, error) {
 	byUserKey := contract.RemotePairingByUserKey(layoutID, commandStationID, userID)

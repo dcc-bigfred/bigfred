@@ -31,10 +31,10 @@ func TestBuildAcquireReplyIncludesLabels(t *testing.T) {
 }
 
 func TestBuildRosterLineUsesDisplayName(t *testing.T) {
-	session := &contract.RemoteSessionWire{AllowAllVehicles: true}
+	session := &contract.RemoteSessionWire{AllowAllVehicles: true, UserID: 9}
 	allowed := contract.AllowedVehicles{
 		Vehicles: []contract.AllowedVehicle{
-			{VehicleID: "V-1", DisplayName: "ET22", Addr: 3},
+			{VehicleID: "V-1", DisplayName: "ET22", Addr: 3, ControllerUserIDs: []uint{9}},
 		},
 	}
 	line := BuildRosterLine(session, allowed, 10239, true)

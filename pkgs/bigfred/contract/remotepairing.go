@@ -17,9 +17,10 @@ const (
 	RemotePairingReqDedupKeyTmpl  = "bigfred:remote:reqdedup:%d:%d:%s"
 	RemoteClientsSnapshotKeyTmpl  = "bigfred:remote:clients:%d:%d"
 
-	// RemoteStickySessionIdle is how long an IP-sticky handset session stays
-	// paired without UDP activity before unpair.
-	RemoteStickySessionIdle = 30 * time.Minute
+	// RemoteStickySessionIdle is how long a paired handset session stays
+	// in Redis without activity (last-seen idle window). TouchSeen refreshes
+	// this TTL so a driving throttle keeps its pairing for days.
+	RemoteStickySessionIdle = 72 * time.Hour
 )
 
 // RemotePairingReqKey is the Redis STRING key for one pending handset pair.
@@ -109,9 +110,12 @@ type RemotePendingWire struct {
 	DisplayLabel     string   `json:"displayLabel"`
 	VehicleIDs       []string `json:"vehicleIds"`
 	AllowedAddrs     []uint16 `json:"allowedAddrs"`
-	AllowAllVehicles bool     `json:"allowAllVehicles"`
-	HandsetBrakeSecs uint     `json:"handsetBrakeSecs"`
-	CreatedAt        int64    `json:"createdAt"` // unix ms UTC
+	// AllowAllVehicles, when true, means every vehicle this user may
+	// drive (owner or active lessee via ControllerUserIDs), not a
+	// preselected VehicleIDs list and not the whole layout roster.
+	AllowAllVehicles bool  `json:"allowAllVehicles"`
+	HandsetBrakeSecs uint  `json:"handsetBrakeSecs"`
+	CreatedAt        int64 `json:"createdAt"` // unix ms UTC
 	// Z21-only pairing CV values (omitempty for other protocols).
 	PairingCV3 int `json:"pairingCV3,omitempty"`
 	PairingCV4 int `json:"pairingCV4,omitempty"`
@@ -123,19 +127,22 @@ type RemotePendingWire struct {
 
 // RemoteSessionWire is stored at RemotePairingActiveKey until idle evict or logoff.
 type RemoteSessionWire struct {
-	Protocol         string   `json:"protocol"`
-	UserID           uint     `json:"userId"`
-	UserLogin        string   `json:"userLogin,omitempty"`
-	VehicleIDs       []string `json:"vehicleIds"`
-	AllowedAddrs     []uint16 `json:"allowedAddrs"`
-	AllowAllVehicles bool     `json:"allowAllVehicles"`
-	PairedAt         int64    `json:"pairedAt"`   // unix ms UTC
-	LastSeenAt       int64    `json:"lastSeenAt"` // unix ms UTC
-	ClientKey        string   `json:"clientKey"`
-	HandsetBrakeSecs uint     `json:"handsetBrakeSecs"`
-	PairingCV3       int      `json:"pairingCV3,omitempty"`
-	PairingCV4       int      `json:"pairingCV4,omitempty"`
-	PairingCode      string   `json:"pairingCode,omitempty"`
+	Protocol     string   `json:"protocol"`
+	UserID       uint     `json:"userId"`
+	UserLogin    string   `json:"userLogin,omitempty"`
+	VehicleIDs   []string `json:"vehicleIds"`
+	AllowedAddrs []uint16 `json:"allowedAddrs"`
+	// AllowAllVehicles, when true, means every vehicle this user may
+	// drive (owner or active lessee via ControllerUserIDs), not a
+	// preselected VehicleIDs list and not the whole layout roster.
+	AllowAllVehicles bool   `json:"allowAllVehicles"`
+	PairedAt         int64  `json:"pairedAt"`   // unix ms UTC
+	LastSeenAt       int64  `json:"lastSeenAt"` // unix ms UTC
+	ClientKey        string `json:"clientKey"`
+	HandsetBrakeSecs uint   `json:"handsetBrakeSecs"`
+	PairingCV3       int    `json:"pairingCV3,omitempty"`
+	PairingCV4       int    `json:"pairingCV4,omitempty"`
+	PairingCode      string `json:"pairingCode,omitempty"`
 }
 
 // MarshalRemotePending encodes a pending pairing request for Redis SET.

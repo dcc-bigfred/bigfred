@@ -52,6 +52,12 @@ func (r *Registry) SetConn(key string, conn net.Conn) {
 	}
 }
 
+// ResetForNewConn resets state owned by the replaced TCP connection.
+func (r *Registry) ResetForNewConn(key string) {
+	r.wire.ResetForNewConn(key)
+	r.inbound.SetHeartbeatMonitor(key, false)
+}
+
 // WriteLine sends one WiThrottle line to the client.
 func (r *Registry) WriteLine(key, line string) error {
 	return r.wire.WriteLine(key, line)

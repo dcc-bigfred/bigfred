@@ -14,22 +14,22 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/keskad/loco/pkgs/bigfred/contract"
+	"github.com/keskad/loco/pkgs/bigfred/remotepairing"
 	"github.com/keskad/loco/pkgs/bigfred/remotes"
 	"github.com/keskad/loco/pkgs/bigfred/remotes/inbound"
-	"github.com/keskad/loco/pkgs/bigfred/remotepairing"
 )
 
 // GatewayName is the remotes gateway factory key for WiThrottle TCP.
 const GatewayName = contract.RemoteProtocolWithrottle
 
 const (
-	defaultPort           = contract.DefaultWithrottleInboundPort
-	defaultSentinel       = contract.DefaultWithrottlePairingAddr
-	defaultHeartbeatSecs  = contract.DefaultWithrottleHeartbeatSecs
-	sessionSyncStale      = 30 * time.Second
-	dispatchShards        = 32
-	dispatchShardBuf      = 128
-	maxLineLen            = 8192
+	defaultPort          = contract.DefaultWithrottleInboundPort
+	defaultSentinel      = contract.DefaultWithrottlePairingAddr
+	defaultHeartbeatSecs = contract.DefaultWithrottleHeartbeatSecs
+	sessionSyncStale     = 30 * time.Second
+	dispatchShards       = 32
+	dispatchShardBuf     = 128
+	maxLineLen           = 8192
 )
 
 // IdleEvictAfter is the idle window before evicting an unpaired WiThrottle client.
@@ -45,8 +45,8 @@ type Config struct {
 	HeartbeatSecs    float64
 	SpeedSteps       uint
 	TrackPowerOn     bool
-	AllowedVehicles   contract.AllowedVehicles
-	VehicleFunctions  contract.VehicleFunctions
+	AllowedVehicles  contract.AllowedVehicles
+	VehicleFunctions contract.VehicleFunctions
 
 	OnListening func(ctx context.Context)
 
@@ -304,9 +304,13 @@ func (s *Server) handleAnonymous(ctx context.Context, conn net.Conn, line string
 		}
 		clientKey := inbound.ClientKey(contract.RemoteProtocolWithrottle, deviceID)
 		prevConn := s.registry.wire.Conn(clientKey)
+		takeover := prevConn != nil && prevConn != conn
+		if takeover {
+			s.registry.ResetForNewConn(clientKey)
+		}
 		now := time.Now().UTC()
 		client := s.registry.TouchByDeviceId(deviceID, conn, now)
-		if prevConn != nil && prevConn != conn && s.registry.IsPaired(client.Key) {
+		if takeover && s.registry.IsPaired(client.Key) {
 			fields := logrus.Fields{
 				"client":    client.Key,
 				"deviceId":  deviceID,
@@ -322,7 +326,7 @@ func (s *Server) handleAnonymous(ctx context.Context, conn net.Conn, line string
 			s.registry.MarkSynced(client.Key)
 		}
 		if s.cfg.Store != nil && s.registry.IsPaired(client.Key) {
-			_ = s.cfg.Store.TouchSeen(ctx, s.cfg.LayoutID, s.cfg.CommandStationID, client.Key, contract.NowMS(), 0)
+			_ = s.cfg.Store.TouchSeen(ctx, s.cfg.LayoutID, s.cfg.CommandStationID, client.Key, contract.NowMS(), contract.RemoteStickySessionIdle)
 		}
 		if !s.registry.initialBurstSent(client.Key) {
 			s.sendInitialBurst(ctx, client.Key)
@@ -340,7 +344,9 @@ func (s *Server) handleAnonymous(ctx context.Context, conn net.Conn, line string
 }
 
 func (s *Server) handleLine(ctx context.Context, conn net.Conn, clientKey, line string) {
-	s.registry.SetConn(clientKey, conn)
+	if s.registry.wire.Conn(clientKey) != conn {
+		return
+	}
 	client, ok := s.registry.Get(clientKey)
 	if !ok {
 		return
@@ -469,13 +475,53 @@ func (s *Server) handleRelease(ctx context.Context, client *Client, cmd MCommand
 	}
 }
 
+func unpairedDriveProp(prop string) bool {
+	if len(prop) < 2 {
+		return false
+	}
+	switch prop[0] {
+	case 'V', 'R', 'F', 'f':
+		return true
+	default:
+		return false
+	}
+}
+
+// actionTargetsPairingLoco reports whether an unpaired M A command is aimed at
+// the pairing sentinel (explicit S/L key, or * when that throttle holds only
+// the sentinel). Other DCC addresses must not enter the pairing-digit path.
+func (s *Server) actionTargetsPairingLoco(client *Client, cmd MCommand) bool {
+	sentinel := s.cfg.PairingAddr
+	if cmd.LocoKey == "*" {
+		if !s.registry.sentinelAcquired(client.Key) {
+			return false
+		}
+		only := true
+		s.registry.withThrottle(client.Key, cmd.ThrottleID, func(tw *throttleWire) {
+			if len(tw.locos) == 0 {
+				only = false
+				return
+			}
+			for addr := range tw.locos {
+				if !isSentinelAddr(addr, sentinel) {
+					only = false
+					return
+				}
+			}
+		})
+		return only
+	}
+	addr, _, ok := parseLocoKey(cmd.LocoKey)
+	return ok && isSentinelAddr(addr, sentinel)
+}
+
 func (s *Server) handleThrottleAction(ctx context.Context, client *Client, cmd MCommand, paired bool) {
 	if len(cmd.Properties) == 0 {
 		return
 	}
 	prop := cmd.Properties[0]
 	if !paired {
-		if s.registry.sentinelAcquired(client.Key) {
+		if s.actionTargetsPairingLoco(client, cmd) && s.registry.sentinelAcquired(client.Key) {
 			addr := s.cfg.PairingAddr
 			switch {
 			case len(prop) >= 2 && prop[0] == 'V':
@@ -508,6 +554,10 @@ func (s *Server) handleThrottleAction(ctx context.Context, client *Client, cmd M
 				}
 				return
 			}
+			return
+		}
+		if unpairedDriveProp(prop) && !s.actionTargetsPairingLoco(client, cmd) {
+			_ = s.writeLine(client.Key, "HMNot paired")
 		}
 		return
 	}

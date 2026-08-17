@@ -101,6 +101,21 @@ func TestWithrottlePairingCanRestrictExpectedClient(t *testing.T) {
 	); err != nil || !ok {
 		t.Fatalf("expected client: ok=%v err=%v", ok, err)
 	}
+
+	active, ttl, ok, err := store.GetActiveByClientKeyTTL(ctx, 1, 2, "withrottle:4242")
+	if err != nil || !ok {
+		t.Fatalf("ttl lookup: ok=%v err=%v", ok, err)
+	}
+	if active.UserID != 9 {
+		t.Fatalf("user %d", active.UserID)
+	}
+	if ttl <= 0 {
+		t.Fatalf("expected remaining TTL, got %s", ttl)
+	}
+	_, ttl, ok, err = store.GetActiveByClientKeyTTL(ctx, 1, 2, "withrottle:missing")
+	if err != nil || ok || ttl != 0 {
+		t.Fatalf("missing: ok=%v ttl=%s err=%v", ok, ttl, err)
+	}
 }
 
 func TestPairRejectsInvalidCV(t *testing.T) {

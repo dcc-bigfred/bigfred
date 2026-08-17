@@ -90,6 +90,20 @@ func (w *WireState) SetConn(key string, conn net.Conn) {
 	w.mu.Unlock()
 }
 
+// ResetForNewConn clears state scoped to one TCP connection. Pairing identity
+// remains in the shared inbound registry / Redis and is reconciled after HU.
+func (w *WireState) ResetForNewConn(key string) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	c := w.client(key)
+	c.heartbeatMonitor = false
+	c.clearPairingBuffer()
+	c.multiThrottle = make(map[byte]*throttleWire)
+	c.sentinelAcquired = false
+	c.sentinelThrottleID = 0
+	c.initialBurstSent = false
+}
+
 // Conn returns the TCP connection for key.
 func (w *WireState) Conn(key string) net.Conn {
 	w.mu.Lock()
@@ -246,9 +260,9 @@ func (c *wireClient) throttle(id byte) *throttleWire {
 	t, ok := c.multiThrottle[id]
 	if !ok {
 		t = &throttleWire{
-			locos:     make(map[uint16]string),
-			forward:   true,
-			lastSpeed: make(map[uint16]uint8, 4),
+			locos:      make(map[uint16]string),
+			forward:    true,
+			lastSpeed:  make(map[uint16]uint8, 4),
 			speedSteps: 1,
 		}
 		c.multiThrottle[id] = t

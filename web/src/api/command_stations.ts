@@ -247,6 +247,11 @@ export interface DccBusProgramStatus {
   status: string;
   pid?: number;
   running: boolean;
+  commandStationId: number;
+  withrottleEnabled: boolean;
+  withrottlePort: number;
+  z21Enabled: boolean;
+  z21Port: number;
 }
 
 export interface DccBusSupervisordStatus {

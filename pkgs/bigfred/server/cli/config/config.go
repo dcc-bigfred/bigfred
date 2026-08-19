@@ -35,6 +35,8 @@ type File struct {
 	MicroinitSocket               string
 	MicroinitBin                  string
 	MicrodnsBin                   string
+	CtlSocket                     string
+	NoCtl                         *bool
 	LogLevel                      string
 	RedisBin                      string
 	RedisBindAddr                 string
@@ -138,6 +140,11 @@ func Parse(text string) File {
 			f.MicroinitBin = value
 		case "MICRODNS_BIN", "MICRODNSBIN":
 			f.MicrodnsBin = value
+		case "CTL_SOCKET", "CTLSOCKET":
+			f.CtlSocket = value
+		case "NO_CTL", "NOCTL":
+			v := parseBool(value)
+			f.NoCtl = &v
 		case "LOG_LEVEL", "LOGLEVEL":
 			f.LogLevel = value
 		case "REDIS_BIN", "REDISBIN":
@@ -227,6 +234,11 @@ SECURE_COOKIE=false
 NO_SUPERVISOR=false
 LOG_LEVEL=%s
 
+# Unix control socket for bf / microdns (flag: --ctl-socket)
+# CTL_SOCKET=
+# Skip the control socket (flag: --no-ctl)
+NO_CTL=false
+
 REDIS_BIN=%s
 REDIS_BIND=%s
 REDIS_PORT=%d
@@ -279,6 +291,12 @@ SECURE_COOKIE=false
 
 # Skip supervisord process management (flag: --no-supervisor)
 NO_SUPERVISOR=false
+
+# Unix control socket for bf / microdns (flag: --ctl-socket)
+# CTL_SOCKET=
+
+# Do not bind the Unix control socket (flag: --no-ctl)
+NO_CTL=false
 
 # logrus level: debug, info, warn, error; BIGFRED_LOG_LEVEL env overrides (flag: --log-level)
 LOG_LEVEL=%s

@@ -26,6 +26,7 @@ import (
 	"github.com/keskad/loco/pkgs/bigfred/platform"
 	"github.com/keskad/loco/pkgs/bigfred/remotepairing"
 	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
+	"github.com/keskad/loco/pkgs/bigfred/server/ctl"
 	"github.com/keskad/loco/pkgs/bigfred/server/datadir"
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
 	httpapi "github.com/keskad/loco/pkgs/bigfred/server/http"
@@ -82,6 +83,13 @@ type Flags struct {
 	// LogLevel is a logrus level name (debug, info, warn, error). The
 	// BIGFRED_LOG_LEVEL env var overrides the flag when set.
 	LogLevel string
+
+	// CtlSocket is the Unix control socket for `bf` / microdns.
+	// Empty is not valid as a listen path; the flag default is
+	// $DATA_DIR/run/bigfred.sock.
+	CtlSocket string
+	// NoCtl skips binding the control socket (tests / second dev instance).
+	NoCtl bool
 }
 
 // NewRootCommand returns the top-level cobra command. It is invoked
@@ -132,6 +140,10 @@ real-time throttle commands.`,
 		"microdns binary path (PATH-relative or absolute) used by the managed daemon")
 	cmd.Flags().StringVar(&f.LogLevel, "log-level", "info",
 		"logrus level (debug, info, warn, error). BIGFRED_LOG_LEVEL env overrides this flag.")
+	cmd.Flags().StringVar(&f.CtlSocket, "ctl-socket", datadir.Path("run", "bigfred.sock"),
+		"Unix control socket for bf/microdns (default $BIGFRED_DATA_DIR/run/bigfred.sock)")
+	cmd.Flags().BoolVar(&f.NoCtl, "no-ctl", false,
+		"do not bind the Unix control socket")
 
 	cmd.Flags().StringVar(&f.RedisBin, "redis-bin", "valkey-server",
 		"redis-server binary path (PATH-relative or absolute) used by the managed daemon")
@@ -708,6 +720,31 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		StaticFS:         staticFS,
 		Metrics:          serverMetrics,
 	})
+
+	if !f.NoCtl {
+		ctlLn, err := ctl.Listen(f.CtlSocket)
+		if err != nil {
+			return err
+		}
+		defer func() {
+			_ = ctlLn.Close()
+			_ = os.Remove(f.CtlSocket)
+		}()
+		var dccPrograms ctl.DccBusPrograms
+		if dccBusSvc != nil {
+			dccPrograms = dccBusSvc
+		}
+		go func() {
+			if err := ctl.Serve(ctx, ctlLn, ctl.Handler{
+				Layouts:  layoutSvc,
+				Stations: commandStationSvc,
+				DccBus:   dccPrograms,
+			}, log); err != nil {
+				log.WithError(err).Error("ctl serve")
+			}
+		}()
+		log.WithField("socket", f.CtlSocket).Info("ctl listening")
+	}
 
 	srv := &http.Server{
 		Addr:              f.HTTPAddr,

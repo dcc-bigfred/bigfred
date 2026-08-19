@@ -50,6 +50,12 @@ func applyConfig(f *Flags, cfg *config.File, changed func(string) bool) {
 	if !changed("microdns-bin") && cfg.MicrodnsBin != "" {
 		f.MicrodnsBin = cfg.MicrodnsBin
 	}
+	if !changed("ctl-socket") && cfg.CtlSocket != "" {
+		f.CtlSocket = cfg.CtlSocket
+	}
+	if !changed("no-ctl") && cfg.NoCtl != nil {
+		f.NoCtl = *cfg.NoCtl
+	}
 	if !changed("log-level") && cfg.LogLevel != "" {
 		f.LogLevel = cfg.LogLevel
 	}

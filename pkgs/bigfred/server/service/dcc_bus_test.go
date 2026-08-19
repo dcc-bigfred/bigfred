@@ -71,6 +71,9 @@ func TestProgramsForCommandStationMergesPortsAndStatus(t *testing.T) {
 	if p := byLayout[2]; !p.Running || p.Status != "running" || p.PID != 42 || p.Name != "dcc-bus-2-5" {
 		t.Fatalf("layout 2: %+v", p)
 	}
+	if p := byLayout[2]; p.CommandStationID != 5 {
+		t.Fatalf("layout 2 commandStationId: %+v", p)
+	}
 	if p := byLayout[3]; p.Running || p.Status != "stopped" || p.Name != "dcc-bus-3-5" {
 		t.Fatalf("layout 3 (port-only): %+v", p)
 	}

@@ -213,14 +213,22 @@ func programName(layoutID, commandStationID uint) string {
 }
 
 // DccBusProgramStatus is one dcc-bus microinit program for a
-// (layout, commandStation) pair, as shown in the admin popup.
+// (layout, commandStation) pair, as shown in the admin popup and on
+// the Unix control socket. WiThrottle/Z21 fields come from the
+// command-station catalogue (the same values passed as
+// --withrottle-port / --z21-port).
 type DccBusProgramStatus struct {
-	LayoutID   uint   `json:"layoutId"`
-	LayoutName string `json:"layoutName"`
-	Name       string `json:"name"`
-	Status     string `json:"status"`
-	PID        int    `json:"pid,omitempty"`
-	Running    bool   `json:"running"`
+	LayoutID          uint   `json:"layoutId"`
+	LayoutName        string `json:"layoutName"`
+	Name              string `json:"name"`
+	Status            string `json:"status"`
+	PID               int    `json:"pid,omitempty"`
+	Running           bool   `json:"running"`
+	CommandStationID  uint   `json:"commandStationId"`
+	WithrottleEnabled bool   `json:"withrottleEnabled"`
+	WithrottlePort    uint16 `json:"withrottlePort"`
+	Z21Enabled        bool   `json:"z21Enabled"`
+	Z21Port           uint16 `json:"z21Port"`
 }
 
 // ProgramsForCommandStation lists every dcc-bus microinit program
@@ -256,6 +264,8 @@ func (d *DccBusService) ProgramsForCommandStation(ctx context.Context, commandSt
 		statusByLayout[layoutID] = st
 	}
 
+	witEn, witPort, z21En, z21Port := d.catalogInboundPorts(ctx, commandStationID)
+
 	out := make([]DccBusProgramStatus, 0, len(candidates))
 	for layoutID := range candidates {
 		name := programName(layoutID, commandStationID)
@@ -270,12 +280,17 @@ func (d *DccBusService) ProgramsForCommandStation(ctx context.Context, commandSt
 			}
 		}
 		out = append(out, DccBusProgramStatus{
-			LayoutID:   layoutID,
-			LayoutName: layoutName,
-			Name:       st.Name,
-			Status:     st.State,
-			PID:        st.PID,
-			Running:    st.State == "running",
+			LayoutID:          layoutID,
+			LayoutName:        layoutName,
+			Name:              st.Name,
+			Status:            st.State,
+			PID:               st.PID,
+			Running:           st.State == "running",
+			CommandStationID:  commandStationID,
+			WithrottleEnabled: witEn,
+			WithrottlePort:    witPort,
+			Z21Enabled:        z21En,
+			Z21Port:           z21Port,
 		})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].LayoutID < out[j].LayoutID })
@@ -286,6 +301,21 @@ func (d *DccBusService) ProgramsForCommandStation(ctx context.Context, commandSt
 		}).Debug("dcc-bus programs for command station")
 	}
 	return out, nil
+}
+
+// catalogInboundPorts returns WiThrottle/Z21 listen settings from the
+// command-station row. Missing catalogue entries leave zeros/false so
+// advertisers skip the service rather than guessing 12090/21105.
+func (d *DccBusService) catalogInboundPorts(ctx context.Context, commandStationID uint) (witEn bool, witPort uint16, z21En bool, z21Port uint16) {
+	if d.cs == nil {
+		return
+	}
+	cs, err := d.cs.FindByID(ctx, commandStationID)
+	if err != nil {
+		return
+	}
+	return cs.WithrottleServerEnabled, cs.EffectiveWithrottleInboundPort(),
+		cs.Z21ServerEnabled, cs.EffectiveZ21InboundPort()
 }
 
 // StartDccBus starts the existing dcc-bus microinit program without

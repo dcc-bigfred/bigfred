@@ -35,6 +35,7 @@ server-telemetry:
 
 server-build:
 	CGO_ENABLED=0 GOOS=linux go build -ldflags="$(VERSION_LDFLAGS)" -o bin/loco-server ./pkgs/bigfred/server
+	CGO_ENABLED=0 GOOS=linux go build -ldflags="$(VERSION_LDFLAGS)" -o bin/bf ./pkgs/bigfred/bf
 
 .PHONY: loadtest-build remote-icmp-build
 loadtest-build:

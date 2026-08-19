@@ -102,6 +102,7 @@ jobs:
           # Hub / desktop SPA embedded via -tags prod (built above).
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -tags prod -ldflags="-s -w ${LDFLAGS}" \
             -o dist/loco-server-linux-amd64 ./pkgs/bigfred/server
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o dist/bf-linux-amd64 ./pkgs/bigfred/bf
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o dist/bigfred-remote-icmp-linux-amd64 ./pkgs/bigfred/remote-icmp
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o dist/loco-linux-amd64 ./pkgs/loco
           GOOS=linux GOARCH=amd64 go build -o dist/rb-linux-amd64 ./pkgs/rb/main.go
@@ -109,6 +110,7 @@ jobs:
           # Raspberry Pi 5 (BCM2712, Cortex-A76) — linux/arm64 (hub OCI bundle)
           CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -tags prod -ldflags="-s -w ${LDFLAGS}" \
             -o dist/loco-server-linux-arm64 ./pkgs/bigfred/server
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="${LDFLAGS}" -o dist/bf-linux-arm64 ./pkgs/bigfred/bf
           CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="${LDFLAGS}" -o dist/bigfred-remote-icmp-linux-arm64 ./pkgs/bigfred/remote-icmp
           CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o dist/loco-linux-arm64 ./pkgs/loco
           GOOS=linux GOARCH=arm64 go build -o dist/rb-linux-arm64 ./pkgs/rb/main.go
@@ -116,6 +118,7 @@ jobs:
           # Raspberry Pi 2 (BCM2836, Cortex-A7) — linux/arm, GOARM=7
           CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -tags prod -ldflags="-s -w ${LDFLAGS}" \
             -o dist/loco-server-linux-armv7 ./pkgs/bigfred/server
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -ldflags="${LDFLAGS}" -o dist/bf-linux-armv7 ./pkgs/bigfred/bf
           CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -ldflags="${LDFLAGS}" -o dist/bigfred-remote-icmp-linux-armv7 ./pkgs/bigfred/remote-icmp
           CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -o dist/loco-linux-armv7 ./pkgs/loco
           GOOS=linux GOARCH=arm GOARM=7 go build -o dist/rb-linux-armv7 ./pkgs/rb/main.go

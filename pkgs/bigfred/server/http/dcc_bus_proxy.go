@@ -82,7 +82,7 @@ func (p *DccBusProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			status, code := svcerrors.UserHTTPStatus(err)
-			writeJSONError(w, status, code)
+			writeJSONErrorCause(w, status, code, err)
 			return
 		}
 		daemonToken = minted

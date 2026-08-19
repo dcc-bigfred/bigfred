@@ -40,7 +40,7 @@ func (h *OAuthHandler) Authorize(w http.ResponseWriter, r *http.Request) {
 	}
 	if _, err := h.oauth.AuthorizeValidatedClient(clientID, redirectURI); err != nil {
 		status, code := oauthHTTPStatus(err)
-		writeJSONError(w, status, code)
+		writeJSONErrorCause(w, status, code, err)
 		return
 	}
 
@@ -59,7 +59,7 @@ func (h *OAuthHandler) Authorize(w http.ResponseWriter, r *http.Request) {
 		bound, err := h.auth.IdentityForLayout(r.Context(), id.User, preferredLayoutID)
 		if err != nil {
 			status, code := svcerrors.LayoutHTTPStatus(err)
-			writeJSONError(w, status, code)
+			writeJSONErrorCause(w, status, code, err)
 			return
 		}
 		id = bound
@@ -68,7 +68,7 @@ func (h *OAuthHandler) Authorize(w http.ResponseWriter, r *http.Request) {
 	code, err := h.oauth.IssueCode(r.Context(), id, clientID, redirectURI)
 	if err != nil {
 		status, code := oauthHTTPStatus(err)
-		writeJSONError(w, status, code)
+		writeJSONErrorCause(w, status, code, err)
 		return
 	}
 	u, err := url.Parse(redirectURI)
@@ -140,7 +140,7 @@ func (h *OAuthHandler) Token(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		status, code := oauthHTTPStatus(err)
-		writeJSONError(w, status, code)
+		writeJSONErrorCause(w, status, code, err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")

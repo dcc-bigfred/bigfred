@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
@@ -46,7 +45,7 @@ func RequireAuth(auth *cmd.Auth, m *metrics.Metrics) func(http.Handler) http.Han
 					writeJSONError(w, http.StatusUnauthorized, "unauthorized")
 					return
 				}
-				writeJSONError(w, http.StatusInternalServerError, "internal_error")
+				writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 				return
 			}
 
@@ -73,7 +72,7 @@ func RequireRole(auth *cmd.Auth, roles ...domain.Role) func(http.Handler) http.H
 			}
 			eff, err := auth.Effective(r.Context(), actor.User, actor.Layout.ID)
 			if err != nil {
-				writeJSONError(w, http.StatusInternalServerError, "internal_error")
+				writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 				return
 			}
 			for _, role := range roles {
@@ -104,7 +103,7 @@ func MaybeImpersonate(auth *cmd.Auth, users *cmd.User) func(http.Handler) http.H
 			}
 			eff, err := auth.Effective(r.Context(), id.User, id.Layout.ID)
 			if err != nil {
-				writeJSONError(w, http.StatusInternalServerError, "internal_error")
+				writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 				return
 			}
 			if !eff.Has(domain.RoleAdmin) {
@@ -114,7 +113,7 @@ func MaybeImpersonate(auth *cmd.Auth, users *cmd.User) func(http.Handler) http.H
 			subject, err := users.FindByLogin(r.Context(), login)
 			if err != nil {
 				status, code := svcerrors.UserHTTPStatus(err)
-				writeJSONError(w, status, code)
+				writeJSONErrorCause(w, status, code, err)
 				return
 			}
 			if !subject.Active {
@@ -138,11 +137,4 @@ func readSessionToken(r *http.Request) string {
 		return strings.TrimSpace(strings.TrimPrefix(h, "Bearer "))
 	}
 	return r.URL.Query().Get("token")
-}
-
-// writeJSONError renders {"error": "..."} with the given status.
-func writeJSONError(w http.ResponseWriter, status int, code string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(map[string]string{"error": code})
 }

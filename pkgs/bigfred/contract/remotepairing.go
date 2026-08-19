@@ -1,6 +1,7 @@
 package contract
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -171,4 +172,61 @@ func UnmarshalRemoteSession(raw []byte) (RemoteSessionWire, error) {
 		return RemoteSessionWire{}, err
 	}
 	return w, nil
+}
+
+// UnmarshalJSON accepts Redis Lua cjson's empty-object stand-in for empty
+// arrays (`"vehicleIds":{}`) so TouchSeen round-trips do not 500.
+func (w *RemotePendingWire) UnmarshalJSON(raw []byte) error {
+	coerced, err := coerceLuaEmptyArrays(raw)
+	if err != nil {
+		return err
+	}
+	type wire RemotePendingWire
+	var tmp wire
+	if err := json.Unmarshal(coerced, &tmp); err != nil {
+		return err
+	}
+	*w = RemotePendingWire(tmp)
+	return nil
+}
+
+// UnmarshalJSON accepts Redis Lua cjson's empty-object stand-in for empty
+// arrays (`"vehicleIds":{}`) so TouchSeen round-trips do not 500.
+func (w *RemoteSessionWire) UnmarshalJSON(raw []byte) error {
+	coerced, err := coerceLuaEmptyArrays(raw)
+	if err != nil {
+		return err
+	}
+	type wire RemoteSessionWire
+	var tmp wire
+	if err := json.Unmarshal(coerced, &tmp); err != nil {
+		return err
+	}
+	*w = RemoteSessionWire(tmp)
+	return nil
+}
+
+// coerceLuaEmptyArrays rewrites "vehicleIds":{} / "allowedAddrs":{} to [].
+// Redis lua-cjson encodes empty Lua tables as objects, not arrays.
+func coerceLuaEmptyArrays(raw []byte) ([]byte, error) {
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &obj); err != nil {
+		return nil, err
+	}
+	changed := false
+	for _, key := range []string{"vehicleIds", "allowedAddrs"} {
+		v, ok := obj[key]
+		if !ok {
+			continue
+		}
+		if !bytes.Equal(bytes.TrimSpace(v), []byte("{}")) {
+			continue
+		}
+		obj[key] = json.RawMessage("[]")
+		changed = true
+	}
+	if !changed {
+		return raw, nil
+	}
+	return json.Marshal(obj)
 }

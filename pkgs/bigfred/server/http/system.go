@@ -30,7 +30,7 @@ func (h *SystemHandler) Get(w http.ResponseWriter, _ *http.Request) {
 			writeJSONError(w, http.StatusServiceUnavailable, "system_unavailable")
 			return
 		}
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -62,7 +62,7 @@ func (h *SystemHandler) Shutdown(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, service.ErrSystemUnavailable):
 			writeJSONError(w, http.StatusServiceUnavailable, "system_unavailable")
 		default:
-			writeJSONError(w, http.StatusInternalServerError, "internal_error")
+			writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		}
 		return
 	}

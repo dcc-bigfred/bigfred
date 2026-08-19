@@ -60,7 +60,7 @@ func (h *HandsetSessionHandler) Status(w http.ResponseWriter, r *http.Request) {
 	if err := validation.ValidateUserPIN(req.PIN); err != nil {
 		h.auditResult(r, 0, 0, req.Login, req.DeviceID, ip, "invalid_pin")
 		status, code := svcerrors.UserHTTPStatus(err)
-		writeJSONError(w, status, code)
+		writeJSONErrorCause(w, status, code, err)
 		return
 	}
 	if h.auth == nil || h.layouts == nil || h.remote == nil {
@@ -72,13 +72,13 @@ func (h *HandsetSessionHandler) Status(w http.ResponseWriter, r *http.Request) {
 	layouts, err := h.layouts.ListSelectable(r.Context())
 	if err != nil {
 		h.auditResult(r, 0, 0, req.Login, req.DeviceID, ip, "internal_error")
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	layoutID, commandStationID, err := selectHandsetWithrottleStation(r.Context(), h.layouts, layouts)
 	if err != nil {
 		h.auditResult(r, 0, 0, req.Login, req.DeviceID, ip, "internal_error")
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	if commandStationID == 0 {
@@ -90,14 +90,14 @@ func (h *HandsetSessionHandler) Status(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.auditResult(r, layoutID, 0, req.Login, req.DeviceID, ip, "invalid_credentials")
 		status, code := svcerrors.AuthHTTPStatus(err)
-		writeJSONError(w, status, code)
+		writeJSONErrorCause(w, status, code, err)
 		return
 	}
 
 	active, ttl, ok, err := h.remote.HandsetSessionByDevice(r.Context(), layoutID, commandStationID, req.DeviceID)
 	if err != nil {
 		h.auditResult(r, layoutID, identity.User.ID, identity.User.Login, req.DeviceID, ip, "internal_error")
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	h.auditResult(r, layoutID, identity.User.ID, identity.User.Login, req.DeviceID, ip, "success")

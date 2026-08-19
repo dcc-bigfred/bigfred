@@ -8,6 +8,8 @@ import (
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
 	"github.com/keskad/loco/pkgs/bigfred/server/domain"
 	"github.com/keskad/loco/pkgs/bigfred/server/metrics"
@@ -69,6 +71,10 @@ type RouterConfig struct {
 
 	// Metrics, when non-nil, records OpenTelemetry signals for HTTP/WS.
 	Metrics *metrics.Metrics
+
+	// Log, when non-nil, receives HTTP 500 and panic details (error + stack).
+	// The HTTP response body stays {"error":"internal_error"}.
+	Log *logrus.Logger
 }
 
 // NewRouter wires every HTTP route currently shipped by the bootstrap.
@@ -81,7 +87,8 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	r.Use(chimiddleware.RealIP)
 	r.Use(MetricsMiddleware(cfg.Metrics))
 	r.Use(chimiddleware.Logger)
-	r.Use(chimiddleware.Recoverer)
+	r.Use(withRequestLog(cfg.Log))
+	r.Use(recoverer)
 
 	r.Use(cors.Handler(cors.Options{
 		AllowOriginFunc:  corsAllowOriginFunc(cfg.AllowedOrigins, cfg.OAuthClients),

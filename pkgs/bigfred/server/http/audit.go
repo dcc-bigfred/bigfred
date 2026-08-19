@@ -46,7 +46,7 @@ func (h *AuditHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	entries, err := h.audit.List(r.Context(), limit)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	if entries == nil {

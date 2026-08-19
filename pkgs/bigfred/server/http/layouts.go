@@ -33,7 +33,7 @@ func NewLayoutHandler(svc *cmd.Layout, auth *cmd.Auth, audit cmd.AuditPublisher)
 func (h *LayoutHandler) ListForLogin(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.svc.ListSelectable(r.Context())
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	out := make([]protocol.LoginLayoutResponse, 0, len(rows))
@@ -50,7 +50,7 @@ func (h *LayoutHandler) ListForLogin(w http.ResponseWriter, r *http.Request) {
 func (h *LayoutHandler) List(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.svc.ListAll(r.Context())
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	out := make([]protocol.LayoutResponse, 0, len(rows))
@@ -86,7 +86,7 @@ func (h *LayoutHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	eff, err := h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	var req protocol.LayoutCreateRequest
@@ -152,7 +152,7 @@ func (h *LayoutHandler) SetCommandStations(w http.ResponseWriter, r *http.Reques
 	}
 	eff, err := h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	var req setLayoutCommandStationsRequest
@@ -213,7 +213,7 @@ func (h *LayoutHandler) SetInterlockings(w http.ResponseWriter, r *http.Request)
 	}
 	eff, err := h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	var req setLayoutInterlockingsRequest
@@ -268,7 +268,7 @@ func (h *LayoutHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	eff, err := h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	var req updateRequest
@@ -340,7 +340,7 @@ func (h *LayoutHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	eff, err := h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	if err := h.svc.Delete(r.Context(), eff, id); err != nil {
@@ -396,17 +396,17 @@ func (h *LayoutHandler) Unlock(w http.ResponseWriter, r *http.Request) {
 
 func writeLayoutError(w http.ResponseWriter, err error) {
 	status, code := svcerrors.LayoutHTTPStatus(err)
-	writeJSONError(w, status, code)
+	writeJSONErrorCause(w, status, code, err)
 }
 
 func writeLayoutInterlockingError(w http.ResponseWriter, err error) {
 	status, code := svcerrors.LayoutInterlockingHTTPStatus(err)
-	writeJSONError(w, status, code)
+	writeJSONErrorCause(w, status, code, err)
 }
 
 func writeLayoutCommandStationError(w http.ResponseWriter, err error) {
 	status, code := svcerrors.LayoutCommandStationHTTPStatus(err)
-	writeJSONError(w, status, code)
+	writeJSONErrorCause(w, status, code, err)
 }
 
 // parseUintParam pulls a path parameter from chi and parses it as a

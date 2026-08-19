@@ -40,7 +40,7 @@ func (h *CommandStationHandler) SetAllowedOrigins(origins []string) {
 func (h *CommandStationHandler) ListCatalogue(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.svc.ListAll(r.Context())
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	out := make([]protocol.CommandStationResponse, 0, len(rows))
@@ -60,7 +60,7 @@ func (h *CommandStationHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	eff, err := h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	var req protocol.CommandStationCreateRequest
@@ -92,7 +92,7 @@ func (h *CommandStationHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	eff, err := h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	var req protocol.CommandStationUpdateRequest
@@ -128,7 +128,7 @@ func (h *CommandStationHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	eff, err := h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	row, getErr := h.svc.Get(r.Context(), id)
@@ -146,5 +146,5 @@ func (h *CommandStationHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 func writeCommandStationError(w http.ResponseWriter, err error) {
 	status, code := svcerrors.CommandStationHTTPStatus(err)
-	writeJSONError(w, status, code)
+	writeJSONErrorCause(w, status, code, err)
 }

@@ -26,6 +26,21 @@ var (
 
 const maxPairGenerationAttempts = 32
 
+// luaDropEmptyArrays omits empty Lua tables before cjson.encode so Redis
+// lua-cjson does not rewrite vehicleIds/allowedAddrs from [] to {}.
+const luaDropEmptyArrays = `
+local function drop_empty(t, key)
+  local v = t[key]
+  if type(v) == 'table' and next(v) == nil then
+    t[key] = nil
+  end
+end
+local function drop_empty_scope(s)
+  drop_empty(s, 'vehicleIds')
+  drop_empty(s, 'allowedAddrs')
+end
+`
+
 // dedupTTLSlack extends the dedup SET TTL past the pending req TTL so the
 // SET auto-cleans once the last pending req on a command station expires.
 const dedupTTLSlack = 30 * time.Second
@@ -89,11 +104,12 @@ return 1
 // read-modify-write race between TouchSeen (per-packet) and
 // UpdateSessionScope (PATCH). It also preserves an existing TTL so a
 // scope update on a sticky session does not strip its expiry.
-var touchSeenScript = redis.NewScript(`
+var touchSeenScript = redis.NewScript(luaDropEmptyArrays + `
 local v = redis.call('GET', KEYS[1])
 if v == false then return 0 end
 local s = cjson.decode(v)
 s['lastSeenAt'] = tonumber(ARGV[1])
+drop_empty_scope(s)
 local ttl = redis.call('PTTL', KEYS[1])
 if ARGV[2] ~= '' then
   ttl = tonumber(ARGV[2])
@@ -115,7 +131,7 @@ return 1
 // in ms (or an empty string to preserve each key's existing TTL); ARGV[i+1] is the
 // lastSeenAt for KEYS[i]. Missing keys are skipped silently (evicted
 // concurrently). Used by the coordinator's batched seen-flusher (WS-1b).
-var touchSeenBatchScript = redis.NewScript(`
+var touchSeenBatchScript = redis.NewScript(luaDropEmptyArrays + `
 local ttl = ARGV[1]
 local layoutId = ARGV[2]
 local csId = ARGV[3]
@@ -124,6 +140,7 @@ for i = 1, #KEYS do
   if v then
     local s = cjson.decode(v)
     s['lastSeenAt'] = tonumber(ARGV[i+3])
+    drop_empty_scope(s)
     if ttl ~= '' then
       redis.call('SET', KEYS[i], cjson.encode(s), 'PX', ttl)
       if s['userId'] and s['clientKey'] then
@@ -146,13 +163,14 @@ return #KEYS
 // updateSessionScopeScript atomically rewrites the vehicle scope on an
 // active session while preserving its TTL (sticky sessions keep their
 // idle expiry). Returns 1 when the session existed, 0 otherwise.
-var updateSessionScopeScript = redis.NewScript(`
+var updateSessionScopeScript = redis.NewScript(luaDropEmptyArrays + `
 local v = redis.call('GET', KEYS[1])
 if v == false then return 0 end
 local s = cjson.decode(v)
 s['vehicleIds'] = cjson.decode(ARGV[1])
 s['allowedAddrs'] = cjson.decode(ARGV[2])
 s['allowAllVehicles'] = (ARGV[3] == '1')
+drop_empty_scope(s)
 local ttl = redis.call('PTTL', KEYS[1])
 if ttl and ttl > 0 then
   redis.call('SET', KEYS[1], cjson.encode(s), 'PX', ttl)

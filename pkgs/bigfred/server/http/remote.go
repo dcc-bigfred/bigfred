@@ -265,5 +265,5 @@ func toRemoteStatusResponse(in cmd.RemoteStatus) protocol.RemoteStatus {
 
 func writeRemoteError(w http.ResponseWriter, err error) {
 	status, code := svcerrors.RemoteHTTPStatus(err)
-	writeJSONError(w, status, code)
+	writeJSONErrorCause(w, status, code, err)
 }

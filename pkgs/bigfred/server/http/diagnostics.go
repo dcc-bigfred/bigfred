@@ -28,7 +28,7 @@ func (h *DiagnosticsHandler) ListSources(w http.ResponseWriter, r *http.Request)
 	}
 	src, err := h.svc.Sources()
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -64,7 +64,7 @@ func (h *DiagnosticsHandler) ReadContent(w http.ResponseWriter, r *http.Request)
 		case errors.Is(err, service.ErrDiagnosticsNotFound):
 			writeJSONError(w, http.StatusNotFound, "diagnostics_not_found")
 		default:
-			writeJSONError(w, http.StatusInternalServerError, "internal_error")
+			writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		}
 		return
 	}

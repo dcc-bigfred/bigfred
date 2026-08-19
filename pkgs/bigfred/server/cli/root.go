@@ -700,6 +700,7 @@ func run(ctx context.Context, log *logrus.Logger, f Flags) error {
 		Audit:            auditSvc,
 		Leases:           leaseSvc,
 		Remote:           remoteSvc,
+		Log:              log,
 		AllowedOrigins:   f.AllowedOrigins,
 		OAuthClients:     oauthClients,
 		OAuth:            oauthSvc,

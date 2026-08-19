@@ -37,7 +37,7 @@ type rosterVehicleResponse struct {
 	OwnerLogin        string    `json:"ownerLogin"`
 	OwnerOrganization string    `json:"ownerOrganization"`
 	AddedAt           time.Time `json:"addedAt"`
-	CanDrive   bool      `json:"canDrive"`
+	CanDrive          bool      `json:"canDrive"`
 }
 
 // rosterTrainResponse is the train-shaped sibling.
@@ -54,11 +54,11 @@ type rosterTrainResponse struct {
 
 func toRosterVehicleResponse(e service.RosterVehicleEntry, canDrive bool) rosterVehicleResponse {
 	return rosterVehicleResponse{
-		VehicleResponse: protocol.ToVehicleResponse(e.Vehicle),
+		VehicleResponse:   protocol.ToVehicleResponse(e.Vehicle),
 		OwnerLogin:        e.OwnerLogin,
 		OwnerOrganization: e.OwnerOrganization,
 		AddedAt:           e.AddedAt,
-		CanDrive:        canDrive,
+		CanDrive:          canDrive,
 	}
 }
 
@@ -120,17 +120,17 @@ func (h *LayoutRosterHandler) ListVehicles(w http.ResponseWriter, r *http.Reques
 	}
 	rows, err := h.svc.ListVehicles(r.Context(), layoutID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	trains, err := h.svc.ListTrains(r.Context(), layoutID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	lessees, err := h.svc.LesseesByVehicle(r.Context(), layoutID, rows, trains)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	out := make([]rosterVehicleResponse, 0, len(rows))
@@ -150,12 +150,12 @@ func (h *LayoutRosterHandler) ListTrains(w http.ResponseWriter, r *http.Request)
 	}
 	rows, err := h.svc.ListTrains(r.Context(), layoutID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	lessees, err := h.svc.LesseesByTrain(r.Context(), layoutID, rows)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	out := make([]rosterTrainResponse, 0, len(rows))
@@ -193,7 +193,7 @@ func (h *LayoutRosterHandler) AddVehicle(w http.ResponseWriter, r *http.Request)
 	}
 	eff, err := h.actorEffectiveRoles(r, actor)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	entry, err := h.svc.AddVehicle(r.Context(), layoutID, actor.User.ID, vehicleID, eff)
@@ -224,7 +224,7 @@ func (h *LayoutRosterHandler) RemoveVehicle(w http.ResponseWriter, r *http.Reque
 	}
 	eff, err := h.actorEffectiveRoles(r, actor)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	vehicleEntry, _ := h.svc.ListVehicles(r.Context(), layoutID)
@@ -273,7 +273,7 @@ func (h *LayoutRosterHandler) AddTrain(w http.ResponseWriter, r *http.Request) {
 	}
 	eff, err := h.actorEffectiveRoles(r, actor)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	entry, err := h.svc.AddTrain(r.Context(), layoutID, actor.User.ID, trainID, eff)
@@ -304,7 +304,7 @@ func (h *LayoutRosterHandler) RemoveTrain(w http.ResponseWriter, r *http.Request
 	}
 	eff, err := h.actorEffectiveRoles(r, actor)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	trainEntries, _ := h.svc.ListTrains(r.Context(), layoutID)
@@ -330,5 +330,5 @@ func (h *LayoutRosterHandler) RemoveTrain(w http.ResponseWriter, r *http.Request
 // writeLayoutRosterError maps roster sentinels to status codes.
 func writeLayoutRosterError(w http.ResponseWriter, err error) {
 	status, code := svcerrors.LayoutRosterHTTPStatus(err)
-	writeJSONError(w, status, code)
+	writeJSONErrorCause(w, status, code, err)
 }

@@ -13,14 +13,17 @@ import (
 )
 
 // defaultMicrodnsConfig is the seed for $DATA_DIR/etc/microdns.json when the
-// file is absent. microinit / microdns owns LAN advertisement; loco-server
-// only ensures a usable default exists.
+// file is absent. On BigFred OS the image overlay overwrites this file every
+// boot; the static bigfred row here is a fallback for non-OS / supervise hosts
+// that do not watch microinit labels.
 const defaultMicrodnsConfig = `{
   "services": [
     { "name": "bigfred", "type": "_http._tcp", "protocol": "tcp", "port": 8080, "host": "bigfred", "txt": { "path": "/" } }
   ],
-  "dccBus": { "enabled": true, "z21Port": 21105, "withrottlePort": 12090, "beacon": true },
-  "retry": { "microinitMs": 2000, "procMs": 2000, "mdnsMs": 3000, "ifaceMs": 5000 }
+  "bigfred": { "enabled": true },
+  "microinit": { "enabled": true },
+  "dccBus": { "beacon": true },
+  "retry": { "bigfredMs": 45000, "pollMs": 25000, "mdnsMs": 3000, "ifaceMs": 5000, "microinitReconnectMs": 3000 }
 }
 `
 

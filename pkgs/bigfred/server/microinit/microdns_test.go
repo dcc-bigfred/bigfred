@@ -29,12 +29,26 @@ func TestEnsureMicrodnsConfigWritesDefaultWhenMissing(t *testing.T) {
 	if err := json.Unmarshal(raw, &cfg); err != nil {
 		t.Fatalf("invalid JSON: %v\n%s", err, raw)
 	}
+	bigfred, ok := cfg["bigfred"].(map[string]any)
+	if !ok {
+		t.Fatalf("missing bigfred: %#v", cfg)
+	}
+	if enabled, _ := bigfred["enabled"].(bool); !enabled {
+		t.Fatalf("bigfred.enabled = %#v, want true", bigfred["enabled"])
+	}
+	microinit, ok := cfg["microinit"].(map[string]any)
+	if !ok {
+		t.Fatalf("missing microinit: %#v", cfg)
+	}
+	if enabled, _ := microinit["enabled"].(bool); !enabled {
+		t.Fatalf("microinit.enabled = %#v, want true", microinit["enabled"])
+	}
 	dccBus, ok := cfg["dccBus"].(map[string]any)
 	if !ok {
 		t.Fatalf("missing dccBus: %#v", cfg)
 	}
-	if enabled, _ := dccBus["enabled"].(bool); !enabled {
-		t.Fatalf("dccBus.enabled = %#v, want true", dccBus["enabled"])
+	if beacon, _ := dccBus["beacon"].(bool); !beacon {
+		t.Fatalf("dccBus.beacon = %#v, want true", dccBus["beacon"])
 	}
 	services, ok := cfg["services"].([]any)
 	if !ok || len(services) != 1 {

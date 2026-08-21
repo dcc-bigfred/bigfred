@@ -161,6 +161,28 @@ func parseGetLocoInfo(pkt []byte) (addr uint16, ok bool) {
 	return parseLocoAddr(pkt, 6)
 }
 
+func parseSetLocoEStop(pkt []byte) (addr uint16, ok bool) {
+	if len(pkt) < 8 {
+		return 0, false
+	}
+	_, header, okHdr := packetHeader(pkt)
+	if !okHdr || header != HeaderXBus || pkt[4] != 0x92 {
+		return 0, false
+	}
+	return parseLocoAddr(pkt, 5)
+}
+
+func parsePurgeLoco(pkt []byte) (addr uint16, ok bool) {
+	if len(pkt) < 9 {
+		return 0, false
+	}
+	_, header, okHdr := packetHeader(pkt)
+	if !okHdr || header != HeaderXBus || pkt[4] != 0xE3 || pkt[5] != 0x44 {
+		return 0, false
+	}
+	return parseLocoAddr(pkt, 6)
+}
+
 // isDriveDB3EStop reports whether the Z21 LAN_X_SET_LOCO_DRIVE speed byte
 // encodes an immediate emergency stop (V=1 in 14/128-step, VVVV=1 in 28-step).
 func isDriveDB3EStop(speedStepsProto, db3 byte) bool {

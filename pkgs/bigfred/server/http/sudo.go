@@ -154,7 +154,7 @@ func (h *SudoHandler) GrantSignalmanToUser(w http.ResponseWriter, r *http.Reques
 	}
 	eff, err := h.auth.Effective(r.Context(), actor.User, layoutID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	if d := (security.LayoutSecurityContext{}).CanGrantSignalmanToUser(eff); !d.Allowed {
@@ -176,7 +176,7 @@ func (h *SudoHandler) GrantSignalmanToUser(w http.ResponseWriter, r *http.Reques
 			writeJSONError(w, http.StatusNotFound, svcerrors.CodeUserNotFound)
 			return
 		}
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 
@@ -198,7 +198,7 @@ func (h *SudoHandler) RevokeSignalmanFromUser(w http.ResponseWriter, r *http.Req
 	}
 	eff, err := h.auth.Effective(r.Context(), actor.User, layoutID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	if d := (security.LayoutSecurityContext{}).CanGrantSignalmanToUser(eff); !d.Allowed {
@@ -216,7 +216,7 @@ func (h *SudoHandler) RevokeSignalmanFromUser(w http.ResponseWriter, r *http.Req
 			writeJSONError(w, http.StatusNotFound, svcerrors.CodeUserNotFound)
 			return
 		}
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 
@@ -259,5 +259,5 @@ func writeSudoError(w http.ResponseWriter, svc *cmd.Sudo, userID, layoutID uint,
 			w.Header().Set("Retry-After", fmt.Sprintf("%d", secs))
 		}
 	}
-	writeJSONError(w, status, code)
+	writeJSONErrorCause(w, status, code, err)
 }

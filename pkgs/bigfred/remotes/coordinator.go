@@ -9,20 +9,21 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/keskad/loco/pkgs/bigfred/contract"
-	"github.com/keskad/loco/pkgs/bigfred/remotes/inbound"
 	"github.com/keskad/loco/pkgs/bigfred/remotepairing"
+	"github.com/keskad/loco/pkgs/bigfred/remotes/inbound"
 )
 
 const (
 	defaultSweeperInterval   = 3 * time.Second
 	defaultClientsPublishMin = 2 * time.Second
 	defaultIdleEvict         = 60 * time.Second
-	defaultStickyIdleEvict   = 30 * time.Minute
+	defaultStickyIdleEvict   = 72 * time.Hour
 	// syncSubscribeRetry is the backoff before re-subscribing to the
 	// session-sync channel after a receive error.
 	syncSubscribeRetry = 2 * time.Second
 	// seenFlushInterval is the cadence of the batched lastSeenAt flush
-	// (WS-1b). 1s balances Redis write rate against lastSeenAt precision.
+	// (WS-1b). 1s balances Redis write rate against lastSeenAt precision
+	// on the sticky idle window.
 	seenFlushInterval = 1 * time.Second
 )
 
@@ -38,6 +39,12 @@ type ProtocolPolicy struct {
 	// TODO(withrottle): on expiry, emit a handset emergency stop before
 	// evicting instead of a plain idle evict.
 	HeartbeatTimeout time.Duration
+	// SweepKeepsPairing makes the idle sweep drop only in-process presence and
+	// leave the Redis session to its own TTL. Set for protocols with an explicit
+	// disconnect signal (WiThrottle TCP), where losing presence does not mean
+	// losing the pairing. UDP protocols (Z21) leave this false because the sweep
+	// is their only cleanup path.
+	SweepKeepsPairing bool
 }
 
 // CoordinatorConfig wires the shared inbound handset coordinator.
@@ -226,7 +233,7 @@ func (c *Coordinator) markSyncSubReady() {
 // runSeenFlusher drains pending lastSeenAt updates and writes them to
 // Redis in batch (one round-trip per protocol group per tick) instead of
 // a per-packet SET. Loses at most one flush interval (1s) of lastSeenAt
-// precision on a crash — acceptable given the 60s/30min idle windows.
+// precision on a crash — acceptable given the sticky idle window.
 func (c *Coordinator) runSeenFlusher(ctx context.Context) {
 	ticker := time.NewTicker(seenFlushInterval)
 	defer ticker.Stop()
@@ -248,8 +255,9 @@ func (c *Coordinator) flushSeen(ctx context.Context) {
 	if len(dirty) == 0 {
 		return
 	}
-	// Group by protocol so each group can use its policy's TTL (sticky
-	// sessions refresh the idle window; non-sticky preserve existing TTL).
+	// Group by protocol so each group refreshes the idle window. Paired
+	// sessions use StickyIdleEvict (WiThrottle and Z21); unpaired keys are
+	// skipped by TouchSeenBatch when the Redis session is already gone.
 	type bucket struct {
 		keys []string
 		ts   []int64
@@ -261,11 +269,8 @@ func (c *Coordinator) flushSeen(ctx context.Context) {
 		policy := c.policyFor(protocol)
 		b, ok := buckets[protocol]
 		if !ok {
-			b = &bucket{}
+			b = &bucket{ttl: policy.StickyIdleEvict}
 			buckets[protocol] = b
-			if policy.IPStickiness {
-				b.ttl = policy.StickyIdleEvict
-			}
 		}
 		b.keys = append(b.keys, key)
 		b.ts = append(b.ts, ts)
@@ -483,12 +488,8 @@ func (c *Coordinator) BuildSnapshot() contract.RemoteClientsSnapshotWire {
 		if cl.Session != nil {
 			w.UserID = cl.Session.UserID
 			w.UserLogin = cl.Session.UserLogin
-			// Surface the sticky-session expiry so the admin UI can show
-			// when an IP-sticky handset will be evicted without activity.
-			// Non-sticky sessions omit the field (UI only renders it when
-			// ipStickiness is on).
-			if policy.IPStickiness {
-				w.SessionExpiresAt = cl.LastSeen.Add(policy.StickyIdleEvict).UnixMilli()
+			if window, show := pairingExpiryWindow(cl, policy); show {
+				w.SessionExpiresAt = cl.LastSeen.Add(window).UnixMilli()
 			}
 		}
 		out = append(out, w)
@@ -526,20 +527,43 @@ func (c *Coordinator) sweep(ctx context.Context) {
 				c.markDirty()
 			}
 		}
-		evictAfter := policy.IdleEvict
-		if policy.IPStickiness && cl.Session != nil {
-			evictAfter = policy.StickyIdleEvict
-		}
 		if policy.HeartbeatTimeout > 0 && cl.Session != nil && cl.HeartbeatMonitor && idle >= policy.HeartbeatTimeout {
 			c.estopHandsetLocos(ctx, cl)
-			evictAfter = policy.HeartbeatTimeout
+			c.dropPresence(ctx, cl.Key)
+			continue
 		}
-		if idle >= evictAfter {
+		if idle >= idleEvictWindow(cl, policy) {
+			if cl.Session != nil && policy.SweepKeepsPairing {
+				c.dropPresence(ctx, cl.Key)
+				continue
+			}
 			c.evictClient(ctx, cl.Key)
 		}
 	}
 	// Only write to Redis when the registry actually changed this tick.
 	c.publishIfDirty(ctx)
+}
+
+// idleEvictWindow is how long cl may stay silent before the sweep acts.
+func idleEvictWindow(cl *inbound.Client, policy ProtocolPolicy) time.Duration {
+	if cl.Session != nil && policy.IPStickiness {
+		return policy.StickyIdleEvict
+	}
+	return policy.IdleEvict
+}
+
+// pairingExpiryWindow reports when the Redis pairing lapses, and whether that
+// is worth surfacing at all. It returns false when the pairing dies together
+// with presence, because the row disappears at the same moment and a countdown
+// would carry nothing beyond lastSeenAt.
+func pairingExpiryWindow(cl *inbound.Client, policy ProtocolPolicy) (time.Duration, bool) {
+	if policy.SweepKeepsPairing {
+		return policy.StickyIdleEvict, true
+	}
+	if cl.Session != nil && policy.IPStickiness {
+		return policy.StickyIdleEvict, true
+	}
+	return 0, false
 }
 
 func (c *Coordinator) policyFor(protocol string) ProtocolPolicy {
@@ -614,6 +638,17 @@ func (c *Coordinator) evictClient(ctx context.Context, key string) {
 			c.cfg.Log.WithError(err).WithField("client", key).Debug("unpair on evict")
 		}
 	}
+	c.dropPresence(ctx, key)
+}
+
+// DropPresence removes the in-process client (and runs onEvict hooks to
+// release slots) without deleting the Redis pairing. Used on TCP disconnect
+// so a sticky session can be reused on reconnect.
+func (c *Coordinator) DropPresence(ctx context.Context, key string) {
+	c.dropPresence(ctx, key)
+}
+
+func (c *Coordinator) dropPresence(ctx context.Context, key string) {
 	c.registry.Remove(key)
 	if c.virtual != nil {
 		c.virtual.RemoveClient(key)

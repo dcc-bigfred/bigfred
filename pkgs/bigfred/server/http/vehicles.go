@@ -43,7 +43,7 @@ func (h *VehicleHandler) ListCatalogue(w http.ResponseWriter, r *http.Request) {
 	}
 	rows, err := h.svc.ListCatalogue(r.Context(), actor.Layout.ID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	out := make([]protocol.VehicleCatalogueResponse, 0, len(rows))
@@ -95,7 +95,7 @@ func (h *VehicleHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	eff, err := h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	row, err := h.svc.Update(r.Context(), actor.User.ID, vehicleID, eff, req.ToUpdateInput())
@@ -104,7 +104,7 @@ func (h *VehicleHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.layoutVehicles.BroadcastVehicleUpdated(r.Context(), row.ID); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -126,12 +126,12 @@ func (h *VehicleHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	eff, err := h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	layoutIDs, err := h.layoutVehicles.LayoutIDsHostingVehicle(r.Context(), vehicleID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	if _, err := h.svc.DeleteAll(r.Context(), actor.User.ID, vehicleID, eff); err != nil {
@@ -163,7 +163,7 @@ func (h *VehicleHandler) UpsertByExternalID(w http.ResponseWriter, r *http.Reque
 	}
 	eff, err := h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	row, created, err := h.svc.UpsertByExternalID(r.Context(), actor.User.ID, eff, externalID, req.ToCreateInput(actor.User.ID))
@@ -172,7 +172,7 @@ func (h *VehicleHandler) UpsertByExternalID(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	if err := h.layoutVehicles.BroadcastVehicleUpdated(r.Context(), row.ID); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -196,7 +196,7 @@ func (h *VehicleHandler) DeleteByExternalID(w http.ResponseWriter, r *http.Reque
 	}
 	eff, err := h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	existing, err := h.svc.GetByExternalID(r.Context(), externalID)
@@ -206,7 +206,7 @@ func (h *VehicleHandler) DeleteByExternalID(w http.ResponseWriter, r *http.Reque
 	}
 	layoutIDs, err := h.layoutVehicles.LayoutIDsHostingVehicle(r.Context(), existing.ID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	if _, err := h.svc.DeleteByExternalID(r.Context(), actor.User.ID, eff, externalID); err != nil {
@@ -241,7 +241,7 @@ func (h *VehicleHandler) ClearDCC(w http.ResponseWriter, r *http.Request) {
 	}
 	eff, err := h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	rows, err := h.svc.ClearDCCAddresses(r.Context(), actor.User.ID, eff, actor.Layout.ID, ids)
@@ -277,7 +277,7 @@ func (h *VehicleHandler) ListPool(w http.ResponseWriter, r *http.Request) {
 	}
 	rows, err := h.pool.List(r.Context(), actor.User.ID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	type rangeResp struct {
@@ -294,5 +294,5 @@ func (h *VehicleHandler) ListPool(w http.ResponseWriter, r *http.Request) {
 
 func writeVehicleError(w http.ResponseWriter, err error) {
 	status, code := svcerrors.VehicleHTTPStatus(err)
-	writeJSONError(w, status, code)
+	writeJSONErrorCause(w, status, code, err)
 }

@@ -33,7 +33,7 @@ func (h *UserHandler) ListDCCPools(w http.ResponseWriter, r *http.Request) {
 	}
 	rows, err := h.svc.ListDCCPoolOverview(r.Context())
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	out := make([]protocol.DCCPoolOverviewResponse, 0, len(rows))
@@ -53,12 +53,12 @@ func (h *UserHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 	eff, err := h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	rows, err := h.svc.ListWithDCCPools(r.Context(), eff)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	out := make([]protocol.UserResponse, 0, len(rows))
@@ -78,7 +78,7 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	eff, err := h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	var req protocol.UserCreateRequest
@@ -120,7 +120,7 @@ func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	eff, err := h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	var req protocol.UserUpdateRequest
@@ -171,7 +171,7 @@ func (h *UserHandler) setActive(w http.ResponseWriter, r *http.Request, active b
 	}
 	eff, err := h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	row, err := h.svc.SetActive(r.Context(), eff, actor.User.ID, userID, active)
@@ -211,7 +211,7 @@ func (h *UserHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	eff, err := h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	target, _ := h.svc.Get(r.Context(), userID)
@@ -231,5 +231,5 @@ func (h *UserHandler) Delete(w http.ResponseWriter, r *http.Request) {
 // codes the frontend can localise.
 func writeUserError(w http.ResponseWriter, err error) {
 	status, code := svcerrors.UserHTTPStatus(err)
-	writeJSONError(w, status, code)
+	writeJSONErrorCause(w, status, code, err)
 }

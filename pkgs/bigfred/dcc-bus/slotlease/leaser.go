@@ -46,14 +46,14 @@ type HolderKey struct {
 type holderKey = HolderKey
 
 type lease struct {
-	addr         uint16
-	kind         leaseKind
-	trainID      string
-	holders      map[holderKey]struct{}
-	holderOrder  []holderKey
-	lastDriveAt  map[holderKey]time.Time
-	acquiredAt   time.Time
-	acquiring    bool
+	addr                 uint16
+	kind                 leaseKind
+	trainID              string
+	holders              map[holderKey]struct{}
+	holderOrder          []holderKey
+	lastDriveAt          map[holderKey]time.Time
+	acquiredAt           time.Time
+	acquiring            bool
 	releaseAfter         bool // set when last holder left during acquire
 	pendingReleaseReason ReleaseReason
 	releaseAt            time.Time // non-zero => deferred release scheduled (switcher grace)
@@ -110,27 +110,27 @@ type Config struct {
 // Leaser is the reference-counted owner of command-station slots for driven
 // vehicles. Viewers do not create holders — only drivers do.
 type Leaser struct {
-	mu              sync.Mutex
-	leases          map[uint16]*lease
-	trains          map[string]*trainLease
-	perUser         map[uint]int
-	userAddrOrder   map[uint][]uint16 // FIFO per user for cap eviction
-	releasePending  map[uint16]struct{}
-	releasing       map[uint16]struct{} // addrs with a scheduled background release (reuse-race guard)
-	station         SlotStation
-	writer          SpeedWriter
-	store           LocoStore
-	hub             StateBroadcaster
-	gate            DriveGate
-	maxPerUser      int
-	maxSlots        int
-	idleTimeout     time.Duration
-	releaseGrace    time.Duration
-	switcherGrace   time.Duration
-	metrics         Recorder
-	diagCh          chan struct{}
-	releaseCh       chan releaseJob
-	stop            chan struct{}
+	mu               sync.Mutex
+	leases           map[uint16]*lease
+	trains           map[string]*trainLease
+	perUser          map[uint]int
+	userAddrOrder    map[uint][]uint16 // FIFO per user for cap eviction
+	releasePending   map[uint16]struct{}
+	releasing        map[uint16]struct{} // addrs with a scheduled background release (reuse-race guard)
+	station          SlotStation
+	writer           SpeedWriter
+	store            LocoStore
+	hub              StateBroadcaster
+	gate             DriveGate
+	maxPerUser       int
+	maxSlots         int
+	idleTimeout      time.Duration
+	releaseGrace     time.Duration
+	switcherGrace    time.Duration
+	metrics          Recorder
+	diagCh           chan struct{}
+	releaseCh        chan releaseJob
+	stop             chan struct{}
 	suppressExternal atomic.Bool
 }
 
@@ -487,7 +487,7 @@ func (l *Leaser) SweepIdle(now time.Time) {
 		if now.Sub(youngest) < l.idleTimeout {
 			continue
 		}
-		delete(l.leases, addr)
+		l.dropLeaseBookkeepingLocked(addr)
 		toRelease = append(toRelease, addr)
 	}
 	l.notifyDiagLocked()

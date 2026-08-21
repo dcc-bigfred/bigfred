@@ -252,6 +252,40 @@ func (a *Adapter) HandleSetLocoDrive(ctx context.Context, client *Client, pkt []
 	a.echoLocoState(ctx, resp, addr)
 }
 
+func (a *Adapter) HandleSetLocoEStop(ctx context.Context, client *Client, pkt []byte) {
+	addr, ok := parseSetLocoEStop(pkt)
+	if !ok {
+		return
+	}
+	if !a.authorize(client, addr) {
+		a.logDriveRejected(client, addr, "estop")
+		return
+	}
+	a.server.registry.SetLastActiveLoco(client.Key, addr)
+	p, paired := a.server.registry.Paired(client.Key)
+	if !paired {
+		return
+	}
+	a.drive.ApplyHandsetPilotEStop(ctx, remotes.HandsetSession{
+		ClientKey: client.Key,
+		UserID:    p.UserID,
+	}, addr)
+	a.echoLocoState(ctx, NewResponder(a.server, client), addr)
+}
+
+func (a *Adapter) HandlePurgeLoco(client *Client, pkt []byte) {
+	addr, ok := parsePurgeLoco(pkt)
+	if !ok {
+		return
+	}
+	if !a.authorize(client, addr) {
+		a.logDriveRejected(client, addr, "purge")
+		return
+	}
+	a.server.registry.UnsubscribeLoco(client.Key, addr)
+	a.drive.Release(a.throttleActor(client), addr)
+}
+
 func (a *Adapter) logDriveFailure(client *Client, addr uint16, action, code string) {
 	if a.server.log == nil {
 		return

@@ -198,6 +198,14 @@ func lnBuildSetSnd(slot byte, snd byte) []byte {
 	return lnAppendChecksum([]byte{lnOPC_LOCO_SND, slot, snd})
 }
 
+func lnBuildGlobalPower(on bool) []byte {
+	opc := byte(lnOPC_GPOFF)
+	if on {
+		opc = lnOPC_GPON
+	}
+	return lnAppendChecksum([]byte{opc})
+}
+
 type lnSlotData struct {
 	Slot  byte
 	Stat1 byte // STAT1 byte from the slot read; SL_STA = Stat1 & lnSLOT_STA_MASK

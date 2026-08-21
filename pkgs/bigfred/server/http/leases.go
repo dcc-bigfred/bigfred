@@ -44,7 +44,7 @@ func (h *LeaseHandler) ListGranted(w http.ResponseWriter, r *http.Request) {
 	}
 	eff, err := h.actorEffectiveRoles(r, actor)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	rows, err := h.svc.ListGranted(r.Context(), layoutID, actor.User, eff)
@@ -76,7 +76,7 @@ func (h *LeaseHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	eff, err := h.actorEffectiveRoles(r, actor)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	var req protocol.CreateLeaseRequest
@@ -111,7 +111,7 @@ func (h *LeaseHandler) Patch(w http.ResponseWriter, r *http.Request) {
 	}
 	eff, err := h.actorEffectiveRoles(r, actor)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	kind, targetID, ok := parseLeasePath(w, r)
@@ -165,7 +165,7 @@ func (h *LeaseHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	eff, err := h.actorEffectiveRoles(r, actor)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	kind, targetID, ok := parseLeasePath(w, r)
@@ -223,5 +223,5 @@ func writeLeaseList(w http.ResponseWriter, rows []cmd.LeaseEntry) {
 
 func writeLeaseError(w http.ResponseWriter, err error) {
 	status, code := svcerrors.LeaseHTTPStatus(err)
-	writeJSONError(w, status, code)
+	writeJSONErrorCause(w, status, code, err)
 }

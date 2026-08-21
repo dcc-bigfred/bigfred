@@ -3,6 +3,7 @@ package remotepairing_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -74,6 +75,47 @@ func TestCreateAndPairViaCV3CV4(t *testing.T) {
 	loaded, ok, err := store.GetActiveByClientKey(ctx, 1, 2, clientKey)
 	if err != nil || !ok || loaded.LastSeenAt != now {
 		t.Fatalf("load active: ok=%v err=%v active=%+v", ok, err, loaded)
+	}
+}
+
+func TestWithrottlePairingCanRestrictExpectedClient(t *testing.T) {
+	store, _ := newTestStore(t)
+	ctx := context.Background()
+	req, err := store.CreateWithrottlePairingRequest(ctx, remotepairing.CreateWithrottlePairingInput{
+		LayoutID:          1,
+		CommandStationID:  2,
+		UserID:            9,
+		UserLogin:         "alice",
+		AllowAllVehicles:  true,
+		ExpectedClientKey: "withrottle:4242",
+	})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if _, ok, _, err := store.PairViaWithrottleCode(
+		ctx, 1, 2, req.PairingCode, "withrottle:other", contract.NowMS(),
+	); err != nil || ok {
+		t.Fatalf("wrong client: ok=%v err=%v", ok, err)
+	}
+	if _, ok, _, err := store.PairViaWithrottleCode(
+		ctx, 1, 2, req.PairingCode, "withrottle:4242", contract.NowMS(),
+	); err != nil || !ok {
+		t.Fatalf("expected client: ok=%v err=%v", ok, err)
+	}
+
+	active, ttl, ok, err := store.GetActiveByClientKeyTTL(ctx, 1, 2, "withrottle:4242")
+	if err != nil || !ok {
+		t.Fatalf("ttl lookup: ok=%v err=%v", ok, err)
+	}
+	if active.UserID != 9 {
+		t.Fatalf("user %d", active.UserID)
+	}
+	if ttl <= 0 {
+		t.Fatalf("expected remaining TTL, got %s", ttl)
+	}
+	_, ttl, ok, err = store.GetActiveByClientKeyTTL(ctx, 1, 2, "withrottle:missing")
+	if err != nil || ok || ttl != 0 {
+		t.Fatalf("missing: ok=%v ttl=%s err=%v", ok, ttl, err)
 	}
 }
 
@@ -319,5 +361,104 @@ func TestPairViaCV3CV4ReportsEvicted(t *testing.T) {
 	}
 	if _, ok, err := store.GetActiveByClientKey(ctx, 1, 2, second); err != nil || !ok {
 		t.Fatalf("new session should be active: ok=%v err=%v", ok, err)
+	}
+}
+
+func TestGetActiveAcceptsLuaEmptyObjectVehicleIds(t *testing.T) {
+	store, mr := newTestStore(t)
+	ctx := context.Background()
+	clientKey := "z21:10.0.0.9:21105"
+	raw := `{"protocol":"z21","userId":9,"vehicleIds":{},"allowedAddrs":{},"allowAllVehicles":true,"pairedAt":1,"lastSeenAt":2,"clientKey":"z21:10.0.0.9:21105"}`
+	mr.Set(contract.RemotePairingActiveKey(1, 2, clientKey), raw)
+	mr.Set(contract.RemotePairingByUserKey(1, 2, 9), clientKey)
+
+	active, ok, err := store.GetActiveByClientKey(ctx, 1, 2, clientKey)
+	if err != nil || !ok {
+		t.Fatalf("get: ok=%v err=%v", ok, err)
+	}
+	if len(active.VehicleIDs) != 0 || len(active.AllowedAddrs) != 0 {
+		t.Fatalf("active=%+v", active)
+	}
+	if !active.AllowAllVehicles || active.UserID != 9 {
+		t.Fatalf("active=%+v", active)
+	}
+
+	sessions, err := store.ListActiveByUser(ctx, 1, 2, 9)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sessions) != 1 || sessions[0].ClientKey != clientKey {
+		t.Fatalf("sessions=%+v", sessions)
+	}
+}
+
+func TestTouchSeenAllowAllDoesNotWriteObjectVehicleIds(t *testing.T) {
+	store, mr := newTestStore(t)
+	ctx := context.Background()
+	req, err := store.CreateZ21PairingRequest(ctx, remotepairing.CreateZ21PairingInput{
+		LayoutID:         1,
+		CommandStationID: 2,
+		UserID:           4,
+		AllowAllVehicles: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	clientKey := "z21:192.168.1.10:40000"
+	if _, ok, _, err := store.PairViaCV3CV4(ctx, 1, 2, req.PairingCV3, req.PairingCV4, clientKey, contract.NowMS()); err != nil || !ok {
+		t.Fatalf("pair: ok=%v err=%v", ok, err)
+	}
+
+	touch := contract.NowMS() + 1000
+	if err := store.TouchSeen(ctx, 1, 2, clientKey, touch, 0); err != nil {
+		t.Fatal(err)
+	}
+	active, ok, err := store.GetActiveByClientKey(ctx, 1, 2, clientKey)
+	if err != nil || !ok || active.LastSeenAt != touch {
+		t.Fatalf("touch: %+v ok=%v err=%v", active, ok, err)
+	}
+
+	got, err := mr.Get(contract.RemotePairingActiveKey(1, 2, clientKey))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(got, `"vehicleIds":{}`) || strings.Contains(got, `"allowedAddrs":{}`) {
+		t.Fatalf("lua cjson object leaked into session JSON: %s", got)
+	}
+}
+
+func TestUpdateSessionScopeEmptySlicesDoNotWriteObjectVehicleIds(t *testing.T) {
+	store, mr := newTestStore(t)
+	ctx := context.Background()
+	req, err := store.CreateZ21PairingRequest(ctx, remotepairing.CreateZ21PairingInput{
+		LayoutID:         1,
+		CommandStationID: 2,
+		UserID:           21,
+		VehicleIDs:       []string{"V-1"},
+		AllowedAddrs:     []uint16{3},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	clientKey := "z21:10.0.0.21:21105"
+	if _, ok, _, err := store.PairViaCV3CV4(ctx, 1, 2, req.PairingCV3, req.PairingCV4, clientKey, contract.NowMS()); err != nil || !ok {
+		t.Fatalf("pair: ok=%v err=%v", ok, err)
+	}
+	if _, ok, err := store.UpdateSessionScope(ctx, 1, 2, clientKey, nil, nil, true); err != nil || !ok {
+		t.Fatalf("update scope: ok=%v err=%v", ok, err)
+	}
+	got, err := mr.Get(contract.RemotePairingActiveKey(1, 2, clientKey))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(got, `"vehicleIds":{}`) || strings.Contains(got, `"allowedAddrs":{}`) {
+		t.Fatalf("lua cjson object leaked into session JSON: %s", got)
+	}
+	active, ok, err := store.GetActiveByClientKey(ctx, 1, 2, clientKey)
+	if err != nil || !ok {
+		t.Fatalf("get: ok=%v err=%v", ok, err)
+	}
+	if !active.AllowAllVehicles {
+		t.Fatalf("expected allow-all, got %+v", active)
 	}
 }

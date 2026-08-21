@@ -160,6 +160,9 @@ func (a *Adapter) HandleAcquire(ctx context.Context, client *Client, cmd MComman
 		tw.locos[addr] = key
 		tw.lastLoco = addr
 	})
+	for _, line := range buildAcquireReply(cmd.ThrottleID, addr, a.server.functionsForAddr(addr)) {
+		_ = a.server.writeLine(client.Key, line)
+	}
 	resp := NewResponder(a.server, client, cmd.ThrottleID)
 	result := a.drive.Subscribe(ctx, a.throttleActor(client), resp, []uint16{addr})
 	if !result.OK {
@@ -167,11 +170,9 @@ func (a *Adapter) HandleAcquire(ctx context.Context, client *Client, cmd MComman
 			delete(tw.locos, addr)
 		})
 		a.logDriveFailure(client, addr, "acquire", result.Code)
+		_ = a.server.writeLine(client.Key, buildReleaseLine(cmd.ThrottleID, key))
 		a.server.writeLine(client.Key, "HM"+result.Code)
 		return
-	}
-	for _, line := range buildAcquireReply(cmd.ThrottleID, addr, a.server.functionsForAddr(addr)) {
-		_ = a.server.writeLine(client.Key, line)
 	}
 }
 
@@ -257,6 +258,7 @@ func (a *Adapter) handleSpeed(ctx context.Context, client *Client, throttleID by
 	for _, addr := range addrs {
 		if !a.authorize(client, addr) {
 			a.logDriveRejected(client, addr, "set_speed")
+			_ = resp.SendLocoError(ctx, addr, "Not authorized", "")
 			continue
 		}
 		if estop || wireSpeed == 1 {
@@ -288,6 +290,7 @@ func (a *Adapter) handleDirection(ctx context.Context, client *Client, throttleI
 	for _, addr := range addrs {
 		if !a.authorize(client, addr) {
 			a.logDriveRejected(client, addr, "set_direction")
+			_ = resp.SendLocoError(ctx, addr, "Not authorized", "")
 			continue
 		}
 		speed, ok := a.server.registry.lastSpeed(client.Key, throttleID, addr)
@@ -315,6 +318,7 @@ func (a *Adapter) handleFunction(ctx context.Context, client *Client, throttleID
 	for _, addr := range addrs {
 		if !a.authorize(client, addr) {
 			a.logDriveRejected(client, addr, "set_function")
+			_ = resp.SendLocoError(ctx, addr, "Not authorized", "")
 			continue
 		}
 		result := a.drive.SetFunction(ctx, actor, resp, contract.LocoSetFunctionWire{

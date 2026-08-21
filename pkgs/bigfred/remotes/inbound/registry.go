@@ -213,6 +213,9 @@ func (r *ClientRegistry) UnsubscribeLoco(key string, addr uint16) {
 		}
 	}
 	c.SubscribedLocos = kept
+	if c.LastActiveLoco == addr {
+		c.LastActiveLoco = 0
+	}
 	r.removeSubscriberLocked(addr, key)
 }
 

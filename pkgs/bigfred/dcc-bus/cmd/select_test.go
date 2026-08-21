@@ -10,22 +10,30 @@ import (
 )
 
 type recordingResponder struct {
-	selected uint16
-	acks     []protocol.AckPayload
-	subs     []uint16
+	selected   uint16
+	acks       []protocol.AckPayload
+	subs       []uint16
+	locoErrors []locoErrorCall
 }
 
-func (r *recordingResponder) Subscribe(addrs ...uint16)                          { r.subs = append(r.subs, addrs...) }
-func (r *recordingResponder) Unsubscribe(addrs ...uint16)                        {}
-func (r *recordingResponder) SubscribedAddrs() []uint16                          { return r.subs }
-func (r *recordingResponder) OldestSubscribed() (uint16, bool)                   { return 0, false }
-func (r *recordingResponder) SelectedAddr() uint16                         { return r.selected }
-func (r *recordingResponder) SetSelected(addr uint16)                      { r.selected = addr }
-func (r *recordingResponder) ClearSelected()                               { r.selected = 0 }
+type locoErrorCall struct {
+	addr   uint16
+	code   string
+	detail string
+}
+
+func (r *recordingResponder) Subscribe(addrs ...uint16)        { r.subs = append(r.subs, addrs...) }
+func (r *recordingResponder) Unsubscribe(addrs ...uint16)      {}
+func (r *recordingResponder) SubscribedAddrs() []uint16        { return r.subs }
+func (r *recordingResponder) OldestSubscribed() (uint16, bool) { return 0, false }
+func (r *recordingResponder) SelectedAddr() uint16             { return r.selected }
+func (r *recordingResponder) SetSelected(addr uint16)          { r.selected = addr }
+func (r *recordingResponder) ClearSelected()                   { r.selected = 0 }
 func (r *recordingResponder) SendLocoState(context.Context, contract.LocoStateWire) error {
 	return nil
 }
-func (r *recordingResponder) SendLocoError(context.Context, uint16, string, string) error {
+func (r *recordingResponder) SendLocoError(_ context.Context, addr uint16, code, detail string) error {
+	r.locoErrors = append(r.locoErrors, locoErrorCall{addr: addr, code: code, detail: detail})
 	return nil
 }
 func (r *recordingResponder) SendLocoErrorPayload(context.Context, protocol.LocoErrorPayload) error {

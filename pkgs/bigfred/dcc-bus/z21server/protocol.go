@@ -22,12 +22,13 @@ const (
 	HeaderLanSessionProbe uint16 = 0x0036
 )
 
-// IdleEvictAfter is Z21 §1.1 — no UDP for this long removes a non-sticky client.
+// IdleEvictAfter is Z21 LAN §1.1 (see specs/bigfred/protos/z21.md): a client
+// that sends no UDP for this long is removed from the participant list.
 const IdleEvictAfter = 60
 
 // StickySessionIdleEvictAfter is the idle window before an IP-sticky paired
-// handset is unpaired (seconds).
-const StickySessionIdleEvictAfter = 30 * 60
+// handset is unpaired (seconds). Matches contract.RemoteStickySessionIdle.
+const StickySessionIdleEvictAfter = 72 * 60 * 60
 
 // SweeperInterval is how often the server scans clients.
 const SweeperInterval = 3

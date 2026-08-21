@@ -38,7 +38,7 @@ func (h *TrainHandler) ListCatalogue(w http.ResponseWriter, r *http.Request) {
 	}
 	rows, err := h.svc.ListCatalogue(r.Context(), actor.Layout.ID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	out := make([]protocol.TrainCatalogueResponse, 0, len(rows))
@@ -67,7 +67,7 @@ func (h *TrainHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.layoutTrains.SyncLayoutRosterForTrain(r.Context(), d.Train.ID); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -94,7 +94,7 @@ func (h *TrainHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	eff, err := h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	d, err := h.svc.Update(r.Context(), actor.User.ID, trainID, eff, req.ToUpdateInput())
@@ -103,7 +103,7 @@ func (h *TrainHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.layoutTrains.BroadcastTrainUpdated(r.Context(), d.Train.ID); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -125,12 +125,12 @@ func (h *TrainHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	eff, err := h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	layoutIDs, err := h.layoutTrains.LayoutIDsHostingTrain(r.Context(), trainID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	if _, err := h.svc.DeleteAll(r.Context(), actor.User.ID, trainID, eff); err != nil {
@@ -165,7 +165,7 @@ func (h *TrainHandler) PatchMember(w http.ResponseWriter, r *http.Request) {
 	}
 	eff, err := h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	member, err := h.svc.UpdateMember(r.Context(), actor.User.ID, trainID, memberID, eff, req.ToMemberPatchInput())
@@ -174,7 +174,7 @@ func (h *TrainHandler) PatchMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.layoutTrains.BroadcastTrainUpdated(r.Context(), trainID); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -183,5 +183,5 @@ func (h *TrainHandler) PatchMember(w http.ResponseWriter, r *http.Request) {
 
 func writeTrainError(w http.ResponseWriter, err error) {
 	status, code := svcerrors.TrainHTTPStatus(err)
-	writeJSONError(w, status, code)
+	writeJSONErrorCause(w, status, code, err)
 }

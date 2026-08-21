@@ -6,6 +6,7 @@ import (
 
 	"github.com/keskad/loco/pkgs/bigfred/contract"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/errors"
+	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/security"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/slotlease"
 	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/state"
 	"github.com/keskad/loco/pkgs/loco/commandstation"
@@ -193,6 +194,41 @@ func TestHandleSetFunction_mapsSlotInUseLikeSetSpeed(t *testing.T) {
 	}
 	if res.Code != errors.CodeSlotInUse {
 		t.Fatalf("code = %q, want %q (not command_station_error)", res.Code, errors.CodeSlotInUse)
+	}
+}
+
+func TestHandleSetFunction_sendsLocoErrorWhenNotAuthorized(t *testing.T) {
+	t.Parallel()
+	rs, cleanup := testRedis(t)
+	defer cleanup()
+	st := &observingSlotStubStation{}
+	r, err := NewRouter(context.Background(), Config{
+		Station:          st,
+		Hub:              &stubHub{},
+		Redis:            rs,
+		LayoutID:         1,
+		CommandStationID: 1,
+		SpeedSteps:       128,
+		AllowedVehicles: contract.AllowedVehicles{
+			LayoutID: 1,
+			Vehicles: []contract.AllowedVehicle{{Addr: 42, ControllerUserIDs: []uint{1}}},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resp := &recordingResponder{}
+	res := r.HandleSetFunction(context.Background(), Actor{UserID: 99, SessionID: "ws-1"}, resp, contract.LocoSetFunctionWire{
+		Address:  42,
+		Function: 0,
+		On:       true,
+	}, "")
+	if res.OK || res.Code != security.ReasonNotAuthorized {
+		t.Fatalf("got %+v, want not authorized", res)
+	}
+	if len(resp.locoErrors) != 1 || resp.locoErrors[0].code != security.ReasonNotAuthorized {
+		t.Fatalf("locoErrors = %+v, want one %s", resp.locoErrors, security.ReasonNotAuthorized)
 	}
 }
 

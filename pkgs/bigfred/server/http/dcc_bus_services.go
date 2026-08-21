@@ -40,7 +40,7 @@ func (h *DccBusServicesHandler) GetStatus(w http.ResponseWriter, r *http.Request
 			writeJSONError(w, http.StatusServiceUnavailable, "service_unavailable")
 			return
 		}
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	if programs == nil {

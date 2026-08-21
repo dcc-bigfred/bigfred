@@ -65,13 +65,13 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 			h.metrics.RecordAuthLogin(false)
 		}
 		status, code := svcerrors.AuthHTTPStatus(err)
-		writeJSONError(w, status, code)
+		writeJSONErrorCause(w, status, code, err)
 		return
 	}
 
 	token, expiry, err := h.auth.IssueToken(id)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	if h.metrics != nil {
@@ -157,11 +157,11 @@ func (h *AuthHandler) ChangePIN(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := h.auth.ChangePIN(r.Context(), id.User.ID, req.CurrentPIN, req.NewPIN); err != nil {
 		if status, code := svcerrors.AuthHTTPStatus(err); code != "internal_error" {
-			writeJSONError(w, status, code)
+			writeJSONErrorCause(w, status, code, err)
 			return
 		}
 		status, code := svcerrors.UserHTTPStatus(err)
-		writeJSONError(w, status, code)
+		writeJSONErrorCause(w, status, code, err)
 		return
 	}
 	if h.audit != nil {
@@ -188,7 +188,7 @@ func (h *AuthHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	user, err := h.auth.UpdateProfile(r.Context(), id.User.ID, req.Organization)
 	if err != nil {
 		status, code := svcerrors.UserHTTPStatus(err)
-		writeJSONError(w, status, code)
+		writeJSONErrorCause(w, status, code, err)
 		return
 	}
 	id.User = user

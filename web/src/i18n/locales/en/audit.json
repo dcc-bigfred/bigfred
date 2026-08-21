@@ -24,6 +24,7 @@
     "audit_roster_vehicle_added": "{{actorLogin}} added vehicle \"{{vehicle}}\" to layout",
     "audit_roster_vehicle_removed": "{{actorLogin}} removed vehicle \"{{vehicle}}\" from layout",
     "audit_roster_train_added": "{{actorLogin}} added train \"{{train}}\" to layout",
-    "audit_roster_train_removed": "{{actorLogin}} removed train \"{{train}}\" from layout"
+    "audit_roster_train_removed": "{{actorLogin}} removed train \"{{train}}\" from layout",
+    "audit_handset_pairing": "{{actorLogin}} handset pairing {{result}} for device {{deviceId}}"
   }
 }

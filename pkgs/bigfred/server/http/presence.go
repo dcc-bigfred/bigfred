@@ -43,14 +43,14 @@ func (h *PresenceHandler) List(w http.ResponseWriter, r *http.Request) {
 	// changes and refresh supervisord for online layouts.
 	if h.dccSync != nil {
 		if err := h.dccSync.ObserveLayout(r.Context(), layoutID); err != nil {
-			writeJSONError(w, http.StatusInternalServerError, "internal_error")
+			writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 			return
 		}
 	}
 
 	users, err := h.svc.ListForLayoutEnsuringCaller(r.Context(), layoutID, id.User)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	if users == nil {

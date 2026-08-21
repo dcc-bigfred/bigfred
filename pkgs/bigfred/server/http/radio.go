@@ -101,6 +101,6 @@ func writeRadioError(w http.ResponseWriter, err error) {
 	case "radio_invalid_target", "radio_invalid_context", "radio_invalid_phrase", "radio_note_too_long":
 		writeJSONError(w, http.StatusUnprocessableEntity, code)
 	default:
-		writeJSONError(w, http.StatusBadRequest, code)
+		writeJSONErrorCause(w, http.StatusBadRequest, code, err)
 	}
 }

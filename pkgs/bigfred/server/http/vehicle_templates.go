@@ -27,7 +27,7 @@ func NewVehicleTemplateHandler(
 func (h *VehicleTemplateHandler) List(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.templates.List(r.Context())
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	out := make([]protocol.VehicleTemplateResponse, 0, len(rows))
@@ -87,7 +87,7 @@ func (h *VehicleTemplateHandler) Update(w http.ResponseWriter, r *http.Request) 
 	}
 	eff, err := h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	id, ok := parseUintParam(r, "id")
@@ -111,5 +111,5 @@ func (h *VehicleTemplateHandler) Update(w http.ResponseWriter, r *http.Request) 
 
 func writeVehicleTemplateError(w http.ResponseWriter, err error) {
 	status, code := svcerrors.VehicleTemplateHTTPStatus(err)
-	writeJSONError(w, status, code)
+	writeJSONErrorCause(w, status, code, err)
 }

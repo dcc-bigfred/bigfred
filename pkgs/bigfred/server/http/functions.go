@@ -261,7 +261,7 @@ func (h *FunctionHandler) ReorderTemplate(w http.ResponseWriter, r *http.Request
 	}
 	eff, err := h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	entries, ok := h.decodeReorder(w, r)
@@ -314,7 +314,7 @@ func (h *FunctionHandler) parseTemplateMutation(w http.ResponseWriter, r *http.R
 	var err error
 	eff, err = h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return 0, 0, 0, domain.EffectiveRoles{}, false
 	}
 	return templateID, num, actor.User.ID, eff, true
@@ -341,5 +341,5 @@ func parseFunctionNumParam(w http.ResponseWriter, r *http.Request) (uint8, bool)
 
 func writeFunctionError(w http.ResponseWriter, err error) {
 	status, code := svcerrors.FunctionHTTPStatus(err)
-	writeJSONError(w, status, code)
+	writeJSONErrorCause(w, status, code, err)
 }

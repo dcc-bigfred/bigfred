@@ -3,12 +3,14 @@ package cmd
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/keskad/loco/pkgs/bigfred/contract"
-	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
-	"github.com/keskad/loco/pkgs/bigfred/server/domain"
-	"github.com/keskad/loco/pkgs/bigfred/server/repo"
 	"github.com/keskad/loco/pkgs/bigfred/remotepairing"
+	"github.com/keskad/loco/pkgs/bigfred/remotes/inbound"
+	"github.com/keskad/loco/pkgs/bigfred/server/domain"
+	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
+	"github.com/keskad/loco/pkgs/bigfred/server/repo"
 )
 
 // Remote manages inbound handset pairing across protocols on one command station.
@@ -62,10 +64,11 @@ type RemoteVehicleRef struct {
 
 // RemoteStartPairingInput carries vehicle scope for a new pairing code.
 type RemoteStartPairingInput struct {
-	UserLogin        string
-	VehicleIDs       []string
-	AllowAllVehicles bool
-	HandsetBrakeSecs uint
+	UserLogin         string
+	VehicleIDs        []string
+	AllowAllVehicles  bool
+	HandsetBrakeSecs  uint
+	ExpectedClientKey string
 }
 
 // RemoteUpdateSessionInput updates scope on an active session.
@@ -167,10 +170,11 @@ func (s *Remote) StartPairing(ctx context.Context, layoutID, csID, userID uint, 
 			return contract.RemotePendingWire{}, errors.New("remote service not configured")
 		}
 		req, err := s.withrottle.StartPairing(ctx, layoutID, csID, userID, WithrottleRemoteStartPairingInput{
-			UserLogin:        in.UserLogin,
-			VehicleIDs:       in.VehicleIDs,
-			AllowAllVehicles: in.AllowAllVehicles,
-			HandsetBrakeSecs: in.HandsetBrakeSecs,
+			UserLogin:         in.UserLogin,
+			VehicleIDs:        in.VehicleIDs,
+			AllowAllVehicles:  in.AllowAllVehicles,
+			HandsetBrakeSecs:  in.HandsetBrakeSecs,
+			ExpectedClientKey: in.ExpectedClientKey,
 		})
 		if err != nil {
 			return contract.RemotePendingWire{}, err
@@ -245,6 +249,17 @@ func (s *Remote) Unpair(ctx context.Context, layoutID, csID, userID uint, client
 	default:
 		return svcerrors.ErrRemoteProtocolUnknown
 	}
+}
+
+// HandsetSessionByDevice looks up the WiThrottle pairing session for a
+// numeric handset device id. ok is false when the Redis key is missing
+// (expired or never paired). ttl is the remaining idle window.
+func (s *Remote) HandsetSessionByDevice(ctx context.Context, layoutID, csID uint, deviceID string) (contract.RemoteSessionWire, time.Duration, bool, error) {
+	if s == nil || s.pairing == nil {
+		return contract.RemoteSessionWire{}, 0, false, errors.New("remote service not configured")
+	}
+	clientKey := inbound.ClientKey(contract.RemoteProtocolWithrottle, deviceID)
+	return s.pairing.GetActiveByClientKeyTTL(ctx, layoutID, csID, clientKey)
 }
 
 func (s *Remote) findCommandStation(ctx context.Context, layoutID, csID uint) (domain.CommandStation, error) {

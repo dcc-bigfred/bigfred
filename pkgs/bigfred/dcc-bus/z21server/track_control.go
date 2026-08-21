@@ -18,10 +18,37 @@ func isSetTrackPowerOff(header uint16, pkt []byte) bool {
 	return header == HeaderXBus && len(pkt) >= 6 && pkt[4] == 0x21 && pkt[5] == 0x80
 }
 
+func isSetTrackPowerOn(header uint16, pkt []byte) bool {
+	return header == HeaderXBus && len(pkt) >= 6 && pkt[4] == 0x21 && pkt[5] == 0x81
+}
+
 func buildBCStoppedReply() []byte {
-	x := []byte{0x81}
+	x := []byte{0x81, 0x00}
 	x = append(x, xorSum(x))
 	return buildXBusReply(x)
+}
+
+func buildBCTrackPowerReply(on bool) []byte {
+	state := byte(0x00)
+	if on {
+		state = 0x01
+	}
+	x := []byte{0x61, state}
+	x = append(x, xorSum(x))
+	return buildXBusReply(x)
+}
+
+func (s *Server) broadcastTrackPower(on bool) {
+	if s.conn == nil {
+		return
+	}
+	pkt := buildBCTrackPowerReply(on)
+	for _, client := range s.registry.Snapshot() {
+		if s.registry.BroadcastFlags(client.Key)&broadcastFlagDriving == 0 {
+			continue
+		}
+		_ = s.writeUDP(&client.Addr, client.Key, pkt)
+	}
 }
 
 func (s *Server) handleSetStop(ctx context.Context, remote *net.UDPAddr, client *Client) {
@@ -78,4 +105,29 @@ func (s *Server) handleTrackPowerOff(ctx context.Context, client *Client) {
 			"userId": p.UserID,
 		}).Info("z21 handset radio stop")
 	}
+	s.broadcastTrackPower(false)
+}
+
+func (s *Server) handleTrackPowerOn(ctx context.Context, client *Client) {
+	p, ok := s.registry.Paired(client.Key)
+	if !ok || s.cfg.Drive == nil {
+		return
+	}
+	// Station-local: any paired handset may restore power on this CS only.
+	if err := s.cfg.Drive.TriggerStationTrackPowerOn(ctx, p.UserID, contract.RemoteProtocolZ21); err != nil {
+		if s.log != nil {
+			s.log.WithError(err).WithFields(logrus.Fields{
+				"client": client.Key,
+				"userId": p.UserID,
+			}).Warn("z21 track power on failed")
+		}
+		return
+	}
+	if s.log != nil {
+		s.log.WithFields(logrus.Fields{
+			"client": client.Key,
+			"userId": p.UserID,
+		}).Info("z21 handset track power on")
+	}
+	s.broadcastTrackPower(true)
 }

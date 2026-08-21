@@ -94,8 +94,20 @@ func (z *Z21Roco) buildProgWritePacket(lcv LocoCV) []byte {
 
 // Track power ON (get back from programming mode)
 func (z *Z21Roco) buildTrackPowerOn() []byte {
+	return z.buildTrackPower(true)
+}
+
+func (z *Z21Roco) buildTrackPowerOff() []byte {
+	return z.buildTrackPower(false)
+}
+
+func (z *Z21Roco) buildTrackPower(on bool) []byte {
 	const dataLen, header = 0x0007, 0x0040
-	x := []byte{0x21, 0x81}
+	db0 := byte(0x80)
+	if on {
+		db0 = 0x81
+	}
+	x := []byte{0x21, db0}
 	x = append(x, xorSum(x))
 	buf := make([]byte, 0, 2+2+len(x))
 	tmp := make([]byte, 2)
@@ -104,6 +116,15 @@ func (z *Z21Roco) buildTrackPowerOn() []byte {
 	binary.LittleEndian.PutUint16(tmp, header)
 	buf = append(buf, tmp...)
 	return append(buf, x...)
+}
+
+// SetTrackPower implements TrackPowerController via LAN_X_SET_TRACK_POWER_*.
+func (z *Z21Roco) SetTrackPower(on bool) error {
+	if z == nil || z.conn == nil {
+		return ErrTrackPowerUnsupported
+	}
+	_, err := z.write(z.buildTrackPower(on))
+	return err
 }
 
 // buildSetBroadcastFlags builds LAN_SET_BROADCASTFLAGS (§2.16). This is

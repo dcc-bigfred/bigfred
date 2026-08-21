@@ -1,6 +1,7 @@
 package commandstation
 
 import (
+	"errors"
 	"fmt"
 	"time"
 )
@@ -161,6 +162,15 @@ type Station interface {
 	GetSpeed(addr LocoAddr) (speed uint8, forward bool, err error)
 	CleanUp() error
 }
+
+// TrackPowerController is implemented by stations that can switch main-track
+// power (LocoNet GPON/GPOFF, Z21 LAN_X_SET_TRACK_POWER_*).
+type TrackPowerController interface {
+	SetTrackPower(on bool) error
+}
+
+// ErrTrackPowerUnsupported is returned when the station cannot switch track power.
+var ErrTrackPowerUnsupported = errors.New("commandstation: track power not supported")
 
 // CV number
 type CVNum uint16

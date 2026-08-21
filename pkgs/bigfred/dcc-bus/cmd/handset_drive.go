@@ -4,8 +4,11 @@ import (
 	"context"
 	"time"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/keskad/loco/pkgs/bigfred/contract"
 	"github.com/keskad/loco/pkgs/bigfred/remotes"
+	"github.com/keskad/loco/pkgs/loco/commandstation"
 )
 
 // CollectHandsetDriveTargets returns locomotive addresses that should be
@@ -92,6 +95,30 @@ func (r *Router) TriggerLayoutRadioStop(ctx context.Context, userID uint, source
 		TriggeredByLogin:  source,
 		At:                time.Now().UTC().UnixMilli(),
 	})
+}
+
+// TriggerStationTrackPowerOn turns main-track power on for this daemon's
+// command station when the hardware supports it (LocoNet GPON, Z21
+// LAN_X_SET_TRACK_POWER_ON). It does not fan out to other stations on the
+// same layout; radio stop remains the layout-wide path.
+func (r *Router) TriggerStationTrackPowerOn(_ context.Context, userID uint, source string) error {
+	if r == nil || r.station == nil {
+		return commandstation.ErrTrackPowerUnsupported
+	}
+	ctrl, ok := r.station.(commandstation.TrackPowerController)
+	if !ok {
+		return commandstation.ErrTrackPowerUnsupported
+	}
+	if err := ctrl.SetTrackPower(true); err != nil {
+		return err
+	}
+	if r.log != nil {
+		r.log.WithFields(logrus.Fields{
+			"userId": userID,
+			"source": source,
+		}).Info("dcc-bus track power on")
+	}
+	return nil
 }
 
 // AuthorizeHandsetDrive checks handset vehicle scope and roster drive policy.

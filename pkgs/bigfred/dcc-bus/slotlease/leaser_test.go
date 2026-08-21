@@ -43,8 +43,8 @@ func (f *fakeStation) ReleaseSlot(addr commandstation.LocoAddr) error {
 }
 
 type fakeWriter struct {
-	mu            sync.Mutex
-	calls         []struct {
+	mu    sync.Mutex
+	calls []struct {
 		addr      uint16
 		speed     uint8
 		forward   bool
@@ -277,6 +277,9 @@ func TestSweepIdleReleasesRemoteOnly(t *testing.T) {
 	st.mu.Unlock()
 	if released != 1 {
 		t.Fatalf("released = %d, want 1 after idle sweep", released)
+	}
+	if got := l.DiagnosticSnapshot().PerUser[1]; got != 0 {
+		t.Fatalf("perUser[1] = %d, want 0 after idle sweep", got)
 	}
 }
 

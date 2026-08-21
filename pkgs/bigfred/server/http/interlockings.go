@@ -51,7 +51,7 @@ func (h *InterlockingHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := h.occupancy.ListForLayout(r.Context(), id.Layout.ID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 
@@ -68,7 +68,7 @@ func (h *InterlockingHandler) List(w http.ResponseWriter, r *http.Request) {
 func (h *InterlockingHandler) ListCatalogue(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.svc.ListAll(r.Context())
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	out := make([]protocol.InterlockingResponse, 0, len(rows))
@@ -103,7 +103,7 @@ func (h *InterlockingHandler) Get(w http.ResponseWriter, r *http.Request) {
 			errors.Is(err, service.ErrInterlockingNotInLayout):
 			writeJSONError(w, http.StatusNotFound, "interlocking_not_found")
 		default:
-			writeJSONError(w, http.StatusInternalServerError, "internal_error")
+			writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		}
 		return
 	}
@@ -120,7 +120,7 @@ func (h *InterlockingHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	eff, err := h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	var req protocol.InterlockingCreateRequest
@@ -152,7 +152,7 @@ func (h *InterlockingHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	eff, err := h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	var req protocol.InterlockingUpdateRequest
@@ -183,7 +183,7 @@ func (h *InterlockingHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	eff, err := h.auth.Effective(r.Context(), actor.User, actor.Layout.ID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	if err := h.svc.Delete(r.Context(), eff, interlockingID); err != nil {
@@ -212,7 +212,7 @@ func (h *InterlockingHandler) Join(w http.ResponseWriter, r *http.Request) {
 
 	isSignalman, err := h.auth.IsEffectiveSignalman(r.Context(), id.User, id.Layout.ID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	if !isSignalman {
@@ -264,7 +264,7 @@ func (h *InterlockingHandler) Leave(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.occupancy.Leave(r.Context(), interlockingID, id.Layout.ID, id.User); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -281,11 +281,11 @@ func writeInterlockingOccupancyError(w http.ResponseWriter, err error) {
 	case errors.Is(err, service.ErrNotSignalman):
 		writeJSONError(w, http.StatusForbidden, "not_signalman")
 	default:
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 	}
 }
 
 func writeInterlockingError(w http.ResponseWriter, err error) {
 	status, code := svcerrors.InterlockingHTTPStatus(err)
-	writeJSONError(w, status, code)
+	writeJSONErrorCause(w, status, code, err)
 }

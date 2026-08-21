@@ -50,7 +50,7 @@ func (h *MicroinitHandler) ListServices(w http.ResponseWriter, _ *http.Request) 
 			writeJSONError(w, http.StatusServiceUnavailable, "service_unavailable")
 			return
 		}
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -69,7 +69,7 @@ func (h *MicroinitHandler) Info(w http.ResponseWriter, _ *http.Request) {
 			writeJSONError(w, http.StatusServiceUnavailable, "service_unavailable")
 			return
 		}
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -97,7 +97,7 @@ func (h *MicroinitHandler) StreamLogs(w http.ResponseWriter, r *http.Request) {
 	}
 	eff, err := h.auth.Effective(r.Context(), id.User, id.Layout.ID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal_error")
+		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	if !eff.Has(domain.RoleAdmin) {

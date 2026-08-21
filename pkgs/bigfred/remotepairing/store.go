@@ -19,12 +19,27 @@ import (
 )
 
 var (
-	ErrDuplicatePair      = errors.New("remotepairing: duplicate pairing code among pending requests")
-	ErrInvalidPairingCV   = errors.New("remotepairing: invalid pairing CV value")
-	ErrUserAlreadyPaired  = errors.New("remotepairing: user already has an active handset session")
+	ErrDuplicatePair     = errors.New("remotepairing: duplicate pairing code among pending requests")
+	ErrInvalidPairingCV  = errors.New("remotepairing: invalid pairing CV value")
+	ErrUserAlreadyPaired = errors.New("remotepairing: user already has an active handset session")
 )
 
 const maxPairGenerationAttempts = 32
+
+// luaDropEmptyArrays omits empty Lua tables before cjson.encode so Redis
+// lua-cjson does not rewrite vehicleIds/allowedAddrs from [] to {}.
+const luaDropEmptyArrays = `
+local function drop_empty(t, key)
+  local v = t[key]
+  if type(v) == 'table' and next(v) == nil then
+    t[key] = nil
+  end
+end
+local function drop_empty_scope(s)
+  drop_empty(s, 'vehicleIds')
+  drop_empty(s, 'allowedAddrs')
+end
+`
 
 // dedupTTLSlack extends the dedup SET TTL past the pending req TTL so the
 // SET auto-cleans once the last pending req on a command station expires.
@@ -89,11 +104,12 @@ return 1
 // read-modify-write race between TouchSeen (per-packet) and
 // UpdateSessionScope (PATCH). It also preserves an existing TTL so a
 // scope update on a sticky session does not strip its expiry.
-var touchSeenScript = redis.NewScript(`
+var touchSeenScript = redis.NewScript(luaDropEmptyArrays + `
 local v = redis.call('GET', KEYS[1])
 if v == false then return 0 end
 local s = cjson.decode(v)
 s['lastSeenAt'] = tonumber(ARGV[1])
+drop_empty_scope(s)
 local ttl = redis.call('PTTL', KEYS[1])
 if ARGV[2] ~= '' then
   ttl = tonumber(ARGV[2])
@@ -112,10 +128,10 @@ return 1
 
 // touchSeenBatchScript atomically updates lastSeenAt on many active
 // sessions in one round-trip. KEYS are active keys; ARGV[1] is the TTL
-// in ms (or '' to preserve each key's existing TTL); ARGV[i+1] is the
+// in ms (or an empty string to preserve each key's existing TTL); ARGV[i+1] is the
 // lastSeenAt for KEYS[i]. Missing keys are skipped silently (evicted
 // concurrently). Used by the coordinator's batched seen-flusher (WS-1b).
-var touchSeenBatchScript = redis.NewScript(`
+var touchSeenBatchScript = redis.NewScript(luaDropEmptyArrays + `
 local ttl = ARGV[1]
 local layoutId = ARGV[2]
 local csId = ARGV[3]
@@ -124,6 +140,7 @@ for i = 1, #KEYS do
   if v then
     local s = cjson.decode(v)
     s['lastSeenAt'] = tonumber(ARGV[i+3])
+    drop_empty_scope(s)
     if ttl ~= '' then
       redis.call('SET', KEYS[i], cjson.encode(s), 'PX', ttl)
       if s['userId'] and s['clientKey'] then
@@ -146,13 +163,14 @@ return #KEYS
 // updateSessionScopeScript atomically rewrites the vehicle scope on an
 // active session while preserving its TTL (sticky sessions keep their
 // idle expiry). Returns 1 when the session existed, 0 otherwise.
-var updateSessionScopeScript = redis.NewScript(`
+var updateSessionScopeScript = redis.NewScript(luaDropEmptyArrays + `
 local v = redis.call('GET', KEYS[1])
 if v == false then return 0 end
 local s = cjson.decode(v)
 s['vehicleIds'] = cjson.decode(ARGV[1])
 s['allowedAddrs'] = cjson.decode(ARGV[2])
 s['allowAllVehicles'] = (ARGV[3] == '1')
+drop_empty_scope(s)
 local ttl = redis.call('PTTL', KEYS[1])
 if ttl and ttl > 0 then
   redis.call('SET', KEYS[1], cjson.encode(s), 'PX', ttl)
@@ -324,14 +342,15 @@ type CreateZ21PairingInput struct {
 
 // CreateWithrottlePairingInput carries the user-selected vehicle scope for WiThrottle pairing.
 type CreateWithrottlePairingInput struct {
-	LayoutID         uint
-	CommandStationID uint
-	UserID           uint
-	UserLogin        string
-	VehicleIDs       []string
-	AllowedAddrs     []uint16
-	AllowAllVehicles bool
-	HandsetBrakeSecs uint
+	LayoutID          uint
+	CommandStationID  uint
+	UserID            uint
+	UserLogin         string
+	VehicleIDs        []string
+	AllowedAddrs      []uint16
+	AllowAllVehicles  bool
+	HandsetBrakeSecs  uint
+	ExpectedClientKey string
 }
 
 // CreateWithrottlePairingRequest generates a unique 6-digit code and stores a WiThrottle pending req.
@@ -362,19 +381,20 @@ func (s *Store) CreateWithrottlePairingRequest(ctx context.Context, in CreateWit
 		}
 
 		req := contract.RemotePendingWire{
-			LayoutID:         in.LayoutID,
-			CommandStationID: in.CommandStationID,
-			Protocol:         contract.RemoteProtocolWithrottle,
-			UserID:           in.UserID,
-			UserLogin:        in.UserLogin,
-			ReqID:            reqID,
-			DisplayLabel:     contract.WithrottlePairingDisplayLabel(code),
-			VehicleIDs:       append([]string(nil), in.VehicleIDs...),
-			AllowedAddrs:     append([]uint16(nil), in.AllowedAddrs...),
-			AllowAllVehicles: in.AllowAllVehicles,
-			HandsetBrakeSecs: contract.NormaliseHandsetBrakeSecs(in.HandsetBrakeSecs),
-			CreatedAt:        now,
-			PairingCode:      code,
+			LayoutID:          in.LayoutID,
+			CommandStationID:  in.CommandStationID,
+			Protocol:          contract.RemoteProtocolWithrottle,
+			UserID:            in.UserID,
+			UserLogin:         in.UserLogin,
+			ReqID:             reqID,
+			DisplayLabel:      contract.WithrottlePairingDisplayLabel(code),
+			VehicleIDs:        append([]string(nil), in.VehicleIDs...),
+			AllowedAddrs:      append([]uint16(nil), in.AllowedAddrs...),
+			AllowAllVehicles:  in.AllowAllVehicles,
+			HandsetBrakeSecs:  contract.NormaliseHandsetBrakeSecs(in.HandsetBrakeSecs),
+			CreatedAt:         now,
+			PairingCode:       code,
+			ExpectedClientKey: in.ExpectedClientKey,
 		}
 		payload, err := contract.MarshalRemotePending(req)
 		if err != nil {
@@ -456,6 +476,34 @@ func (s *Store) GetActiveByClientKey(ctx context.Context, layoutID, commandStati
 	return active, true, nil
 }
 
+// GetActiveByClientKeyTTL loads a paired session and its remaining Redis TTL.
+func (s *Store) GetActiveByClientKeyTTL(ctx context.Context, layoutID, commandStationID uint, clientKey string) (contract.RemoteSessionWire, time.Duration, bool, error) {
+	key := contract.RemotePairingActiveKey(layoutID, commandStationID, clientKey)
+	pipe := s.client.Pipeline()
+	get := pipe.Get(ctx, key)
+	pttl := pipe.PTTL(ctx, key)
+	_, err := pipe.Exec(ctx)
+	if err != nil && !errors.Is(err, redis.Nil) {
+		return contract.RemoteSessionWire{}, 0, false, err
+	}
+	raw, err := get.Result()
+	if errors.Is(err, redis.Nil) {
+		return contract.RemoteSessionWire{}, 0, false, nil
+	}
+	if err != nil {
+		return contract.RemoteSessionWire{}, 0, false, err
+	}
+	active, err := contract.UnmarshalRemoteSession([]byte(raw))
+	if err != nil {
+		return contract.RemoteSessionWire{}, 0, false, err
+	}
+	ttl, err := pttl.Result()
+	if err != nil || ttl < 0 {
+		return active, 0, true, nil
+	}
+	return active, ttl, true, nil
+}
+
 // ListActiveByUser returns the active session for userID, if any (at most one).
 func (s *Store) ListActiveByUser(ctx context.Context, layoutID, commandStationID, userID uint) ([]contract.RemoteSessionWire, error) {
 	byUserKey := contract.RemotePairingByUserKey(layoutID, commandStationID, userID)
@@ -491,6 +539,9 @@ func (s *Store) CompletePairing(ctx context.Context, layoutID, commandStationID 
 	req, err := contract.UnmarshalRemotePending([]byte(raw))
 	if err != nil {
 		return contract.RemoteSessionWire{}, false, "", err
+	}
+	if req.ExpectedClientKey != "" && req.ExpectedClientKey != clientKey {
+		return contract.RemoteSessionWire{}, false, "", nil
 	}
 
 	active := contract.RemoteSessionWire{

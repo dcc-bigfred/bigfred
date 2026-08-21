@@ -348,6 +348,13 @@ func (s *Server) handlePacket(ctx context.Context, remote *net.UDPAddr, pkt []by
 			}
 			return
 		}
+		if isSetLocoEStop(header, pkt) {
+			handled = true
+			if addr, ok := parseSetLocoEStop(pkt); ok {
+				s.sendVirtualLoco(ctx, client, s.virtual.SetSpeed(client.Key, addr, 0, true))
+			}
+			return
+		}
 		if isSetLocoFunction(header, pkt) {
 			handled = true
 			if addr, fn, sw, ok := parseSetLocoFunction(pkt); ok {
@@ -393,6 +400,15 @@ func (s *Server) handlePacket(ctx context.Context, remote *net.UDPAddr, pkt []by
 	case isSetTrackPowerOff(header, pkt):
 		handled = true
 		s.handleTrackPowerOff(ctx, client)
+	case isSetTrackPowerOn(header, pkt):
+		handled = true
+		s.handleTrackPowerOn(ctx, client)
+	case isSetLocoEStop(header, pkt):
+		handled = true
+		s.adapter.HandleSetLocoEStop(ctx, client, pkt)
+	case isPurgeLoco(header, pkt):
+		handled = true
+		s.adapter.HandlePurgeLoco(client, pkt)
 	case header == HeaderSetBroadcastFlags:
 		handled = true
 		s.adapter.HandleSetBroadcastFlags(client, pkt)
@@ -438,6 +454,14 @@ func isSetLocoFunctionGroup(header uint16, pkt []byte) bool {
 
 func isGetLocoInfo(header uint16, pkt []byte) bool {
 	return header == HeaderXBus && len(pkt) >= 6 && pkt[4] == 0xE3 && pkt[5] == 0xF0
+}
+
+func isSetLocoEStop(header uint16, pkt []byte) bool {
+	return header == HeaderXBus && len(pkt) >= 8 && pkt[4] == 0x92
+}
+
+func isPurgeLoco(header uint16, pkt []byte) bool {
+	return header == HeaderXBus && len(pkt) >= 9 && pkt[4] == 0xE3 && pkt[5] == 0x44
 }
 
 func (s *Server) handleUnpairedPairingFn(ctx context.Context, client *Client, locoAddr uint16, fn int) bool {

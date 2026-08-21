@@ -672,22 +672,20 @@ export default function RemotesPage() {
                                 label={t("remotes:clients.idleBraked")}
                               />
                             )}
-                            {row.paired &&
-                              clients.data.ipStickiness &&
-                              row.sessionExpiresAt != null && (
-                                <Typography
-                                  variant="caption"
-                                  display="block"
-                                  color="text.secondary"
-                                >
-                                  {t("remotes:clients.sessionExpires", {
-                                    time: formatTime(
-                                      row.sessionExpiresAt,
-                                      i18n.language,
-                                    ),
-                                  })}
-                                </Typography>
-                              )}
+                            {row.paired && row.sessionExpiresAt != null && (
+                              <Typography
+                                variant="caption"
+                                display="block"
+                                color="text.secondary"
+                              >
+                                {t("remotes:clients.sessionExpires", {
+                                  time: formatTime(
+                                    row.sessionExpiresAt,
+                                    i18n.language,
+                                  ),
+                                })}
+                              </Typography>
+                            )}
                           </TableCell>
                           <TableCell align="right">
                             {row.paired && row.userId === me?.id && (

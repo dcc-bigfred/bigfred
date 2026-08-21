@@ -603,9 +603,10 @@ func (d *Daemon) startRemoteGateways(ctx context.Context) error {
 		}
 		remotes.RegisterGatewayFactory(withrottle.GatewayName, withrottle.NewGateway)
 		coordinator.RegisterPolicy(contract.RemoteProtocolWithrottle, remotes.ProtocolPolicy{
-			IdleEvict:        withrottle.IdleEvictAfter * time.Second,
-			StickyIdleEvict:  contract.RemoteStickySessionIdle,
-			HeartbeatTimeout: withrottle.HeartbeatTimeout(heartbeatSecs),
+			IdleEvict:         withrottle.IdleEvictAfter * time.Second,
+			StickyIdleEvict:   contract.RemoteStickySessionIdle,
+			HeartbeatTimeout:  withrottle.HeartbeatTimeout(heartbeatSecs),
+			SweepKeepsPairing: true,
 		})
 		gw, err := remotes.NewGateway(ctx, withrottle.GatewayName, remotes.GatewayConfig{
 			LayoutID:         d.cfg.LayoutID,

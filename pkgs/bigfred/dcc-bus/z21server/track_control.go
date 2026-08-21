@@ -108,9 +108,19 @@ func (s *Server) handleTrackPowerOff(ctx context.Context, client *Client) {
 	s.broadcastTrackPower(false)
 }
 
-func (s *Server) handleTrackPowerOn(client *Client) {
+func (s *Server) handleTrackPowerOn(ctx context.Context, client *Client) {
 	p, ok := s.registry.Paired(client.Key)
-	if !ok {
+	if !ok || s.cfg.Drive == nil {
+		return
+	}
+	// Station-local: any paired handset may restore power on this CS only.
+	if err := s.cfg.Drive.TriggerStationTrackPowerOn(ctx, p.UserID, contract.RemoteProtocolZ21); err != nil {
+		if s.log != nil {
+			s.log.WithError(err).WithFields(logrus.Fields{
+				"client": client.Key,
+				"userId": p.UserID,
+			}).Warn("z21 track power on failed")
+		}
 		return
 	}
 	if s.log != nil {

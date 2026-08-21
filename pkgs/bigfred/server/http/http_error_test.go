@@ -134,3 +134,26 @@ func TestRecovererLogsPanicNotBody(t *testing.T) {
 		t.Fatalf("log missing panic marker: %s", logged)
 	}
 }
+
+func TestRecovererRepanicsAbortHandler(t *testing.T) {
+	log, buf := testErrorLogger()
+	handler := testErrorRouter(log, "/abort", func(http.ResponseWriter, *http.Request) {
+		panic(http.ErrAbortHandler)
+	})
+
+	rec := httptest.NewRecorder()
+	defer func() {
+		recov := recover()
+		if recov != http.ErrAbortHandler {
+			t.Fatalf("recover=%v want ErrAbortHandler", recov)
+		}
+		if rec.Code != 200 {
+			t.Fatalf("status=%d, abort must not write 500", rec.Code)
+		}
+		if buf.Len() != 0 {
+			t.Fatalf("abort must not log: %s", buf.String())
+		}
+	}()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/abort", nil))
+	t.Fatal("expected panic")
+}

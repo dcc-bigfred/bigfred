@@ -402,7 +402,7 @@ func (s *Server) handlePacket(ctx context.Context, remote *net.UDPAddr, pkt []by
 		s.handleTrackPowerOff(ctx, client)
 	case isSetTrackPowerOn(header, pkt):
 		handled = true
-		s.handleTrackPowerOn(client)
+		s.handleTrackPowerOn(ctx, client)
 	case isSetLocoEStop(header, pkt):
 		handled = true
 		s.adapter.HandleSetLocoEStop(ctx, client, pkt)

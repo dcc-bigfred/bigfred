@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -129,5 +130,35 @@ func TestTriggerLayoutRadioStop_publishes(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("expected radio stop publish")
+	}
+}
+
+type recordingPowerStation struct {
+	commandstation.StubStation
+	on bool
+	n  int
+}
+
+func (s *recordingPowerStation) SetTrackPower(on bool) error {
+	s.on = on
+	s.n++
+	return nil
+}
+
+func TestTriggerStationTrackPowerOn_usesLocalStation(t *testing.T) {
+	st := &recordingPowerStation{}
+	r := &Router{station: st}
+	if err := r.TriggerStationTrackPowerOn(context.Background(), 11, "z21"); err != nil {
+		t.Fatal(err)
+	}
+	if st.n != 1 || !st.on {
+		t.Fatalf("SetTrackPower calls=%d on=%v", st.n, st.on)
+	}
+}
+
+func TestTriggerStationTrackPowerOn_unsupportedWithoutController(t *testing.T) {
+	r := &Router{station: &commandstation.StubStation{}}
+	if err := r.TriggerStationTrackPowerOn(context.Background(), 11, "z21"); !errors.Is(err, commandstation.ErrTrackPowerUnsupported) {
+		t.Fatalf("err=%v", err)
 	}
 }

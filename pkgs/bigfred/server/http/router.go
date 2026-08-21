@@ -123,8 +123,9 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	auditH := NewAuditHandler(cfg.Audit)
 	leaseH := NewLeaseHandler(cfg.Leases, cfg.Auth)
 	remoteH := NewRemoteHandler(cfg.Remote, cfg.Auth)
-	handsetPairingH := NewHandsetPairingHandler(cfg.Auth, cfg.Layouts, cfg.Remote, cfg.Audit)
-	handsetSessionH := NewHandsetSessionHandler(cfg.Auth, cfg.Layouts, cfg.Remote, cfg.Audit)
+	handsetLimiter := newHandsetPairingLimiter()
+	handsetPairingH := NewHandsetPairingHandler(cfg.Auth, cfg.Layouts, cfg.Remote, cfg.Audit, handsetLimiter)
+	handsetSessionH := NewHandsetSessionHandler(cfg.Auth, cfg.Layouts, cfg.Remote, cfg.Audit, handsetLimiter)
 
 	r.Route("/api/v1", func(r chi.Router) {
 		// WebSocket upgrade — auth reads cookie / ?token= inline.

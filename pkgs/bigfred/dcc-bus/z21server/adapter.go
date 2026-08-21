@@ -278,6 +278,10 @@ func (a *Adapter) HandlePurgeLoco(client *Client, pkt []byte) {
 	if !ok {
 		return
 	}
+	if !a.authorize(client, addr) {
+		a.logDriveRejected(client, addr, "purge")
+		return
+	}
 	a.server.registry.UnsubscribeLoco(client.Key, addr)
 	a.drive.Release(a.throttleActor(client), addr)
 }

@@ -60,6 +60,9 @@ func recoverer(next http.Handler) http.Handler {
 			if rec == nil {
 				return
 			}
+			if rec == http.ErrAbortHandler {
+				panic(rec)
+			}
 			logHTTPPanic(w, r, rec)
 			writeJSONErrorBody(w, http.StatusInternalServerError, "internal_error")
 		}()
@@ -102,11 +105,12 @@ func logHTTP500(w http.ResponseWriter, status int, code string, err error) {
 		fields["path"] = r.URL.Path
 		fields["request_id"] = chimiddleware.GetReqID(r.Context())
 	}
+	fields["stack"] = string(debug.Stack())
 	entry := log.WithFields(fields)
 	if err != nil {
 		entry = entry.WithError(err)
 	}
-	entry.Errorf("http %d\n%s", status, debug.Stack())
+	entry.Error("http 500")
 }
 
 func logHTTPPanic(w http.ResponseWriter, r *http.Request, rec any) {
@@ -125,7 +129,8 @@ func logHTTPPanic(w http.ResponseWriter, r *http.Request, rec any) {
 		fields["path"] = r.URL.Path
 		fields["request_id"] = chimiddleware.GetReqID(r.Context())
 	}
-	log.WithFields(fields).Errorf("http panic\n%s", debug.Stack())
+	fields["stack"] = string(debug.Stack())
+	log.WithFields(fields).Error("http panic")
 }
 
 func loggerAndRequest(w http.ResponseWriter) (*logrus.Logger, *http.Request) {

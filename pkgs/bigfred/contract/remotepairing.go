@@ -209,6 +209,9 @@ func (w *RemoteSessionWire) UnmarshalJSON(raw []byte) error {
 // coerceLuaEmptyArrays rewrites "vehicleIds":{} / "allowedAddrs":{} to [].
 // Redis lua-cjson encodes empty Lua tables as objects, not arrays.
 func coerceLuaEmptyArrays(raw []byte) ([]byte, error) {
+	if !bytes.Contains(raw, []byte("{}")) {
+		return raw, nil
+	}
 	var obj map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &obj); err != nil {
 		return nil, err

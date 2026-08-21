@@ -24,6 +24,9 @@ func (acquireOrderDrive) ApplyHandsetIdleBrake(context.Context, remotes.HandsetS
 func (acquireOrderDrive) ApplyHandsetPilotEStop(context.Context, remotes.HandsetSession, uint16) {
 }
 func (acquireOrderDrive) TriggerLayoutRadioStop(context.Context, uint, string) error { return nil }
+func (acquireOrderDrive) TriggerStationTrackPowerOn(context.Context, uint, string) error {
+	return nil
+}
 func (acquireOrderDrive) ReadLocoCV(uint16, commandstation.CVNum) (int, error) {
 	return 0, nil
 }
@@ -166,5 +169,80 @@ func TestHandleActionUnauthorizedSendsHM(t *testing.T) {
 	case <-done:
 	case <-time.After(2 * time.Second):
 		t.Fatal("HandleAction did not finish")
+	}
+}
+
+type failSubscribeDrive struct{ acquireOrderDrive }
+
+func (failSubscribeDrive) Subscribe(context.Context, remotes.ThrottleActor, remotes.ThrottleResponder, []uint16) remotes.CommandResult {
+	return remotes.CommandResult{OK: false, Code: "busy"}
+}
+
+func TestHandleAcquireFailureReleasesLoco(t *testing.T) {
+	srv, err := New(Config{
+		LayoutID:         1,
+		CommandStationID: 1,
+		SpeedSteps:       128,
+		Drive:            failSubscribeDrive{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	clientConn, serverConn := net.Pipe()
+	defer clientConn.Close()
+	defer serverConn.Close()
+	client := srv.registry.TouchByDeviceId("fail-acquire", serverConn, time.Now().UTC())
+	srv.registry.SetPaired(client.Key, &contract.RemoteSessionWire{
+		ClientKey:        client.Key,
+		UserID:           7,
+		AllowAllVehicles: true,
+	})
+
+	done := make(chan struct{})
+	go func() {
+		srv.adapter.HandleAcquire(context.Background(), client, MCommand{
+			ThrottleID: '0',
+			Op:         MOpAdd,
+			LocoKey:    "S3",
+		})
+		close(done)
+	}()
+
+	if err := clientConn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	scanner := bufio.NewScanner(clientConn)
+	var lines []string
+	for scanner.Scan() {
+		line := strings.TrimRight(scanner.Text(), "\r\n")
+		lines = append(lines, line)
+		if strings.HasPrefix(line, "HM") {
+			break
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		t.Fatal(err)
+	}
+	var sawRelease, sawHM bool
+	for _, line := range lines {
+		if line == "M0-S3<;>" {
+			sawRelease = true
+		}
+		if line == "HMbusy" {
+			sawHM = true
+		}
+	}
+	if !sawRelease || !sawHM {
+		t.Fatalf("lines=%q want M0-S3 release and HMbusy", lines)
+	}
+	srv.registry.withThrottle(client.Key, '0', func(tw *throttleWire) {
+		if _, ok := tw.locos[3]; ok {
+			t.Fatal("failed acquire left loco in throttle wire")
+		}
+	})
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("acquire did not finish")
 	}
 }

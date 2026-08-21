@@ -37,6 +37,10 @@ func (s *stubInboundDrive) TriggerLayoutRadioStop(context.Context, uint, string)
 	return nil
 }
 
+func (s *stubInboundDrive) TriggerStationTrackPowerOn(context.Context, uint, string) error {
+	return nil
+}
+
 func (s *stubInboundDrive) ReadLocoCV(uint16, commandstation.CVNum) (int, error) {
 	return 0, nil
 }
@@ -164,6 +168,11 @@ func TestHandlePurgeLocoReleasesAndUnsubscribes(t *testing.T) {
 		false,
 	)
 	srv.registry.SubscribeLoco(client.Key, addr)
+	srv.registry.SetPaired(client.Key, &contract.Z21PairingActiveWire{
+		ClientKey:        client.Key,
+		UserID:           7,
+		AllowAllVehicles: true,
+	})
 	x := []byte{0xE3, 0x44, 0x00, byte(addr)}
 	x = append(x, xorSum(x))
 	adapter.HandlePurgeLoco(client, buildXBusReply(x))

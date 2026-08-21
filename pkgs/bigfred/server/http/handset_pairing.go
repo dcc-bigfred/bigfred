@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net"
 	"net/http"
 	"strings"
@@ -20,8 +21,7 @@ import (
 
 const (
 	handsetPairingWindow   = time.Minute
-	handsetPairingAttempts = 5
-	handsetSessionAttempts = 30
+	handsetPairingAttempts = 30
 	maxHandsetPairingBody  = 4096
 	maxHandsetDeviceIDLen  = 32
 	maxHandsetRateKeys     = 1024
@@ -31,6 +31,7 @@ type handsetPairingRequest struct {
 	Login    string `json:"login"`
 	PIN      string `json:"pin"`
 	DeviceID string `json:"deviceId"`
+	LayoutID uint   `json:"layoutId"`
 }
 
 type handsetPairingResponse struct {
@@ -58,38 +59,48 @@ func newHandsetPairingLimiter() *handsetPairingLimiter {
 	}
 }
 
-func (l *handsetPairingLimiter) allow(ip, login string, now time.Time) bool {
-	return l.allowAt(ip, login, now, handsetPairingAttempts)
-}
-
-func (l *handsetPairingLimiter) allowAt(ip, login string, now time.Time, max int) bool {
+func (l *handsetPairingLimiter) blocked(ip, login string, now time.Time) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	pruneHandsetBuckets(l.byIP, now)
+	pruneHandsetBuckets(l.byLogin, now)
 	ipBucket := currentHandsetBucket(l.byIP[ip], now)
 	loginKey := strings.ToLower(login)
 	loginBucket := currentHandsetBucket(l.byLogin[loginKey], now)
+	return ipBucket.count >= handsetPairingAttempts || loginBucket.count >= handsetPairingAttempts
+}
+
+// recordFailure counts one failed auth attempt. Successful logins are not
+// counted so a reconnecting handset does not lock itself out. New keys are
+// skipped when the map is full so a flood of distinct IPs/logins cannot
+// fail-close pairing for everyone.
+func (l *handsetPairingLimiter) recordFailure(ip, login string, now time.Time) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	pruneHandsetBuckets(l.byIP, now)
 	pruneHandsetBuckets(l.byLogin, now)
-	if _, ok := l.byIP[ip]; !ok && len(l.byIP) >= maxHandsetRateKeys {
-		return false
+	loginKey := strings.ToLower(login)
+	recordHandsetFailure(l.byIP, ip, now)
+	recordHandsetFailure(l.byLogin, loginKey, now)
+}
+
+func recordHandsetFailure(buckets map[string]handsetRateBucket, key string, now time.Time) {
+	if key == "" {
+		return
 	}
-	if _, ok := l.byLogin[loginKey]; !ok && len(l.byLogin) >= maxHandsetRateKeys {
-		return false
+	bucket := currentHandsetBucket(buckets[key], now)
+	if _, ok := buckets[key]; !ok && len(buckets) >= maxHandsetRateKeys {
+		return
 	}
-	if ipBucket.count >= max || loginBucket.count >= max {
-		return false
+	if bucket.count >= handsetPairingAttempts {
+		buckets[key] = bucket
+		return
 	}
-	ipBucket.count++
-	loginBucket.count++
-	l.byIP[ip] = ipBucket
-	l.byLogin[loginKey] = loginBucket
-	return true
+	bucket.count++
+	buckets[key] = bucket
 }
 
 func pruneHandsetBuckets(buckets map[string]handsetRateBucket, now time.Time) {
-	if len(buckets) < maxHandsetRateKeys {
-		return
-	}
 	for key, bucket := range buckets {
 		if now.Sub(bucket.start) >= handsetPairingWindow {
 			delete(buckets, key)
@@ -114,10 +125,13 @@ type HandsetPairingHandler struct {
 	limiter *handsetPairingLimiter
 }
 
-func NewHandsetPairingHandler(auth *cmd.Auth, layouts *cmd.Layout, remote *cmd.Remote, audit cmd.AuditPublisher) *HandsetPairingHandler {
+func NewHandsetPairingHandler(auth *cmd.Auth, layouts *cmd.Layout, remote *cmd.Remote, audit cmd.AuditPublisher, limiter *handsetPairingLimiter) *HandsetPairingHandler {
+	if limiter == nil {
+		limiter = newHandsetPairingLimiter()
+	}
 	return &HandsetPairingHandler{
 		auth: auth, layouts: layouts, remote: remote, audit: audit,
-		limiter: newHandsetPairingLimiter(),
+		limiter: limiter,
 	}
 }
 
@@ -131,17 +145,19 @@ func (h *HandsetPairingHandler) Start(w http.ResponseWriter, r *http.Request) {
 	req.Login = strings.TrimSpace(req.Login)
 	req.DeviceID = strings.TrimSpace(req.DeviceID)
 	ip := handsetClientIP(r)
-	if !h.limiter.allow(ip, req.Login, time.Now()) {
-		h.auditResult(r, 0, 0, req.Login, req.DeviceID, ip, "rate_limited")
+	now := time.Now()
+	if h.limiter.blocked(ip, req.Login, now) {
 		writeJSONError(w, http.StatusTooManyRequests, "rate_limited")
 		return
 	}
 	if req.Login == "" || !validHandsetDeviceID(req.DeviceID) {
+		h.limiter.recordFailure(ip, req.Login, now)
 		h.auditResult(r, 0, 0, req.Login, req.DeviceID, ip, "invalid_request")
 		writeJSONError(w, http.StatusBadRequest, "invalid_request")
 		return
 	}
 	if err := validation.ValidateUserPIN(req.PIN); err != nil {
+		h.limiter.recordFailure(ip, req.Login, now)
 		h.auditResult(r, 0, 0, req.Login, req.DeviceID, ip, "invalid_pin")
 		status, code := svcerrors.UserHTTPStatus(err)
 		writeJSONErrorCause(w, status, code, err)
@@ -159,10 +175,10 @@ func (h *HandsetPairingHandler) Start(w http.ResponseWriter, r *http.Request) {
 		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
-	layoutID, commandStationID, err := selectHandsetWithrottleStation(r.Context(), h.layouts, layouts)
+	layoutID, commandStationID, err := selectHandsetWithrottleStation(r.Context(), h.layouts, layouts, req.LayoutID)
 	if err != nil {
-		h.auditResult(r, 0, 0, req.Login, req.DeviceID, ip, "internal_error")
-		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
+		h.auditResult(r, 0, 0, req.Login, req.DeviceID, ip, handsetSelectAuditResult(err))
+		writeHandsetSelectError(w, err)
 		return
 	}
 	if commandStationID == 0 {
@@ -172,6 +188,7 @@ func (h *HandsetPairingHandler) Start(w http.ResponseWriter, r *http.Request) {
 	}
 	identity, err := h.auth.Login(r.Context(), req.Login, req.PIN, layoutID)
 	if err != nil {
+		h.limiter.recordFailure(ip, req.Login, now)
 		h.auditResult(r, layoutID, 0, req.Login, req.DeviceID, ip, "invalid_credentials")
 		status, code := svcerrors.AuthHTTPStatus(err)
 		writeJSONErrorCause(w, status, code, err)
@@ -206,22 +223,68 @@ func (h *HandsetPairingHandler) Start(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func selectHandsetWithrottleStation(ctx context.Context, layouts *cmd.Layout, listed []domain.Layout) (layoutID, commandStationID uint, err error) {
+var errHandsetLayoutUnavailable = errors.New("handset layout unavailable")
+
+func selectHandsetWithrottleStation(ctx context.Context, layouts *cmd.Layout, listed []domain.Layout, preferredLayoutID uint) (layoutID, commandStationID uint, err error) {
+	if preferredLayoutID != 0 {
+		layout, found := layoutByID(listed, preferredLayoutID)
+		if !found {
+			return 0, 0, errHandsetLayoutUnavailable
+		}
+		csID, pickErr := pickHandsetWithrottleStation(ctx, layouts, layout)
+		return layout.ID, csID, pickErr
+	}
 	for _, layout := range listed {
 		if layout.IsSystem {
 			continue
 		}
-		stations, listErr := layouts.ListCommandStations(ctx, layout.ID)
-		if listErr != nil {
-			return 0, 0, listErr
+		csID, pickErr := pickHandsetWithrottleStation(ctx, layouts, layout)
+		if pickErr != nil {
+			return 0, 0, pickErr
 		}
-		for _, station := range stations {
-			if station.WithrottleServerEnabled && !station.HideInThrottle {
-				return layout.ID, station.ID, nil
-			}
+		if csID != 0 {
+			return layout.ID, csID, nil
 		}
 	}
 	return 0, 0, nil
+}
+
+func layoutByID(listed []domain.Layout, id uint) (domain.Layout, bool) {
+	for _, layout := range listed {
+		if layout.ID == id {
+			return layout, true
+		}
+	}
+	return domain.Layout{}, false
+}
+
+func pickHandsetWithrottleStation(ctx context.Context, layouts *cmd.Layout, layout domain.Layout) (uint, error) {
+	stations, err := layouts.ListCommandStations(ctx, layout.ID)
+	if err != nil {
+		return 0, err
+	}
+	for _, station := range stations {
+		if station.WithrottleServerEnabled && !station.HideInThrottle {
+			return station.ID, nil
+		}
+	}
+	return 0, nil
+}
+
+func writeHandsetSelectError(w http.ResponseWriter, err error) {
+	if errors.Is(err, errHandsetLayoutUnavailable) {
+		writeJSONError(w, http.StatusBadRequest, "invalid_request")
+		return
+	}
+	status, code := svcerrors.LayoutHTTPStatus(err)
+	writeJSONErrorCause(w, status, code, err)
+}
+
+func handsetSelectAuditResult(err error) string {
+	if errors.Is(err, errHandsetLayoutUnavailable) {
+		return "invalid_request"
+	}
+	return "internal_error"
 }
 
 func validHandsetDeviceID(id string) bool {

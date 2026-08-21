@@ -170,6 +170,7 @@ func (a *Adapter) HandleAcquire(ctx context.Context, client *Client, cmd MComman
 			delete(tw.locos, addr)
 		})
 		a.logDriveFailure(client, addr, "acquire", result.Code)
+		_ = a.server.writeLine(client.Key, buildReleaseLine(cmd.ThrottleID, key))
 		a.server.writeLine(client.Key, "HM"+result.Code)
 		return
 	}

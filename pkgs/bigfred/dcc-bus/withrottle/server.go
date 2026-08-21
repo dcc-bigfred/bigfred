@@ -345,6 +345,10 @@ func (s *Server) handleAnonymous(ctx context.Context, conn net.Conn, line string
 
 func (s *Server) handleLine(ctx context.Context, conn net.Conn, clientKey, line string) {
 	if s.registry.wire.Conn(clientKey) != conn {
+		s.log.WithFields(logrus.Fields{
+			"client": clientKey,
+			"line":   line,
+		}).Debug("withrottle: dropping line from stale connection")
 		return
 	}
 	client, ok := s.registry.Get(clientKey)
@@ -761,6 +765,14 @@ func (s *Server) evictClient(ctx context.Context, key string) {
 	}
 }
 
+func (s *Server) dropPresence(ctx context.Context, key string) {
+	if s.coordinator != nil {
+		s.coordinator.DropPresence(ctx, key)
+		return
+	}
+	s.registry.Remove(key)
+}
+
 func (s *Server) handleDisconnect(ctx context.Context, clientKey string, staleConn net.Conn) {
 	if clientKey == "" {
 		return
@@ -768,7 +780,7 @@ func (s *Server) handleDisconnect(ctx context.Context, clientKey string, staleCo
 	if s.registry.wire.Conn(clientKey) != staleConn {
 		return
 	}
-	s.evictClient(ctx, clientKey)
+	s.dropPresence(ctx, clientKey)
 }
 
 func (s *Server) noteClientActivity(ctx context.Context, clientKey string) {

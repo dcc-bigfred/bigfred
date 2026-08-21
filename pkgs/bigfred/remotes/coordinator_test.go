@@ -62,8 +62,8 @@ func TestBuildSnapshotSessionExpiresAt(t *testing.T) {
 
 	c.RegisterPolicy(contract.RemoteProtocolZ21, ProtocolPolicy{IPStickiness: false, StickyIdleEvict: 30 * time.Minute})
 	snap = c.BuildSnapshot()
-	if snap.Clients[0].SessionExpiresAt == 0 {
-		t.Fatal("expected SessionExpiresAt for paired non-sticky client (idle TTL)")
+	if snap.Clients[0].SessionExpiresAt != 0 {
+		t.Fatal("non-sticky Z21 pairing dies with presence; SessionExpiresAt must be omitted")
 	}
 }
 
@@ -295,5 +295,259 @@ func TestCoordinatorEvictClearsVirtualLoco(t *testing.T) {
 	c.Evict(context.Background(), client.Key)
 	if c.VirtualLocos().HasClient(client.Key) {
 		t.Fatal("expected virtual loco state cleared on evict")
+	}
+}
+
+func TestSweepUnpairsIdleZ21WithoutStickiness(t *testing.T) {
+	mr, err := miniredis.Run()
+	if err != nil {
+		t.Fatalf("miniredis: %v", err)
+	}
+	defer mr.Close()
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	defer rdb.Close()
+	store := remotepairing.NewStore(rdb)
+
+	ctx := context.Background()
+	req, err := store.CreateZ21PairingRequest(ctx, remotepairing.CreateZ21PairingInput{
+		LayoutID:         1,
+		CommandStationID: 2,
+		UserID:           9,
+		AllowAllVehicles: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	reg := inbound.NewClientRegistry()
+	c := NewCoordinator(CoordinatorConfig{
+		LayoutID:         1,
+		CommandStationID: 2,
+		Registry:         reg,
+		Store:            store,
+	})
+	c.RegisterPolicy(contract.RemoteProtocolZ21, ProtocolPolicy{
+		IdleEvict:       60 * time.Second,
+		StickyIdleEvict: 72 * time.Hour,
+	})
+	past := time.Now().UTC().Add(-2 * time.Minute)
+	udpAddr, _ := net.ResolveUDPAddr("udp", "10.0.0.8:40001")
+	client := reg.Touch(contract.RemoteProtocolZ21, udpAddr, past, false)
+	if _, ok, _, err := store.PairViaCV3CV4(ctx, 1, 2, req.PairingCV3, req.PairingCV4, client.Key, contract.NowMS()); err != nil || !ok {
+		t.Fatalf("pair: ok=%v err=%v", ok, err)
+	}
+	reg.SetSession(client.Key, &contract.RemoteSessionWire{UserID: 9, ClientKey: client.Key})
+
+	c.sweep(ctx)
+	if _, ok := reg.Get(client.Key); ok {
+		t.Fatal("idle Z21 without stickiness must leave the registry")
+	}
+	if _, ok, err := store.GetActiveByClientKey(ctx, 1, 2, client.Key); err != nil || ok {
+		t.Fatalf("idle Z21 without stickiness must unpair Redis: ok=%v err=%v", ok, err)
+	}
+}
+
+func TestSweepKeepsZ21WithinIdleWindow(t *testing.T) {
+	reg := inbound.NewClientRegistry()
+	c := NewCoordinator(CoordinatorConfig{
+		LayoutID:         1,
+		CommandStationID: 2,
+		Registry:         reg,
+	})
+	c.RegisterPolicy(contract.RemoteProtocolZ21, ProtocolPolicy{
+		IdleEvict:       60 * time.Second,
+		StickyIdleEvict: 72 * time.Hour,
+	})
+	udpAddr, _ := net.ResolveUDPAddr("udp", "10.0.0.8:40001")
+	client := reg.Touch(contract.RemoteProtocolZ21, udpAddr, time.Now().UTC(), false)
+	reg.SetSession(client.Key, &contract.RemoteSessionWire{UserID: 9, ClientKey: client.Key})
+
+	c.sweep(context.Background())
+	if _, ok := reg.Get(client.Key); !ok {
+		t.Fatal("Z21 still inside the idle window must stay")
+	}
+}
+
+func TestSweepKeepsStickyZ21BeyondIdleWindow(t *testing.T) {
+	reg := inbound.NewClientRegistry()
+	c := NewCoordinator(CoordinatorConfig{
+		LayoutID:         1,
+		CommandStationID: 2,
+		Registry:         reg,
+	})
+	c.RegisterPolicy(contract.RemoteProtocolZ21, ProtocolPolicy{
+		IdleEvict:       60 * time.Second,
+		StickyIdleEvict: 72 * time.Hour,
+		IPStickiness:    true,
+	})
+	past := time.Now().UTC().Add(-2 * time.Minute)
+	udpAddr, _ := net.ResolveUDPAddr("udp", "10.0.0.8:40001")
+	client := reg.Touch(contract.RemoteProtocolZ21, udpAddr, past, true)
+	reg.SetSession(client.Key, &contract.RemoteSessionWire{UserID: 9, ClientKey: client.Key})
+
+	c.sweep(context.Background())
+	if _, ok := reg.Get(client.Key); !ok {
+		t.Fatal("sticky Z21 must survive IdleEvict and wait for StickyIdleEvict")
+	}
+}
+
+func TestSweepDropsWithrottlePresenceWithoutUnpair(t *testing.T) {
+	mr, err := miniredis.Run()
+	if err != nil {
+		t.Fatalf("miniredis: %v", err)
+	}
+	defer mr.Close()
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	defer rdb.Close()
+	store := remotepairing.NewStore(rdb)
+
+	ctx := context.Background()
+	req, err := store.CreateWithrottlePairingRequest(ctx, remotepairing.CreateWithrottlePairingInput{
+		LayoutID:         1,
+		CommandStationID: 2,
+		UserID:           9,
+		AllowAllVehicles: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	clientKey := "withrottle:4242"
+	if _, ok, _, err := store.PairViaWithrottleCode(ctx, 1, 2, req.PairingCode, clientKey, contract.NowMS()); err != nil || !ok {
+		t.Fatalf("pair: ok=%v err=%v", ok, err)
+	}
+
+	reg := inbound.NewClientRegistry()
+	c := NewCoordinator(CoordinatorConfig{
+		LayoutID:         1,
+		CommandStationID: 2,
+		Registry:         reg,
+		Store:            store,
+	})
+	c.RegisterPolicy(contract.RemoteProtocolWithrottle, ProtocolPolicy{
+		IdleEvict:         60 * time.Second,
+		StickyIdleEvict:   72 * time.Hour,
+		SweepKeepsPairing: true,
+	})
+	past := time.Now().UTC().Add(-2 * time.Minute)
+	udpAddr, _ := net.ResolveUDPAddr("udp", "10.0.0.8:12090")
+	client := reg.TouchByEndpoint(contract.RemoteProtocolWithrottle, "4242", udpAddr, past)
+	reg.SetSession(client.Key, &contract.RemoteSessionWire{UserID: 9, ClientKey: clientKey})
+
+	c.sweep(ctx)
+	if _, ok := reg.Get(client.Key); ok {
+		t.Fatal("idle WiThrottle must leave the registry")
+	}
+	if _, ok, err := store.GetActiveByClientKey(ctx, 1, 2, clientKey); err != nil || !ok {
+		t.Fatalf("WiThrottle Redis pairing must survive sweep: ok=%v err=%v", ok, err)
+	}
+}
+
+func TestBuildSnapshotOmitsExpiryForNonStickyZ21(t *testing.T) {
+	reg := inbound.NewClientRegistry()
+	c := NewCoordinator(CoordinatorConfig{
+		LayoutID:         1,
+		CommandStationID: 2,
+		Registry:         reg,
+	})
+	c.RegisterPolicy(contract.RemoteProtocolZ21, ProtocolPolicy{
+		IdleEvict:       60 * time.Second,
+		StickyIdleEvict: 72 * time.Hour,
+	})
+	udpAddr, _ := net.ResolveUDPAddr("udp", "10.0.0.8:40001")
+	client := reg.Touch(contract.RemoteProtocolZ21, udpAddr, time.Now().UTC(), false)
+	reg.SetSession(client.Key, &contract.RemoteSessionWire{UserID: 9, ClientKey: client.Key})
+
+	snap := c.BuildSnapshot()
+	if len(snap.Clients) != 1 {
+		t.Fatalf("expected 1 client, got %d", len(snap.Clients))
+	}
+	if snap.Clients[0].SessionExpiresAt != 0 {
+		t.Fatalf("SessionExpiresAt=%d, want 0", snap.Clients[0].SessionExpiresAt)
+	}
+}
+
+func TestBuildSnapshotExpiryMatchesSweep(t *testing.T) {
+	stickyTTL := 30 * time.Minute
+	now := time.Now().UTC()
+
+	reg := inbound.NewClientRegistry()
+	c := NewCoordinator(CoordinatorConfig{
+		LayoutID:         1,
+		CommandStationID: 2,
+		Registry:         reg,
+	})
+	c.RegisterPolicy(contract.RemoteProtocolZ21, ProtocolPolicy{
+		IdleEvict:       60 * time.Second,
+		StickyIdleEvict: stickyTTL,
+		IPStickiness:    true,
+	})
+	c.RegisterPolicy(contract.RemoteProtocolWithrottle, ProtocolPolicy{
+		IdleEvict:         120 * time.Second,
+		StickyIdleEvict:   stickyTTL,
+		SweepKeepsPairing: true,
+	})
+
+	z21Addr, _ := net.ResolveUDPAddr("udp", "10.0.0.8:40001")
+	z21 := reg.Touch(contract.RemoteProtocolZ21, z21Addr, now, true)
+	reg.SetSession(z21.Key, &contract.RemoteSessionWire{UserID: 9, ClientKey: z21.Key})
+
+	wtAddr, _ := net.ResolveUDPAddr("udp", "10.0.0.9:12090")
+	wt := reg.TouchByEndpoint(contract.RemoteProtocolWithrottle, "4242", wtAddr, now)
+	reg.SetSession(wt.Key, &contract.RemoteSessionWire{UserID: 8, ClientKey: wt.Key})
+
+	want := now.Add(stickyTTL).UnixMilli()
+	snap := c.BuildSnapshot()
+	if len(snap.Clients) != 2 {
+		t.Fatalf("expected 2 clients, got %d", len(snap.Clients))
+	}
+	for _, row := range snap.Clients {
+		if row.SessionExpiresAt != want {
+			t.Fatalf("%s SessionExpiresAt=%d, want %d (pairing TTL)", row.Protocol, row.SessionExpiresAt, want)
+		}
+	}
+}
+
+func TestDropPresenceKeepsRedisPairing(t *testing.T) {
+	mr, err := miniredis.Run()
+	if err != nil {
+		t.Fatalf("miniredis: %v", err)
+	}
+	defer mr.Close()
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	defer rdb.Close()
+	store := remotepairing.NewStore(rdb)
+
+	ctx := context.Background()
+	req, err := store.CreateWithrottlePairingRequest(ctx, remotepairing.CreateWithrottlePairingInput{
+		LayoutID:         1,
+		CommandStationID: 2,
+		UserID:           9,
+		AllowAllVehicles: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	clientKey := "withrottle:4242"
+	if _, ok, _, err := store.PairViaWithrottleCode(ctx, 1, 2, req.PairingCode, clientKey, contract.NowMS()); err != nil || !ok {
+		t.Fatalf("pair: ok=%v err=%v", ok, err)
+	}
+
+	reg := inbound.NewClientRegistry()
+	c := NewCoordinator(CoordinatorConfig{
+		LayoutID:         1,
+		CommandStationID: 2,
+		Registry:         reg,
+		Store:            store,
+	})
+	udpAddr, _ := net.ResolveUDPAddr("udp", "10.0.0.8:12090")
+	client := reg.TouchByEndpoint(contract.RemoteProtocolWithrottle, "4242", udpAddr, time.Now().UTC())
+	reg.SetSession(client.Key, &contract.RemoteSessionWire{UserID: 9, ClientKey: clientKey})
+
+	c.DropPresence(ctx, client.Key)
+	if _, ok := reg.Get(client.Key); ok {
+		t.Fatal("presence should be gone")
+	}
+	if _, ok, err := store.GetActiveByClientKey(ctx, 1, 2, clientKey); err != nil || !ok {
+		t.Fatalf("redis pairing must survive drop: ok=%v err=%v", ok, err)
 	}
 }

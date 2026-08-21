@@ -479,15 +479,15 @@ func (s *Store) GetActiveByClientKey(ctx context.Context, layoutID, commandStati
 // GetActiveByClientKeyTTL loads a paired session and its remaining Redis TTL.
 func (s *Store) GetActiveByClientKeyTTL(ctx context.Context, layoutID, commandStationID uint, clientKey string) (contract.RemoteSessionWire, time.Duration, bool, error) {
 	key := contract.RemotePairingActiveKey(layoutID, commandStationID, clientKey)
-	pipe := s.client.TxPipeline()
+	pipe := s.client.Pipeline()
 	get := pipe.Get(ctx, key)
 	pttl := pipe.PTTL(ctx, key)
 	_, err := pipe.Exec(ctx)
-	if err != nil && err != redis.Nil {
+	if err != nil && !errors.Is(err, redis.Nil) {
 		return contract.RemoteSessionWire{}, 0, false, err
 	}
 	raw, err := get.Result()
-	if err == redis.Nil {
+	if errors.Is(err, redis.Nil) {
 		return contract.RemoteSessionWire{}, 0, false, nil
 	}
 	if err != nil {
@@ -498,10 +498,7 @@ func (s *Store) GetActiveByClientKeyTTL(ctx context.Context, layoutID, commandSt
 		return contract.RemoteSessionWire{}, 0, false, err
 	}
 	ttl, err := pttl.Result()
-	if err != nil {
-		return active, 0, true, nil
-	}
-	if ttl < 0 {
+	if err != nil || ttl < 0 {
 		return active, 0, true, nil
 	}
 	return active, ttl, true, nil

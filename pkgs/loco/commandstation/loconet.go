@@ -191,8 +191,8 @@ const (
 func newLocoNetBase() *LocoNet {
 	ln := &LocoNet{
 		timeout:           4 * time.Second,
-		slotTimeout:        lnDefaultSlotTimeout,
-		slotReplyTimeout:   lnDefaultSlotReplyTimeout,
+		slotTimeout:       lnDefaultSlotTimeout,
+		slotReplyTimeout:  lnDefaultSlotReplyTimeout,
 		minTxGap:          lnDefaultMinTxGap,
 		keepaliveInterval: lnKeepaliveInterval,
 		txCh:              make(chan lnTxJob, 64),
@@ -1029,6 +1029,14 @@ func (l *LocoNet) GetSpeed(addr LocoAddr) (speed uint8, forward bool, err error)
 // sendLocked transmits one frame via the async writer (normal priority).
 func (l *LocoNet) sendLocked(pkt []byte) error {
 	return l.txEnqueue(pkt, lnTxPriorityNormal)
+}
+
+// SetTrackPower implements TrackPowerController via OPC_GPON / OPC_GPOFF.
+func (l *LocoNet) SetTrackPower(on bool) error {
+	if l == nil {
+		return ErrTrackPowerUnsupported
+	}
+	return l.txEnqueue(lnBuildGlobalPower(on), lnTxPriorityNormal)
 }
 
 // pace blocks until the minimum inter-frame gap for pkt has elapsed since the

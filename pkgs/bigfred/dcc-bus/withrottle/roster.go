@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/keskad/loco/pkgs/bigfred/contract"
+	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/security"
 )
 
 // BuildRosterLine builds the RL roster line for one client state.
@@ -135,12 +136,6 @@ func rosterDisplayName(v contract.AllowedVehicle) string {
 	return fmt.Sprintf("Loco %d", v.Addr)
 }
 
-// userMayDrive matches dcc-bus CanDrive: membership in ControllerUserIDs.
 func userMayDrive(userID uint, v contract.AllowedVehicle) bool {
-	for _, id := range v.ControllerUserIDs {
-		if id == userID {
-			return true
-		}
-	}
-	return false
+	return (security.DrivePolicy{}).CanDrive(userID, v, true).Allowed
 }

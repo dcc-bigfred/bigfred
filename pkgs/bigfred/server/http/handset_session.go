@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/keskad/loco/pkgs/bigfred/contract"
 	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
 	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
 	"github.com/keskad/loco/pkgs/bigfred/server/validation"
@@ -30,10 +31,13 @@ type HandsetSessionHandler struct {
 	limiter *handsetPairingLimiter
 }
 
-func NewHandsetSessionHandler(auth *cmd.Auth, layouts *cmd.Layout, remote *cmd.Remote, audit cmd.AuditPublisher) *HandsetSessionHandler {
+func NewHandsetSessionHandler(auth *cmd.Auth, layouts *cmd.Layout, remote *cmd.Remote, audit cmd.AuditPublisher, limiter *handsetPairingLimiter) *HandsetSessionHandler {
+	if limiter == nil {
+		limiter = newHandsetPairingLimiter()
+	}
 	return &HandsetSessionHandler{
 		auth: auth, layouts: layouts, remote: remote, audit: audit,
-		limiter: newHandsetPairingLimiter(),
+		limiter: limiter,
 	}
 }
 
@@ -47,17 +51,19 @@ func (h *HandsetSessionHandler) Status(w http.ResponseWriter, r *http.Request) {
 	req.Login = strings.TrimSpace(req.Login)
 	req.DeviceID = strings.TrimSpace(req.DeviceID)
 	ip := handsetClientIP(r)
-	if !h.limiter.allowAt(ip, req.Login, time.Now(), handsetSessionAttempts) {
-		h.auditResult(r, 0, 0, req.Login, req.DeviceID, ip, "rate_limited")
+	now := time.Now()
+	if h.limiter.blocked(ip, req.Login, now) {
 		writeJSONError(w, http.StatusTooManyRequests, "rate_limited")
 		return
 	}
 	if req.Login == "" || !validHandsetDeviceID(req.DeviceID) {
+		h.limiter.recordFailure(ip, req.Login, now)
 		h.auditResult(r, 0, 0, req.Login, req.DeviceID, ip, "invalid_request")
 		writeJSONError(w, http.StatusBadRequest, "invalid_request")
 		return
 	}
 	if err := validation.ValidateUserPIN(req.PIN); err != nil {
+		h.limiter.recordFailure(ip, req.Login, now)
 		h.auditResult(r, 0, 0, req.Login, req.DeviceID, ip, "invalid_pin")
 		status, code := svcerrors.UserHTTPStatus(err)
 		writeJSONErrorCause(w, status, code, err)
@@ -75,10 +81,10 @@ func (h *HandsetSessionHandler) Status(w http.ResponseWriter, r *http.Request) {
 		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
-	layoutID, commandStationID, err := selectHandsetWithrottleStation(r.Context(), h.layouts, layouts)
+	layoutID, commandStationID, err := selectHandsetWithrottleStation(r.Context(), h.layouts, layouts, req.LayoutID)
 	if err != nil {
-		h.auditResult(r, 0, 0, req.Login, req.DeviceID, ip, "internal_error")
-		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
+		h.auditResult(r, 0, 0, req.Login, req.DeviceID, ip, handsetSelectAuditResult(err))
+		writeHandsetSelectError(w, err)
 		return
 	}
 	if commandStationID == 0 {
@@ -88,6 +94,7 @@ func (h *HandsetSessionHandler) Status(w http.ResponseWriter, r *http.Request) {
 	}
 	identity, err := h.auth.Login(r.Context(), req.Login, req.PIN, layoutID)
 	if err != nil {
+		h.limiter.recordFailure(ip, req.Login, now)
 		h.auditResult(r, layoutID, 0, req.Login, req.DeviceID, ip, "invalid_credentials")
 		status, code := svcerrors.AuthHTTPStatus(err)
 		writeJSONErrorCause(w, status, code, err)
@@ -99,6 +106,11 @@ func (h *HandsetSessionHandler) Status(w http.ResponseWriter, r *http.Request) {
 		h.auditResult(r, layoutID, identity.User.ID, identity.User.Login, req.DeviceID, ip, "internal_error")
 		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
+	}
+	if ok && active.UserID != identity.User.ID {
+		ok = false
+		active = contract.RemoteSessionWire{}
+		ttl = 0
 	}
 	h.auditResult(r, layoutID, identity.User.ID, identity.User.Login, req.DeviceID, ip, "success")
 	resp := handsetSessionResponse{

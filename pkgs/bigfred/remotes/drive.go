@@ -39,6 +39,11 @@ type HandsetDrivePort interface {
 	ApplyHandsetIdleBrake(ctx context.Context, session HandsetSession, subscribed []uint16, scope DriveScope)
 	ApplyHandsetPilotEStop(ctx context.Context, session HandsetSession, addr uint16)
 	TriggerLayoutRadioStop(ctx context.Context, userID uint, source string) error
+	// TriggerStationTrackPowerOn turns main-track power on for this command
+	// station only. Unlike TriggerLayoutRadioStop it is not published across
+	// the layout: other stations stay off and their inbound remotes are not
+	// notified. Any paired handset may call it; there is no extra role gate.
+	TriggerStationTrackPowerOn(ctx context.Context, userID uint, source string) error
 	ReadLocoCV(addr uint16, cvNum commandstation.CVNum) (int, error)
 }
 

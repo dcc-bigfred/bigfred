@@ -61,9 +61,39 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          mkdir -p release-assets
           gh run download "${{ steps.ci.outputs.run_id }}" \
-            --name binaries \
-            --dir release-assets
+            --name binaries-arm64 \
+            --dir release-assets/arm64
+          gh run download "${{ steps.ci.outputs.run_id }}" \
+            --name binaries-amd64 \
+            --dir release-assets/amd64
+          gh run download "${{ steps.ci.outputs.run_id }}" \
+            --name binaries-android-arm64 \
+            --dir release-assets/android-arm64
+          # Flatten without clobbering same-named sidecar files (e.g. SHA256SUMS).
+          for arch in arm64 amd64 android-arm64; do
+            while IFS= read -r -d '' f; do
+              base="$(basename "${f}")"
+              lc_base="$(printf '%s' "${base}" | tr '[:upper:]' '[:lower:]')"
+              case "${lc_base}" in
+                sha256sums|sha256sums.*)
+                  dest="release-assets/SHA256SUMS.${arch}"
+                  ;;
+                *)
+                  dest="release-assets/${base}"
+                  if [[ -e "${dest}" ]]; then
+                    echo "error: colliding release asset name: ${base} (from ${arch})" >&2
+                    ls -la release-assets >&2
+                    exit 1
+                  fi
+                  ;;
+              esac
+              cp -f "${f}" "${dest}"
+            done < <(find "release-assets/${arch}" -type f -print0)
+          done
+          rm -rf release-assets/arm64 release-assets/amd64 release-assets/android-arm64
+          ls -la release-assets
 
       - name: Set up Go
         uses: actions/setup-go@v5

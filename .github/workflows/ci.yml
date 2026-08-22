@@ -62,9 +62,28 @@ jobs:
         run: npm test
 
   build:
-    name: Build (linux/amd64, linux/arm64, linux/armv7, android/arm64)
+    name: Build ${{ matrix.name }}
     needs: test
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: amd64
+            goos: linux
+            goarch: amd64
+            suffix: linux-amd64
+            android_spa: "0"
+          - name: arm64
+            goos: linux
+            goarch: arm64
+            suffix: linux-arm64
+            android_spa: "0"
+          - name: android-arm64
+            goos: android
+            goarch: arm64
+            suffix: android-arm64
+            android_spa: "1"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -87,9 +106,23 @@ jobs:
 
       - name: Build embedded SPA (required for -tags prod)
         working-directory: web
-        run: npm ci --no-audit --no-fund && npm run build
+        env:
+          ANDROID_SPA: ${{ matrix.android_spa }}
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          if [ "${ANDROID_SPA}" = "1" ]; then
+            VITE_ANDROID=1 npm run build
+          else
+            npm run build
+          fi
 
       - name: Build binaries
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          SUFFIX: ${{ matrix.suffix }}
+          ANDROID_SPA: ${{ matrix.android_spa }}
         run: |
           set -euo pipefail
           mkdir -p dist
@@ -99,46 +132,29 @@ jobs:
           VERSION_PKG="github.com/keskad/loco/pkgs/bigfred/server/version"
           LDFLAGS="-X ${VERSION_PKG}.buildCommit=${COMMIT} -X ${VERSION_PKG}.buildTime=${BUILDTIME}"
 
-          # Hub / desktop SPA embedded via -tags prod (built above).
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -tags prod -ldflags="-s -w ${LDFLAGS}" \
-            -o dist/loco-server-linux-amd64 ./pkgs/bigfred/server
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o dist/bf-linux-amd64 ./pkgs/bigfred/bf
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o dist/bigfred-remote-icmp-linux-amd64 ./pkgs/bigfred/remote-icmp
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o dist/loco-linux-amd64 ./pkgs/loco
-          GOOS=linux GOARCH=amd64 go build -o dist/rb-linux-amd64 ./pkgs/rb/main.go
+          CGO_ENABLED=0 go build -tags prod -ldflags="-s -w ${LDFLAGS}" \
+            -o "dist/loco-server-${SUFFIX}" ./pkgs/bigfred/server
 
-          # Raspberry Pi 5 (BCM2712, Cortex-A76) — linux/arm64 (hub OCI bundle)
-          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -tags prod -ldflags="-s -w ${LDFLAGS}" \
-            -o dist/loco-server-linux-arm64 ./pkgs/bigfred/server
-          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="${LDFLAGS}" -o dist/bf-linux-arm64 ./pkgs/bigfred/bf
-          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="${LDFLAGS}" -o dist/bigfred-remote-icmp-linux-arm64 ./pkgs/bigfred/remote-icmp
-          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o dist/loco-linux-arm64 ./pkgs/loco
-          GOOS=linux GOARCH=arm64 go build -o dist/rb-linux-arm64 ./pkgs/rb/main.go
+          if [ "${ANDROID_SPA}" != "1" ]; then
+            CGO_ENABLED=0 go build -ldflags="${LDFLAGS}" -o "dist/bf-${SUFFIX}" ./pkgs/bigfred/bf
+            CGO_ENABLED=0 go build -ldflags="${LDFLAGS}" -o "dist/bigfred-remote-icmp-${SUFFIX}" ./pkgs/bigfred/remote-icmp
+            CGO_ENABLED=0 go build -o "dist/loco-${SUFFIX}" ./pkgs/loco
+            go build -o "dist/rb-${SUFFIX}" ./pkgs/rb/main.go
+          fi
 
-          # Raspberry Pi 2 (BCM2836, Cortex-A7) — linux/arm, GOARM=7
-          CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -tags prod -ldflags="-s -w ${LDFLAGS}" \
-            -o dist/loco-server-linux-armv7 ./pkgs/bigfred/server
-          CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -ldflags="${LDFLAGS}" -o dist/bf-linux-armv7 ./pkgs/bigfred/bf
-          CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -ldflags="${LDFLAGS}" -o dist/bigfred-remote-icmp-linux-armv7 ./pkgs/bigfred/remote-icmp
-          CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -o dist/loco-linux-armv7 ./pkgs/loco
-          GOOS=linux GOARCH=arm GOARM=7 go build -o dist/rb-linux-armv7 ./pkgs/rb/main.go
-
-          # Android arm64 — rebuild SPA with phone capabilities, then embed
-          (cd web && VITE_ANDROID=1 npm run build)
-          CGO_ENABLED=0 GOOS=android GOARCH=arm64 go build -tags prod -ldflags="-s -w ${LDFLAGS}" \
-            -o dist/loco-server-android-arm64 ./pkgs/bigfred/server
+          (
+            cd dist
+            sha256sum -- * > "../SHA256SUMS.${{ matrix.name }}"
+            mv -f "../SHA256SUMS.${{ matrix.name }}" "SHA256SUMS.${{ matrix.name }}"
+          )
 
       - name: Report binary sizes
-        run: |
-          set -euo pipefail
-          ls -lh dist/
-          echo "loco-server-android-arm64: $(wc -c < dist/loco-server-android-arm64) bytes"
+        run: ls -lh dist/
 
-      - name: Upload binaries
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: binaries
+          name: binaries-${{ matrix.name }}
           path: dist/
           if-no-files-found: error
           retention-days: 90
-

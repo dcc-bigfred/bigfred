@@ -22,7 +22,7 @@ const defaultMicrodnsConfig = `{
   ],
   "bigfred": { "enabled": true },
   "microinit": { "enabled": true },
-  "dccBus": { "beacon": true },
+  "dccBus": { "beacon": true, "host": "bigfred" },
   "retry": { "bigfredMs": 45000, "pollMs": 45000, "mdnsMs": 3000, "ifaceMs": 5000, "microinitReconnectMs": 3000 }
 }
 `

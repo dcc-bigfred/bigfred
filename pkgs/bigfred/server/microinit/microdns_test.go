@@ -50,6 +50,9 @@ func TestEnsureMicrodnsConfigWritesDefaultWhenMissing(t *testing.T) {
 	if beacon, _ := dccBus["beacon"].(bool); !beacon {
 		t.Fatalf("dccBus.beacon = %#v, want true", dccBus["beacon"])
 	}
+	if host, _ := dccBus["host"].(string); host != "bigfred" {
+		t.Fatalf("dccBus.host = %#v, want bigfred", dccBus["host"])
+	}
 	services, ok := cfg["services"].([]any)
 	if !ok || len(services) != 1 {
 		t.Fatalf("services = %#v", cfg["services"])

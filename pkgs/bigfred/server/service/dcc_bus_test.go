@@ -7,7 +7,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/keskad/loco/pkgs/bigfred/server/domain"
 	"github.com/keskad/loco/pkgs/bigfred/server/microinit"
+	"github.com/keskad/loco/pkgs/bigfred/server/repo"
 )
 
 func TestProgramNameDeterministic(t *testing.T) {
@@ -16,6 +18,9 @@ func TestProgramNameDeterministic(t *testing.T) {
 	}
 	if got := programName(99, 7); got != "dcc-bus-99-7" {
 		t.Fatalf("programName(99,7) = %q", got)
+	}
+	if got := ProgramName(1, 2); got != "dcc-bus-1-2" {
+		t.Fatalf("ProgramName(1,2) = %q", got)
 	}
 }
 
@@ -187,4 +192,24 @@ func (f *fakeSupervisor) Status(context.Context) ([]ServiceState, error) {
 		return nil, f.statusErr
 	}
 	return f.status, nil
+}
+
+type fakeLayoutCS struct {
+	err error
+}
+
+func (f fakeLayoutCS) Find(context.Context, uint, uint) (domain.LayoutCommandStation, error) {
+	return domain.LayoutCommandStation{}, f.err
+}
+
+func TestEnsureRunningRejectsUnattachedStation(t *testing.T) {
+	d := NewDccBusService(DccBusConfig{}, &fakeSupervisor{}, nil, nil, nil, nil)
+	d.SetLayoutCommandStations(fakeLayoutCS{err: repo.ErrLayoutCommandStationNotFound})
+	_, _, err := d.EnsureRunning(context.Background(), 1, 9)
+	if !errors.Is(err, ErrCommandStationNotAttached) {
+		t.Fatalf("got %v, want ErrCommandStationNotAttached", err)
+	}
+	if d.PortFor(1, 9) != 0 {
+		t.Fatal("must not allocate a port for an unattached station")
+	}
 }

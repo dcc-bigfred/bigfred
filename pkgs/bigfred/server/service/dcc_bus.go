@@ -38,6 +38,10 @@ var ErrNoDccBusPortsAvailable = svcerrors.ErrNoDCCBusPortsAvailable
 // Surface this to the WS layer as `dcc_bus_unavailable`.
 var ErrDccBusUnavailable = errors.New("dcc-bus daemon unavailable")
 
+// ErrCommandStationNotAttached is returned by EnsureRunning when the
+// (layout, command station) pair is not in the layout roster.
+var ErrCommandStationNotAttached = errors.New("command_station_not_attached")
+
 var ErrServiceManagerNotWired = errors.New("dcc-bus: service manager is not wired")
 
 // Deprecated: use ErrServiceManagerNotWired.
@@ -80,17 +84,24 @@ type DccBusConfig struct {
 	ManagedRedis bool
 }
 
+// layoutCommandStationFinder is the join-table lookup EnsureRunning uses
+// to reject stations that are not attached to the requested layout.
+type layoutCommandStationFinder interface {
+	Find(ctx context.Context, layoutID, commandStationID uint) (domain.LayoutCommandStation, error)
+}
+
 // DccBusService is the loco-server-side orchestrator for dcc-bus
 // daemons. It owns the port pool, drives microinit via
 // SupervisordService, and exposes typed helpers to publish commands
 // onto the daemon's Redis channels (§7e.6).
 type DccBusService struct {
-	cfg     DccBusConfig
-	mgr     ServiceManager
-	redis   *RedisService
-	cs      *repo.CommandStations
-	layouts *repo.Layouts
-	log     *logrus.Logger
+	cfg      DccBusConfig
+	mgr      ServiceManager
+	redis    *RedisService
+	cs       *repo.CommandStations
+	layouts  *repo.Layouts
+	layoutCS layoutCommandStationFinder
+	log      *logrus.Logger
 
 	mu      sync.Mutex
 	ports   map[portKey]uint16 // (layoutID, commandStationID) -> port
@@ -186,6 +197,17 @@ func (d *DccBusService) LayoutIDsWithProgramForCS(commandStationID uint) []uint 
 // SetMetrics wires optional OpenTelemetry recorders for orchestration paths.
 func (d *DccBusService) SetMetrics(m *metrics.Metrics) {
 	d.metrics = m
+}
+
+// SetLayoutCommandStations wires the layout↔command-station join used by
+// EnsureRunning to reject stations that are not attached to the layout.
+func (d *DccBusService) SetLayoutCommandStations(lcs layoutCommandStationFinder) {
+	d.layoutCS = lcs
+}
+
+// ProgramName is the microinit program name for a (layout, CS) daemon.
+func ProgramName(layoutID, commandStationID uint) string {
+	return programName(layoutID, commandStationID)
 }
 
 // AllocatedPortCount returns how many dcc-bus daemons have a port assignment.
@@ -421,6 +443,9 @@ func (d *DccBusService) ensureRunning(ctx context.Context, layoutID, commandStat
 		return 0, "", ErrServiceManagerNotWired
 	}
 	name := programName(layoutID, commandStationID)
+	if err := d.checkAttached(ctx, layoutID, commandStationID); err != nil {
+		return 0, name, err
+	}
 	key := portKey{LayoutID: layoutID, CommandStationID: commandStationID}
 
 	d.mu.Lock()
@@ -480,6 +505,20 @@ func (d *DccBusService) ensureRunning(ctx context.Context, layoutID, commandStat
 	d.persistPort(ctx, key, port)
 	d.log.WithFields(logrus.Fields{"program": name, "port": port}).Info("dcc-bus ensure running: daemon ready")
 	return port, name, nil
+}
+
+func (d *DccBusService) checkAttached(ctx context.Context, layoutID, commandStationID uint) error {
+	if d.layoutCS == nil {
+		return nil
+	}
+	_, err := d.layoutCS.Find(ctx, layoutID, commandStationID)
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, repo.ErrLayoutCommandStationNotFound) {
+		return ErrCommandStationNotAttached
+	}
+	return fmt.Errorf("check command station attachment: %w", err)
 }
 
 // Stop tears down one daemon (e.g. when the operator detaches the

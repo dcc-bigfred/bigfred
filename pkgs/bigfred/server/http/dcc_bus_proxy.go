@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httputil"
@@ -10,12 +11,19 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	chimiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/sirupsen/logrus"
 
 	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
 	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
 	"github.com/keskad/loco/pkgs/bigfred/server/metrics"
 	"github.com/keskad/loco/pkgs/bigfred/server/service"
 )
+
+// dccBusProxySpawnTimeout is the budget the WS proxy spends spawning a
+// missing daemon before answering 503. Shorter than DccBusConfig.SpawnTimeout
+// so a hung microinit start cannot stall the upgrade indefinitely.
+const dccBusProxySpawnTimeout = 5 * time.Second
 
 // DccBusProxy reverse-proxies the dcc-bus daemon's WebSocket endpoint
 // so the SPA only ever talks to loco-server. JWT is verified before
@@ -99,12 +107,13 @@ func (p *DccBusProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	csID = uint(csID64)
 
-	port := p.dccBus.PortFor(layoutID, csID)
-	if port == 0 {
+	port, code, err := resolveDccBusPort(r.Context(), p.dccBus, layoutID, csID)
+	if err != nil {
 		if p.metrics != nil {
-			p.metrics.RecordDccBusProxyUpgrade(layoutID, csID, false, "dcc_bus_unavailable")
+			p.metrics.RecordDccBusProxyUpgrade(layoutID, csID, false, code)
 		}
-		writeJSONError(w, http.StatusServiceUnavailable, "dcc_bus_unavailable")
+		logDccBusProxyFail(w, r, layoutID, csID, 0, http.StatusServiceUnavailable, code, err)
+		writeJSONErrorBody(w, http.StatusServiceUnavailable, code)
 		return
 	}
 
@@ -132,5 +141,74 @@ func (p *DccBusProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		req.URL.RawQuery = q.Encode()
 		req.Host = target.Host
 	}
+	rp.ErrorHandler = dccBusProxyErrorHandler(layoutID, csID, port)
 	rp.ServeHTTP(w, r)
+}
+
+// resolveDccBusPort returns the loopback port for (layout, CS). A miss
+// triggers EnsureRunning so a wizard (or any client) that never opened a
+// layout session can still spawn the daemon.
+func resolveDccBusPort(ctx context.Context, dccBus *service.DccBusService, layoutID, csID uint) (uint16, string, error) {
+	if port := dccBus.PortFor(layoutID, csID); port != 0 {
+		return port, "", nil
+	}
+	spawnCtx, cancel := context.WithTimeout(ctx, dccBusProxySpawnTimeout)
+	defer cancel()
+	port, _, err := dccBus.EnsureRunning(spawnCtx, layoutID, csID)
+	if err != nil {
+		return 0, dccBusEnsureErrorCode(err), err
+	}
+	return port, "", nil
+}
+
+func dccBusEnsureErrorCode(err error) string {
+	switch {
+	case errors.Is(err, service.ErrCommandStationNotAttached):
+		return "command_station_not_attached"
+	case errors.Is(err, svcerrors.ErrNoDCCBusPortsAvailable):
+		return svcerrors.CodeNoDCCBusPortsAvailable
+	default:
+		return "dcc_bus_unavailable"
+	}
+}
+
+func dccBusProxyErrorHandler(layoutID, csID uint, port uint16) func(http.ResponseWriter, *http.Request, error) {
+	return func(w http.ResponseWriter, r *http.Request, err error) {
+		logDccBusProxyFail(w, r, layoutID, csID, port, http.StatusBadGateway, "dcc_bus_unreachable", err)
+		writeJSONErrorBody(w, http.StatusBadGateway, "dcc_bus_unreachable")
+	}
+}
+
+func logDccBusProxyFail(w http.ResponseWriter, r *http.Request, layoutID, csID uint, port uint16, status int, code string, err error) {
+	log, req := loggerAndRequest(w)
+	if log == nil && r != nil {
+		if l, ok := r.Context().Value(requestLogCtxKey{}).(*logrus.Logger); ok {
+			log = l
+		}
+	}
+	if log == nil {
+		return
+	}
+	if req == nil {
+		req = r
+	}
+	fields := logrus.Fields{
+		"status":           status,
+		"code":             code,
+		"layoutId":         layoutID,
+		"commandStationId": csID,
+		"program":          service.ProgramName(layoutID, csID),
+		"port":             port,
+		"portAllocated":    port != 0,
+	}
+	if req != nil {
+		fields["method"] = req.Method
+		fields["path"] = req.URL.Path
+		fields["request_id"] = chimiddleware.GetReqID(req.Context())
+	}
+	entry := log.WithFields(fields)
+	if err != nil {
+		entry = entry.WithError(err)
+	}
+	entry.Warn("dcc-bus proxy 5xx")
 }

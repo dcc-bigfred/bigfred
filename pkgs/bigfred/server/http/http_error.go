@@ -71,16 +71,16 @@ func recoverer(next http.Handler) http.Handler {
 }
 
 // writeJSONError renders {"error": "..."} with the given status.
-// HTTP 500 also logs the handler stack; the response body stays generic.
+// HTTP 5xx is logged; the response body stays generic.
 func writeJSONError(w http.ResponseWriter, status int, code string) {
 	writeJSONErrorCause(w, status, code, nil)
 }
 
-// writeJSONErrorCause is writeJSONError plus an optional cause logged only
-// for HTTP 500. The cause never appears in the response body.
+// writeJSONErrorCause is writeJSONError plus an optional cause logged for
+// HTTP 5xx. The cause never appears in the response body.
 func writeJSONErrorCause(w http.ResponseWriter, status int, code string, err error) {
-	if status == http.StatusInternalServerError {
-		logHTTP500(w, status, code, err)
+	if status >= 500 {
+		logHTTP5xx(w, status, code, err)
 	}
 	writeJSONErrorBody(w, status, code)
 }
@@ -91,7 +91,7 @@ func writeJSONErrorBody(w http.ResponseWriter, status int, code string) {
 	_ = json.NewEncoder(w).Encode(map[string]string{"error": code})
 }
 
-func logHTTP500(w http.ResponseWriter, status int, code string, err error) {
+func logHTTP5xx(w http.ResponseWriter, status int, code string, err error) {
 	log, r := loggerAndRequest(w)
 	if log == nil {
 		return
@@ -105,12 +105,18 @@ func logHTTP500(w http.ResponseWriter, status int, code string, err error) {
 		fields["path"] = r.URL.Path
 		fields["request_id"] = chimiddleware.GetReqID(r.Context())
 	}
-	fields["stack"] = string(debug.Stack())
+	if status == http.StatusInternalServerError {
+		fields["stack"] = string(debug.Stack())
+	}
 	entry := log.WithFields(fields)
 	if err != nil {
 		entry = entry.WithError(err)
 	}
-	entry.Error("http 500")
+	if status == http.StatusInternalServerError {
+		entry.Error("http 500")
+		return
+	}
+	entry.Warn("http 5xx")
 }
 
 func logHTTPPanic(w http.ResponseWriter, r *http.Request, rec any) {

@@ -25,6 +25,7 @@ import (
 	bfotel "github.com/keskad/loco/pkgs/bigfred/otel"
 	"github.com/keskad/loco/pkgs/bigfred/platform"
 	"github.com/keskad/loco/pkgs/bigfred/remotepairing"
+	"github.com/keskad/loco/pkgs/bigfred/server/cli/config"
 	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
 	"github.com/keskad/loco/pkgs/bigfred/server/ctl"
 	"github.com/keskad/loco/pkgs/bigfred/server/datadir"
@@ -123,8 +124,8 @@ real-time throttle commands.`,
 		"address the HTTP server listens on (0.0.0.0 = all interfaces)")
 	cmd.Flags().StringVar(&f.DBPath, "db", "var/db/bigfred/bigfred.sqlite3", "path to the SQLite database file")
 	cmd.Flags().StringVar(&f.JWTSecret, "jwt-secret", "",
-		"hex/base64 secret used to sign session JWTs. Falls back to BIGFRED_JWT_SECRET "+
-			"env var; a random per-run secret is generated when empty (sessions don't survive restarts).")
+		"hex/base64 secret used to sign session JWTs. Falls back to loco-server.conf JWT_SECRET, "+
+			"then BIGFRED_JWT_SECRET; a random secret is generated and persisted when empty.")
 	cmd.Flags().StringSliceVar(&f.AllowedOrigins, "cors-origin",
 		[]string{"http://localhost:5173", "http://127.0.0.1:5173"},
 		"CORS allowed origins (Vite dev server on :5173 by default)")
@@ -827,8 +828,8 @@ func resolveOTLPEndpoint() string {
 }
 
 // resolveJWTSecret picks the JWT signing key in the documented
-// precedence order: explicit --jwt-secret > BIGFRED_JWT_SECRET env >
-// random per-run secret (development only).
+// precedence order: explicit --jwt-secret > file JWT_SECRET (via merge) >
+// BIGFRED_JWT_SECRET env > generate once and persist to loco-server.conf.
 func resolveJWTSecret(flag string, log *logrus.Logger) ([]byte, error) {
 	if flag != "" {
 		return []byte(flag), nil
@@ -840,13 +841,18 @@ func resolveJWTSecret(flag string, log *logrus.Logger) ([]byte, error) {
 	if _, err := rand.Read(buf); err != nil {
 		return nil, fmt.Errorf("generate random jwt secret: %w", err)
 	}
-	log.Warn("no JWT secret configured — generated a random one. Existing sessions will not survive a restart. " +
-		"Set --jwt-secret or BIGFRED_JWT_SECRET in production.")
 	// Hex-encode the secret so it is ASCII-safe. It is forwarded to each
 	// dcc-bus daemon on the command line and written verbatim into
 	// supervisord.conf, which supervisord parses strictly as UTF-8. Raw
 	// random bytes routinely contain non-UTF-8 sequences (e.g. 0x96) that
 	// make `supervisorctl reread` fail, so the daemon never starts and the
 	// data-plane proxy returns 502. The encoding is irrelevant to HMAC.
-	return []byte(hex.EncodeToString(buf)), nil
+	secret := hex.EncodeToString(buf)
+	path := config.DefaultPath()
+	if err := config.PersistJWTSecret(path, secret); err != nil {
+		log.WithError(err).WithField("path", path).Warn("generated JWT secret but could not persist it; sessions will not survive a restart")
+	} else {
+		log.WithField("path", path).Info("generated and persisted JWT secret")
+	}
+	return []byte(secret), nil
 }

@@ -184,3 +184,56 @@ func TestDefaultPathUsesDataDir(t *testing.T) {
 		t.Fatalf("DefaultPath() = %q, want %q", got, want)
 	}
 }
+
+func TestPersistJWTSecretReplacesCommentedLine(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "loco-server.conf")
+	if err := Write(path, DefaultFile()); err != nil {
+		t.Fatal(err)
+	}
+	if err := PersistJWTSecret(path, "abc123deadbeef"); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	if !strings.Contains(text, "JWT_SECRET=abc123deadbeef\n") && !strings.Contains(text, "JWT_SECRET=abc123deadbeef") {
+		t.Fatalf("missing persisted secret in:\n%s", text)
+	}
+	if strings.Contains(text, "# JWT_SECRET=") {
+		t.Fatalf("commented JWT_SECRET should have been replaced:\n%s", text)
+	}
+	got := Parse(text)
+	if got.JWTSecret != "abc123deadbeef" {
+		t.Fatalf("Parse JWTSecret = %q", got.JWTSecret)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Fatalf("perm = %o, want 0600", info.Mode().Perm())
+	}
+}
+
+func TestPersistJWTSecretCreatesFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "etc", "loco-server.conf")
+	if err := PersistJWTSecret(path, "generated"); err != nil {
+		t.Fatal(err)
+	}
+	got := Parse(mustRead(t, path))
+	if got.JWTSecret != "generated" {
+		t.Fatalf("JWTSecret = %q", got.JWTSecret)
+	}
+}
+
+func mustRead(t *testing.T, path string) string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
+}

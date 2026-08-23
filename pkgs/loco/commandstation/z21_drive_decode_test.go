@@ -248,3 +248,21 @@ func TestDecodeLocoDriveFromLocoInfo(t *testing.T) {
 		})
 	}
 }
+
+func TestBuildProgReadPacketDataLen(t *testing.T) {
+	t.Parallel()
+	z := &Z21Roco{}
+	pkt := z.buildProgReadPacket(CV{Num: 8})
+	if got := binary.LittleEndian.Uint16(pkt[0:2]); got != 0x0009 {
+		t.Fatalf("DataLen = %#04x, want 0x0009 (LAN_X_CV_READ §6.1)", got)
+	}
+	if len(pkt) != 9 {
+		t.Fatalf("len = %d, want 9", len(pkt))
+	}
+	want := []byte{0x09, 0x00, 0x40, 0x00, 0x23, 0x11, 0x00, 0x07, 0x35}
+	for i := range want {
+		if pkt[i] != want[i] {
+			t.Fatalf("byte %d = %#02x, want %#02x (pkt=% X)", i, pkt[i], want[i], pkt)
+		}
+	}
+}

@@ -366,7 +366,7 @@ func New(ctx context.Context, log *logrus.Logger, cfg Config) (*Daemon, error) {
 		log.Info("dcc-bus ws metrics enabled")
 	}
 
-	wsSrv := ws.NewServer(ws.ServerConfig{
+	wsCfg := ws.ServerConfig{
 		Verifier:           verifier,
 		Hub:                hub,
 		Router:             ws.NewRouterAdapter(router),
@@ -386,7 +386,11 @@ func New(ctx context.Context, log *logrus.Logger, cfg Config) (*Daemon, error) {
 			AllowedOrigins: cfg.AllowedOrigins,
 			Verifier:       verifier,
 		}),
-	})
+	}
+	if h, ok := st.(ws.StationHealth); ok {
+		wsCfg.StationHealth = h
+	}
+	wsSrv := ws.NewServer(wsCfg)
 
 	srv := &http.Server{
 		Addr:              net.JoinHostPort(cfg.BindAddr, strconv.Itoa(int(cfg.Port))),

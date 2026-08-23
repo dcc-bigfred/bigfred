@@ -2,6 +2,7 @@ package commandstation
 
 import (
 	"encoding/binary"
+	"errors"
 
 	"github.com/sirupsen/logrus"
 )
@@ -61,7 +62,7 @@ func (z *Z21Roco) buildPomWriteByte(lcv LocoCV) []byte {
 // ===== PROG (Programming Track / Direct Mode) =====
 // Read: LAN_X_CV_READ (23 11)
 func (z *Z21Roco) buildProgReadPacket(cv CV) []byte {
-	const dataLen, header = 0x000B, 0x0040
+	const dataLen, header = 0x0009, 0x0040
 	cvWire := cv.Translate()
 
 	x := []byte{0x23, 0x11, byte(cvWire >> 8), byte(cvWire & 0xFF)}
@@ -120,7 +121,7 @@ func (z *Z21Roco) buildTrackPower(on bool) []byte {
 
 // SetTrackPower implements TrackPowerController via LAN_X_SET_TRACK_POWER_*.
 func (z *Z21Roco) SetTrackPower(on bool) error {
-	if z == nil || z.conn == nil {
+	if z == nil || z.currentConn() == nil {
 		return ErrTrackPowerUnsupported
 	}
 	_, err := z.write(z.buildTrackPower(on))
@@ -226,10 +227,16 @@ func (z *Z21Roco) buildSetLocoSpeed(addr LocoAddr, speed uint8, forward bool, sp
 
 func (z *Z21Roco) write(b []byte) (n int, err error) {
 	logrus.Debugf("write: % X", b)
-	n, err = z.conn.Write(b)
+	conn := z.currentConn()
+	if conn == nil {
+		z.metrics.incr(&z.metrics.txErrors)
+		return 0, errors.New("z21: not connected")
+	}
+	n, err = conn.Write(b)
 	if err != nil {
 		z.metrics.incr(&z.metrics.txErrors)
 		logrus.WithError(err).Warn("z21 command station: UDP write failed")
+		go z.doReconnect()
 		return n, err
 	}
 	for _, pkt := range splitZ21Datagram(b[:n]) {

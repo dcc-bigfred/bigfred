@@ -125,3 +125,53 @@ fmt: ## Run go fmt against code.
 .PHONY: vet
 vet: ## Run go vet against code.
 	go vet ./...
+
+# --- Hub deploy (RO rootfs: binaries live on /data) -----------------------
+# Hub runs Dropbear. Older images lack /usr/libexec/sftp-server; -O uses
+# legacy scp. Harmless on images that ship openssh sftp-server.
+#
+#   make deploy-hub
+#   make deploy-hub HUB=192.168.0.10
+#
+# Installs linux/arm64 prod binaries into /data/opt/bigfred/bin (preferred
+# over the image copies in /opt) and restarts microinit services.
+HUB ?= 192.168.0.1
+HUB_USER ?= root
+HUB_SSH ?= $(HUB_USER)@$(HUB)
+SCP ?= scp
+SCP_OPTS ?= -O
+SSH ?= ssh
+HUB_BIN_DIR ?= /data/opt/bigfred/bin
+
+.PHONY: hub-arm64 deploy-hub
+hub-arm64: web-build
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -tags prod -ldflags="-s -w $(VERSION_LDFLAGS)" \
+		-o bin/loco-server-linux-arm64 ./pkgs/bigfred/server
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="$(VERSION_LDFLAGS)" \
+		-o bin/bigfred-remote-icmp-linux-arm64 ./pkgs/bigfred/remote-icmp
+	@ls -lh bin/loco-server-linux-arm64 bin/bigfred-remote-icmp-linux-arm64
+
+# Upload next to the target and rename: writing in place fails with ETXTBSY
+# once the hub is running the /data copy, and rename(2) swaps the inode
+# atomically. dcc-bus runs `bigfred dcc-bus …` from the same binary, so those
+# daemons keep the old inode until they are restarted too.
+deploy-hub: hub-arm64
+	@test -f bin/loco-server-linux-arm64 || { echo "error: bin/loco-server-linux-arm64 missing" >&2; exit 1; }
+	@test -f bin/bigfred-remote-icmp-linux-arm64 || { echo "error: bin/bigfred-remote-icmp-linux-arm64 missing" >&2; exit 1; }
+	$(SSH) $(HUB_SSH) 'mkdir -p $(HUB_BIN_DIR)'
+	$(SCP) $(SCP_OPTS) bin/loco-server-linux-arm64 $(HUB_SSH):$(HUB_BIN_DIR)/.bigfred.new
+	$(SCP) $(SCP_OPTS) bin/bigfred-remote-icmp-linux-arm64 $(HUB_SSH):$(HUB_BIN_DIR)/.bigfred-remote-icmp.new
+	$(SSH) $(HUB_SSH) 'set -e; \
+		cd $(HUB_BIN_DIR); \
+		chmod 755 .bigfred.new .bigfred-remote-icmp.new; \
+		mv -f .bigfred.new bigfred; \
+		mv -f .bigfred-remote-icmp.new bigfred-remote-icmp; \
+		command -v setcap >/dev/null && setcap cap_net_raw+ep bigfred-remote-icmp || true; \
+		rc=0; \
+		microinit restart bigfred || rc=1; \
+		microinit restart remote-icmp || rc=1; \
+		for p in $$(microinit list 2>/dev/null | grep -o "^dcc-bus-[^ ]*" || true); do \
+			echo "restarting $$p"; \
+			microinit restart "$$p" || rc=1; \
+		done; \
+		exit $$rc'

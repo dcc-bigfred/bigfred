@@ -26,9 +26,16 @@ const (
 	z21BcAllLocos uint32 = 0x00010000
 )
 
+const (
+	z21ReconnectBackoff  = 2 * time.Second
+	z21HeartbeatInterval = 10 * time.Second
+	z21HeartbeatTimeout  = 2 * time.Second
+)
+
 // NewZ21Roco constructor
 func NewZ21Roco(netAddr string, netPort uint16) (*Z21Roco, error) {
 	roco := Z21Roco{
+		addr:            fmt.Sprintf("%s:%d", netAddr, netPort),
 		Timeout:         time.Second * 10,
 		ReadInfoTimeout: 1500 * time.Millisecond,
 		wasPowerCutOff:  false,
@@ -37,11 +44,23 @@ func NewZ21Roco(netAddr string, netPort uint16) (*Z21Roco, error) {
 		stop:            make(chan struct{}),
 		metrics:         newZ21Metrics(),
 	}
-	return &roco, roco.connect(fmt.Sprintf("%s:%d", netAddr, netPort))
+	if err := roco.dial(); err != nil {
+		return nil, err
+	}
+	go roco.readLoop()
+	go roco.heartbeatLoop()
+	return &roco, nil
 }
 
 type Z21Roco struct {
-	conn net.Conn
+	addr   string
+	conn   net.Conn
+	connMu sync.RWMutex
+	// reachable is false while a reconnect is in progress or the last
+	// serial-number heartbeat failed.
+	reachable    atomic.Bool
+	reconnecting atomic.Bool
+
 	// Timeout bounds CV programming-track read/verify cycles, which can
 	// be slow on some decoders.
 	Timeout time.Duration
@@ -67,6 +86,10 @@ type Z21Roco struct {
 	obsCh      chan LocoObservation
 	stop       chan struct{}
 
+	// broadcastsWanted is set when ObserveStates has requested
+	// LAN_X_LOCO_INFO push; reconnect re-sends the flags because a
+	// new UDP socket is a new Z21 LAN session.
+	broadcastsWanted atomic.Bool
 	// enableBroadcastsOnce lazily turns on LAN_X_LOCO_INFO push the
 	// first time a consumer asks for observations.
 	enableBroadcastsOnce sync.Once
@@ -107,14 +130,29 @@ type fnState struct {
 	B29_31 byte // DB8
 }
 
-func (z *Z21Roco) connect(netAddr string) error {
-	conn, err := net.Dial("udp", netAddr)
+func (z *Z21Roco) currentConn() net.Conn {
+	z.connMu.RLock()
+	defer z.connMu.RUnlock()
+	return z.conn
+}
+
+// Reachable reports whether the last UDP dial / serial heartbeat succeeded.
+func (z *Z21Roco) Reachable() bool {
+	return z.reachable.Load()
+}
+
+func (z *Z21Roco) dial() error {
+	conn, err := net.Dial("udp", z.addr)
 	if err != nil {
 		return fmt.Errorf("UDP dial error while connecting to Roco Z21: %s", err)
 	}
+	z.connMu.Lock()
+	old := z.conn
 	z.conn = conn
-	// initialize cache + channels (defensive: in case the struct was
-	// assembled without NewZ21Roco)
+	z.connMu.Unlock()
+	if old != nil {
+		_ = old.Close()
+	}
 	z.fnStateMu.Lock()
 	if z.fnStateCache == nil {
 		z.fnStateCache = make(map[LocoAddr]fnState)
@@ -132,8 +170,83 @@ func (z *Z21Roco) connect(netAddr string) error {
 	if z.metrics == nil {
 		z.metrics = newZ21Metrics()
 	}
-	logrus.WithField("remote", netAddr).Info("z21 command station: UDP socket open")
-	go z.readLoop()
+	logrus.WithField("remote", z.addr).Info("z21 command station: UDP socket open")
+	return nil
+}
+
+func (z *Z21Roco) doReconnect() {
+	if !z.reconnecting.CompareAndSwap(false, true) {
+		return
+	}
+	defer z.reconnecting.Store(false)
+	z.reachable.Store(false)
+	for {
+		select {
+		case <-z.stop:
+			return
+		default:
+		}
+		if err := z.dial(); err != nil {
+			logrus.WithError(err).WithField("remote", z.addr).Warn("z21 reconnect failed, retrying")
+			select {
+			case <-z.stop:
+				return
+			case <-time.After(z21ReconnectBackoff):
+			}
+			continue
+		}
+		z.restoreBroadcasts()
+		if err := z.pingSerial(); err != nil {
+			logrus.WithError(err).WithField("remote", z.addr).Warn("z21 reconnect probe failed, retrying")
+			select {
+			case <-z.stop:
+				return
+			case <-time.After(z21ReconnectBackoff):
+			}
+			continue
+		}
+		return
+	}
+}
+
+func (z *Z21Roco) heartbeatLoop() {
+	// UDP Dial succeeds without a peer; probe immediately so /healthz
+	// does not stay green for a full interval against a dead Railbox.
+	if err := z.pingSerial(); err != nil {
+		logrus.WithError(err).WithField("remote", z.addr).Warn("z21 initial heartbeat failed, reconnecting")
+		z.doReconnect()
+	}
+	ticker := time.NewTicker(z21HeartbeatInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-z.stop:
+			return
+		case <-ticker.C:
+			if err := z.pingSerial(); err != nil {
+				logrus.WithError(err).WithField("remote", z.addr).Warn("z21 heartbeat failed, reconnecting")
+				z.doReconnect()
+			}
+		}
+	}
+}
+
+func (z *Z21Roco) pingSerial() error {
+	z.ioMu.Lock()
+	defer z.ioMu.Unlock()
+	z.beginSync()
+	defer z.endSync()
+	if _, err := z.write(z21SerialNumberProbe); err != nil {
+		return err
+	}
+	_, err := z.awaitMatching(z21HeartbeatTimeout, func(pkt []byte) bool {
+		return len(pkt) >= 4 && binary.LittleEndian.Uint16(pkt[2:4]) == 0x0010
+	})
+	if err != nil {
+		z.reachable.Store(false)
+		return err
+	}
+	z.reachable.Store(true)
 	return nil
 }
 
@@ -162,7 +275,15 @@ func (z *Z21Roco) CleanUp() error {
 		close(z.stop)
 	}
 	logrus.Info("z21 command station: closing UDP socket")
-	return z.conn.Close()
+	z.connMu.Lock()
+	conn := z.conn
+	z.conn = nil
+	z.connMu.Unlock()
+	z.reachable.Store(false)
+	if conn != nil {
+		return conn.Close()
+	}
+	return nil
 }
 
 func (Z *Z21Roco) markBuildTrackPowerOff() {
@@ -174,6 +295,7 @@ func (Z *Z21Roco) markBuildTrackPowerOff() {
 // Z21 LAN_X_LOCO_INFO broadcast so the station pushes state changes —
 // including those made by external handsets — to this client.
 func (z *Z21Roco) ObserveStates() <-chan LocoObservation {
+	z.broadcastsWanted.Store(true)
 	z.enableBroadcastsOnce.Do(func() {
 		if err := z.enableLocoInfoBroadcast(); err != nil {
 			logrus.WithError(err).Warn("z21: enabling loco-info broadcast failed; push may not work")
@@ -182,6 +304,15 @@ func (z *Z21Roco) ObserveStates() <-chan LocoObservation {
 		}
 	})
 	return z.obsCh
+}
+
+func (z *Z21Roco) restoreBroadcasts() {
+	if !z.broadcastsWanted.Load() {
+		return
+	}
+	if err := z.enableLocoInfoBroadcast(); err != nil {
+		logrus.WithError(err).Warn("z21: re-enabling loco-info broadcast after reconnect failed")
+	}
 }
 
 // SubscribeLocoInfo implements LocoInfoSubscriber. It sends
@@ -223,8 +354,13 @@ func (z *Z21Roco) readLoop() {
 		default:
 		}
 
-		_ = z.conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
-		n, err := z.conn.Read(buf)
+		conn := z.currentConn()
+		if conn == nil {
+			z.doReconnect()
+			continue
+		}
+		_ = conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+		n, err := conn.Read(buf)
 		if err != nil {
 			if ne, ok := err.(net.Error); ok && ne.Timeout() {
 				continue
@@ -234,8 +370,8 @@ func (z *Z21Roco) readLoop() {
 				return
 			default:
 				z.metrics.incr(&z.metrics.rxErrors)
-				logrus.Debugf("z21 read error: %v", err)
-				time.Sleep(100 * time.Millisecond)
+				logrus.WithError(err).Warn("z21 read error, reconnecting")
+				z.doReconnect()
 				continue
 			}
 		}

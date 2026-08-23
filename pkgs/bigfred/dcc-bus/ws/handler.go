@@ -82,6 +82,16 @@ type Server struct {
 	// the daemon binds to loopback because the reverse proxy on
 	// loco-server already validates Origin).
 	AllowedOrigins []string
+
+	// stationHealth is optional; Z21 reports UDP reachability so
+	// /healthz can fail closed while the station is reconnecting.
+	stationHealth StationHealth
+}
+
+// StationHealth is implemented by command-station drivers that can
+// report whether the physical bus is reachable (Z21 serial heartbeat).
+type StationHealth interface {
+	Reachable() bool
 }
 
 // ServerConfig collects the few knobs Server takes at construction.
@@ -101,6 +111,8 @@ type ServerConfig struct {
 	// ProgrammingEnabled opens the loco.cvRead / cvWrite / addrGet /
 	// addrSet frames. Off by default.
 	ProgrammingEnabled bool
+	// StationHealth, when set, is consulted by /healthz.
+	StationHealth StationHealth
 }
 
 // NewServer returns a ready-to-mount Server. Heartbeat and dead-man
@@ -124,19 +136,20 @@ func NewServer(cfg ServerConfig) *Server {
 		log = logrus.New()
 	}
 	return &Server{
-		verifier:       cfg.Verifier,
-		hub:            cfg.Hub,
-		router:         cfg.Router,
-		log:            log,
-		layoutID:       cfg.LayoutID,
-		csID:           cfg.CommandStation,
-		speedSteps:     steps,
-		heartbeatSecs:  hb,
-		deadmanSecs:    dms,
-		AllowedOrigins: cfg.AllowedOrigins,
-		metrics:        cfg.Metrics,
-		slotsDiag:      cfg.SlotsDiag,
+		verifier:           cfg.Verifier,
+		hub:                cfg.Hub,
+		router:             cfg.Router,
+		log:                log,
+		layoutID:           cfg.LayoutID,
+		csID:               cfg.CommandStation,
+		speedSteps:         steps,
+		heartbeatSecs:      hb,
+		deadmanSecs:        dms,
+		AllowedOrigins:     cfg.AllowedOrigins,
+		metrics:            cfg.Metrics,
+		slotsDiag:          cfg.SlotsDiag,
 		programmingEnabled: cfg.ProgrammingEnabled,
+		stationHealth:      cfg.StationHealth,
 	}
 }
 
@@ -160,11 +173,21 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.NotFound(w, r)
 		}
 	case "/healthz":
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"status":"ok"}`))
+		s.handleHealthz(w)
 	default:
 		http.NotFound(w, r)
 	}
+}
+
+func (s *Server) handleHealthz(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "application/json")
+	if s.stationHealth != nil && !s.stationHealth.Reachable() {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = w.Write([]byte(`{"status":"unhealthy","code":"station_unreachable"}`))
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(`{"status":"ok"}`))
 }
 
 // handleWS authenticates, upgrades, registers the session and runs
@@ -250,8 +273,8 @@ func (s *Server) readLoop(ctx context.Context, sess *Session) {
 			sess.Close(errors.WsCodeSessionReadLoopDone)
 		}
 		s.log.WithFields(logrus.Fields{
-			"sessionId":              sess.ID,
-			"userId":                 sess.UserID,
+			"sessionId":             sess.ID,
+			"userId":                sess.UserID,
 			"userSessionsRemaining": len(s.hub.SessionsForUser(sess.UserID)),
 		}).Info("dcc-bus session closed")
 		// Give the browser time to reconnect before firing the dead-man's

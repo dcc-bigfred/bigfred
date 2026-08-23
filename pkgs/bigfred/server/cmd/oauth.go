@@ -15,7 +15,10 @@ import (
 	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
 )
 
-const oauthCodeTTL = 60 * time.Second
+const (
+	oauthCodeTTL   = 60 * time.Second
+	loginTicketTTL = 60 * time.Second
+)
 
 // OAuth handles authorization-code issue and token exchange.
 type OAuth struct {
@@ -123,18 +126,14 @@ func (o *OAuth) ExchangeCode(ctx context.Context, in TokenExchangeInput) (TokenE
 	if p.ClientID != in.ClientID || p.RedirectURI != in.RedirectURI {
 		return TokenExchangeResult{}, svcerrors.ErrOAuthInvalidGrant
 	}
-	user, err := o.auth.users.FindByID(ctx, p.UserID)
+	id, err := o.identityFor(ctx, p.UserID, p.LayoutID)
 	if err != nil {
+		if errors.Is(err, svcerrors.ErrAccountDeactivated) {
+			return TokenExchangeResult{}, err
+		}
 		return TokenExchangeResult{}, svcerrors.ErrOAuthInvalidGrant
 	}
-	if !user.Active {
-		return TokenExchangeResult{}, svcerrors.ErrAccountDeactivated
-	}
-	layout, err := o.auth.layouts.ValidateForLogin(ctx, p.LayoutID)
-	if err != nil {
-		return TokenExchangeResult{}, err
-	}
-	token, exp, err := o.auth.IssueToken(Identity{User: user, Layout: layout})
+	token, exp, err := o.auth.IssueToken(id)
 	if err != nil {
 		return TokenExchangeResult{}, err
 	}
@@ -145,8 +144,77 @@ func (o *OAuth) ExchangeCode(ctx context.Context, in TokenExchangeInput) (TokenE
 	}, nil
 }
 
+type loginTicketPayload struct {
+	UserID   uint `json:"uid"`
+	LayoutID uint `json:"lid"`
+}
+
+// IssueLoginTicket stores a one-time ticket for an authenticated identity.
+// Used by ephemeral SSO logins so the browser never receives bigfred_session.
+func (o *OAuth) IssueLoginTicket(ctx context.Context, id Identity) (string, error) {
+	if o.redis == nil {
+		return "", fmt.Errorf("oauth: redis unavailable")
+	}
+	ticket, err := randomHex(16)
+	if err != nil {
+		return "", err
+	}
+	payload, err := json.Marshal(loginTicketPayload{
+		UserID:   id.User.ID,
+		LayoutID: id.Layout.ID,
+	})
+	if err != nil {
+		return "", err
+	}
+	if err := o.redis.Set(ctx, loginTicketKey(ticket), payload, loginTicketTTL).Err(); err != nil {
+		return "", err
+	}
+	return ticket, nil
+}
+
+// ConsumeLoginTicket redeems a one-time login ticket. Failure (missing,
+// expired, reused, or inactive user) is ErrInvalidCredentials.
+func (o *OAuth) ConsumeLoginTicket(ctx context.Context, ticket string) (Identity, error) {
+	ticket = strings.TrimSpace(ticket)
+	if ticket == "" || o.redis == nil {
+		return Identity{}, svcerrors.ErrInvalidCredentials
+	}
+	raw, err := o.redis.GetDel(ctx, loginTicketKey(ticket)).Bytes()
+	if err != nil {
+		return Identity{}, svcerrors.ErrInvalidCredentials
+	}
+	var p loginTicketPayload
+	if err := json.Unmarshal(raw, &p); err != nil {
+		return Identity{}, svcerrors.ErrInvalidCredentials
+	}
+	id, err := o.identityFor(ctx, p.UserID, p.LayoutID)
+	if err != nil {
+		return Identity{}, svcerrors.ErrInvalidCredentials
+	}
+	return id, nil
+}
+
+func (o *OAuth) identityFor(ctx context.Context, userID, layoutID uint) (Identity, error) {
+	user, err := o.auth.users.FindByID(ctx, userID)
+	if err != nil {
+		return Identity{}, svcerrors.ErrOAuthInvalidGrant
+	}
+	if !user.Active {
+		return Identity{}, svcerrors.ErrAccountDeactivated
+	}
+	layout, err := o.auth.layouts.ValidateForLogin(ctx, layoutID)
+	if err != nil {
+		return Identity{}, err
+	}
+	return Identity{User: user, Layout: layout}, nil
+}
+
 func oauthCodeKey(code string) string {
 	return "oauth:code:" + code
+}
+
+func loginTicketKey(ticket string) string {
+	return "oauth:login-ticket:" + ticket
 }
 
 func randomHex(nBytes int) (string, error) {

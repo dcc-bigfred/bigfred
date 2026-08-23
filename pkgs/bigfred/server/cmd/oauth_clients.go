@@ -23,6 +23,10 @@ type OAuthClient struct {
 	CorsEnabled  bool     `json:"corsEnabled"`
 	CorsOrigins  []string `json:"corsOrigins"`
 	Enabled      bool     `json:"enabled"`
+	// ShareSession lets a successful SSO login through this client leave a
+	// BigFred web session cookie behind. Off by default: the browser gets a
+	// one-time login ticket instead and never receives bigfred_session.
+	ShareSession bool `json:"shareSession"`
 }
 
 // OAuthClientsRegistry loads `$DATA_DIR/etc/bigfred/oauth-clients/*.json`.

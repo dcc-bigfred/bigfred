@@ -32,6 +32,13 @@ func TestOAuthClientsRegistryLoadAndCors(t *testing.T) {
 		"corsOrigins": ["http://localhost:3000"],
 		"enabled": true
 	}`)
+	write("shared.json", `{
+		"clientId": "shared-app",
+		"clientSecret": "x",
+		"redirectUris": ["http://localhost:4000/cb"],
+		"enabled": true,
+		"shareSession": true
+	}`)
 	write("disabled.json", `{
 		"clientId": "disabled",
 		"clientSecret": "x",
@@ -52,6 +59,16 @@ func TestOAuthClientsRegistryLoadAndCors(t *testing.T) {
 	}
 	if !c.RedirectURIAllowed("http://localhost:8091/auth/callback") {
 		t.Fatal("redirect URI should match")
+	}
+	if c.ShareSession {
+		t.Fatal("missing shareSession must default to false")
+	}
+	shared, ok := reg.Get("shared-app")
+	if !ok {
+		t.Fatal("shared-app client missing")
+	}
+	if !shared.ShareSession {
+		t.Fatal("shareSession true must be preserved")
 	}
 	if c.RedirectURIAllowed("http://evil/") {
 		t.Fatal("evil redirect must fail")

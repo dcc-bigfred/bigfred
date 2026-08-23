@@ -26,12 +26,13 @@ type AuthHandler struct {
 	audit   cmd.AuditPublisher
 	secure  bool // toggles the Secure cookie flag (off in dev over http://)
 	metrics *metrics.Metrics
+	oauth   *cmd.OAuth // nil when Redis/OAuth is unavailable
 }
 
 // NewAuthHandler returns an AuthHandler. `secureCookie` should be
 // true in any production deployment (HTTPS-only).
-func NewAuthHandler(auth *cmd.Auth, layouts *cmd.Layout, sudo *cmd.Sudo, audit cmd.AuditPublisher, secureCookie bool, m *metrics.Metrics) *AuthHandler {
-	return &AuthHandler{auth: auth, layouts: layouts, sudo: sudo, audit: audit, secure: secureCookie, metrics: m}
+func NewAuthHandler(auth *cmd.Auth, layouts *cmd.Layout, sudo *cmd.Sudo, audit cmd.AuditPublisher, secureCookie bool, m *metrics.Metrics, oauth *cmd.OAuth) *AuthHandler {
+	return &AuthHandler{auth: auth, layouts: layouts, sudo: sudo, audit: audit, secure: secureCookie, metrics: m, oauth: oauth}
 }
 
 // Login validates credentials, mints a JWT and sets it as a Secure,
@@ -69,13 +70,32 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if h.metrics != nil {
+		h.metrics.RecordAuthLogin(true)
+	}
+
+	if req.Ephemeral {
+		if h.oauth == nil {
+			writeJSONError(w, http.StatusServiceUnavailable, "sso_unavailable")
+			return
+		}
+		ticket, err := h.oauth.IssueLoginTicket(r.Context(), id)
+		if err != nil {
+			writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(protocol.LoginResponse{
+			MeResponse:  h.buildMeResponse(r, id),
+			LoginTicket: ticket,
+		})
+		return
+	}
+
 	token, expiry, err := h.auth.IssueToken(id)
 	if err != nil {
 		writeJSONErrorCause(w, http.StatusInternalServerError, "internal_error", err)
 		return
-	}
-	if h.metrics != nil {
-		h.metrics.RecordAuthLogin(true)
 	}
 
 	http.SetCookie(w, &http.Cookie{
@@ -94,7 +114,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	})
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(h.buildMeResponse(r, id))
+	_ = json.NewEncoder(w).Encode(protocol.LoginResponse{MeResponse: h.buildMeResponse(r, id)})
 }
 
 // Logout clears the session cookie. Idempotent — calling it without

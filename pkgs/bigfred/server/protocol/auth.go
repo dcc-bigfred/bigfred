@@ -8,9 +8,17 @@ import (
 
 // LoginRequest mirrors POST /api/v1/auth/login.
 type LoginRequest struct {
-	Login    string `json:"login"`
-	PIN      string `json:"pin"`
-	LayoutID uint   `json:"layoutId"`
+	Login     string `json:"login"`
+	PIN       string `json:"pin"`
+	LayoutID  uint   `json:"layoutId"`
+	Ephemeral bool   `json:"ephemeral"`
+}
+
+// LoginResponse is POST /auth/login. MeResponse is embedded so the JSON
+// shape stays backward compatible; loginTicket is set only for ephemeral SSO.
+type LoginResponse struct {
+	MeResponse
+	LoginTicket string `json:"loginTicket,omitempty"`
 }
 
 // SudoElevationResponse carries the active sudo grant, or is absent when nil.

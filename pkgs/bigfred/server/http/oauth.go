@@ -38,20 +38,16 @@ func (h *OAuthHandler) Authorize(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "unsupported_response_type")
 		return
 	}
-	if _, err := h.oauth.AuthorizeValidatedClient(clientID, redirectURI); err != nil {
+	client, err := h.oauth.AuthorizeValidatedClient(clientID, redirectURI)
+	if err != nil {
 		status, code := oauthHTTPStatus(err)
 		writeJSONErrorCause(w, status, code, err)
 		return
 	}
 
-	token := readSessionToken(r)
-	if token == "" {
-		h.redirectToLogin(w, r, preferredLayoutID)
-		return
-	}
-	id, err := h.auth.VerifyToken(r.Context(), token)
-	if err != nil {
-		h.redirectToLogin(w, r, preferredLayoutID)
+	id, ok := h.resolveAuthorizeIdentity(r)
+	if !ok {
+		h.redirectToLogin(w, r, preferredLayoutID, client.ShareSession)
 		return
 	}
 
@@ -85,15 +81,42 @@ func (h *OAuthHandler) Authorize(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, u.String(), http.StatusFound)
 }
 
-func (h *OAuthHandler) redirectToLogin(w http.ResponseWriter, r *http.Request, layoutID uint) {
+func (h *OAuthHandler) resolveAuthorizeIdentity(r *http.Request) (cmd.Identity, bool) {
+	if token := readSessionToken(r); token != "" {
+		id, err := h.auth.VerifyToken(r.Context(), token)
+		if err == nil {
+			return id, true
+		}
+	}
+	ticket := strings.TrimSpace(r.URL.Query().Get("login_ticket"))
+	if ticket == "" {
+		return cmd.Identity{}, false
+	}
+	id, err := h.oauth.ConsumeLoginTicket(r.Context(), ticket)
+	if err != nil {
+		return cmd.Identity{}, false
+	}
+	return id, true
+}
+
+func (h *OAuthHandler) redirectToLogin(w http.ResponseWriter, r *http.Request, layoutID uint, shareSession bool) {
 	returnTo := r.URL.RequestURI()
 	if !strings.HasPrefix(returnTo, "/api/v1/auth/oauth/authorize") {
 		returnTo = "/api/v1/auth/oauth/authorize?" + r.URL.RawQuery
+	}
+	if u, err := url.Parse(returnTo); err == nil {
+		q := u.Query()
+		q.Del("login_ticket")
+		u.RawQuery = q.Encode()
+		returnTo = u.String()
 	}
 	params := url.Values{}
 	params.Set("return_to", returnTo)
 	if layoutID != 0 {
 		params.Set("layout_id", strconv.FormatUint(uint64(layoutID), 10))
+	}
+	if !shareSession {
+		params.Set("ephemeral", "1")
 	}
 	http.Redirect(w, r, "/login?"+params.Encode(), http.StatusFound)
 }

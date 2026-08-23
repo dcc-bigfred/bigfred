@@ -60,7 +60,10 @@ export interface LoginRequest {
   login: string;
   pin: string;
   layoutId: number;
+  ephemeral?: boolean;
 }
+
+export type LoginResponse = CurrentUser & { loginTicket?: string };
 
 export const meQueryKey = ["auth", "me"] as const;
 
@@ -114,11 +117,14 @@ export function useLogin() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: LoginRequest) =>
-      apiFetch<CurrentUser>("/api/v1/auth/login", {
+      apiFetch<LoginResponse>("/api/v1/auth/login", {
         method: "POST",
         body: JSON.stringify(body),
       }),
-    onSuccess: (user) => {
+    onSuccess: (user, variables) => {
+      if (variables.ephemeral) {
+        return;
+      }
       resetSessionExpiryGuard();
       qc.setQueryData(meQueryKey, user);
     },

@@ -78,6 +78,11 @@ export default function LoginPage() {
     return Number.isInteger(n) && n > 0 ? n : 0;
   }, [location.search]);
 
+  const ephemeral = useMemo(() => {
+    const v = new URLSearchParams(location.search).get("ephemeral");
+    return v === "1" || v === "true";
+  }, [location.search]);
+
   // Pre-select preferred layout_id from SSO (wizard) or the system
   // layout on first paint (§7a.1).
   useEffect(() => {
@@ -117,7 +122,22 @@ export default function LoginPage() {
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (layoutId === 0) return;
-    loginMut.mutate({ login: login.trim(), pin, layoutId });
+    loginMut.mutate(
+      { login: login.trim(), pin, layoutId, ephemeral },
+      {
+        onSuccess: (res) => {
+          if (!ephemeral) return;
+          const params = new URLSearchParams(location.search);
+          const returnTo = params.get("return_to");
+          if (returnTo && isSafeSSOReturnTo(returnTo) && res.loginTicket) {
+            const sep = returnTo.includes("?") ? "&" : "?";
+            window.location.assign(
+              `${returnTo}${sep}login_ticket=${encodeURIComponent(res.loginTicket)}`,
+            );
+          }
+        },
+      },
+    );
   };
 
   // ApiError.code is machine-readable on purpose — we map it 1:1 to a

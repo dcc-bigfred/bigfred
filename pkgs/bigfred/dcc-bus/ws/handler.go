@@ -178,7 +178,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := s.verifier.Verify(token)
 	if err != nil {
-		s.log.WithError(err).Debug("dcc-bus reject upgrade")
+		s.log.WithError(err).Info("dcc-bus reject upgrade")
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -189,7 +189,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	}
 	conn, err := websocket.Accept(w, r, accept)
 	if err != nil {
-		s.log.WithError(err).Debug("dcc-bus upgrade failed")
+		s.log.WithError(err).Info("dcc-bus upgrade failed")
 		return
 	}
 

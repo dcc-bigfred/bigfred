@@ -100,6 +100,42 @@ func TestWriteJSONErrorDoesNotLog4xx(t *testing.T) {
 	}
 }
 
+func TestWriteJSONErrorLogs503WithoutStack(t *testing.T) {
+	log, buf := testErrorLogger()
+	cause := errors.New("port map miss")
+	handler := testErrorRouter(log, "/ws", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSONErrorCause(w, http.StatusServiceUnavailable, "dcc_bus_unavailable", cause)
+	})
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/ws", nil))
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `"error":"dcc_bus_unavailable"`) {
+		t.Fatalf("body=%s", body)
+	}
+	if strings.Contains(body, "port map miss") {
+		t.Fatalf("cause leaked into body: %s", body)
+	}
+
+	logged := buf.String()
+	if !strings.Contains(logged, "dcc_bus_unavailable") {
+		t.Fatalf("log missing code: %s", logged)
+	}
+	if !strings.Contains(logged, "port map miss") {
+		t.Fatalf("log missing cause: %s", logged)
+	}
+	if !strings.Contains(logged, "http 5xx") {
+		t.Fatalf("log missing 5xx marker: %s", logged)
+	}
+	if strings.Contains(logged, "goroutine") {
+		t.Fatalf("503 must not log a stack: %s", logged)
+	}
+}
+
 func TestRecovererLogsPanicNotBody(t *testing.T) {
 	log, buf := testErrorLogger()
 	handler := testErrorRouter(log, "/panic", func(http.ResponseWriter, *http.Request) {

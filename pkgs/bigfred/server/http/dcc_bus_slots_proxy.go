@@ -61,9 +61,10 @@ func (p *DccBusSlotsProxy) proxy(w http.ResponseWriter, r *http.Request, daemonP
 	}
 	csID := uint(csID64)
 
-	port := p.dccBus.PortFor(id.Layout.ID, csID)
-	if port == 0 {
-		writeJSONError(w, http.StatusServiceUnavailable, "dcc_bus_unavailable")
+	port, code, err := resolveDccBusPort(r.Context(), p.dccBus, id.Layout.ID, csID)
+	if err != nil {
+		logDccBusProxyFail(w, r, id.Layout.ID, csID, 0, http.StatusServiceUnavailable, code, err)
+		writeJSONErrorBody(w, http.StatusServiceUnavailable, code)
 		return
 	}
 
@@ -81,5 +82,6 @@ func (p *DccBusSlotsProxy) proxy(w http.ResponseWriter, r *http.Request, daemonP
 		req.URL.RawQuery = q.Encode()
 		req.Host = target.Host
 	}
+	rp.ErrorHandler = dccBusProxyErrorHandler(id.Layout.ID, csID, port)
 	rp.ServeHTTP(w, r)
 }

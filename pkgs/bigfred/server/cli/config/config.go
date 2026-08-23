@@ -216,6 +216,58 @@ func WriteDefaultsReference(path string, defaults File) error {
 	return os.WriteFile(path, []byte(content), 0o644)
 }
 
+// PersistJWTSecret writes JWT_SECRET=<secret> into path, replacing a
+// commented or empty JWT_SECRET line and creating the file when missing.
+// The file mode is 0600 because it now holds a signing key.
+func PersistJWTSecret(path, secret string) error {
+	if strings.TrimSpace(secret) == "" {
+		return fmt.Errorf("persist jwt secret: empty secret")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return fmt.Errorf("read %s: %w", path, err)
+		}
+		if writeErr := Write(path, DefaultFile()); writeErr != nil {
+			return writeErr
+		}
+		data, err = os.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("read %s after create: %w", path, err)
+		}
+	}
+	updated := upsertDotenvKey(string(data), "JWT_SECRET", secret)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(path, []byte(updated), 0o600); err != nil {
+		return err
+	}
+	return os.Chmod(path, 0o600)
+}
+
+func upsertDotenvKey(text, key, value string) string {
+	want := key + "=" + value
+	lines := strings.Split(text, "\n")
+	for i, line := range lines {
+		if isDotenvKeyLine(line, key) {
+			lines[i] = want
+			return strings.Join(lines, "\n")
+		}
+	}
+	if text != "" && !strings.HasSuffix(text, "\n") {
+		return text + "\n" + want + "\n"
+	}
+	return text + want + "\n"
+}
+
+func isDotenvKeyLine(line, key string) bool {
+	s := strings.TrimSpace(line)
+	s = strings.TrimPrefix(s, "#")
+	s = strings.TrimSpace(s)
+	return strings.HasPrefix(strings.ToUpper(s), strings.ToUpper(key)+"=")
+}
+
 func renderConfig(d File) string {
 	cors := strings.Join(d.CorsOrigins, ",")
 	redisPort := uint16(6379)
@@ -228,7 +280,7 @@ func renderConfig(d File) string {
 
 HTTP=%s
 DB=%s
-# JWT_SECRET=          # empty = BIGFRED_JWT_SECRET env or random per-run secret
+# JWT_SECRET=          # empty = generate once and persist here; or BIGFRED_JWT_SECRET env
 CORS_ORIGIN=%s
 SECURE_COOKIE=false
 NO_SUPERVISOR=false
@@ -280,7 +332,7 @@ HTTP=%s
 # SQLite database path (flag: --db)
 DB=%s
 
-# JWT signing secret; empty uses BIGFRED_JWT_SECRET or a random per-run secret (flag: --jwt-secret)
+# JWT signing secret; empty generates once and persists into loco-server.conf (flag: --jwt-secret)
 JWT_SECRET=
 
 # Comma-separated CORS allowed origins (flag: --cors-origin)

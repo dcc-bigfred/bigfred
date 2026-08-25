@@ -2,6 +2,7 @@ package remotes
 
 import (
 	"context"
+	"io"
 	"net"
 	"sync/atomic"
 	"testing"
@@ -9,10 +10,12 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
+	"github.com/sirupsen/logrus"
 
 	"github.com/keskad/loco/pkgs/bigfred/contract"
 	"github.com/keskad/loco/pkgs/bigfred/remotepairing"
 	"github.com/keskad/loco/pkgs/bigfred/remotes/inbound"
+	"github.com/keskad/loco/pkgs/loco/commandstation"
 )
 
 func TestCoordinatorBuildSnapshotIPStickiness(t *testing.T) {
@@ -549,5 +552,91 @@ func TestDropPresenceKeepsRedisPairing(t *testing.T) {
 	}
 	if _, ok, err := store.GetActiveByClientKey(ctx, 1, 2, clientKey); err != nil || !ok {
 		t.Fatalf("redis pairing must survive drop: ok=%v err=%v", ok, err)
+	}
+}
+
+type recordingDrive struct {
+	brakes atomic.Int32
+	estops atomic.Int32
+}
+
+func (d *recordingDrive) AuthorizeDrive(uint, uint16, DriveScope) bool { return true }
+func (d *recordingDrive) CollectHandsetDriveTargets(_ context.Context, _ uint, subscribed []uint16, _ DriveScope) []uint16 {
+	return subscribed
+}
+func (d *recordingDrive) ApplyHandsetIdleBrake(context.Context, HandsetSession, []uint16, DriveScope) {
+	d.brakes.Add(1)
+}
+func (d *recordingDrive) ApplyHandsetPilotEStop(context.Context, HandsetSession, uint16) {
+	d.estops.Add(1)
+}
+func (d *recordingDrive) TriggerLayoutRadioStop(context.Context, uint, string) error { return nil }
+func (d *recordingDrive) TriggerStationTrackPowerOn(context.Context, uint, string) error {
+	return nil
+}
+func (d *recordingDrive) ReadLocoCV(uint16, commandstation.CVNum) (int, error) { return 0, nil }
+
+func TestSweepWithrottleBrakeWaitsForMinBrakeWindow(t *testing.T) {
+	reg := inbound.NewClientRegistry()
+	drive := &recordingDrive{}
+	log := logrus.New()
+	log.SetOutput(io.Discard)
+	c := NewCoordinator(CoordinatorConfig{
+		LayoutID:         1,
+		CommandStationID: 2,
+		Registry:         reg,
+		Drive:            drive,
+		Log:              log,
+	})
+	c.RegisterPolicy(contract.RemoteProtocolWithrottle, ProtocolPolicy{
+		IdleEvict:         time.Hour,
+		HeartbeatTimeout:  15 * time.Second,
+		MinBrakeWindow:    12 * time.Second,
+		SweepKeepsPairing: true,
+	})
+
+	udpAddr, _ := net.ResolveUDPAddr("udp", "10.0.0.8:12090")
+	client := reg.TouchByEndpoint(contract.RemoteProtocolWithrottle, "4242", udpAddr, time.Now().UTC().Add(-8*time.Second))
+	reg.SetSession(client.Key, &contract.RemoteSessionWire{
+		UserID:           9,
+		ClientKey:        client.Key,
+		HandsetBrakeSecs: 6,
+	})
+	reg.SetHeartbeatMonitor(client.Key, true)
+	reg.SubscribeLoco(client.Key, 3)
+
+	c.sweep(context.Background())
+	if got := drive.brakes.Load(); got != 0 {
+		t.Fatalf("idle brake at 8s with 12s floor: got %d", got)
+	}
+	if drive.estops.Load() != 0 {
+		t.Fatal("heartbeat estop must not fire before HeartbeatTimeout")
+	}
+	if _, ok := reg.Get(client.Key); !ok {
+		t.Fatal("client must stay listed inside the heartbeat window")
+	}
+
+	reg.TouchLastSeen(client.Key, time.Now().UTC().Add(-13*time.Second))
+	c.sweep(context.Background())
+	if got := drive.brakes.Load(); got != 1 {
+		t.Fatalf("want 1 idle brake at 13s, got %d", got)
+	}
+	if drive.estops.Load() != 0 {
+		t.Fatal("heartbeat estop must wait for HeartbeatTimeout")
+	}
+	if !reg.IdleBraked(client.Key) {
+		t.Fatal("expected IdleBraked after brake")
+	}
+	if _, ok := reg.Get(client.Key); !ok {
+		t.Fatal("idle brake must keep presence")
+	}
+
+	reg.TouchLastSeen(client.Key, time.Now().UTC().Add(-16*time.Second))
+	c.sweep(context.Background())
+	if got := drive.estops.Load(); got != 1 {
+		t.Fatalf("want heartbeat estop at 16s, got %d", got)
+	}
+	if _, ok := reg.Get(client.Key); ok {
+		t.Fatal("heartbeat estop must drop presence")
 	}
 }

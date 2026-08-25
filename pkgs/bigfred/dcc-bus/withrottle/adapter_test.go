@@ -246,3 +246,82 @@ func TestHandleAcquireFailureReleasesLoco(t *testing.T) {
 		t.Fatal("acquire did not finish")
 	}
 }
+
+func TestJoinHMAndTruncate(t *testing.T) {
+	if got := joinHM("", ""); got != "" {
+		t.Fatalf("empty join = %q", got)
+	}
+	if got := joinHM("busy", ""); got != "busy" {
+		t.Fatalf("code only = %q", got)
+	}
+	if got := joinHM("", "detail"); got != "detail" {
+		t.Fatalf("detail only = %q", got)
+	}
+	got := truncateUTF8(strings.Repeat("x", 80), maxHMPayload)
+	if len(got) != maxHMPayload {
+		t.Fatalf("len=%d want %d", len(got), maxHMPayload)
+	}
+	if got == "" {
+		t.Fatal("truncated payload must stay non-empty")
+	}
+}
+
+func TestSendLocoErrorTruncatesPayload(t *testing.T) {
+	srv, err := New(Config{LayoutID: 1, CommandStationID: 1, SpeedSteps: 128, Drive: acquireOrderDrive{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	clientConn, serverConn := net.Pipe()
+	defer clientConn.Close()
+	defer serverConn.Close()
+	client := srv.registry.TouchByDeviceId("hm-trunc", serverConn, time.Now().UTC())
+	resp := NewResponder(srv, client, '0')
+	detail := strings.Repeat("e", 80)
+	done := make(chan error, 1)
+	go func() {
+		done <- resp.SendLocoError(context.Background(), 3, "command_station_error", detail)
+	}()
+	if err := clientConn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	scanner := bufio.NewScanner(clientConn)
+	if !scanner.Scan() {
+		t.Fatalf("no HM line: %v", scanner.Err())
+	}
+	line := strings.TrimRight(scanner.Text(), "\r\n")
+	if !strings.HasPrefix(line, "HM") {
+		t.Fatalf("line = %q", line)
+	}
+	if payload := line[2:]; len(payload) > maxHMPayload {
+		t.Fatalf("HM payload len=%d want <= %d (%q)", len(payload), maxHMPayload, payload)
+	}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSendLocoErrorSkipsEmpty(t *testing.T) {
+	srv, err := New(Config{LayoutID: 1, CommandStationID: 1, SpeedSteps: 128, Drive: acquireOrderDrive{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	clientConn, serverConn := net.Pipe()
+	defer clientConn.Close()
+	defer serverConn.Close()
+	client := srv.registry.TouchByDeviceId("hm-empty", serverConn, time.Now().UTC())
+	resp := NewResponder(srv, client, '0')
+	if err := resp.SendLocoError(context.Background(), 3, "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := clientConn.SetReadDeadline(time.Now().Add(50 * time.Millisecond)); err != nil {
+		t.Fatal(err)
+	}
+	buf := make([]byte, 8)
+	n, err := clientConn.Read(buf)
+	if n != 0 {
+		t.Fatalf("unexpected bytes %q", buf[:n])
+	}
+	if err == nil {
+		t.Fatal("expected timeout, got line")
+	}
+}

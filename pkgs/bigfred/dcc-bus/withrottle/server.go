@@ -793,11 +793,12 @@ func (s *Server) noteClientActivity(ctx context.Context, clientKey string) {
 }
 
 func (s *Server) touchClientActivity(ctx context.Context, clientKey, line string) {
-	if line == "*" || strings.HasPrefix(line, "N") || strings.HasPrefix(line, "M") {
-		s.registry.touchLastSeen(clientKey, time.Now().UTC())
-		if s.registry.IsPaired(clientKey) && s.cfg.Store != nil {
-			s.registry.MarkSeenDirty(clientKey, contract.NowMS())
-		}
+	if line == "" {
+		return
+	}
+	s.registry.touchLastSeen(clientKey, time.Now().UTC())
+	if s.registry.IsPaired(clientKey) && s.cfg.Store != nil {
+		s.registry.MarkSeenDirty(clientKey, contract.NowMS())
 	}
 }
 

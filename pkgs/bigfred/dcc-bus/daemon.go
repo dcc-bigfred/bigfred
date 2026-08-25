@@ -610,6 +610,7 @@ func (d *Daemon) startRemoteGateways(ctx context.Context) error {
 			IdleEvict:         withrottle.IdleEvictAfter * time.Second,
 			StickyIdleEvict:   contract.RemoteStickySessionIdle,
 			HeartbeatTimeout:  withrottle.HeartbeatTimeout(heartbeatSecs),
+			MinBrakeWindow:    time.Duration((heartbeatSecs + 2) * float64(time.Second)),
 			SweepKeepsPairing: true,
 		})
 		gw, err := remotes.NewGateway(ctx, withrottle.GatewayName, remotes.GatewayConfig{

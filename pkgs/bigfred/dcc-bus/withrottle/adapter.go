@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/sirupsen/logrus"
 
@@ -95,11 +97,7 @@ func (r *Responder) SendLocoState(ctx context.Context, snap contract.LocoStateWi
 func (r *Responder) SendLocoError(ctx context.Context, addr uint16, code, detail string) error {
 	_ = ctx
 	_ = addr
-	msg := code
-	if detail != "" {
-		msg = code + ": " + detail
-	}
-	return r.server.writeLine(r.client.Key, "HM"+msg)
+	return r.server.writeHM(r.client.Key, joinHM(code, detail))
 }
 
 // Adapter maps inbound WiThrottle lines to remotes.InboundDrivePort.
@@ -171,7 +169,7 @@ func (a *Adapter) HandleAcquire(ctx context.Context, client *Client, cmd MComman
 		})
 		a.logDriveFailure(client, addr, "acquire", result.Code)
 		_ = a.server.writeLine(client.Key, buildReleaseLine(cmd.ThrottleID, key))
-		a.server.writeLine(client.Key, "HM"+result.Code)
+		_ = a.server.writeHM(client.Key, result.Code)
 		return
 	}
 }
@@ -421,6 +419,45 @@ func (a *Adapter) logDriveFailure(client *Client, addr uint16, action, code stri
 		"action": action,
 		"code":   code,
 	}).Info("withrottle drive command failed")
+}
+
+func (s *Server) writeHM(key, msg string) error {
+	msg = strings.TrimSpace(msg)
+	if msg == "" {
+		return nil
+	}
+	if len(msg) > maxHMPayload {
+		msg = truncateUTF8(msg, maxHMPayload)
+	}
+	return s.writeLine(key, "HM"+msg)
+}
+
+func joinHM(code, detail string) string {
+	code = strings.TrimSpace(code)
+	detail = strings.TrimSpace(detail)
+	switch {
+	case code == "" && detail == "":
+		return ""
+	case detail == "":
+		return code
+	case code == "":
+		return detail
+	default:
+		return code + ": " + detail
+	}
+}
+
+const maxHMPayload = 64
+
+func truncateUTF8(s string, max int) string {
+	if max <= 0 || len(s) <= max {
+		return s
+	}
+	s = s[:max]
+	for len(s) > 0 && !utf8.ValidString(s) {
+		s = s[:len(s)-1]
+	}
+	return s
 }
 
 func parseAcquireAddr(locoKey string, props []string) (addr uint16, ok bool) {

@@ -32,13 +32,14 @@ type ProtocolPolicy struct {
 	IdleEvict       time.Duration
 	StickyIdleEvict time.Duration
 	IPStickiness    bool
-	// HeartbeatTimeout, when > 0, evicts a paired client whose last
-	// activity is older than the timeout. Used by line-oriented protocols
-	// with a dead-man's switch (e.g. WiThrottle heartbeat). Z21 leaves
+	// HeartbeatTimeout, when > 0, estops a paired client whose last
+	// activity is older than the timeout (WiThrottle *+). Z21 leaves
 	// this zero and relies on IdleEvict/StickyIdleEvict.
-	// TODO(withrottle): on expiry, emit a handset emergency stop before
-	// evicting instead of a plain idle evict.
 	HeartbeatTimeout time.Duration
+	// MinBrakeWindow floors the session idle-brake so a protocol with
+	// an advertised heartbeat cannot be braked inside that heartbeat.
+	// Zero means "use the session value as-is" (Z21).
+	MinBrakeWindow time.Duration
 	// SweepKeepsPairing makes the idle sweep drop only in-process presence and
 	// leave the Redis session to its own TTL. Set for protocols with an explicit
 	// disconnect signal (WiThrottle TCP), where losing presence does not mean
@@ -521,6 +522,9 @@ func (c *Coordinator) sweep(ctx context.Context) {
 		policy := c.policyFor(cl.Protocol)
 		if cl.Session != nil {
 			brakeAfter := time.Duration(contract.NormaliseHandsetBrakeSecs(cl.Session.HandsetBrakeSecs)) * time.Second
+			if policy.MinBrakeWindow > brakeAfter {
+				brakeAfter = policy.MinBrakeWindow
+			}
 			if idle >= brakeAfter && !cl.IdleBraked {
 				c.brakeHandsetLocos(ctx, cl)
 				c.registry.SetIdleBraked(cl.Key, true)

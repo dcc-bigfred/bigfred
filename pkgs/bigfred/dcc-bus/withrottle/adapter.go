@@ -158,7 +158,8 @@ func (a *Adapter) HandleAcquire(ctx context.Context, client *Client, cmd MComman
 		tw.locos[addr] = key
 		tw.lastLoco = addr
 	})
-	for _, line := range buildAcquireReply(cmd.ThrottleID, addr, a.server.functionsForAddr(addr)) {
+	snap := a.drive.LocoSnapshot(addr)
+	for _, line := range buildAcquireReply(cmd.ThrottleID, addr, a.server.functionsForAddr(addr), snap.Speed, snap.Forward, a.server.cfg.SpeedSteps) {
 		_ = a.server.writeLine(client.Key, line)
 	}
 	resp := NewResponder(a.server, client, cmd.ThrottleID)

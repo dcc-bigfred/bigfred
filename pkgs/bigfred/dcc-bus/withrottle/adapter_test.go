@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"net"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -47,7 +48,7 @@ func (acquireOrderDrive) Subscribe(ctx context.Context, _ remotes.ThrottleActor,
 }
 func (acquireOrderDrive) Release(remotes.ThrottleActor, uint16) {}
 func (acquireOrderDrive) LocoSnapshot(uint16) contract.LocoStateWire {
-	return contract.LocoStateWire{}
+	return contract.LocoStateWire{Forward: true}
 }
 
 func TestAcquireSnapshotFollowsDefaultDump(t *testing.T) {
@@ -106,6 +107,81 @@ func TestAcquireSnapshotFollowsDefaultDump(t *testing.T) {
 	if defaultSpeedAt < 0 || snapshotSpeedAt <= defaultSpeedAt {
 		t.Fatalf("default speed at %d, snapshot speed at %d", defaultSpeedAt, snapshotSpeedAt)
 	}
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("acquire did not finish")
+	}
+}
+
+type snapshotSpeedDrive struct{ acquireOrderDrive }
+
+func (snapshotSpeedDrive) LocoSnapshot(uint16) contract.LocoStateWire {
+	return contract.LocoStateWire{Speed: 42, Forward: false}
+}
+
+func TestAcquireDumpUsesSnapshotSpeed(t *testing.T) {
+	srv, err := New(Config{
+		LayoutID:         1,
+		CommandStationID: 1,
+		SpeedSteps:       128,
+		Drive:            snapshotSpeedDrive{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	clientConn, serverConn := net.Pipe()
+	defer clientConn.Close()
+	defer serverConn.Close()
+	client := srv.registry.TouchByDeviceId("snap-speed", serverConn, time.Now().UTC())
+	srv.registry.SetPaired(client.Key, &contract.RemoteSessionWire{
+		ClientKey:        client.Key,
+		UserID:           7,
+		AllowAllVehicles: true,
+	})
+
+	done := make(chan struct{})
+	go func() {
+		srv.adapter.HandleAcquire(context.Background(), client, MCommand{
+			ThrottleID: '0',
+			Op:         MOpAdd,
+			LocoKey:    "S3",
+		})
+		close(done)
+	}()
+
+	if err := clientConn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	wantV := "M0AS3<;>V" + strconv.Itoa(wireSpeedFromDCC(42, 128))
+	scanner := bufio.NewScanner(clientConn)
+	var dumpV, dumpR string
+	for scanner.Scan() {
+		line := strings.TrimRight(scanner.Text(), "\r\n")
+		if strings.HasPrefix(line, "M0AS3<;>V") && dumpV == "" {
+			dumpV = line
+		}
+		if strings.HasPrefix(line, "M0AS3<;>R") && dumpR == "" {
+			dumpR = line
+		}
+		if dumpV != "" && dumpR != "" {
+			break
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if dumpV != wantV {
+		t.Fatalf("dump speed %q want %q", dumpV, wantV)
+	}
+	if dumpR != "M0AS3<;>R0" {
+		t.Fatalf("dump dir %q want M0AS3<;>R0", dumpR)
+	}
+	// Drain remaining dump/subscribe lines so HandleAcquire is not blocked on the pipe.
+	go func() {
+		for scanner.Scan() {
+		}
+	}()
 	select {
 	case <-done:
 	case <-time.After(2 * time.Second):

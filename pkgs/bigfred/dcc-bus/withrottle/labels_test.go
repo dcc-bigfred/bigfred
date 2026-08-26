@@ -1,6 +1,7 @@
 package withrottle
 
 import (
+	"strconv"
 	"testing"
 
 	"github.com/keskad/loco/pkgs/bigfred/contract"
@@ -21,12 +22,33 @@ func TestBuildFunctionLabelLine(t *testing.T) {
 func TestBuildAcquireReplyIncludesLabels(t *testing.T) {
 	lines := buildAcquireReply('0', 3, []contract.FunctionDefinition{
 		{Num: 1, Name: "Bell"},
-	})
+	}, 0, true, 128)
 	if len(lines) < 3 {
 		t.Fatalf("lines: %v", lines)
 	}
 	if lines[1] != "M0LS3<;>]\\[]\\[Bell" {
 		t.Fatalf("labels: %q", lines[1])
+	}
+}
+
+func TestBuildAcquireReplyUsesSnapshotSpeedAndDirection(t *testing.T) {
+	lines := buildAcquireReply('0', 3, nil, 42, false, 128)
+	wantV := "M0AS3<;>V" + strconv.Itoa(wireSpeedFromDCC(42, 128))
+	wantR := "M0AS3<;>R0"
+	var gotV, gotR string
+	for _, line := range lines {
+		if len(line) >= 10 && line[:9] == "M0AS3<;>V" {
+			gotV = line
+		}
+		if len(line) >= 10 && line[:9] == "M0AS3<;>R" {
+			gotR = line
+		}
+	}
+	if gotV != wantV {
+		t.Fatalf("speed line %q want %q", gotV, wantV)
+	}
+	if gotR != wantR {
+		t.Fatalf("dir line %q want %q", gotR, wantR)
 	}
 }
 

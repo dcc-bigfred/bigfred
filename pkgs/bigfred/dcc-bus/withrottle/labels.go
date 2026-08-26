@@ -33,9 +33,15 @@ func buildFunctionLabelLine(throttleID byte, locoKey string, defs []contract.Fun
 }
 
 // buildAcquireReply returns the verbose state dump after a successful acquire.
-func buildAcquireReply(throttleID byte, addr uint16, defs []contract.FunctionDefinition) []string {
+// speed/forward come from the in-memory loco snapshot so a re-acquire does
+// not report V0/R1 when the locomotive is already moving.
+func buildAcquireReply(throttleID byte, addr uint16, defs []contract.FunctionDefinition, speed uint8, forward bool, speedSteps uint) []string {
 	id := string(throttleID)
 	key := locoKeyForAddr(addr)
+	dir := 0
+	if forward {
+		dir = 1
+	}
 	lines := []string{
 		fmt.Sprintf("M%s+%s%s", id, key, propSep),
 	}
@@ -46,8 +52,8 @@ func buildAcquireReply(throttleID byte, addr uint16, defs []contract.FunctionDef
 		lines = append(lines, fmt.Sprintf("M%sA%s%sF0%d", id, key, propSep, fn))
 	}
 	lines = append(lines,
-		fmt.Sprintf("M%sA%s%sV0", id, key, propSep),
-		fmt.Sprintf("M%sA%s%sR1", id, key, propSep),
+		fmt.Sprintf("M%sA%s%sV%d", id, key, propSep, wireSpeedFromDCC(speed, speedSteps)),
+		fmt.Sprintf("M%sA%s%sR%d", id, key, propSep, dir),
 		fmt.Sprintf("M%sA%s%ss1", id, key, propSep),
 	)
 	return lines

@@ -15,14 +15,14 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/keskad/loco/pkgs/bigfred/contract"
-	dccbuscli "github.com/keskad/loco/pkgs/bigfred/dcc-bus/cli"
-	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/protocol"
-	"github.com/keskad/loco/pkgs/bigfred/server/domain"
-	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
-	"github.com/keskad/loco/pkgs/bigfred/server/metrics"
-	"github.com/keskad/loco/pkgs/bigfred/server/microinit"
-	"github.com/keskad/loco/pkgs/bigfred/server/repo"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/contract"
+	dccbuscli "github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/cli"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/protocol"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/domain"
+	svcerrors "github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/errors"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/metrics"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/microinit"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/repo"
 )
 
 // DccBusGroupName is retained for compatibility. dcc-bus services are

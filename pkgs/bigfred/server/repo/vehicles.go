@@ -8,7 +8,7 @@ import (
 	"github.com/go-rel/rel/sort"
 	"github.com/go-rel/rel/where"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/domain"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/domain"
 )
 
 // ErrVehicleNotFound is returned when no vehicle row matches.

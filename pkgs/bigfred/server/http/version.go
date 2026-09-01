@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/version"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/version"
 )
 
 // VersionHandler serves GET /api/v1/version (public, no auth).

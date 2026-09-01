@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/domain"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/domain"
 )
 
 // SudoElevationStore persists short-lived layout-scoped sudo grants (§7a.7).

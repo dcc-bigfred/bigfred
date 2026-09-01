@@ -10,8 +10,8 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/keskad/loco/pkgs/bigfred/loadtest/dccbus"
-	"github.com/keskad/loco/pkgs/bigfred/loadtest/httpapi"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/loadtest/dccbus"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/loadtest/httpapi"
 )
 
 const maxFunction = uint8(28) // LocoNet driver supports F0–F28

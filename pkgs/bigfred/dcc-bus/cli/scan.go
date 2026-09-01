@@ -12,9 +12,9 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
-	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/netutil"
-	"github.com/keskad/loco/pkgs/bigfred/platform"
-	"github.com/keskad/loco/pkgs/loco/commandstation"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/netutil"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/platform"
+	"github.com/dcc-bigfred/bigfred/pkgs/loco/commandstation"
 )
 
 const scanTimeout = 60 * time.Second

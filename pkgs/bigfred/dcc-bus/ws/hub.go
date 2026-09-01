@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/keskad/loco/pkgs/bigfred/contract"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/contract"
 )
 
 // Hub is the in-memory registry of every Session currently connected

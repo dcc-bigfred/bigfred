@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
-	"github.com/keskad/loco/pkgs/bigfred/server/validation"
+	svcerrors "github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/errors"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/validation"
 )
 
 func TestSanitiseVehicleTemplateName(t *testing.T) {

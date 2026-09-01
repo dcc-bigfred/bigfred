@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/ws"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/ws"
 )
 
 func TestEStopTargetServiceRequiresDccBus(t *testing.T) {

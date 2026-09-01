@@ -1,7 +1,7 @@
 package z21server
 
 import (
-	"github.com/keskad/loco/pkgs/loco/commandstation"
+	"github.com/dcc-bigfred/bigfred/pkgs/loco/commandstation"
 )
 
 const (

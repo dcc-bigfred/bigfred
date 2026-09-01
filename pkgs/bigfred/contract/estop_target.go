@@ -1,6 +1,6 @@
 package contract
 
-import "github.com/keskad/loco/pkgs/bigfred/server/domain"
+import "github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/domain"
 
 // TypeSystemEStopTarget is the control-plane per-target emergency stop
 // action (§4.2, §6.3d — „Zatrzymaj skład").

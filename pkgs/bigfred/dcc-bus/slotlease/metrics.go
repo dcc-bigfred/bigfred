@@ -116,7 +116,7 @@ func NewMetrics(cfg MetricsConfig) (Recorder, error) {
 	}
 	meter := cfg.Meter
 	if meter == nil {
-		meter = otel.Meter("github.com/keskad/loco/pkgs/bigfred/dcc-bus/slotlease")
+		meter = otel.Meter("github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/slotlease")
 	}
 	base := []attribute.KeyValue{
 		attribute.Int("layout.id", int(cfg.LayoutID)),

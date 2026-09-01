@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/keskad/loco/pkgs/loco/commandstation"
+	"github.com/dcc-bigfred/bigfred/pkgs/loco/commandstation"
 )
 
 // EnvLanPrefix is set by the Android host process so StreamScanCommandStations

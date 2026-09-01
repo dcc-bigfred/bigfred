@@ -1,6 +1,6 @@
 package security
 
-import "github.com/keskad/loco/pkgs/bigfred/server/domain"
+import "github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/domain"
 
 // DriveSecurityContext evaluates driving authority from an owner plus
 // active-lessee projection (§4.3). Callers construct it with a zero

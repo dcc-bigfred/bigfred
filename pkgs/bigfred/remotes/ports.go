@@ -6,7 +6,7 @@ package remotes
 import (
 	"context"
 
-	"github.com/keskad/loco/pkgs/bigfred/contract"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/contract"
 )
 
 // HandsetSession identifies one remote control client.

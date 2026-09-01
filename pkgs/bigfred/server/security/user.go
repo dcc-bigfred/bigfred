@@ -1,7 +1,7 @@
 package security
 
 import (
-	"github.com/keskad/loco/pkgs/bigfred/server/domain"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/domain"
 )
 
 // UserSecurityContext is the stateless policy struct that gates every

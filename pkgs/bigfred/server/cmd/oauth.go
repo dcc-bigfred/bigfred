@@ -12,7 +12,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
+	svcerrors "github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/errors"
 )
 
 const (

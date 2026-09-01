@@ -1,7 +1,7 @@
 package validation
 
 import (
-	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
+	svcerrors "github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/errors"
 )
 
 const maxLayoutMaxVehiclesPerUser = 120

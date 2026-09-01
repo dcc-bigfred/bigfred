@@ -1,8 +1,8 @@
 package cmd
 
 import (
-	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/service/station"
-	"github.com/keskad/loco/pkgs/loco/commandstation"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/service/station"
+	"github.com/dcc-bigfred/bigfred/pkgs/loco/commandstation"
 )
 
 // forceRevalidateSlot drops any debounce window and re-queries the command

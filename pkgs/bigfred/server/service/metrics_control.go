@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/metrics"
-	"github.com/keskad/loco/pkgs/bigfred/server/ws"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/metrics"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/ws"
 )
 
 // MetricsControlHandler wraps a control-plane dispatcher with WS command timing.

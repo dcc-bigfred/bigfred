@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/keskad/loco/pkgs/bigfred/contract"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/contract"
 )
 
 // LocoStateNotifier fans locomotive state updates to registered observers.

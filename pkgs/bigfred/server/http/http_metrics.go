@@ -7,7 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/metrics"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/metrics"
 )
 
 // MetricsMiddleware records HTTP request latency and volume with low-cardinality

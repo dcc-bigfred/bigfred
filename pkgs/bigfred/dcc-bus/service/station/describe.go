@@ -3,7 +3,7 @@ package station
 import (
 	"fmt"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/domain"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/domain"
 )
 
 // Describe returns a log-safe summary of how the daemon will dial

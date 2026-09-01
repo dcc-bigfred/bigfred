@@ -8,8 +8,8 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/domain"
-	"github.com/keskad/loco/pkgs/loco/commandstation"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/domain"
+	"github.com/dcc-bigfred/bigfred/pkgs/loco/commandstation"
 )
 
 // Z21 metric names. Kept under the same bigfred.dcc_bus.* namespace as the
@@ -51,7 +51,7 @@ func StartZ21Metrics(src commandstation.Z21MetricsSource, cfg Z21MetricsConfig) 
 	}
 	meter := cfg.Meter
 	if meter == nil {
-		meter = otel.Meter("github.com/keskad/loco/pkgs/bigfred/dcc-bus/station")
+		meter = otel.Meter("github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/station")
 	}
 	base := []attribute.KeyValue{
 		attribute.String("station.kind", string(cfg.Kind)),

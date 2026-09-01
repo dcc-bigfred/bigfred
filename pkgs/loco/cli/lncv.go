@@ -6,8 +6,7 @@ import (
 	"strconv"
 	"time"
 
-	locoapp "github.com/keskad/loco/pkgs/loco/app"
-	rbapp "github.com/keskad/loco/pkgs/rb/app"
+	"github.com/dcc-bigfred/bigfred/pkgs/loco/app"
 	"github.com/spf13/cobra"
 )
 
@@ -28,8 +27,8 @@ func defaultLncvCmdArgs() lncvCmdArgs {
 	}
 }
 
-func (a lncvCmdArgs) connArgs(cv int) rbapp.LNCVArgs {
-	return rbapp.LNCVArgs{
+func (a lncvCmdArgs) connArgs(cv int) app.LNCVArgs {
+	return app.LNCVArgs{
 		Device:     a.Device,
 		Baudrate:   a.Baudrate,
 		Article:    a.Article,
@@ -40,7 +39,7 @@ func (a lncvCmdArgs) connArgs(cv int) rbapp.LNCVArgs {
 	}
 }
 
-func addLNCVFlags(cmd *cobra.Command, loc *locoapp.LocoApp, args *lncvCmdArgs) {
+func addLNCVFlags(cmd *cobra.Command, loc *app.LocoApp, args *lncvCmdArgs) {
 	cmd.Flags().BoolVarP(&loc.Debug, "debug", "v", false, "Increase verbosity to the debug level")
 	cmd.Flags().IntVarP(&args.Article, "article", "a", args.Article, "LNCV article number (6312 for Uhlenbrock 63120; 63120 is accepted)")
 	cmd.Flags().IntVar(&args.ModuleAddr, "addr", args.ModuleAddr, "Module address on LocoNet (LNCV 0, default 1)")
@@ -49,14 +48,14 @@ func addLNCVFlags(cmd *cobra.Command, loc *locoapp.LocoApp, args *lncvCmdArgs) {
 	cmd.Flags().Uint16Var(&args.Timeout, "timeout", 4, "LocoNet response timeout in seconds")
 }
 
-func resolveLncvDevice(loc *locoapp.LocoApp, device string) string {
+func resolveLncvDevice(loc *app.LocoApp, device string) string {
 	if device != "" {
 		return device
 	}
 	return loc.Config.Server.Device
 }
 
-func NewLNCVCommand(loc *locoapp.LocoApp) *cobra.Command {
+func NewLNCVCommand(loc *app.LocoApp) *cobra.Command {
 	command := &cobra.Command{
 		Use:   "lncv",
 		Short: "Program Uhlenbrock LNCV modules over LocoNet (e.g. Uhlenbrock 63120)",
@@ -67,12 +66,12 @@ LocoNet adapter (e.g. Uhlenbrock 63120) on the host. Use factory baud 115200
 until LNCV 2 is set to 57600.
 
 Example — set Uhlenbrock 63120 to 57600 baud + Direktmodus:
-  rb lncv set --device /dev/ttyACM0 --baud 115200 4 1
-  rb lncv set --device /dev/ttyACM0 --baud 115200 2 3
+  loco lncv set --device /dev/ttyACM0 --baud 115200 4 1
+  loco lncv set --device /dev/ttyACM0 --baud 115200 2 3
 
 Example — verify current settings:
-  rb lncv get --device /dev/ttyACM0 --baud 57600 2
-  rb lncv get --device /dev/ttyACM0 --baud 57600 4`,
+  loco lncv get --device /dev/ttyACM0 --baud 57600 2
+  loco lncv get --device /dev/ttyACM0 --baud 57600 4`,
 		RunE: func(command *cobra.Command, args []string) error {
 			return errors.New("please select a command")
 		},
@@ -83,7 +82,7 @@ Example — verify current settings:
 	return command
 }
 
-func NewLNCVSetCommand(loc *locoapp.LocoApp) *cobra.Command {
+func NewLNCVSetCommand(loc *app.LocoApp) *cobra.Command {
 	cmdArgs := defaultLncvCmdArgs()
 
 	command := &cobra.Command{
@@ -106,7 +105,7 @@ func NewLNCVSetCommand(loc *locoapp.LocoApp) *cobra.Command {
 
 			conn := cmdArgs.connArgs(cv)
 			conn.Device = resolveLncvDevice(loc, cmdArgs.Device)
-			result, err := rbapp.LNCVSet(conn, val)
+			result, err := app.LNCVSet(conn, val)
 			if err != nil {
 				return err
 			}
@@ -121,7 +120,7 @@ func NewLNCVSetCommand(loc *locoapp.LocoApp) *cobra.Command {
 	return command
 }
 
-func NewLNCVGetCommand(loc *locoapp.LocoApp) *cobra.Command {
+func NewLNCVGetCommand(loc *app.LocoApp) *cobra.Command {
 	cmdArgs := defaultLncvCmdArgs()
 
 	command := &cobra.Command{
@@ -140,7 +139,7 @@ func NewLNCVGetCommand(loc *locoapp.LocoApp) *cobra.Command {
 
 			conn := cmdArgs.connArgs(cv)
 			conn.Device = resolveLncvDevice(loc, cmdArgs.Device)
-			val, err := rbapp.LNCVGet(conn)
+			val, err := app.LNCVGet(conn)
 			if err != nil {
 				return err
 			}

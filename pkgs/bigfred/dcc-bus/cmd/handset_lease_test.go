@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/keskad/loco/pkgs/bigfred/contract"
-	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/slotlease"
-	"github.com/keskad/loco/pkgs/bigfred/remotes"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/contract"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/slotlease"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/remotes"
 )
 
 func TestPrepareHandsetLease_acquiresOnFirstDrive(t *testing.T) {

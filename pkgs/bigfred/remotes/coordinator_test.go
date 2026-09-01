@@ -12,10 +12,10 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
 
-	"github.com/keskad/loco/pkgs/bigfred/contract"
-	"github.com/keskad/loco/pkgs/bigfred/remotepairing"
-	"github.com/keskad/loco/pkgs/bigfred/remotes/inbound"
-	"github.com/keskad/loco/pkgs/loco/commandstation"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/contract"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/remotepairing"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/remotes/inbound"
+	"github.com/dcc-bigfred/bigfred/pkgs/loco/commandstation"
 )
 
 func TestCoordinatorBuildSnapshotIPStickiness(t *testing.T) {

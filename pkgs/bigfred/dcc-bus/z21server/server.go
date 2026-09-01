@@ -9,10 +9,10 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/keskad/loco/pkgs/bigfred/contract"
-	"github.com/keskad/loco/pkgs/bigfred/remotepairing"
-	"github.com/keskad/loco/pkgs/bigfred/remotes"
-	"github.com/keskad/loco/pkgs/bigfred/remotes/inbound"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/contract"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/remotepairing"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/remotes"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/remotes/inbound"
 )
 
 // GatewayName is the remotes gateway factory key for Z21 LAN.

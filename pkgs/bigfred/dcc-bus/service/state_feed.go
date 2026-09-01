@@ -6,10 +6,10 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/service/station"
-	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/state"
-	"github.com/keskad/loco/pkgs/bigfred/remotes"
-	"github.com/keskad/loco/pkgs/loco/commandstation"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/service/station"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/state"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/remotes"
+	"github.com/dcc-bigfred/bigfred/pkgs/loco/commandstation"
 )
 
 const (

@@ -3,7 +3,7 @@ package remotes
 import (
 	"sync"
 
-	"github.com/keskad/loco/pkgs/bigfred/contract"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/contract"
 )
 
 const virtualLocoFunctionCount = 32

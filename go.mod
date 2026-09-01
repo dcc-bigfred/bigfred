@@ -1,4 +1,4 @@
-module github.com/keskad/loco
+module github.com/dcc-bigfred/bigfred
 
 go 1.25.0
 

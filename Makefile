@@ -1,19 +1,16 @@
-.PHONY: all build loco-build rb-build
+.PHONY: all build loco-build
 all: build
 
 # Build metadata injected into pkgs/bigfred/server/version via -ldflags.
 # Release tag + tagCommit are added post-build (ELF section) at retag time.
-VERSION_PKG := github.com/keskad/loco/pkgs/bigfred/server/version
+VERSION_PKG := github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/version
 VERSION_LDFLAGS := -X $(VERSION_PKG).buildCommit=$(shell git rev-parse --short HEAD 2>/dev/null) \
 	-X $(VERSION_PKG).buildTime=$(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 
-build: loco-build rb-build server-build loadtest-build remote-icmp-build
+build: loco-build server-build loadtest-build remote-icmp-build
 
 loco-build:
 	CGO_ENABLED=0 GOOS=linux go build -o bin/loco ./pkgs/loco
-
-rb-build:
-	CGO_ENABLED=0 GOOS=linux go build -o bin/rb pkgs/rb/main.go
 
 # --- BigFred: backend (loco-server) ---------------------------------------
 # Built from pkgs/bigfred/server. CGO_ENABLED=0 keeps cross-compile working

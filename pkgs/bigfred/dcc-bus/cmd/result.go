@@ -1,6 +1,6 @@
 package cmd
 
-import "github.com/keskad/loco/pkgs/bigfred/dcc-bus/protocol"
+import "github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/protocol"
 
 // Result is the outcome of a use-case action before the WS layer maps it
 // onto ack / loco.error frames.

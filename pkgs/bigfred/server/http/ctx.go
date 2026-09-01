@@ -3,7 +3,7 @@ package httpapi
 import (
 	"context"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/cmd"
 )
 
 // identityCtxKey is the unexported context key used by the auth

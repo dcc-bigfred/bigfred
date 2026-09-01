@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/helpers"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/helpers"
 )
 
 func TestMergeUserIDs(t *testing.T) {

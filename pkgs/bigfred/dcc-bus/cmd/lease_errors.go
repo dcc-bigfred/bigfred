@@ -3,9 +3,9 @@ package cmd
 import (
 	stderrors "errors"
 
-	buserrors "github.com/keskad/loco/pkgs/bigfred/dcc-bus/errors"
-	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/slotlease"
-	"github.com/keskad/loco/pkgs/loco/commandstation"
+	buserrors "github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/errors"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/slotlease"
+	"github.com/dcc-bigfred/bigfred/pkgs/loco/commandstation"
 )
 
 func leaseErrorResult(userID uint, leaser *slotlease.Leaser, err error) Result {

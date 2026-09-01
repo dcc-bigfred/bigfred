@@ -8,8 +8,8 @@ import (
 
 	"github.com/dcc-bigfred/microinit/go/config"
 
-	"github.com/keskad/loco/pkgs/bigfred/platform"
-	"github.com/keskad/loco/pkgs/bigfred/server/datadir"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/platform"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/datadir"
 )
 
 // defaultMicrodnsConfig is the seed for $DATA_DIR/etc/microdns.json when the

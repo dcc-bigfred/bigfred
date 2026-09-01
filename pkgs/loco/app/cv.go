@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/keskad/loco/pkgs/loco/commandstation"
-	"github.com/keskad/loco/pkgs/loco/syntax"
+	"github.com/dcc-bigfred/bigfred/pkgs/loco/commandstation"
+	"github.com/dcc-bigfred/bigfred/pkgs/loco/syntax"
 	"github.com/sirupsen/logrus"
 )
 

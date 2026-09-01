@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/keskad/loco/pkgs/loco/app"
+	"github.com/dcc-bigfred/bigfred/pkgs/loco/app"
 	"github.com/spf13/cobra"
 )
 

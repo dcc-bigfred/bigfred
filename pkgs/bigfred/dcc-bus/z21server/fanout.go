@@ -3,8 +3,8 @@ package z21server
 import (
 	"context"
 
-	"github.com/keskad/loco/pkgs/bigfred/contract"
-	"github.com/keskad/loco/pkgs/bigfred/remotes"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/contract"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/remotes"
 )
 
 var _ remotes.LocoStateObserver = (*Server)(nil)

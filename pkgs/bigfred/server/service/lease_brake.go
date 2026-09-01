@@ -3,7 +3,7 @@ package service
 import (
 	"github.com/sirupsen/logrus"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/cmd"
 )
 
 type LeaseBrakeConfig struct {

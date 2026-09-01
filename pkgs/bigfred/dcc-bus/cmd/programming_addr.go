@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/protocol"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/protocol"
 )
 
 // Address encoding per NMRA S-9.2.2. Mirrors pkgs/loco/app/addr.go,

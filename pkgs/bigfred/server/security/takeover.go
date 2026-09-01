@@ -1,6 +1,6 @@
 package security
 
-import "github.com/keskad/loco/pkgs/bigfred/server/domain"
+import "github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/domain"
 
 // TakeoverSecurityContext gates takeover.request (§4.3).
 type TakeoverSecurityContext struct{}

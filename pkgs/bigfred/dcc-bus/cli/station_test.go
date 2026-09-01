@@ -3,7 +3,7 @@ package cli
 import (
 	"testing"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/domain"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/domain"
 )
 
 func TestCommandStationFromFlags(t *testing.T) {

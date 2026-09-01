@@ -11,7 +11,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/protocol"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/protocol"
 )
 
 // Loco is one vehicle ready to drive on the data plane.

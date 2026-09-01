@@ -1,6 +1,6 @@
 package security
 
-import "github.com/keskad/loco/pkgs/bigfred/server/domain"
+import "github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/domain"
 
 // EStopTargetSecurityContext gates per-target emergency stop (§4.2).
 type EStopTargetSecurityContext struct{}

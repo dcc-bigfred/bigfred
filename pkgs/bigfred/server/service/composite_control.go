@@ -3,7 +3,7 @@ package service
 import (
 	"context"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/ws"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/ws"
 )
 
 // CompositeControlHandler delegates control-plane WS frames to the

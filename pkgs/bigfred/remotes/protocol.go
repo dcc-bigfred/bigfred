@@ -3,9 +3,9 @@ package remotes
 import (
 	"context"
 
-	"github.com/keskad/loco/pkgs/bigfred/contract"
-	"github.com/keskad/loco/pkgs/bigfred/remotepairing"
-	"github.com/keskad/loco/pkgs/loco/commandstation"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/contract"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/remotepairing"
+	"github.com/dcc-bigfred/bigfred/pkgs/loco/commandstation"
 )
 
 // RemoteProtocol is a protocol-specific inbound handset listener.

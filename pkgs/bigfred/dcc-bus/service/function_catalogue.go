@@ -3,7 +3,7 @@ package service
 import (
 	"sync"
 
-	"github.com/keskad/loco/pkgs/bigfred/contract"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/contract"
 )
 
 // FunctionCatalogueCache holds the in-memory vehicle_functions snapshot

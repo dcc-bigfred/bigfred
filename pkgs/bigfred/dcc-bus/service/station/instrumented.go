@@ -9,8 +9,8 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/domain"
-	"github.com/keskad/loco/pkgs/loco/commandstation"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/domain"
+	"github.com/dcc-bigfred/bigfred/pkgs/loco/commandstation"
 )
 
 const histogramName = "bigfred.dcc_bus.station.operation.duration"
@@ -42,7 +42,7 @@ func Wrap(inner commandstation.Station, cfg InstrumentConfig) (commandstation.St
 	}
 	meter := cfg.Meter
 	if meter == nil {
-		meter = otel.Meter("github.com/keskad/loco/pkgs/bigfred/dcc-bus/station")
+		meter = otel.Meter("github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/station")
 	}
 	hist, err := meter.Float64Histogram(histogramName,
 		metric.WithDescription("Command station driver round-trip latency"),

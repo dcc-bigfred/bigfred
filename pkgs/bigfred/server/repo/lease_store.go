@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/domain"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/domain"
 )
 
 // VehicleLeaseStore persists active vehicle drive leases in Redis.

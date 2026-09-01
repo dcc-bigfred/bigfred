@@ -3,7 +3,7 @@ package cli
 import (
 	"testing"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/cli/config"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/cli/config"
 )
 
 func TestApplyConfigRespectsCLIOverrides(t *testing.T) {

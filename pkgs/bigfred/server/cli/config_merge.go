@@ -4,7 +4,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/cli/config"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/cli/config"
 )
 
 func mergeConfigFile(cmd *cobra.Command, f *Flags, log *logrus.Logger) error {

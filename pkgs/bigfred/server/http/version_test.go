@@ -9,7 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/require"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/version"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/version"
 )
 
 func TestVersionHandler_publicJSON(t *testing.T) {

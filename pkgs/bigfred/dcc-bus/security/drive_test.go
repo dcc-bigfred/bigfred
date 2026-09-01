@@ -3,8 +3,8 @@ package security_test
 import (
 	"testing"
 
-	"github.com/keskad/loco/pkgs/bigfred/contract"
-	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/security"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/contract"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/security"
 )
 
 func TestDrivePolicyCanDrive(t *testing.T) {

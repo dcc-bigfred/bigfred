@@ -3,7 +3,7 @@ package cmd
 import (
 	"context"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/domain"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/domain"
 )
 
 // DCCPoolPort checks whether a DCC address falls inside the owner's

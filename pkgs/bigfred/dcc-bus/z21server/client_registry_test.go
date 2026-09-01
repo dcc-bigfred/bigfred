@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/keskad/loco/pkgs/bigfred/contract"
-	"github.com/keskad/loco/pkgs/bigfred/remotes/inbound"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/contract"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/remotes/inbound"
 )
 
 func TestRegistryTouchIPStickinessReusesSessionOnPortChange(t *testing.T) {

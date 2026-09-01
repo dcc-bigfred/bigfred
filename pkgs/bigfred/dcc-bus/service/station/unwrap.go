@@ -1,6 +1,6 @@
 package station
 
-import "github.com/keskad/loco/pkgs/loco/commandstation"
+import "github.com/dcc-bigfred/bigfred/pkgs/loco/commandstation"
 
 // innerStation is implemented by decorators that wrap a driver.
 type innerStation interface {

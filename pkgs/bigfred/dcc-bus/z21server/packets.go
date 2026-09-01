@@ -3,7 +3,7 @@ package z21server
 import (
 	"encoding/binary"
 
-	"github.com/keskad/loco/pkgs/bigfred/contract"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/contract"
 )
 
 const (

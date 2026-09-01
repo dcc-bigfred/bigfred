@@ -1,14 +1,14 @@
-package rbapp
+package app
 
 import (
 	"errors"
 	"fmt"
 	"time"
 
-	"github.com/keskad/loco/pkgs/loco/commandstation"
+	"github.com/dcc-bigfred/bigfred/pkgs/loco/commandstation"
 )
 
-// LNCVArgs configures rb lncv set/get.
+// LNCVArgs configures loco lncv set/get.
 type LNCVArgs struct {
 	Device     string
 	Baudrate   int

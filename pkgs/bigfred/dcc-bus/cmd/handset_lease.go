@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"github.com/keskad/loco/pkgs/bigfred/remotes"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/remotes"
 )
 
 // prepareHandsetLease acquires (or refreshes) a slot lease for the first

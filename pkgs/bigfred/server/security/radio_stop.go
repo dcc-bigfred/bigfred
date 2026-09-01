@@ -1,8 +1,8 @@
 package security
 
 import (
-	"github.com/keskad/loco/pkgs/bigfred/contract"
-	"github.com/keskad/loco/pkgs/bigfred/server/domain"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/contract"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/domain"
 )
 
 // RadioStopSecurityContext gates layout-wide Radio Stop (§4.6.2).

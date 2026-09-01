@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
+	svcerrors "github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/errors"
 )
 
 func TestSanitiseCommandStationTimingDefaults(t *testing.T) {

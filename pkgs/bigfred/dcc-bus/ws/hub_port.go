@@ -3,8 +3,8 @@ package ws
 import (
 	"context"
 
-	"github.com/keskad/loco/pkgs/bigfred/contract"
-	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/cmd"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/contract"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/cmd"
 )
 
 type hubAdapter struct {

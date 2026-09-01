@@ -14,10 +14,10 @@ import (
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/sirupsen/logrus"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
-	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
-	"github.com/keskad/loco/pkgs/bigfred/server/metrics"
-	"github.com/keskad/loco/pkgs/bigfred/server/service"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/cmd"
+	svcerrors "github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/errors"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/metrics"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/service"
 )
 
 // dccBusProxySpawnTimeout is the budget the WS proxy spends spawning a

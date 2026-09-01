@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/keskad/loco/pkgs/bigfred/contract"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/contract"
 )
 
 const pairingFnBufferSize = 6

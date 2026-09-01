@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/domain"
-	"github.com/keskad/loco/pkgs/bigfred/server/microinit"
-	"github.com/keskad/loco/pkgs/bigfred/server/repo"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/domain"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/microinit"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/repo"
 )
 
 func TestProgramNameDeterministic(t *testing.T) {

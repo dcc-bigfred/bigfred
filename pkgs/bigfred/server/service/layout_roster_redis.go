@@ -3,7 +3,7 @@ package service
 import (
 	"context"
 
-	"github.com/keskad/loco/pkgs/bigfred/contract"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/contract"
 )
 
 // layoutRosterPublisher pushes full roster snapshots to Redis for dcc-bus.

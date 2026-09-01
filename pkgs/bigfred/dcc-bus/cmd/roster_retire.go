@@ -6,10 +6,10 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/keskad/loco/pkgs/bigfred/contract"
-	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/service"
-	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/service/station"
-	"github.com/keskad/loco/pkgs/loco/commandstation"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/contract"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/service"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/service/station"
+	"github.com/dcc-bigfred/bigfred/pkgs/loco/commandstation"
 )
 
 func (r *Router) retireRemovedLocos(ctx context.Context, addrs []uint16) {

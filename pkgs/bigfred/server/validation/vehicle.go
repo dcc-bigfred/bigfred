@@ -5,8 +5,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/domain"
-	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/domain"
+	svcerrors "github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/errors"
 )
 
 const (

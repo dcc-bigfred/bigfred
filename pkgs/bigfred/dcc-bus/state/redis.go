@@ -9,8 +9,8 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	"github.com/keskad/loco/pkgs/bigfred/contract"
-	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/protocol"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/contract"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/protocol"
 )
 
 // Redis is the daemon's typed wrapper around go-redis. Key and channel

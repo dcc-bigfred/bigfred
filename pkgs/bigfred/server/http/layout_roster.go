@@ -5,12 +5,12 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
-	"github.com/keskad/loco/pkgs/bigfred/server/domain"
-	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
-	"github.com/keskad/loco/pkgs/bigfred/server/protocol"
-	"github.com/keskad/loco/pkgs/bigfred/server/security"
-	"github.com/keskad/loco/pkgs/bigfred/server/service"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/cmd"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/domain"
+	svcerrors "github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/errors"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/protocol"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/security"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/service"
 )
 
 // LayoutRosterHandler bundles the layout-scoped vehicle and train

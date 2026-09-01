@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/service"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/service"
 )
 
 func TestCancelAll_abortsPendingTrainJobs(t *testing.T) {

@@ -11,10 +11,10 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
 
-	"github.com/keskad/loco/pkgs/bigfred/contract"
-	buserrors "github.com/keskad/loco/pkgs/bigfred/dcc-bus/errors"
-	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/protocol"
-	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/state"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/contract"
+	buserrors "github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/errors"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/protocol"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/state"
 )
 
 func TestLogControlProgramming_publishesRejectionEvent(t *testing.T) {

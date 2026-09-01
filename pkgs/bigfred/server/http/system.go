@@ -5,7 +5,7 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/service"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/service"
 )
 
 // SystemHandler serves admin host power control (BigFredOS / microinit init).

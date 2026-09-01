@@ -19,7 +19,7 @@ package protocol
 import (
 	"encoding/json"
 
-	"github.com/keskad/loco/pkgs/bigfred/contract"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/contract"
 )
 
 // Frame is a small helper that re-wraps a strongly-typed payload

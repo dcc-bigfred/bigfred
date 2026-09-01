@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/keskad/loco/pkgs/bigfred/contract"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/contract"
 )
 
 func TestParseMAction_acquire(t *testing.T) {

@@ -5,10 +5,10 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
-	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
-	"github.com/keskad/loco/pkgs/bigfred/server/protocol"
-	"github.com/keskad/loco/pkgs/bigfred/server/service"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/cmd"
+	svcerrors "github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/errors"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/protocol"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/service"
 )
 
 // InterlockingHandler bundles REST endpoints for the interlocking

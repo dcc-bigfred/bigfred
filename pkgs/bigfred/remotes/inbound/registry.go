@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/keskad/loco/pkgs/bigfred/contract"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/contract"
 )
 
 // Client is one registered inbound handset participant.

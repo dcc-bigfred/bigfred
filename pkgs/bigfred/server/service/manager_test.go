@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/microinit"
-	"github.com/keskad/loco/pkgs/bigfred/server/service"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/microinit"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/service"
 )
 
 // TestReplaceServicesSkipsForeign verifies ReplaceServices skips services

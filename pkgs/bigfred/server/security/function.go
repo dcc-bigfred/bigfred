@@ -1,6 +1,6 @@
 package security
 
-import "github.com/keskad/loco/pkgs/bigfred/server/domain"
+import "github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/domain"
 
 // FunctionSecurityContext gates function-definition mutations (§7a.3).
 type FunctionSecurityContext struct{}

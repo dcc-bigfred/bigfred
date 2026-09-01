@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/z21server"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/z21server"
 )
 
 func TestHandshakeReplies(t *testing.T) {

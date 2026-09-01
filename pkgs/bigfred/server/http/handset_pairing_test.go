@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
-	"github.com/keskad/loco/pkgs/bigfred/server/domain"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/cmd"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/domain"
 )
 
 func TestHandsetPairingLimiterKeysByIPAndLogin(t *testing.T) {

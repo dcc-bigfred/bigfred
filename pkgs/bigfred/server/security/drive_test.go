@@ -3,7 +3,7 @@ package security
 import (
 	"testing"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/domain"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/domain"
 )
 
 func TestDriveSecurityContext_CanDrive(t *testing.T) {

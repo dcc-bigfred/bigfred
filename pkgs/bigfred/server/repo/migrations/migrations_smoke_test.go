@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/repo"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/repo"
 )
 
 // TestMigrateUpSmoke ensures every migration runs cleanly on a fresh

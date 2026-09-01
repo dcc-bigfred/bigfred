@@ -1,6 +1,6 @@
 package contract
 
-import "github.com/keskad/loco/pkgs/bigfred/server/domain"
+import "github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/domain"
 
 // WS action type strings (§4.2).
 const (

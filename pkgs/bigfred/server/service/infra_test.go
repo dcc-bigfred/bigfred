@@ -9,7 +9,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/microinit"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/microinit"
 )
 
 type alloySetupStub struct {

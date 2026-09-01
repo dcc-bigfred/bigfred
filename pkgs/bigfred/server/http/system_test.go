@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	miclient "github.com/dcc-bigfred/microinit/go/client"
-	"github.com/keskad/loco/pkgs/bigfred/server/service"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/service"
 )
 
 func mountSystem(h *SystemHandler) http.Handler {

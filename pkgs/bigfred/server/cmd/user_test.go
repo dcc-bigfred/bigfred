@@ -5,10 +5,10 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
-	"github.com/keskad/loco/pkgs/bigfred/server/domain"
-	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
-	"github.com/keskad/loco/pkgs/bigfred/server/repo"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/cmd"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/domain"
+	svcerrors "github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/errors"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/repo"
 )
 
 var testUserPool = []cmd.PoolRange{{From: 1000, To: 1999}}

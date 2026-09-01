@@ -12,7 +12,7 @@ import (
 
 	"github.com/dcc-bigfred/microinit/go/config"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/datadir"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/datadir"
 )
 
 type RDBSavePoint struct{ Seconds, Changes int }

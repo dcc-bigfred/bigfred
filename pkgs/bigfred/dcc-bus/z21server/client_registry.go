@@ -4,8 +4,8 @@ import (
 	"net"
 	"time"
 
-	"github.com/keskad/loco/pkgs/bigfred/contract"
-	"github.com/keskad/loco/pkgs/bigfred/remotes/inbound"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/contract"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/remotes/inbound"
 )
 
 // Client is one registered Z21 LAN participant (§1.1 implicit login).

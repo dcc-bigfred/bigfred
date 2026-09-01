@@ -3,16 +3,16 @@ package app
 import (
 	"fmt"
 
-	"github.com/keskad/loco/pkgs/loco/commandstation"
-	"github.com/keskad/loco/pkgs/loco/config"
-	"github.com/keskad/loco/pkgs/loco/output"
+	"github.com/dcc-bigfred/bigfred/pkgs/loco/commandstation"
+	"github.com/dcc-bigfred/bigfred/pkgs/loco/config"
+	"github.com/dcc-bigfred/bigfred/pkgs/loco/output"
 	"github.com/sirupsen/logrus"
 )
 
 //
 // Actions - a controller level that performs operations and returns results.
 //
-// Console output belongs in the CLI layer (loco/cli, rb/cli).
+// Console output belongs in the CLI layer (loco/cli).
 //
 
 type LocoApp struct {

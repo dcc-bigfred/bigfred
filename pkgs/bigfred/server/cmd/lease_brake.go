@@ -6,9 +6,9 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/keskad/loco/pkgs/bigfred/contract"
-	dccprotocol "github.com/keskad/loco/pkgs/bigfred/dcc-bus/protocol"
-	"github.com/keskad/loco/pkgs/bigfred/server/domain"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/contract"
+	dccprotocol "github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/protocol"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/domain"
 )
 
 // LeaseBrakePort stops a leased vehicle or train on the layout when a lease

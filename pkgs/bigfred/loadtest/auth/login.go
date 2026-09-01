@@ -12,7 +12,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/protocol"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/protocol"
 )
 
 const sessionCookieName = "bigfred_session"

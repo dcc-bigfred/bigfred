@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/domain"
-	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
-	"github.com/keskad/loco/pkgs/bigfred/server/validation"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/domain"
+	svcerrors "github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/errors"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/validation"
 )
 
 func TestSanitiseLogin(t *testing.T) {

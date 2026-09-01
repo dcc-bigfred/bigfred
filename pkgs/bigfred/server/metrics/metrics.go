@@ -107,7 +107,7 @@ func New(cfg Config) (*Metrics, error) {
 	}
 	meter := cfg.Meter
 	if meter == nil {
-		meter = otel.Meter("github.com/keskad/loco/pkgs/bigfred/server/metrics")
+		meter = otel.Meter("github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/metrics")
 	}
 	m := &Metrics{}
 	var err error

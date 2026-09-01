@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/domain"
-	"github.com/keskad/loco/pkgs/loco/commandstation"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/domain"
+	"github.com/dcc-bigfred/bigfred/pkgs/loco/commandstation"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"

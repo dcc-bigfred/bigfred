@@ -12,7 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 
-	"github.com/keskad/loco/pkgs/bigfred/loadtest/wsutil"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/loadtest/wsutil"
 )
 
 const (

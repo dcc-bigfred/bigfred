@@ -3,7 +3,7 @@ package contract_test
 import (
 	"testing"
 
-	"github.com/keskad/loco/pkgs/bigfred/contract"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/contract"
 )
 
 func TestEffectiveMemberSpeed(t *testing.T) {

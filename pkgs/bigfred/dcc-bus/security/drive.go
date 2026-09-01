@@ -1,6 +1,6 @@
 package security
 
-import "github.com/keskad/loco/pkgs/bigfred/contract"
+import "github.com/dcc-bigfred/bigfred/pkgs/bigfred/contract"
 
 // DrivePolicy evaluates throttle authority against one roster vehicle row.
 type DrivePolicy struct{}

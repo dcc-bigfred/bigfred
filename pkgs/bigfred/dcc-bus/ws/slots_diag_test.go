@@ -11,8 +11,8 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/slotlease"
-	"github.com/keskad/loco/pkgs/loco/commandstation"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/slotlease"
+	"github.com/dcc-bigfred/bigfred/pkgs/loco/commandstation"
 )
 
 type diagFakeStation struct{}

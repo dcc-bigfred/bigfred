@@ -3,9 +3,9 @@ package main
 import (
 	"os"
 
-	"github.com/keskad/loco/pkgs/loco/app"
-	"github.com/keskad/loco/pkgs/loco/cli"
-	"github.com/keskad/loco/pkgs/loco/output"
+	"github.com/dcc-bigfred/bigfred/pkgs/loco/app"
+	"github.com/dcc-bigfred/bigfred/pkgs/loco/cli"
+	"github.com/dcc-bigfred/bigfred/pkgs/loco/output"
 )
 
 func main() {

@@ -10,12 +10,12 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
-	"github.com/keskad/loco/pkgs/bigfred/loadtest/auth"
-	"github.com/keskad/loco/pkgs/bigfred/loadtest/control"
-	"github.com/keskad/loco/pkgs/bigfred/loadtest/dccbus"
-	"github.com/keskad/loco/pkgs/bigfred/loadtest/httpapi"
-	"github.com/keskad/loco/pkgs/bigfred/loadtest/sim"
-	"github.com/keskad/loco/pkgs/bigfred/loadtest/wsutil"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/loadtest/auth"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/loadtest/control"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/loadtest/dccbus"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/loadtest/httpapi"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/loadtest/sim"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/loadtest/wsutil"
 )
 
 // Flags collects every command-line knob exposed by loco-server-load-test.

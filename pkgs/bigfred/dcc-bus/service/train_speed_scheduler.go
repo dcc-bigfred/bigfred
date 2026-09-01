@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/errors"
-	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/protocol"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/errors"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/protocol"
 )
 
 // StartDelayMaxPreviousSpeed is the highest DCC step at which a consist

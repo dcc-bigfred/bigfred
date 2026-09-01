@@ -4,12 +4,12 @@ import (
 	"context"
 	"testing"
 
-	"github.com/keskad/loco/pkgs/bigfred/contract"
-	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/errors"
-	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/security"
-	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/slotlease"
-	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/state"
-	"github.com/keskad/loco/pkgs/loco/commandstation"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/contract"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/errors"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/security"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/slotlease"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/state"
+	"github.com/dcc-bigfred/bigfred/pkgs/loco/commandstation"
 )
 
 // observingSlotStubStation simulates LocoNet SendFn acquiring a slot and

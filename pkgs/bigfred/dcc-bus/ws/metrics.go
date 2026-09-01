@@ -9,7 +9,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 
-	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/errors"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/errors"
 )
 
 const (
@@ -72,7 +72,7 @@ func NewMetrics(cfg MetricsConfig) (*Metrics, error) {
 	}
 	meter := cfg.Meter
 	if meter == nil {
-		meter = otel.Meter("github.com/keskad/loco/pkgs/bigfred/dcc-bus/ws")
+		meter = otel.Meter("github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/ws")
 	}
 	hist, err := meter.Float64Histogram(histogramWSCommandDuration,
 		metric.WithDescription("WebSocket command handler round-trip latency"),

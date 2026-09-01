@@ -6,10 +6,10 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/keskad/loco/pkgs/bigfred/contract"
-	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/service"
-	"github.com/keskad/loco/pkgs/bigfred/remotes"
-	"github.com/keskad/loco/pkgs/loco/commandstation"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/contract"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/service"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/remotes"
+	"github.com/dcc-bigfred/bigfred/pkgs/loco/commandstation"
 )
 
 // HandleSetSpeed forwards a throttle move to the command station, updates

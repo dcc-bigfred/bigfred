@@ -14,7 +14,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/keskad/loco/pkgs/bigfred/loadtest/cli"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/loadtest/cli"
 )
 
 func main() {

@@ -3,8 +3,8 @@ package service
 import (
 	"context"
 
-	"github.com/keskad/loco/pkgs/bigfred/contract"
-	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/protocol"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/contract"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/protocol"
 )
 
 // StateBroadcaster fans loco.state envelopes to live WS sessions.

@@ -1,6 +1,6 @@
 package protocol
 
-import "github.com/keskad/loco/pkgs/bigfred/server/domain"
+import "github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/domain"
 
 const (
 	TypeSessionSetCommandStation               = "session.setCommandStation"

@@ -7,10 +7,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/ctl"
-	"github.com/keskad/loco/pkgs/bigfred/server/datadir"
-	"github.com/keskad/loco/pkgs/bigfred/server/protocol"
-	"github.com/keskad/loco/pkgs/bigfred/server/version"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/ctl"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/datadir"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/protocol"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/version"
 )
 
 type options struct {

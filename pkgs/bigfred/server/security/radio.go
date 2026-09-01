@@ -1,6 +1,6 @@
 package security
 
-import "github.com/keskad/loco/pkgs/bigfred/server/domain"
+import "github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/domain"
 
 // RadioSecurityContext gates walkie-talkie send and replay (§4.4).
 type RadioSecurityContext struct{}

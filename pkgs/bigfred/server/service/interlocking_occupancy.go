@@ -3,10 +3,10 @@ package service
 import (
 	"github.com/go-rel/rel"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
-	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
-	"github.com/keskad/loco/pkgs/bigfred/server/repo"
-	"github.com/keskad/loco/pkgs/bigfred/server/ws"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/cmd"
+	svcerrors "github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/errors"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/repo"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/ws"
 )
 
 var (

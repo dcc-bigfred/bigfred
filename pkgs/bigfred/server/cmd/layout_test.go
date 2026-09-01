@@ -5,9 +5,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
-	"github.com/keskad/loco/pkgs/bigfred/server/domain"
-	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/cmd"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/domain"
+	svcerrors "github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/errors"
 )
 
 func TestLayoutCatalogAdminOnly(t *testing.T) {

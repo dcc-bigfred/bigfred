@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/domain"
-	"github.com/keskad/loco/pkgs/bigfred/server/protocol"
-	"github.com/keskad/loco/pkgs/bigfred/server/service"
-	"github.com/keskad/loco/pkgs/bigfred/server/version"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/domain"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/protocol"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/service"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/version"
 )
 
 type fakeLayouts struct {

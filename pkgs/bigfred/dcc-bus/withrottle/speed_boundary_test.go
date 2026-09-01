@@ -3,7 +3,7 @@ package withrottle
 import (
 	"testing"
 
-	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/service"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/service"
 )
 
 func TestDccSpeedFromWire_wire1IsEstopPayload(t *testing.T) {

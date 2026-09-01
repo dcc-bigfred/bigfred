@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/keskad/loco/pkgs/bigfred/contract"
-	dccprotocol "github.com/keskad/loco/pkgs/bigfred/dcc-bus/protocol"
-	"github.com/keskad/loco/pkgs/bigfred/server/domain"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/contract"
+	dccprotocol "github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/protocol"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/domain"
 )
 
 type recordingDccBus struct {

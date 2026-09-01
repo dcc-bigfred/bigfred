@@ -6,13 +6,13 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/keskad/loco/pkgs/bigfred/contract"
-	dccprotocol "github.com/keskad/loco/pkgs/bigfred/dcc-bus/protocol"
-	"github.com/keskad/loco/pkgs/bigfred/server/domain"
-	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
-	"github.com/keskad/loco/pkgs/bigfred/server/helpers"
-	"github.com/keskad/loco/pkgs/bigfred/server/repo"
-	"github.com/keskad/loco/pkgs/bigfred/server/security"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/contract"
+	dccprotocol "github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/protocol"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/domain"
+	svcerrors "github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/errors"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/helpers"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/repo"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/security"
 )
 
 var (

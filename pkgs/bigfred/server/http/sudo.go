@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
-	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
-	"github.com/keskad/loco/pkgs/bigfred/server/protocol"
-	"github.com/keskad/loco/pkgs/bigfred/server/security"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/cmd"
+	svcerrors "github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/errors"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/protocol"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/security"
 )
 
 // SudoHandler bundles the four endpoints that drive the layout-scoped

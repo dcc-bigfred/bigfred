@@ -25,7 +25,7 @@ type Metrics struct {
 
 // NewMetrics registers OTel instruments. Returns nil metrics only via error.
 func NewMetrics() (*Metrics, error) {
-	meter := otel.Meter("github.com/keskad/loco/pkgs/bigfred/remote-icmp")
+	meter := otel.Meter("github.com/dcc-bigfred/bigfred/pkgs/bigfred/remote-icmp")
 	rtt, err := meter.Float64Histogram(histogramRemoteICMPRTT,
 		metric.WithDescription("ICMP Echo round-trip latency to handset IP"),
 		metric.WithUnit("s"),

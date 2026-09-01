@@ -14,7 +14,7 @@ import (
 	"github.com/go-rel/sqlite3"
 	"github.com/sirupsen/logrus"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/metrics"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/metrics"
 
 	// modernc.org/sqlite registers itself under the driver name
 	// "sqlite" in its init(). The go-rel/sqlite3 adapter is

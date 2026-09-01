@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/protocol"
-	"github.com/keskad/loco/pkgs/bigfred/server/service"
-	"github.com/keskad/loco/pkgs/bigfred/server/version"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/protocol"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/service"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/version"
 )
 
 func TestPrintLayoutsHuman(t *testing.T) {

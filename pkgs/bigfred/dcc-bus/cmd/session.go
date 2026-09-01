@@ -5,7 +5,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/errors"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/errors"
 )
 
 // HandleSessionClose runs the dead-man's plan when a browser session ends.

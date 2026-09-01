@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/keskad/loco/pkgs/bigfred/contract"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/contract"
 )
 
 func TestBuildFunctionLabelLine(t *testing.T) {

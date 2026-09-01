@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/keskad/loco/pkgs/bigfred/contract"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/contract"
 )
 
 func mustAddr(t *testing.T, ip string, port int) *net.UDPAddr {

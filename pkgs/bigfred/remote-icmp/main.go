@@ -19,9 +19,9 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
-	bfotel "github.com/keskad/loco/pkgs/bigfred/otel"
-	"github.com/keskad/loco/pkgs/bigfred/server/cli/config"
-	"github.com/keskad/loco/pkgs/bigfred/server/service"
+	bfotel "github.com/dcc-bigfred/bigfred/pkgs/bigfred/otel"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/cli/config"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/service"
 )
 
 type flags struct {

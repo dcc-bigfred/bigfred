@@ -9,7 +9,7 @@ import (
 	"github.com/dcc-bigfred/microinit/go/supervise"
 	"github.com/sirupsen/logrus"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/datadir"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/datadir"
 )
 
 // Re-export shared client / config symbols used by call sites that import this

@@ -3,10 +3,10 @@ package cmd
 import (
 	"context"
 
-	"github.com/keskad/loco/pkgs/bigfred/contract"
-	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/errors"
-	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/service"
-	"github.com/keskad/loco/pkgs/bigfred/remotes"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/contract"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/errors"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/service"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/remotes"
 )
 
 func (r *Router) leadingWasAtStartSpeed(_ context.Context, leading contract.DefinedTrainMember) bool {

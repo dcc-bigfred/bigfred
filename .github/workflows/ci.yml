@@ -129,7 +129,7 @@ jobs:
 
           COMMIT="${GITHUB_SHA::7}"
           BUILDTIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          VERSION_PKG="github.com/keskad/loco/pkgs/bigfred/server/version"
+          VERSION_PKG="github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/version"
           LDFLAGS="-X ${VERSION_PKG}.buildCommit=${COMMIT} -X ${VERSION_PKG}.buildTime=${BUILDTIME}"
 
           CGO_ENABLED=0 go build -tags prod -ldflags="-s -w ${LDFLAGS}" \
@@ -139,7 +139,6 @@ jobs:
             CGO_ENABLED=0 go build -ldflags="${LDFLAGS}" -o "dist/bf-${SUFFIX}" ./pkgs/bigfred/bf
             CGO_ENABLED=0 go build -ldflags="${LDFLAGS}" -o "dist/bigfred-remote-icmp-${SUFFIX}" ./pkgs/bigfred/remote-icmp
             CGO_ENABLED=0 go build -o "dist/loco-${SUFFIX}" ./pkgs/loco
-            go build -o "dist/rb-${SUFFIX}" ./pkgs/rb/main.go
           fi
 
           (

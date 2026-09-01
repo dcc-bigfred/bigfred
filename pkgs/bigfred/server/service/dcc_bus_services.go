@@ -8,9 +8,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/keskad/loco/pkgs/bigfred/contract"
-	"github.com/keskad/loco/pkgs/bigfred/server/microinit"
-	"github.com/keskad/loco/pkgs/bigfred/server/ws"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/contract"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/microinit"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/ws"
 )
 
 // CommandStationIDsForLayout resolves the command-station ids attached

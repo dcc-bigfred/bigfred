@@ -3,8 +3,7 @@ package cli
 import (
 	"fmt"
 
-	"github.com/keskad/loco/pkgs/loco/app"
-	"github.com/keskad/loco/pkgs/loco/decoders"
+	"github.com/dcc-bigfred/bigfred/pkgs/loco/app"
 )
 
 func printAddressInfo(info app.AddressInfo) {
@@ -14,26 +13,6 @@ func printAddressInfo(info app.AddressInfo) {
 	fmt.Printf("cv29=%d\n", info.CV29)
 	fmt.Printf("address=%d\n", info.Address)
 	fmt.Printf("type=%s\n", info.Type)
-}
-
-func printDecoderIdentification(id decoders.Identification) {
-	if id.SoftwareVersion >= 0 {
-		fmt.Printf("cv7=%d\n", id.SoftwareVersion)
-	}
-	fmt.Printf("cv8=%d\n", id.ManufacturerID)
-	fmt.Printf("decoder=%s\n", id.Name)
-}
-
-func printFactoryResetResult(result app.FactoryResetResult) {
-	if result.Preserved != nil {
-		fmt.Printf("preserving address=%d (%s)\n", result.Preserved.Address, result.Preserved.Type)
-	}
-	fmt.Printf("decoder=%s\n", result.Decoder.Name)
-	fmt.Printf("factory reset: cv8=%d\n", result.ResetCV8Value)
-	if result.Restored && result.Preserved != nil {
-		fmt.Printf("restoring address=%d\n", result.Preserved.Address)
-	}
-	fmt.Printf("factory reset complete\n")
 }
 
 func printCVReads(reads []app.CVRead) error {
@@ -76,15 +55,17 @@ func printActiveFunctions(functions []int) {
 	}
 }
 
-func printBrightnessLevels(levels []app.OutputBrightnessLevel) {
-	for _, level := range levels {
-		fmt.Printf("output=%d brightness=%d\n", level.Output, level.Brightness)
+func printLNCVWriteResult(result app.LNCVWriteResult) {
+	if result.SelfConfig && result.AppliedNoAck {
+		fmt.Printf("LNCV %d = %d sent to adapter (article %d). The adapter applies "+
+			"self-configuration without an acknowledge; reconnect with the new settings to verify.\n",
+			result.CV, result.Value, result.Article)
+		return
 	}
-}
-
-func printBrightnessSnapshot(snapshot []decoders.OutputBrightness) {
-	fmt.Printf("Saved brightness values:\n")
-	for _, state := range snapshot {
-		fmt.Printf("output=%d cv%d=%d\n", state.Output, state.CV, state.Value)
+	if result.SelfConfig {
+		fmt.Printf("LNCV %d = %d written and acknowledged (article %d)\n", result.CV, result.Value, result.Article)
+		return
 	}
+	fmt.Printf("LNCV %d = %d written (article %d, module %d)\n",
+		result.CV, result.Value, result.Article, result.ModuleAddr)
 }

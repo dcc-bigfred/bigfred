@@ -3,7 +3,7 @@ package service
 import (
 	"context"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/domain"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/domain"
 )
 
 // LesseesByVehicle resolves active lessees per vehicle on a layout.

@@ -10,9 +10,9 @@ import (
 	"github.com/coder/websocket"
 	"github.com/sirupsen/logrus"
 
-	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/auth"
-	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/protocol"
-	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/slotlease"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/auth"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/protocol"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/slotlease"
 )
 
 const (

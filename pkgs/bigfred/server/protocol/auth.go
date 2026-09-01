@@ -3,7 +3,7 @@ package protocol
 import (
 	"time"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/domain"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/domain"
 )
 
 // LoginRequest mirrors POST /api/v1/auth/login.

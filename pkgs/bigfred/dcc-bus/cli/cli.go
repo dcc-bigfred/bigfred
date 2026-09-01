@@ -13,7 +13,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
-	dccbus "github.com/keskad/loco/pkgs/bigfred/dcc-bus"
+	dccbus "github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus"
 )
 
 // Flags collects every command-line knob the dcc-bus daemon exposes.

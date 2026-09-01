@@ -3,7 +3,7 @@ package cli
 import (
 	"testing"
 
-	"github.com/keskad/loco/pkgs/loco/commandstation"
+	"github.com/dcc-bigfred/bigfred/pkgs/loco/commandstation"
 )
 
 func TestBuildScanAutodetections(t *testing.T) {

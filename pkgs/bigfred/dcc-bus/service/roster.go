@@ -5,7 +5,7 @@ package service
 import (
 	"sync"
 
-	"github.com/keskad/loco/pkgs/bigfred/contract"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/contract"
 )
 
 // RosterCache holds the in-memory allowed_vehicles snapshot published by

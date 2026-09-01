@@ -1,8 +1,8 @@
 package protocol
 
 import (
-	"github.com/keskad/loco/pkgs/bigfred/contract"
-	"github.com/keskad/loco/pkgs/bigfred/remotepairing"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/contract"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/remotepairing"
 )
 
 // RemoteProtocolInfo describes one inbound protocol on a command station.

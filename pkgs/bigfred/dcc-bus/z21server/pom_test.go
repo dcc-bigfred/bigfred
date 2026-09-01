@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/keskad/loco/pkgs/bigfred/contract"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/contract"
 )
 
 func buildPOMReadByte(locoAddr uint16, cvWire int) []byte {

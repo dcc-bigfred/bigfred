@@ -3,7 +3,7 @@ package security
 import (
 	"time"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/domain"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/domain"
 )
 
 // InterlockingSecurityContext evaluates interlocking occupation rules

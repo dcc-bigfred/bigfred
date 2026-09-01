@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/keskad/loco/pkgs/bigfred/contract"
-	"github.com/keskad/loco/pkgs/bigfred/dcc-bus/security"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/contract"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/security"
 )
 
 // BuildRosterLine builds the RL roster line for one client state.

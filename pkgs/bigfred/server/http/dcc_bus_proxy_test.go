@@ -4,8 +4,8 @@ import (
 	"errors"
 	"testing"
 
-	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
-	"github.com/keskad/loco/pkgs/bigfred/server/service"
+	svcerrors "github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/errors"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/service"
 )
 
 func TestDccBusEnsureErrorCode(t *testing.T) {

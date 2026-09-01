@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/keskad/loco/pkgs/bigfred/remotepairing"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/remotepairing"
 	"github.com/sirupsen/logrus"
 )
 

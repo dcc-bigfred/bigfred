@@ -11,7 +11,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/sirupsen/logrus"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/datadir"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/datadir"
 )
 
 // OAuthClient is one drop-in OAuth client registration.

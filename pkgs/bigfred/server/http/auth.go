@@ -5,10 +5,10 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/keskad/loco/pkgs/bigfred/server/cmd"
-	svcerrors "github.com/keskad/loco/pkgs/bigfred/server/errors"
-	"github.com/keskad/loco/pkgs/bigfred/server/metrics"
-	"github.com/keskad/loco/pkgs/bigfred/server/protocol"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/cmd"
+	svcerrors "github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/errors"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/metrics"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/protocol"
 )
 
 // AuthHandler bundles the auth endpoints declared under

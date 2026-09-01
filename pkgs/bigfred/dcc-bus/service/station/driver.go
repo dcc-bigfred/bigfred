@@ -10,9 +10,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/keskad/loco/pkgs/bigfred/platform"
-	"github.com/keskad/loco/pkgs/bigfred/server/domain"
-	"github.com/keskad/loco/pkgs/loco/commandstation"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/platform"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/domain"
+	"github.com/dcc-bigfred/bigfred/pkgs/loco/commandstation"
 )
 
 // Open dials the command station described by cs. The returned

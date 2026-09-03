@@ -15,6 +15,10 @@ Open the app in any browser, pick a locomotive, and drive. BigFred works with Ro
 - **Remote handsets** — pair Z21 handsets and WiThrottle apps to vehicles in your roster
 - **LongFred** — our own WiFred-based wireless handset for physical throttle control on the layout
 
+## SDK
+
+- Rust: [`bigfred-client`](rust/crates/bigfred-client)
+
 ## Guides
 
 - [User & operator guide](https://dcc-5ccd5152.mintlify.app/)

@@ -175,3 +175,46 @@ jobs:
           fi
           gh release upload "$TAG" "${FILES[@]}" --clobber
 
+  crates-io:
+    name: Publish crates.io
+    needs: release
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: rust
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Check crate version matches tag
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME#v}"
+          VER="$(cargo metadata --format-version 1 --no-deps --locked \
+            | jq -r '.packages[] | select(.name == "bigfred-client") | .version')"
+          if [ "$VER" != "$TAG" ]; then
+            echo "bigfred-client version ${VER} != tag ${GITHUB_REF_NAME} (expected ${TAG})" >&2
+            echo "Bump rust/Cargo.toml [workspace.package] version before tagging." >&2
+            exit 1
+          fi
+
+      - name: Publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish -p bigfred-client --locked
+
+      - name: Link crate on GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        working-directory: ${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          extra=$'\n\nPublished to crates.io:\n\n- https://crates.io/crates/bigfred-client\n'
+          body="$(gh release view "$TAG" --json body --jq .body)"
+          printf '%s%s' "$body" "$extra" > /tmp/release-body.md
+          gh release edit "$TAG" --notes-file /tmp/release-body.md
+

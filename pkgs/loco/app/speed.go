@@ -1,6 +1,6 @@
 package app
 
-import "github.com/dcc-bigfred/bigfred/pkgs/loco/commandstation"
+import "github.com/dcc-bigfred/proto/go/pkgs/commandstation"
 
 // SetSpeedAction sets the speed and direction of a locomotive
 func (app *LocoApp) SetSpeedAction(locoId uint8, speed uint8, forward bool, speedSteps uint8) error {

@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/contract"
-	"github.com/dcc-bigfred/bigfred/pkgs/loco/commandstation"
+	"github.com/dcc-bigfred/proto/go/pkgs/commandstation"
 )
 
 type recordingStation struct {
@@ -29,6 +29,9 @@ func (s *recordingStation) SetSpeed(_ commandstation.LocoAddr, speed uint8, _ bo
 }
 func (s *recordingStation) GetSpeed(commandstation.LocoAddr) (uint8, bool, error) {
 	return 0, true, nil
+}
+func (s *recordingStation) EmergencyStop(_ commandstation.LocoAddr, _ bool) error {
+	return s.SetSpeed(0, 1, true, 128)
 }
 func (s *recordingStation) CleanUp() error { return nil }
 func (s *recordingStation) ObserveStates() <-chan commandstation.LocoObservation {

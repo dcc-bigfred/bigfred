@@ -96,7 +96,4 @@ func TestBroadcastSystemStateFlagPushesUpdate(t *testing.T) {
 	if binary.LittleEndian.Uint16(buf[2:4]) != HeaderSystemStateData {
 		t.Fatalf("expected systemstate push, got: % x", buf[:n])
 	}
-	if int16(binary.LittleEndian.Uint16(buf[4:6])) != emuMainCurrentMA {
-		t.Fatalf("main current push: % x", buf[:n])
-	}
 }

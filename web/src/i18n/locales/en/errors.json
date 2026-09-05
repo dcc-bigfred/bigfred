@@ -36,6 +36,7 @@
   "command_station_idle_timeout_invalid": "Remote idle timeout must be between 0 and 3600 s.",
   "command_station_programming_track_invalid": "Default programming track output must be “prog” or “pom”.",
   "command_station_inbound_port_conflict": "Another command station already has the Z21 or WiFred handset server enabled on the same port (default 21105 or 12090). Only one station per host can listen on a given port — disable handsets on one station or change the ports in advanced settings.",
+  "command_station_withrottle_port_conflict": "This WiThrottle client would dial this host's own WiFred listener. Use a different inbound port, or disable the WiFred server.",
   "layout_max_vehicles_invalid": "Vehicles-per-user limit must be between 1 and 120.",
   "layout_max_vehicles_exceeds_slot_budget": "Vehicles-per-user limit cannot exceed the LocoNet slot budget on an attached command station.",
   "radio_chat_disabled": "Radio messages are disabled on this layout.",

@@ -5,7 +5,7 @@ import (
 
 	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/contract"
 	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/remotepairing"
-	"github.com/dcc-bigfred/bigfred/pkgs/loco/commandstation"
+	"github.com/dcc-bigfred/proto/go/pkgs/commandstation"
 )
 
 // RemoteProtocol is a protocol-specific inbound handset listener.

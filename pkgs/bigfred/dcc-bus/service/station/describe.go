@@ -16,6 +16,8 @@ func Describe(cs domain.CommandStation) string {
 		return fmt.Sprintf("loconet_serial uri=%q", cs.ConnectionURI)
 	case domain.CommandStationKindLocoNetTCP:
 		return fmt.Sprintf("loconet_tcp uri=%q", cs.ConnectionURI)
+	case domain.CommandStationKindWiThrottle:
+		return fmt.Sprintf("withrottle uri=%q", cs.ConnectionURI)
 	default:
 		return fmt.Sprintf("kind=%q uri=%q", cs.Kind, cs.ConnectionURI)
 	}

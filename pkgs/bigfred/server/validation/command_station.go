@@ -1,6 +1,8 @@
 package validation
 
 import (
+	"net"
+	"strconv"
 	"strings"
 
 	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/domain"
@@ -137,4 +139,52 @@ func SanitiseCommandStationProgrammingTrackOutput(track string) (string, error) 
 		return "", svcerrors.ErrCommandStationProgrammingTrackInvalid
 	}
 	return track, nil
+}
+
+// ValidateWithrottlePortConflict rejects a WiThrottle client that would
+// dial this process's own inbound WiThrottle listener (loopback + same port).
+func ValidateWithrottlePortConflict(kind domain.CommandStationKind, uri string, serverEnabled bool, inboundPort uint16) error {
+	if kind != domain.CommandStationKindWiThrottle || !serverEnabled {
+		return nil
+	}
+	host, port, err := parseCommandStationHostPort(uri, "withrottle", domain.DefaultWithrottleInboundPort)
+	if err != nil {
+		return nil
+	}
+	if port != inboundPort || !isLoopbackHost(host) {
+		return nil
+	}
+	return svcerrors.ErrCommandStationWithrottlePortConflict
+}
+
+func parseCommandStationHostPort(uri, scheme string, defaultPort uint16) (string, uint16, error) {
+	s := strings.TrimSpace(uri)
+	if s == "" {
+		return "", 0, strconv.ErrSyntax
+	}
+	for _, prefix := range []string{scheme + "://", "z21://", "udp://", "loconet-tcp://", "tcp://", "withrottle://", "lbserver://"} {
+		if strings.HasPrefix(s, prefix) {
+			s = strings.TrimPrefix(s, prefix)
+			break
+		}
+	}
+	host, portStr, err := net.SplitHostPort(s)
+	if err != nil {
+		return s, defaultPort, nil
+	}
+	p, err := strconv.ParseUint(portStr, 10, 16)
+	if err != nil {
+		return "", 0, err
+	}
+	return host, uint16(p), nil
+}
+
+func isLoopbackHost(host string) bool {
+	h := strings.ToLower(strings.Trim(strings.TrimSpace(host), "[]"))
+	switch h {
+	case "", "localhost", "127.0.0.1", "::1", "0.0.0.0", "*":
+		return true
+	}
+	ip := net.ParseIP(h)
+	return ip != nil && ip.IsLoopback()
 }

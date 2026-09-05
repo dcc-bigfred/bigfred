@@ -99,7 +99,8 @@
     "kind": {
       "z21": "Z21 (UDP)",
       "loconet_serial": "LocoNet (serial)",
-      "loconet_tcp": "LocoNet (TCP)"
+      "loconet_tcp": "LocoNet (TCP)",
+      "withrottle": "WiThrottle (TCP)"
     },
     "programmingTrack": {
       "prog": "Programming track (prog)",
@@ -120,7 +121,7 @@
         "name": "Name",
         "kind": "Kind",
         "connectionUri": "Connection URI",
-        "connectionUriHelp": "e.g. udp://192.168.1.10:21105, serial:///dev/ttyUSB0:57600, serial://autodetect:115200, tcp://192.168.1.20:1234",
+        "connectionUriHelp": "e.g. udp://192.168.1.10:21105, serial:///dev/ttyUSB0:57600, serial://autodetect:115200, tcp://192.168.1.20:1234, withrottle://192.168.1.30:12090",
         "speedSteps": "Speed steps",
         "speedStepsHelp": "DCC speed resolution forwarded to dcc-bus. Default 128.",
         "pollIntervalMs": "Poll interval (ms)",
@@ -149,6 +150,8 @@
         "singleVehicleControlHelp": "When enabled, selecting or driving a different vehicle or consist stops the user's other moving vehicles (speed > 1). Lent-out vehicles are not stopped.",
         "programming": "Decoder programming",
         "programmingHelp": "Allows reading and writing decoder CVs and changing the DCC address through this command station. Off by default because writing CVs on a live layout is destructive.",
+        "programmingWithrottleHelp": "Decoder programming is not available over WiThrottle — the protocol has no CV read/write commands.",
+        "withrottlePortConflict": "This station would connect to a WiThrottle server on this same host while also listening for WiThrottle handsets. Use a different inbound port, or disable the WiFred server if you only want to talk to JMRI/DCC-EX.",
         "defaultProgrammingTrackOutput": "Default programming track output",
         "defaultProgrammingTrackOutputHelp": "Track used when a programming request does not say which one: the isolated programming output (prog) or the main track (POM, programming on the main).",
         "hideInThrottle": "Hide in throttle view",

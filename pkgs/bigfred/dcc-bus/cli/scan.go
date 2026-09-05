@@ -14,7 +14,7 @@ import (
 
 	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/netutil"
 	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/platform"
-	"github.com/dcc-bigfred/bigfred/pkgs/loco/commandstation"
+	"github.com/dcc-bigfred/proto/go/pkgs/commandstation"
 )
 
 const scanTimeout = 60 * time.Second
@@ -103,6 +103,7 @@ func buildScanAutodetections(supportsSerial bool, lanPrefix string) commandstati
 		scanners = append(scanners,
 			commandstation.LocoNetTCPAutodetection{SubnetPrefix: lanPrefix},
 			commandstation.Z21Autodetection{SubnetPrefix: lanPrefix},
+			commandstation.WiThrottleAutodetection{SubnetPrefix: lanPrefix},
 		)
 	}
 	return scanners

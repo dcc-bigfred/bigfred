@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/domain"
-	"github.com/dcc-bigfred/bigfred/pkgs/loco/commandstation"
+	"github.com/dcc-bigfred/proto/go/pkgs/commandstation"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
@@ -38,7 +38,8 @@ func (f *fakeStation) SetSpeed(commandstation.LocoAddr, uint8, bool, uint8) erro
 func (f *fakeStation) GetSpeed(commandstation.LocoAddr) (uint8, bool, error) {
 	return 0, true, nil
 }
-func (f *fakeStation) CleanUp() error { return nil }
+func (f *fakeStation) EmergencyStop(commandstation.LocoAddr, bool) error { return nil }
+func (f *fakeStation) CleanUp() error                                    { return nil }
 
 func (f *fakeStation) ObserveStates() <-chan commandstation.LocoObservation {
 	ch := make(chan commandstation.LocoObservation)

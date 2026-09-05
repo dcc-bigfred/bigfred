@@ -144,7 +144,7 @@ should rarely be invoked manually.`,
 	cmd.Flags().Uint16Var(&f.Port, "port", 0, "TCP port to expose the WebSocket on (required; allocated by loco-server)")
 	cmd.Flags().StringVar(&f.RedisAddr, "redis-addr", "127.0.0.1:6379", "redis host:port used for state cache and pub/sub")
 	cmd.Flags().StringVar(&f.StationName, FlagStationName, "", "command station display name (required; set by loco-server)")
-	cmd.Flags().StringVar(&f.StationKind, FlagStationKind, "", "driver kind: z21 | loconet_serial | loconet_tcp (required)")
+	cmd.Flags().StringVar(&f.StationKind, FlagStationKind, "", "driver kind: z21 | loconet_serial | loconet_tcp | withrottle (required)")
 	cmd.Flags().StringVar(&f.StationURI, FlagStationURI, "", "connection URI for the command station (required)")
 	cmd.Flags().UintVar(&f.StationSpeedSteps, FlagSpeedSteps, 128, "DCC speed steps (14 or 28 or 128)")
 	cmd.Flags().StringVar(&f.JWTSecret, "jwt-secret", "", "JWT signing secret (use --jwt-secret-env to read from an env var instead)")

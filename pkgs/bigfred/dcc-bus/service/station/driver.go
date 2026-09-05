@@ -1,4 +1,4 @@
-// Package station builds a pkgs/loco/commandstation.Station for the
+// Package station builds a proto commandstation.Station for the
 // daemon's command-station row. The parsing layer is intentionally
 // permissive — operators paste a connection URI into the admin form
 // and the daemon dials whatever it says.
@@ -12,7 +12,7 @@ import (
 
 	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/platform"
 	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/domain"
-	"github.com/dcc-bigfred/bigfred/pkgs/loco/commandstation"
+	"github.com/dcc-bigfred/proto/go/pkgs/commandstation"
 )
 
 // Open dials the command station described by cs. The returned
@@ -56,6 +56,13 @@ func Open(cs domain.CommandStation) (commandstation.Station, error) {
 		}
 		return commandstation.NewLocoNetTCPBinary(host, port)
 
+	case domain.CommandStationKindWiThrottle:
+		host, port, err := parseHostPort(cs.ConnectionURI, "withrottle", 12090)
+		if err != nil {
+			return nil, fmt.Errorf("withrottle uri %q: %w", cs.ConnectionURI, err)
+		}
+		return commandstation.NewWiThrottle(host, port)
+
 	default:
 		return nil, fmt.Errorf("unsupported command station kind %q", cs.Kind)
 	}
@@ -73,10 +80,14 @@ func parseHostPort(uri, scheme string, defaultPort uint16) (string, uint16, erro
 	if s == "" {
 		return "", 0, fmt.Errorf("empty uri")
 	}
-	s = strings.TrimPrefix(s, scheme+"://")
+	for _, prefix := range []string{scheme + "://", "z21://", "udp://", "loconet-tcp://", "tcp://", "withrottle://"} {
+		if strings.HasPrefix(s, prefix) {
+			s = strings.TrimPrefix(s, prefix)
+			break
+		}
+	}
 	host, portStr, err := net.SplitHostPort(s)
 	if err != nil {
-		// no port → use default
 		return s, defaultPort, nil
 	}
 	p, err := strconv.ParseUint(portStr, 10, 16)

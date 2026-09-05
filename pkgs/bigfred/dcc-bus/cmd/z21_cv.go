@@ -4,7 +4,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/dcc-bigfred/bigfred/pkgs/loco/commandstation"
+	"github.com/dcc-bigfred/proto/go/pkgs/commandstation"
 )
 
 // ReadLocoCV reads one CV from a locomotive on the main track (POM / RailCom).

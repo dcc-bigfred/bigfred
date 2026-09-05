@@ -1,7 +1,7 @@
 package app
 
 import (
-	"github.com/dcc-bigfred/bigfred/pkgs/loco/commandstation"
+	"github.com/dcc-bigfred/proto/go/pkgs/commandstation"
 )
 
 // progModeForLoco selects programming track when locoId is 0, PoM otherwise.

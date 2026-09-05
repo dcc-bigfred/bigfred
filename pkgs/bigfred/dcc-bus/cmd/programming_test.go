@@ -10,7 +10,7 @@ import (
 
 	buserrors "github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/errors"
 	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/protocol"
-	"github.com/dcc-bigfred/bigfred/pkgs/loco/commandstation"
+	"github.com/dcc-bigfred/proto/go/pkgs/commandstation"
 )
 
 type cvCall struct {

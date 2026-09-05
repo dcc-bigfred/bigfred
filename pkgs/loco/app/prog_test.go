@@ -3,7 +3,7 @@ package app
 import (
 	"testing"
 
-	"github.com/dcc-bigfred/bigfred/pkgs/loco/commandstation"
+	"github.com/dcc-bigfred/proto/go/pkgs/commandstation"
 )
 
 func TestProgModeForLoco(t *testing.T) {

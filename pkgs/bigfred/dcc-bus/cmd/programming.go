@@ -10,7 +10,7 @@ import (
 
 	buserrors "github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/errors"
 	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/protocol"
-	"github.com/dcc-bigfred/bigfred/pkgs/loco/commandstation"
+	"github.com/dcc-bigfred/proto/go/pkgs/commandstation"
 )
 
 const (
@@ -246,6 +246,9 @@ func (r *Router) writeCV(mode commandstation.Mode, locoID commandstation.LocoAdd
 }
 
 func (r *Router) programmingFailure(actor Actor, frameType string, addr uint16, err error, code string) Result {
+	if stderrors.Is(err, commandstation.ErrUnsupported) {
+		code = buserrors.CodeProgrammingFailed
+	}
 	r.log.WithError(err).WithFields(logrus.Fields{
 		"sessionId": actor.SessionID,
 		"userId":    actor.UserID,

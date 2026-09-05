@@ -324,6 +324,8 @@ func CommandStationHTTPStatus(err error) (status int, code string) {
 		return http.StatusUnprocessableEntity, CodeCommandStationPollIntervalInvalid
 	case stderrors.Is(err, ErrCommandStationInboundPortConflict):
 		return http.StatusConflict, CodeCommandStationInboundPortConflict
+	case stderrors.Is(err, ErrCommandStationWithrottlePortConflict):
+		return http.StatusConflict, CodeCommandStationWithrottlePortConflict
 	case stderrors.Is(err, ErrCommandStationMaxLoconetSlotsInvalid):
 		return http.StatusUnprocessableEntity, CodeCommandStationMaxLoconetSlotsInvalid
 	case stderrors.Is(err, ErrCommandStationIdleTimeoutInvalid):

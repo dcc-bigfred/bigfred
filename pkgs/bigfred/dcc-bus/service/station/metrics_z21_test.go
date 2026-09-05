@@ -7,7 +7,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 
 	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/domain"
-	"github.com/dcc-bigfred/bigfred/pkgs/loco/commandstation"
+	"github.com/dcc-bigfred/proto/go/pkgs/commandstation"
 )
 
 type fakeZ21MetricsSource struct {

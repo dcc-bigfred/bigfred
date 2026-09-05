@@ -4,7 +4,7 @@ import "time"
 
 // CommandStationKind is the closed catalogue of supported physical
 // DCC command stations (§7e.2). The value drives which driver in
-// `pkgs/loco/commandstation` the `dcc-bus` daemon constructs.
+// `proto/go/pkgs/commandstation` the `dcc-bus` daemon constructs.
 type CommandStationKind string
 
 const (
@@ -18,6 +18,9 @@ const (
 	// wire format: `tcp://` for raw binary LocoNet over TCP (default),
 	// `lbserver://` for the ASCII LoconetOverTcp/LbServer protocol.
 	CommandStationKindLocoNetTCP CommandStationKind = "loconet_tcp"
+	// CommandStationKindWiThrottle is an outbound WiThrottle TCP client
+	// (JMRI, DCC-EX, LNWI, RB1110). URI: withrottle://host:port (default 12090).
+	CommandStationKindWiThrottle CommandStationKind = "withrottle"
 )
 
 // CommandStationKinds returns the closed catalogue in display order
@@ -27,6 +30,7 @@ func CommandStationKinds() []CommandStationKind {
 		CommandStationKindZ21,
 		CommandStationKindLocoNetSerial,
 		CommandStationKindLocoNetTCP,
+		CommandStationKindWiThrottle,
 	}
 }
 
@@ -35,7 +39,7 @@ func CommandStationKinds() []CommandStationKind {
 // validation.
 func (k CommandStationKind) IsValid() bool {
 	switch k {
-	case CommandStationKindZ21, CommandStationKindLocoNetSerial, CommandStationKindLocoNetTCP:
+	case CommandStationKindZ21, CommandStationKindLocoNetSerial, CommandStationKindLocoNetTCP, CommandStationKindWiThrottle:
 		return true
 	}
 	return false
@@ -58,6 +62,7 @@ func (k CommandStationKind) IsLocoNet() bool {
 //                     use `serial://autodetect:<baud>` to pick the first available port)
 //   - loconet_tcp:    `tcp://<host>:<port>`       (raw binary LocoNet; default)
 //                     `lbserver://<host>:<port>`  (ASCII LoconetOverTcp/LbServer)
+//   - withrottle:     `withrottle://<host>:<port>` (default 12090)
 //
 // Keeping the URI as a plain string (rather than a JSON blob) keeps
 // admin UX trivial — copy-paste from the Z21 sticker, save, done.

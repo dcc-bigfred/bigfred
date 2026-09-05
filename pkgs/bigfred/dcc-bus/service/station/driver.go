@@ -25,7 +25,12 @@ func Open(cs domain.CommandStation) (commandstation.Station, error) {
 		if err != nil {
 			return nil, fmt.Errorf("z21 uri %q: %w", cs.ConnectionURI, err)
 		}
-		return commandstation.NewZ21Roco(host, port)
+		st, err := commandstation.NewZ21Roco(host, port)
+		if err != nil {
+			return nil, err
+		}
+		st.SetSpeedSteps(uint8(cs.EffectiveSpeedSteps()))
+		return st, nil
 
 	case domain.CommandStationKindLocoNetSerial:
 		if !platform.SupportsLocoNetSerial() {

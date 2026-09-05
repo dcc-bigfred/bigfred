@@ -45,3 +45,18 @@ func TestBuildScanAutodetections(t *testing.T) {
 		})
 	}
 }
+
+func TestLegacyScanURIKeepsV1Schemes(t *testing.T) {
+	cases := map[string]string{
+		"z21://192.168.0.10:21105":        "udp://192.168.0.10:21105",
+		"loconet-tcp://192.168.0.20:1234": "tcp://192.168.0.20:1234",
+		"lbserver://192.168.0.20:1234":    "lbserver://192.168.0.20:1234",
+		"withrottle://192.168.0.30:12090": "withrottle://192.168.0.30:12090",
+		"serial:///dev/ttyUSB0:57600":     "serial:///dev/ttyUSB0:57600",
+	}
+	for in, want := range cases {
+		if got := legacyScanURI(in); got != want {
+			t.Errorf("legacyScanURI(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

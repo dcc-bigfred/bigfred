@@ -73,8 +73,8 @@ func TestCommanderGetsNoEcho(t *testing.T) {
 	drainUntilLine(t, r1, func(line string) bool { return strings.Contains(line, "<;>s1") })
 	wtWrite(t, c2, "M0+S3<;>S3")
 	drainUntilLine(t, r2, func(line string) bool { return strings.Contains(line, "<;>s1") })
-	drainQuiet(t, r1, 80*time.Millisecond)
-	drainQuiet(t, r2, 80*time.Millisecond)
+	drainQuiet(t, c1, r1, 80*time.Millisecond)
+	drainQuiet(t, c2, r2, 80*time.Millisecond)
 
 	srv.OnLocoStateChanged(context.Background(), contract.LocoStateWire{Address: 3, Speed: 42, Forward: false}, "withrottle:origin")
 

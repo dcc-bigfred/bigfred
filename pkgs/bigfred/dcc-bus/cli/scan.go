@@ -75,6 +75,7 @@ func runScan(parent context.Context, log *logrus.Logger, lanPrefix string) error
 
 	enc := json.NewEncoder(os.Stdout)
 	scanErr := scanners.Scan(ctx, func(c commandstation.DetectedConnection) error {
+		c.URI = legacyScanURI(c.URI)
 		if err := enc.Encode(c); err != nil {
 			return fmt.Errorf("dcc-bus scan: encode: %w", err)
 		}
@@ -89,6 +90,19 @@ func runScan(parent context.Context, log *logrus.Logger, lanPrefix string) error
 	}
 	log.WithError(scanErr).Error("dcc-bus scan: scanner error")
 	return fmt.Errorf("dcc-bus scan: %w", scanErr)
+}
+
+// legacyScanURI maps proto's scheme names onto the ones BigFred has always
+// stored and shown in the admin form (udp:// for Z21, tcp:// for binary
+// LocoNet over TCP), so a rescan proposes the same URI as before.
+func legacyScanURI(uri string) string {
+	switch {
+	case strings.HasPrefix(uri, "z21://"):
+		return "udp://" + strings.TrimPrefix(uri, "z21://")
+	case strings.HasPrefix(uri, "loconet-tcp://"):
+		return "tcp://" + strings.TrimPrefix(uri, "loconet-tcp://")
+	}
+	return uri
 }
 
 // buildScanAutodetections returns the autodetection stack for dcc-bus scan.

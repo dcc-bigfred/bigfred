@@ -25,6 +25,19 @@ var (
 
 func (s *Server) OnConnect(client drive.ClientID, deviceID string) {
 	now := time.Now().UTC()
+	key := string(client)
+	if _, known := s.registry.Get(key); known {
+		// Same HU on a new TCP connection while the previous one is still
+		// registered: proto has already replaced the session, so per-connection
+		// wire state (throttles, sentinel, pairing digits) must start fresh.
+		if s.registry.IsPaired(key) {
+			s.log.WithFields(logrus.Fields{
+				"client":   key,
+				"deviceId": deviceID,
+			}).Warn("withrottle: paired handset device id taken over by new connection")
+		}
+		s.registry.ResetForNewConn(key)
+	}
 	c := s.registry.TouchByDeviceId(deviceID, nil, now)
 	ctx := s.ctx()
 	if s.registry.NeedsSync(c.Key, sessionSyncStale) {
@@ -63,17 +76,23 @@ func (s *Server) OnDisconnect(client drive.ClientID) {
 	if _, ok := s.quit.LoadAndDelete(key); ok {
 		return
 	}
+	if p := s.protoServer(); p != nil && p.HasSession(client) {
+		return
+	}
 	s.dropPresence(s.ctx(), key)
 }
 
 func (s *Server) OnN(client drive.ClientID, name string) bool {
 	key := string(client)
-	s.registry.setDeviceName(key, name)
-	if s.registry.IsPaired(key) {
-		return false
-	}
 	c, ok := s.registry.Get(key)
 	if !ok {
+		// N before HU: the session is still keyed by its TCP remote address.
+		// v1 ignored it entirely (no burst, no heartbeat, no wire entry); the
+		// initial burst goes out on HU once the paired roster is known.
+		return true
+	}
+	s.registry.setDeviceName(key, name)
+	if s.registry.IsPaired(key) {
 		return false
 	}
 	consumed, active := s.pairing.HandleN(s.ctx(), c, name)
@@ -82,9 +101,8 @@ func (s *Server) OnN(client drive.ClientID, name string) bool {
 		fields["client"] = key
 		fields["pairingCode"] = active.PairingCode
 		s.log.WithFields(fields).Info("withrottle handset paired via device name")
-		return true
 	}
-	return false
+	return consumed
 }
 
 func (s *Server) Acquire(client drive.ClientID, throttleID byte, addr uint16) (bool, []string) {
@@ -340,7 +358,10 @@ func (s *Server) Roster(client drive.ClientID) []wtproto.RosterEntry {
 	return out
 }
 
-func (s *Server) Labels(_ drive.ClientID, addr uint16) []string {
+func (s *Server) Labels(client drive.ClientID, addr uint16) []string {
+	if !s.registry.IsPaired(string(client)) {
+		return nil
+	}
 	return functionLabels(s.functionsForAddr(addr))
 }
 

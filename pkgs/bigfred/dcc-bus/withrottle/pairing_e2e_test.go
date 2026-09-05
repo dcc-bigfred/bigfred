@@ -54,6 +54,24 @@ func TestNNamePairing(t *testing.T) {
 	}
 }
 
+func TestFailedNCodeDoesNotSendHeartbeat(t *testing.T) {
+	store := testPairingStore(t)
+	srv := startWT(t, Config{
+		LayoutID:         1,
+		CommandStationID: 1,
+		Store:            store,
+		HeartbeatSecs:    10,
+		TrackPowerOn:     true,
+	})
+	conn, r := dialWT(t, srv)
+	handshakeHU(t, conn, r, "n-miss")
+	wtWrite(t, conn, "N000000")
+	_ = conn.SetReadDeadline(time.Now().Add(150 * time.Millisecond))
+	if line, err := r.ReadString('\n'); err == nil {
+		t.Fatalf("unexpected reply after failed N-code %q", strings.TrimRight(line, "\r\n"))
+	}
+}
+
 func TestFunctionKeyPairingEndToEnd(t *testing.T) {
 	store := testPairingStore(t)
 	ctx := context.Background()

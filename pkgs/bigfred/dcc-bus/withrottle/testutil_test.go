@@ -94,16 +94,21 @@ func drainUntilLine(t *testing.T, r *bufio.Reader, match func(string) bool) stri
 	return ""
 }
 
-func drainQuiet(t *testing.T, r *bufio.Reader, d time.Duration) {
+// drainQuiet discards every line that arrives within d (including lines still
+// in the kernel socket buffer, which bufio.Reader.Buffered does not see) and
+// then restores the long test deadline.
+func drainQuiet(t *testing.T, conn net.Conn, r *bufio.Reader, d time.Duration) int {
 	t.Helper()
-	deadline := time.Now().Add(d)
-	for time.Now().Before(deadline) {
-		if r.Buffered() == 0 {
-			time.Sleep(5 * time.Millisecond)
-			continue
+	_ = conn.SetReadDeadline(time.Now().Add(d))
+	n := 0
+	for {
+		if _, err := r.ReadString('\n'); err != nil {
+			break
 		}
-		_, _ = r.ReadString('\n')
+		n++
 	}
+	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	return n
 }
 
 func handshakeHU(t *testing.T, conn net.Conn, r *bufio.Reader, device string) {

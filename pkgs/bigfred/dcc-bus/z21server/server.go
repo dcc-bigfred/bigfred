@@ -180,6 +180,7 @@ func (s *Server) Run(ctx context.Context) error {
 	protoSrv, err := z21proto.Listen(bind, s,
 		z21proto.WithSerial(s.cfg.Serial),
 		z21proto.WithPeerTTL(0),
+		z21proto.WithSystemStatePayload(s.effectiveSystemState().encode()),
 		z21proto.WithClientKeyFunc(func(a *net.UDPAddr) drive.ClientID {
 			return drive.ClientID(inbound.ClientKey(contract.RemoteProtocolZ21, inbound.EndpointFromAddr(a, ipStickiness)))
 		}),

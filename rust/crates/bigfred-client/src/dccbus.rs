@@ -127,13 +127,41 @@ impl DccBusClient {
 
     /// Opens (or reuses) the organizer programming WebSocket. No-op when a
     /// live session already exists — used to warm the link right after login.
+    /// Station is autodetection (`pick_station`) unless `fixed_dcc_bus` is set.
     pub async fn ensure_connected(&self, token: &str) -> Result<Status> {
+        self.ensure_programming(token, None).await
+    }
+
+    /// Opens (or switches) the organizer programming WebSocket to `station_id`.
+    /// Reuses the live socket when it already targets that station.
+    pub async fn ensure_connected_to(&self, token: &str, station_id: u64) -> Result<Status> {
+        self.ensure_programming(token, Some(station_id)).await
+    }
+
+    async fn ensure_programming(&self, token: &str, station_id: Option<u64>) -> Result<Status> {
         let mut guard = self.programming.lock().await;
         if guard.as_ref().is_some_and(|s| !s.is_alive()) {
             *guard = None;
         }
-        if guard.is_none() {
-            *guard = Some(self.connect_with_backoff_as(token, None).await?);
+        let reuse = match (guard.as_ref(), station_id) {
+            (Some(session), Some(want)) => session.command_station_id == want,
+            (Some(_), None) => true,
+            (None, _) => false,
+        };
+        if !reuse {
+            if let Some(prev) = guard.take() {
+                if let Some(want) = station_id {
+                    tracing::info!(
+                        previous = prev.command_station_id,
+                        next = want,
+                        "dcc-bus programming session switching station"
+                    );
+                }
+            }
+            *guard = Some(
+                self.connect_with_backoff_as(token, None, station_id)
+                    .await?,
+            );
         }
         drop(guard);
         Ok(self.status())
@@ -158,7 +186,9 @@ impl DccBusClient {
                     "dcc-bus drive session switching user"
                 );
             }
-            let session = self.connect_with_backoff_as(token, Some(login)).await?;
+            let session = self
+                .connect_with_backoff_as(token, Some(login), None)
+                .await?;
             *guard = Some(DriveSession {
                 login: login.to_string(),
                 session,
@@ -177,12 +207,48 @@ impl DccBusClient {
         frame: &str,
         payload: serde_json::Value,
     ) -> Result<Ack> {
+        self.request_on(token, None, frame, payload).await
+    }
+
+    /// Like [`Self::request`], but pins the programming socket to `station_id`.
+    pub async fn request_to(
+        &self,
+        token: &str,
+        station_id: u64,
+        frame: &str,
+        payload: serde_json::Value,
+    ) -> Result<Ack> {
+        self.request_on(token, Some(station_id), frame, payload)
+            .await
+    }
+
+    async fn request_on(
+        &self,
+        token: &str,
+        station_id: Option<u64>,
+        frame: &str,
+        payload: serde_json::Value,
+    ) -> Result<Ack> {
         let mut guard = self.programming.lock().await;
         if guard.as_ref().is_some_and(|s| !s.is_alive()) {
             *guard = None;
         }
-        if guard.is_none() {
-            *guard = Some(self.connect_with_backoff_as(token, None).await?);
+        let reuse = match (guard.as_ref(), station_id) {
+            (Some(session), Some(want)) => session.command_station_id == want,
+            (Some(_), None) => true,
+            (None, _) => false,
+        };
+        if !reuse {
+            *guard = None;
+            *guard = Some(
+                self.connect_with_backoff_as(token, None, station_id)
+                    .await?,
+            );
+        } else if guard.is_none() {
+            *guard = Some(
+                self.connect_with_backoff_as(token, None, station_id)
+                    .await?,
+            );
         }
 
         match send_and_wait(
@@ -195,7 +261,10 @@ impl DccBusClient {
             Ok(ack) => Ok(ack),
             Err(err) if err.is_dcc_bus_unavailable() => {
                 *guard = None;
-                *guard = Some(self.connect_with_backoff_as(token, None).await?);
+                *guard = Some(
+                    self.connect_with_backoff_as(token, None, station_id)
+                        .await?,
+                );
                 send_and_wait(
                     guard.as_ref().ok_or(Error::DccBusSessionLost)?,
                     frame,
@@ -234,7 +303,9 @@ impl DccBusClient {
             .is_some_and(|d| d.login == login && d.session.is_alive());
         if !reuse {
             let _ = guard.take();
-            let session = self.connect_with_backoff_as(token, Some(login)).await?;
+            let session = self
+                .connect_with_backoff_as(token, Some(login), None)
+                .await?;
             *guard = Some(DriveSession {
                 login: login.to_string(),
                 session,
@@ -311,13 +382,14 @@ impl DccBusClient {
         &self,
         token: &str,
         as_login: Option<&str>,
+        station_id: Option<u64>,
     ) -> Result<Session> {
         let mut last: Option<Error> = None;
         for attempt in 0..CONNECT_ATTEMPTS {
             if attempt > 0 {
                 tokio::time::sleep(backoff_delay(attempt)).await;
             }
-            match self.connect(token, as_login).await {
+            match self.connect(token, as_login, station_id).await {
                 Ok(session) => {
                     if as_login.is_none() {
                         let mut status = self.lock_status();
@@ -334,6 +406,7 @@ impl DccBusClient {
                         attempt,
                         error = %err.code(),
                         as_login = as_login.unwrap_or(""),
+                        station_id = station_id.unwrap_or(0),
                         "dcc-bus connect failed"
                     );
                     if as_login.is_none() {
@@ -348,8 +421,32 @@ impl DccBusClient {
         Err(last.unwrap_or_else(|| Error::DccBusUnreachable(String::new())))
     }
 
-    async fn connect(&self, token: &str, as_login: Option<&str>) -> Result<Session> {
-        let station = self.pick_station(token).await?;
+    async fn resolve_station(
+        &self,
+        token: &str,
+        station_id: Option<u64>,
+    ) -> Result<CommandStation> {
+        if let Some(id) = station_id {
+            if id == 0 {
+                return Err(Error::NoProgrammingStation);
+            }
+            return Ok(CommandStation {
+                id,
+                name: format!("dcc-bus #{id}"),
+                programming: true,
+                ..CommandStation::default()
+            });
+        }
+        self.pick_station(token).await
+    }
+
+    async fn connect(
+        &self,
+        token: &str,
+        as_login: Option<&str>,
+        station_id: Option<u64>,
+    ) -> Result<Session> {
+        let station = self.resolve_station(token, station_id).await?;
         if as_login.is_none() {
             let mut status = self.lock_status();
             status.command_station_id = Some(station.id);
@@ -652,5 +749,18 @@ mod tests {
         assert_eq!(station.id, 7);
         assert!(station.programming);
         assert_eq!(station.name, "dcc-bus #7");
+    }
+
+    #[tokio::test]
+    async fn resolve_station_pins_explicit_id() {
+        let tmp = std::env::temp_dir().join(format!("bf-dcc-{}", uuid::Uuid::new_v4()));
+        let cfg = test_config(tmp);
+        let client = DccBusClient::new(Arc::new(RwLock::new(cfg)), reqwest::Client::new());
+        let station = client
+            .resolve_station("token", Some(42))
+            .await
+            .expect("pinned");
+        assert_eq!(station.id, 42);
+        assert!(station.programming);
     }
 }

@@ -153,6 +153,14 @@ let cfg = Arc::new(RwLock::new(cfg));
 let dcc = DccBusClient::new(cfg, http);
 
 dcc.ensure_connected(organizer_token).await?;
+dcc.ensure_connected_to(organizer_token, 3).await?;
+dcc.request_to(
+    organizer_token,
+    3,
+    "loco.cvRead",
+    serde_json::json!({ "address": 0, "cvs": [1], "mode": "prog" }),
+)
+.await?;
 dcc.ensure_drive(organizer_token, "alice").await?;
 dcc.pulse_function(organizer_token, "alice", 3, 2, 500).await?;
 ```

@@ -140,3 +140,31 @@ func TestIPStickinessKeying(t *testing.T) {
 		t.Fatalf("endpoint=%q want 127.0.0.1", clients[0].Endpoint)
 	}
 }
+
+func TestBroadcastTrackPowerGoesOutOverProto(t *testing.T) {
+	srv := startZ21(t, Config{Drive: &stubInboundDrive{authorized: true}})
+	client := dialZ21(t, srv)
+	if _, err := client.Write([]byte{0x04, 0x00, 0x10, 0x00}); err != nil {
+		t.Fatal(err)
+	}
+	_ = client.SetReadDeadline(time.Now().Add(time.Second))
+	buf := make([]byte, 64)
+	if _, err := client.Read(buf); err != nil {
+		t.Fatal(err)
+	}
+	clients := srv.registry.Snapshot()
+	if len(clients) != 1 {
+		t.Fatalf("clients=%d", len(clients))
+	}
+	srv.registry.SetBroadcastFlags(clients[0].Key, broadcastFlagDriving)
+	srv.broadcastTrackPower(true)
+	_ = client.SetReadDeadline(time.Now().Add(time.Second))
+	n, err := client.Read(buf)
+	if err != nil {
+		t.Fatalf("no track-power broadcast: %v", err)
+	}
+	want := buildBCTrackPowerReply(true)
+	if n < len(want) || string(buf[:len(want)]) != string(want) {
+		t.Fatalf("got %x want %x", buf[:n], want)
+	}
+}

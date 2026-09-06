@@ -145,3 +145,90 @@ func TestHUReconnectWithCoordinatorKeepsTCP(t *testing.T) {
 		t.Fatalf("replacement TCP closed after HU takeover: %v", err)
 	}
 }
+
+func TestStarPlusArmsHeartbeatMonitor(t *testing.T) {
+	srv := startWT(t, Config{
+		LayoutID:         1,
+		CommandStationID: 1,
+		HeartbeatSecs:    10,
+		TrackPowerOn:     true,
+	})
+	conn, r := dialWT(t, srv)
+	handshakeHU(t, conn, r, "hb-arm")
+	wtWrite(t, conn, "*+")
+	key := ClientKeyForDevice("hb-arm")
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		c, ok := srv.registry.Get(key)
+		if ok && c.HeartbeatMonitor {
+			wtWrite(t, conn, "*-")
+			for time.Now().Before(deadline.Add(time.Second)) {
+				c, ok = srv.registry.Get(key)
+				if ok && !c.HeartbeatMonitor {
+					return
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+			t.Fatal("*- did not clear HeartbeatMonitor")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("*+ did not arm HeartbeatMonitor")
+}
+
+func TestPairedActionOnUnheldLocoIsIgnored(t *testing.T) {
+	drive := &speedProbeDrive{}
+	srv := startWT(t, Config{
+		LayoutID:         1,
+		CommandStationID: 1,
+		SpeedSteps:       128,
+		Drive:            drive,
+	})
+	conn, r := dialWT(t, srv)
+	handshakeHU(t, conn, r, "unheld")
+	pairDevice(srv, "unheld")
+	wtWrite(t, conn, "M0AS3<;>V40")
+	time.Sleep(80 * time.Millisecond)
+	if drive.calls() != 0 {
+		t.Fatalf("SetSpeed on unheld loco: %d calls", drive.calls())
+	}
+}
+
+func TestCoordinatorEvictClearsWireState(t *testing.T) {
+	coord := remotes.NewCoordinator(remotes.CoordinatorConfig{
+		LayoutID:         1,
+		CommandStationID: 1,
+	})
+	srv := startWT(t, Config{
+		LayoutID:         1,
+		CommandStationID: 1,
+		HeartbeatSecs:    10,
+		TrackPowerOn:     true,
+		Coordinator:      coord,
+	})
+	conn, r := dialWT(t, srv)
+	handshakeHU(t, conn, r, "wire-evict")
+	key := ClientKeyForDevice("wire-evict")
+	srv.registry.setLastSpeed(key, '0', 3, 40)
+	if _, ok := srv.registry.lastSpeed(key, '0', 3); !ok {
+		t.Fatal("setup lastSpeed")
+	}
+	coord.DropPresence(context.Background(), key)
+	if _, ok := srv.registry.lastSpeed(key, '0', 3); ok {
+		t.Fatal("wire lastSpeed survived DropPresence")
+	}
+	_ = conn
+	_ = r
+}
+
+func TestScopeChangedDetectsRosterDelta(t *testing.T) {
+	a := &contract.RemoteSessionWire{AllowAllVehicles: false, AllowedAddrs: []uint16{3, 7}}
+	b := &contract.RemoteSessionWire{AllowAllVehicles: false, AllowedAddrs: []uint16{3, 7}}
+	if scopeChanged(a, b) {
+		t.Fatal("identical scopes")
+	}
+	b.AllowedAddrs = []uint16{3, 8}
+	if !scopeChanged(a, b) {
+		t.Fatal("addr set change must be detected")
+	}
+}

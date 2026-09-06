@@ -123,6 +123,7 @@ func New(cfg Config) (*Server, error) {
 	if cfg.Coordinator != nil {
 		s.virtual = cfg.Coordinator.VirtualLocos()
 		cfg.Coordinator.RegisterOnEvict(func(key string) {
+			wire.Remove(key)
 			s.disconnectProto(key)
 		})
 		cfg.Coordinator.RegisterSessionSyncHandler(contract.RemoteProtocolWithrottle, func(ctx context.Context, clientKey string) {
@@ -217,6 +218,9 @@ func (s *Server) Run(ctx context.Context) error {
 		wtproto.WithTrackOn(s.cfg.TrackPowerOn),
 		wtproto.WithRosterProvider(s),
 		wtproto.WithLabelProvider(s),
+		wtproto.WithErrorHandler(func(err error) {
+			s.log.WithError(err).Warn("withrottle inbound listener error")
+		}),
 	)
 	if err != nil {
 		return err
@@ -306,9 +310,39 @@ func (s *Server) syncPairedByKey(ctx context.Context, key string) {
 	active, ok, err := s.cfg.Store.GetActiveByClientKey(ctx, s.cfg.LayoutID, s.cfg.CommandStationID, key)
 	if err != nil || !ok {
 		s.registry.SetPaired(key, nil)
+		prev, had := s.registry.Session(key)
+		if had && prev != nil {
+			s.emitRosterUpdate(key)
+		}
 		return
 	}
+	prev, had := s.registry.Session(key)
 	s.registry.SetPaired(key, &active)
+	if had && prev != nil && scopeChanged(prev, &active) {
+		s.emitRosterUpdate(key)
+	}
+}
+
+func scopeChanged(a, b *contract.RemoteSessionWire) bool {
+	if a == nil || b == nil {
+		return true
+	}
+	if a.AllowAllVehicles != b.AllowAllVehicles {
+		return true
+	}
+	if len(a.AllowedAddrs) != len(b.AllowedAddrs) {
+		return true
+	}
+	seen := make(map[uint16]struct{}, len(a.AllowedAddrs))
+	for _, addr := range a.AllowedAddrs {
+		seen[addr] = struct{}{}
+	}
+	for _, addr := range b.AllowedAddrs {
+		if _, ok := seen[addr]; !ok {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Server) emitRosterUpdate(key string) {

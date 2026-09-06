@@ -184,6 +184,9 @@ func (s *Server) Run(ctx context.Context) error {
 		z21proto.WithClientKeyFunc(func(a *net.UDPAddr) drive.ClientID {
 			return drive.ClientID(inbound.ClientKey(contract.RemoteProtocolZ21, inbound.EndpointFromAddr(a, ipStickiness)))
 		}),
+		z21proto.WithErrorHandler(func(err error) {
+			s.log.WithError(err).Warn("z21 inbound listener error")
+		}),
 	)
 	if err != nil {
 		return err

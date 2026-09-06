@@ -19,6 +19,7 @@ var (
 	_ drive.Subscriber       = (*Server)(nil)
 	_ drive.SessionHooks     = (*Server)(nil)
 	_ drive.NHook            = (*Server)(nil)
+	_ drive.HeartbeatHook    = (*Server)(nil)
 	_ wtproto.RosterProvider = (*Server)(nil)
 	_ wtproto.LabelProvider  = (*Server)(nil)
 )
@@ -214,6 +215,10 @@ func (s *Server) GateRelease(client drive.ClientID, throttleID byte, locoKey str
 	return true
 }
 
+func (s *Server) OnHeartbeatMonitor(client drive.ClientID, on bool) {
+	s.registry.setHeartbeatMonitor(string(client), on)
+}
+
 func (s *Server) Action(client drive.ClientID, throttleID byte, locoKey string, addr uint16, prop string) bool {
 	key := string(client)
 	c, ok := s.registry.Get(key)
@@ -222,6 +227,9 @@ func (s *Server) Action(client drive.ClientID, throttleID byte, locoKey string, 
 	}
 	if !s.registry.IsPaired(key) {
 		s.handleUnpairedAction(c, throttleID, locoKey, addr, prop)
+		return true
+	}
+	if locoKey != "*" && !s.registry.throttleHolds(key, throttleID, addr) {
 		return true
 	}
 	if s.adapter != nil {

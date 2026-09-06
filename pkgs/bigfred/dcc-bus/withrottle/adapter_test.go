@@ -6,6 +6,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -49,6 +50,25 @@ func (acquireOrderDrive) Subscribe(ctx context.Context, _ remotes.ThrottleActor,
 func (acquireOrderDrive) Release(remotes.ThrottleActor, uint16) {}
 func (acquireOrderDrive) LocoSnapshot(uint16) contract.LocoStateWire {
 	return contract.LocoStateWire{Forward: true}
+}
+
+type speedProbeDrive struct {
+	acquireOrderDrive
+	mu sync.Mutex
+	n  int
+}
+
+func (d *speedProbeDrive) SetSpeed(context.Context, remotes.ThrottleActor, remotes.ThrottleResponder, contract.LocoSetSpeedWire) remotes.CommandResult {
+	d.mu.Lock()
+	d.n++
+	d.mu.Unlock()
+	return remotes.CommandResult{OK: true}
+}
+
+func (d *speedProbeDrive) calls() int {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.n
 }
 
 func TestAcquireSnapshotFollowsDefaultDump(t *testing.T) {

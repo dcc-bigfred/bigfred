@@ -39,7 +39,7 @@ func buildBCTrackPowerReply(on bool) []byte {
 }
 
 func (s *Server) broadcastTrackPower(on bool) {
-	if s.conn == nil {
+	if s.protoServer() == nil && s.conn == nil {
 		return
 	}
 	pkt := buildBCTrackPowerReply(on)

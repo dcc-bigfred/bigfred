@@ -6,7 +6,7 @@ require (
 	github.com/alicebob/miniredis/v2 v2.38.0
 	github.com/coder/websocket v1.8.13
 	github.com/dcc-bigfred/microinit/go v0.5.1-0.20260808183938-3d44aecd02c5
-	github.com/dcc-bigfred/proto/go v0.1.1-0.20260905205749-bebcf8b5ec1d
+	github.com/dcc-bigfred/proto/go v0.1.1-0.20260906202405-36a36f684638
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/go-chi/chi/v5 v5.3.0
 	github.com/go-chi/cors v1.2.2

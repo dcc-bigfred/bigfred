@@ -75,8 +75,9 @@ func (r *Router) programmingGate() (Result, bool) {
 
 // HandleLocoCVWrite programs the requested CVs on one decoder. Writes
 // are applied in the order the client sent them with a settle pause in
-// between; the first failure aborts the batch so a half-applied address
-// change is reported instead of silently continued.
+// between. A per-CV failure is recorded in Errors and the rest of the
+// list still runs (ok stays true). Address changes stay fail-fast in
+// HandleLocoAddrSet.
 func (r *Router) HandleLocoCVWrite(_ context.Context, actor Actor, _ Responder, p protocol.LocoCVWritePayload, _ string) Result {
 	if res, ok := r.programmingGate(); !ok {
 		return res
@@ -90,18 +91,22 @@ func (r *Router) HandleLocoCVWrite(_ context.Context, actor Actor, _ Responder, 
 	defer r.progMu.Unlock()
 
 	written := make([]protocol.CVEntry, 0, len(p.CVs))
+	failed := make([]uint16, 0)
 	for i, entry := range p.CVs {
 		if i > 0 {
 			time.Sleep(programmingSettle)
 		}
 		if err := r.writeCV(mode, locoID, entry.CV, int(entry.Value), false); err != nil {
-			return r.programmingFailure(actor, "loco.cvWrite", p.Address, err, buserrors.CodeProgrammingFailed)
+			r.programmingSlotWarn(actor, "loco.cvWrite", p.Address, entry.CV, err)
+			failed = append(failed, entry.CV)
+			continue
 		}
 		written = append(written, entry)
 	}
 
 	res := OKResult()
 	res.CVs = written
+	res.Errors = failed
 	return res
 }
 
@@ -121,16 +126,20 @@ func (r *Router) HandleLocoCVRead(_ context.Context, actor Actor, _ Responder, p
 	defer r.progMu.Unlock()
 
 	out := make([]protocol.CVEntry, 0, len(p.CVs))
+	failed := make([]uint16, 0)
 	for _, num := range p.CVs {
 		value, err := r.readCV(mode, locoID, num)
 		if err != nil {
-			return r.programmingFailure(actor, "loco.cvRead", p.Address, err, buserrors.CodeProgrammingFailed)
+			r.programmingSlotWarn(actor, "loco.cvRead", p.Address, num, err)
+			failed = append(failed, num)
+			continue
 		}
 		out = append(out, protocol.CVEntry{CV: num, Value: uint8(value)})
 	}
 
 	res := OKResult()
 	res.CVs = out
+	res.Errors = failed
 	return res
 }
 
@@ -243,6 +252,16 @@ func (r *Router) writeCV(mode commandstation.Mode, locoID commandstation.LocoAdd
 		LocoId: locoID,
 		Cv:     commandstation.CV{Num: commandstation.CVNum(num), Value: value},
 	}, commandstation.Verify(verify), commandstation.Timeout(programmingTimeout))
+}
+
+func (r *Router) programmingSlotWarn(actor Actor, frameType string, addr uint16, cv uint16, err error) {
+	r.log.WithError(err).WithFields(logrus.Fields{
+		"sessionId": actor.SessionID,
+		"userId":    actor.UserID,
+		"type":      frameType,
+		"addr":      addr,
+		"cv":        cv,
+	}).Warn("dcc-bus programming CV failed")
 }
 
 func (r *Router) programmingFailure(actor Actor, frameType string, addr uint16, err error, code string) Result {

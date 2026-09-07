@@ -37,6 +37,8 @@ pub struct Ack {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cvs: Option<Vec<CvEntry>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub errors: Option<Vec<u16>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub loco_address: Option<u16>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub long_address: Option<bool>,

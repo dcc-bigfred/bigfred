@@ -25,6 +25,7 @@ type cvStubStation struct {
 	commandstation.StubStation
 	mu     sync.Mutex
 	values map[uint16]int
+	fail   map[uint16]error
 	reads  []cvCall
 	writes []cvCall
 }
@@ -33,6 +34,9 @@ func (s *cvStubStation) ReadCV(mode commandstation.Mode, lcv commandstation.Loco
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.reads = append(s.reads, cvCall{mode: mode, locoID: lcv.LocoId, cv: uint16(lcv.Cv.Num)})
+	if err := s.fail[uint16(lcv.Cv.Num)]; err != nil {
+		return 0, err
+	}
 	return s.values[uint16(lcv.Cv.Num)], nil
 }
 
@@ -40,6 +44,9 @@ func (s *cvStubStation) WriteCV(mode commandstation.Mode, lcv commandstation.Loc
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.writes = append(s.writes, cvCall{mode: mode, locoID: lcv.LocoId, cv: uint16(lcv.Cv.Num), value: lcv.Cv.Value})
+	if err := s.fail[uint16(lcv.Cv.Num)]; err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -193,5 +200,52 @@ func TestHandleLocoAddrSet_shortAddressClearsLongBit(t *testing.T) {
 	last := st.writes[len(st.writes)-1]
 	if last.cv != 29 || last.value != 6 {
 		t.Fatalf("CV29 write = %+v, want 6 (long bit cleared)", last)
+	}
+}
+
+func TestHandleLocoCVRead_continuesAfterPerCVError(t *testing.T) {
+	t.Parallel()
+	st := &cvStubStation{
+		values: map[uint16]int{1: 3, 3: 10},
+		fail:   map[uint16]error{2: commandstation.ErrUnsupported},
+	}
+	r := newProgrammingRouter(st, true, protocol.ProgrammingModeProg)
+
+	res := r.HandleLocoCVRead(context.Background(), Actor{}, noopResponder{}, protocol.LocoCVReadPayload{
+		CVs: []uint16{1, 2, 3},
+	}, "")
+	if !res.OK {
+		t.Fatalf("read failed: %s", res.Code)
+	}
+	if len(st.reads) != 3 {
+		t.Fatalf("reads = %v, want CV1/2/3", st.reads)
+	}
+	if len(res.CVs) != 2 || res.CVs[0].CV != 1 || res.CVs[1].CV != 3 {
+		t.Fatalf("cvs = %+v, want CV1 and CV3", res.CVs)
+	}
+	if len(res.Errors) != 1 || res.Errors[0] != 2 {
+		t.Fatalf("errors = %v, want [2]", res.Errors)
+	}
+}
+
+func TestHandleLocoCVWrite_continuesAfterPerCVError(t *testing.T) {
+	t.Parallel()
+	st := &cvStubStation{fail: map[uint16]error{2: commandstation.ErrUnsupported}}
+	r := newProgrammingRouter(st, true, protocol.ProgrammingModeProg)
+
+	res := r.HandleLocoCVWrite(context.Background(), Actor{}, noopResponder{}, protocol.LocoCVWritePayload{
+		CVs: []protocol.CVEntry{{CV: 1, Value: 3}, {CV: 2, Value: 4}, {CV: 3, Value: 5}},
+	}, "")
+	if !res.OK {
+		t.Fatalf("write failed: %s", res.Code)
+	}
+	if len(st.writes) != 3 {
+		t.Fatalf("writes = %v, want three attempts", st.writes)
+	}
+	if len(res.CVs) != 2 || res.CVs[0].CV != 1 || res.CVs[1].CV != 3 {
+		t.Fatalf("cvs = %+v, want CV1 and CV3", res.CVs)
+	}
+	if len(res.Errors) != 1 || res.Errors[0] != 2 {
+		t.Fatalf("errors = %v, want [2]", res.Errors)
 	}
 }

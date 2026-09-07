@@ -206,6 +206,10 @@ type AckPayload struct {
 	// CVs carries the CVs read back (loco.cvRead) or the CVs the
 	// daemon actually wrote (loco.cvWrite, loco.addrSet).
 	CVs []CVEntry `json:"cvs,omitempty"`
+	// Errors lists CV numbers that failed inside a loco.cvRead /
+	// loco.cvWrite batch. The ack stays ok: true; the rest of the
+	// list still ran. Empty is omitted so existing clients are unchanged.
+	Errors []uint16 `json:"errors,omitempty"`
 	// LocoAddress and LongAddress report the decoder address decoded
 	// from CV1/CV17/CV18/CV29 on loco.addrGet and loco.addrSet.
 	LocoAddress uint16 `json:"locoAddress,omitempty"`

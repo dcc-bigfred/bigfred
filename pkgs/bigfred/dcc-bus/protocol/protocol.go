@@ -128,6 +128,9 @@ type LocoAddrSetPayload struct {
 	Address uint16 `json:"address"`
 	Mode    string `json:"mode,omitempty"`
 	Verify  bool   `json:"verify,omitempty"`
+	// RailComPlus is optional. nil (omitted) and false disable CV 28 bit 7.
+	// true sets the bit. A missing CV 28 read skips that write.
+	RailComPlus *bool `json:"railcomPlus,omitempty"`
 }
 
 // LocoAddrGetPayload reads a decoder's currently programmed address.

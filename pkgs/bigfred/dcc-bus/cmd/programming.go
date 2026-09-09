@@ -11,6 +11,7 @@ import (
 	buserrors "github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/errors"
 	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/protocol"
 	"github.com/dcc-bigfred/proto/go/pkgs/commandstation"
+	"github.com/dcc-bigfred/proto/go/pkgs/z21"
 )
 
 const (
@@ -205,7 +206,14 @@ func (r *Router) HandleLocoAddrSet(_ context.Context, actor Actor, _ Responder, 
 		return r.programmingFailure(actor, "loco.addrSet", p.Address, fmt.Errorf("read CV29: %w", err), buserrors.CodeProgrammingFailed)
 	}
 
-	writes, long, err := addressCVWrites(p.Address, cv29)
+	// Default: disable RailComPlus. Explicit true in the body turns it on.
+	disableRailCom := true
+	if p.RailComPlus != nil && *p.RailComPlus {
+		disableRailCom = false
+	}
+	cv28 := r.tryReadCV28(actor, mode, locoID)
+
+	writes, long, err := addressWritesFromProto(p.Address, cv29, disableRailCom, cv28)
 	if err != nil {
 		return r.programmingFailure(actor, "loco.addrSet", p.Address, err, buserrors.WsCodeBadPayload)
 	}
@@ -232,6 +240,32 @@ func (r *Router) HandleLocoAddrSet(_ context.Context, actor Actor, _ Responder, 
 	res.LocoAddress = p.Address
 	res.LongAddress = long
 	return res
+}
+
+func (r *Router) tryReadCV28(actor Actor, mode commandstation.Mode, locoID commandstation.LocoAddr) *byte {
+	value, err := r.readCV(mode, locoID, z21.RailComPlusCV)
+	if err != nil {
+		r.log.WithError(err).WithFields(logrus.Fields{
+			"sessionId": actor.SessionID,
+			"userId":    actor.UserID,
+			"cv":        z21.RailComPlusCV,
+		}).Warn("optional CV 28 unread, continuing")
+		return nil
+	}
+	b := byte(value)
+	return &b
+}
+
+func addressWritesFromProto(addr uint16, cv29 int, disableRailCom bool, cv28 *byte) ([]protocol.CVEntry, bool, error) {
+	writes, long, err := z21.AddressCVWrites(addr, byte(cv29), z21.WithRailComPlusDisabled(disableRailCom, cv28))
+	if err != nil {
+		return nil, false, err
+	}
+	out := make([]protocol.CVEntry, 0, len(writes))
+	for _, w := range writes {
+		out = append(out, protocol.CVEntry{CV: w.CV, Value: w.Value})
+	}
+	return out, long, nil
 }
 
 func (r *Router) readCV(mode commandstation.Mode, locoID commandstation.LocoAddr, num uint16) (int, error) {

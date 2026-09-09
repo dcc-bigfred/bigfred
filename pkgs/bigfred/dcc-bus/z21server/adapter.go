@@ -9,7 +9,7 @@ import (
 
 	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/contract"
 	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/remotes"
-	"github.com/dcc-bigfred/bigfred/pkgs/loco/commandstation"
+	"github.com/dcc-bigfred/proto/go/pkgs/commandstation"
 )
 
 // Responder sends Z21 LAN replies to one handset client.

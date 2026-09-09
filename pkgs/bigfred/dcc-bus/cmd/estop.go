@@ -11,7 +11,7 @@ import (
 	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/protocol"
 	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/service"
 	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/domain"
-	"github.com/dcc-bigfred/bigfred/pkgs/loco/commandstation"
+	"github.com/dcc-bigfred/proto/go/pkgs/commandstation"
 )
 
 // HandleEStop slams every loco the requesting session subscribes to down to

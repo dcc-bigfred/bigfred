@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/dcc-bigfred/bigfred/pkgs/loco/commandstation"
+	"github.com/dcc-bigfred/proto/go/pkgs/commandstation"
 )
 
 // LNCVArgs configures loco lncv set/get.

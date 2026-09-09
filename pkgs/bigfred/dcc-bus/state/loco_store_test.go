@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/contract"
-	"github.com/dcc-bigfred/bigfred/pkgs/loco/commandstation"
+	"github.com/dcc-bigfred/proto/go/pkgs/commandstation"
 )
 
 type memRedis struct {

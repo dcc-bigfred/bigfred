@@ -9,8 +9,6 @@ import (
 
 const writeTimeout = 5 * time.Second
 
-const maxWiThrottleFunction = 31
-
 // throttleWire tracks one MultiThrottle instance on a WiThrottle connection.
 type throttleWire struct {
 	locos      map[uint16]string // addr → wire key (Snnn / Lnnn)

@@ -9,7 +9,7 @@ import (
 	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/security"
 	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/slotlease"
 	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/state"
-	"github.com/dcc-bigfred/bigfred/pkgs/loco/commandstation"
+	"github.com/dcc-bigfred/proto/go/pkgs/commandstation"
 )
 
 // observingSlotStubStation simulates LocoNet SendFn acquiring a slot and

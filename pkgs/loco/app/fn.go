@@ -1,6 +1,6 @@
 package app
 
-import "github.com/dcc-bigfred/bigfred/pkgs/loco/commandstation"
+import "github.com/dcc-bigfred/proto/go/pkgs/commandstation"
 
 func (app *LocoApp) SendFnAction(mode string, locoId uint8, fnNum int, toggle bool) error {
 	if cmdErr := app.InitializeCommandStation(); cmdErr != nil {

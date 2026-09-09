@@ -97,6 +97,22 @@ func TestBroadcastSystemStateFlagPushesUpdate(t *testing.T) {
 		t.Fatalf("expected systemstate push, got: % x", buf[:n])
 	}
 	if int16(binary.LittleEndian.Uint16(buf[4:6])) != emuMainCurrentMA {
-		t.Fatalf("main current push: % x", buf[:n])
+		t.Fatalf("pushed main current: %d", int16(binary.LittleEndian.Uint16(buf[4:6])))
+	}
+
+	getFlags := []byte{0x04, 0x00, 0x51, 0x00}
+	if _, err := client.Write(getFlags); err != nil {
+		t.Fatal(err)
+	}
+	_ = client.SetReadDeadline(time.Now().Add(time.Second))
+	n, err = client.Read(buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if binary.LittleEndian.Uint16(buf[2:4]) != HeaderGetBroadcastFlags {
+		t.Fatalf("expected GET_BROADCASTFLAGS reply, got: % x", buf[:n])
+	}
+	if flags := binary.LittleEndian.Uint32(buf[4:8]); flags != 0 {
+		t.Fatalf("GET_BROADCASTFLAGS=%#x want 0", flags)
 	}
 }

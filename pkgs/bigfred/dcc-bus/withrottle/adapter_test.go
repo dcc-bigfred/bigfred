@@ -6,12 +6,13 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/contract"
 	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/remotes"
-	"github.com/dcc-bigfred/bigfred/pkgs/loco/commandstation"
+	"github.com/dcc-bigfred/proto/go/pkgs/commandstation"
 )
 
 type acquireOrderDrive struct{}
@@ -51,45 +52,42 @@ func (acquireOrderDrive) LocoSnapshot(uint16) contract.LocoStateWire {
 	return contract.LocoStateWire{Forward: true}
 }
 
+type speedProbeDrive struct {
+	acquireOrderDrive
+	mu sync.Mutex
+	n  int
+}
+
+func (d *speedProbeDrive) SetSpeed(context.Context, remotes.ThrottleActor, remotes.ThrottleResponder, contract.LocoSetSpeedWire) remotes.CommandResult {
+	d.mu.Lock()
+	d.n++
+	d.mu.Unlock()
+	return remotes.CommandResult{OK: true}
+}
+
+func (d *speedProbeDrive) calls() int {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.n
+}
+
 func TestAcquireSnapshotFollowsDefaultDump(t *testing.T) {
-	srv, err := New(Config{
+	srv := startWT(t, Config{
 		LayoutID:         1,
 		CommandStationID: 1,
 		SpeedSteps:       128,
 		Drive:            acquireOrderDrive{},
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	clientConn, serverConn := net.Pipe()
-	defer clientConn.Close()
-	defer serverConn.Close()
-	client := srv.registry.TouchByDeviceId("order-test", serverConn, time.Now().UTC())
-	srv.registry.SetPaired(client.Key, &contract.RemoteSessionWire{
-		ClientKey:        client.Key,
-		UserID:           7,
-		AllowAllVehicles: true,
-	})
+	conn, r := dialWT(t, srv)
+	handshakeHU(t, conn, r, "order-test")
+	pairDevice(srv, "order-test")
+	wtWrite(t, conn, "M0+S3<;>S3")
 
-	done := make(chan struct{})
-	go func() {
-		srv.adapter.HandleAcquire(context.Background(), client, MCommand{
-			ThrottleID: '0',
-			Op:         MOpAdd,
-			LocoKey:    "S3",
-		})
-		close(done)
-	}()
-
-	if err := clientConn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
-		t.Fatal(err)
-	}
-	scanner := bufio.NewScanner(clientConn)
 	defaultSpeedAt := -1
 	snapshotSpeedAt := -1
 	lineNo := 0
-	for scanner.Scan() {
-		line := strings.TrimRight(scanner.Text(), "\r\n")
+	for i := 0; i < 80; i++ {
+		line := wtRead(t, r)
 		switch {
 		case line == "M0AS3<;>V0":
 			defaultSpeedAt = lineNo
@@ -97,20 +95,12 @@ func TestAcquireSnapshotFollowsDefaultDump(t *testing.T) {
 			snapshotSpeedAt = lineNo
 		}
 		lineNo++
-		if line == "M0AS3<;>R0" {
+		if line == "M0AS3<;>R0" && defaultSpeedAt >= 0 && snapshotSpeedAt > defaultSpeedAt {
 			break
 		}
 	}
-	if err := scanner.Err(); err != nil {
-		t.Fatal(err)
-	}
 	if defaultSpeedAt < 0 || snapshotSpeedAt <= defaultSpeedAt {
 		t.Fatalf("default speed at %d, snapshot speed at %d", defaultSpeedAt, snapshotSpeedAt)
-	}
-	select {
-	case <-done:
-	case <-time.After(2 * time.Second):
-		t.Fatal("acquire did not finish")
 	}
 }
 
@@ -121,43 +111,20 @@ func (snapshotSpeedDrive) LocoSnapshot(uint16) contract.LocoStateWire {
 }
 
 func TestAcquireDumpUsesSnapshotSpeed(t *testing.T) {
-	srv, err := New(Config{
+	srv := startWT(t, Config{
 		LayoutID:         1,
 		CommandStationID: 1,
 		SpeedSteps:       128,
 		Drive:            snapshotSpeedDrive{},
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	clientConn, serverConn := net.Pipe()
-	defer clientConn.Close()
-	defer serverConn.Close()
-	client := srv.registry.TouchByDeviceId("snap-speed", serverConn, time.Now().UTC())
-	srv.registry.SetPaired(client.Key, &contract.RemoteSessionWire{
-		ClientKey:        client.Key,
-		UserID:           7,
-		AllowAllVehicles: true,
-	})
-
-	done := make(chan struct{})
-	go func() {
-		srv.adapter.HandleAcquire(context.Background(), client, MCommand{
-			ThrottleID: '0',
-			Op:         MOpAdd,
-			LocoKey:    "S3",
-		})
-		close(done)
-	}()
-
-	if err := clientConn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
-		t.Fatal(err)
-	}
+	conn, r := dialWT(t, srv)
+	handshakeHU(t, conn, r, "snap-speed")
+	pairDevice(srv, "snap-speed")
+	wtWrite(t, conn, "M0+S3<;>S3")
 	wantV := "M0AS3<;>V" + strconv.Itoa(wireSpeedFromDCC(42, 128))
-	scanner := bufio.NewScanner(clientConn)
 	var dumpV, dumpR string
-	for scanner.Scan() {
-		line := strings.TrimRight(scanner.Text(), "\r\n")
+	for i := 0; i < 80; i++ {
+		line := wtRead(t, r)
 		if strings.HasPrefix(line, "M0AS3<;>V") && dumpV == "" {
 			dumpV = line
 		}
@@ -168,24 +135,11 @@ func TestAcquireDumpUsesSnapshotSpeed(t *testing.T) {
 			break
 		}
 	}
-	if err := scanner.Err(); err != nil {
-		t.Fatal(err)
-	}
 	if dumpV != wantV {
 		t.Fatalf("dump speed %q want %q", dumpV, wantV)
 	}
 	if dumpR != "M0AS3<;>R0" {
 		t.Fatalf("dump dir %q want M0AS3<;>R0", dumpR)
-	}
-	// Drain remaining dump/subscribe lines so HandleAcquire is not blocked on the pipe.
-	go func() {
-		for scanner.Scan() {
-		}
-	}()
-	select {
-	case <-done:
-	case <-time.After(2 * time.Second):
-		t.Fatal("acquire did not finish")
 	}
 }
 
@@ -222,12 +176,7 @@ func TestHandleActionUnauthorizedSendsHM(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		srv.adapter.HandleAction(context.Background(), client, MCommand{
-			ThrottleID: '0',
-			Op:         MOpAction,
-			LocoKey:    "S3",
-			Properties: []string{"V10"},
-		})
+		srv.adapter.HandleAction(context.Background(), client, '0', "S3", 3, "V10")
 		close(done)
 	}()
 
@@ -255,49 +204,23 @@ func (failSubscribeDrive) Subscribe(context.Context, remotes.ThrottleActor, remo
 }
 
 func TestHandleAcquireFailureReleasesLoco(t *testing.T) {
-	srv, err := New(Config{
+	srv := startWT(t, Config{
 		LayoutID:         1,
 		CommandStationID: 1,
 		SpeedSteps:       128,
 		Drive:            failSubscribeDrive{},
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	clientConn, serverConn := net.Pipe()
-	defer clientConn.Close()
-	defer serverConn.Close()
-	client := srv.registry.TouchByDeviceId("fail-acquire", serverConn, time.Now().UTC())
-	srv.registry.SetPaired(client.Key, &contract.RemoteSessionWire{
-		ClientKey:        client.Key,
-		UserID:           7,
-		AllowAllVehicles: true,
-	})
-
-	done := make(chan struct{})
-	go func() {
-		srv.adapter.HandleAcquire(context.Background(), client, MCommand{
-			ThrottleID: '0',
-			Op:         MOpAdd,
-			LocoKey:    "S3",
-		})
-		close(done)
-	}()
-
-	if err := clientConn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
-		t.Fatal(err)
-	}
-	scanner := bufio.NewScanner(clientConn)
+	conn, r := dialWT(t, srv)
+	handshakeHU(t, conn, r, "fail-acquire")
+	pairDevice(srv, "fail-acquire")
+	wtWrite(t, conn, "M0+S3<;>S3")
 	var lines []string
-	for scanner.Scan() {
-		line := strings.TrimRight(scanner.Text(), "\r\n")
+	for i := 0; i < 80; i++ {
+		line := wtRead(t, r)
 		lines = append(lines, line)
 		if strings.HasPrefix(line, "HM") {
 			break
 		}
-	}
-	if err := scanner.Err(); err != nil {
-		t.Fatal(err)
 	}
 	var sawRelease, sawHM bool
 	for _, line := range lines {
@@ -311,16 +234,11 @@ func TestHandleAcquireFailureReleasesLoco(t *testing.T) {
 	if !sawRelease || !sawHM {
 		t.Fatalf("lines=%q want M0-S3 release and HMbusy", lines)
 	}
-	srv.registry.withThrottle(client.Key, '0', func(tw *throttleWire) {
+	srv.registry.withThrottle("withrottle:fail-acquire", '0', func(tw *throttleWire) {
 		if _, ok := tw.locos[3]; ok {
 			t.Fatal("failed acquire left loco in throttle wire")
 		}
 	})
-	select {
-	case <-done:
-	case <-time.After(2 * time.Second):
-		t.Fatal("acquire did not finish")
-	}
 }
 
 func TestJoinHMAndTruncate(t *testing.T) {

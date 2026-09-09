@@ -1,14 +1,13 @@
 package withrottle
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
 	"net"
 	"strconv"
-	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -17,6 +16,8 @@ import (
 	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/remotepairing"
 	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/remotes"
 	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/remotes/inbound"
+	"github.com/dcc-bigfred/proto/go/pkgs/drive"
+	wtproto "github.com/dcc-bigfred/proto/go/pkgs/withrottle"
 )
 
 // GatewayName is the remotes gateway factory key for WiThrottle TCP.
@@ -27,9 +28,6 @@ const (
 	defaultSentinel      = contract.DefaultWithrottlePairingAddr
 	defaultHeartbeatSecs = contract.DefaultWithrottleHeartbeatSecs
 	sessionSyncStale     = 30 * time.Second
-	dispatchShards       = 32
-	dispatchShardBuf     = 128
-	maxLineLen           = 8192
 )
 
 // IdleEvictAfter is the idle window before evicting an unpaired WiThrottle client.
@@ -56,7 +54,7 @@ type Config struct {
 	Log         *logrus.Logger
 }
 
-// Server listens for WiThrottle TCP and dispatches line commands.
+// Server listens for WiThrottle TCP via proto.Listen and applies BigFred policy.
 type Server struct {
 	cfg         Config
 	log         *logrus.Logger
@@ -65,10 +63,14 @@ type Server struct {
 	adapter     *Adapter
 	coordinator *remotes.Coordinator
 	virtual     *remotes.VirtualLocoStore
-	dispatch    *dispatcher
 	allowedMu   sync.RWMutex
 	catalogueMu sync.RWMutex
-	connWg      sync.WaitGroup
+
+	runCtx atomic.Value // context.Context
+	quit   sync.Map     // client key → struct{} for Q vs TCP drop
+
+	mu    sync.Mutex
+	proto *wtproto.Server
 }
 
 // HeartbeatTimeout returns coordinator policy timeout with grace slack.
@@ -84,7 +86,7 @@ func New(cfg Config) (*Server, error) {
 	if cfg.LayoutID == 0 || cfg.CommandStationID == 0 {
 		return nil, errors.New("withrottle: layout and command station id are required")
 	}
-	if cfg.Port == 0 {
+	if cfg.Port == 0 && (cfg.Bind == "" || cfg.Bind == "0.0.0.0") {
 		cfg.Port = defaultPort
 	}
 	if cfg.PairingAddr == 0 {
@@ -110,7 +112,6 @@ func New(cfg Config) (*Server, error) {
 	var inboundReg *inbound.ClientRegistry
 	if cfg.Coordinator != nil {
 		inboundReg = cfg.Coordinator.Registry()
-		cfg.Coordinator.RegisterOnEvict(wire.Remove)
 	}
 	registry := NewRegistry(inboundReg, wire)
 	s := &Server{
@@ -121,13 +122,15 @@ func New(cfg Config) (*Server, error) {
 	}
 	if cfg.Coordinator != nil {
 		s.virtual = cfg.Coordinator.VirtualLocos()
-	} else {
-		s.virtual = remotes.NewVirtualLocoStore()
-	}
-	if cfg.Coordinator != nil {
+		cfg.Coordinator.RegisterOnEvict(func(key string) {
+			wire.Remove(key)
+			s.disconnectProto(key)
+		})
 		cfg.Coordinator.RegisterSessionSyncHandler(contract.RemoteProtocolWithrottle, func(ctx context.Context, clientKey string) {
 			s.syncPairedByKey(ctx, clientKey)
 		})
+	} else {
+		s.virtual = remotes.NewVirtualLocoStore()
 	}
 	s.pairing = NewPairingHandler(cfg.Store, cfg.LayoutID, cfg.CommandStationID, s.registry,
 		func(ctx context.Context, key string, active *contract.RemoteSessionWire) {
@@ -189,18 +192,45 @@ func NewGateway(_ context.Context, cfg remotes.GatewayConfig) (remotes.RemotePro
 // Name implements remotes.RemoteProtocol.
 func (s *Server) Name() string { return contract.RemoteProtocolWithrottle }
 
+// Addr is the bound TCP address after Run has started listening.
+func (s *Server) Addr() net.Addr {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.proto == nil {
+		return nil
+	}
+	return s.proto.Addr()
+}
+
 // Run listens until ctx is cancelled.
 func (s *Server) Run(ctx context.Context) error {
-	ln, err := net.Listen("tcp", net.JoinHostPort(s.cfg.Bind, strconv.Itoa(int(s.cfg.Port))))
+	s.runCtx.Store(ctx)
+	bind := net.JoinHostPort(s.cfg.Bind, strconv.Itoa(int(s.cfg.Port)))
+	hb := s.cfg.HeartbeatSecs
+	if hb <= 0 {
+		hb = defaultHeartbeatSecs
+	}
+	protoSrv, err := wtproto.Listen(bind, s,
+		wtproto.WithHeartbeatSecs(hb),
+		wtproto.WithDeadman(false),
+		wtproto.WithReadTimeout(time.Duration(hb*2+5)*time.Second),
+		wtproto.WithServerName("BigFred"),
+		wtproto.WithTrackOn(s.cfg.TrackPowerOn),
+		wtproto.WithRosterProvider(s),
+		wtproto.WithLabelProvider(s),
+		wtproto.WithErrorHandler(func(err error) {
+			s.log.WithError(err).Warn("withrottle inbound listener error")
+		}),
+	)
 	if err != nil {
 		return err
 	}
-	defer ln.Close()
-	s.startDispatch()
-	defer s.stopDispatch()
+	s.mu.Lock()
+	s.proto = protoSrv
+	s.mu.Unlock()
 
 	s.log.WithFields(logrus.Fields{
-		"bind":             ln.Addr().String(),
+		"bind":             protoSrv.Addr().String(),
 		"layoutId":         s.cfg.LayoutID,
 		"commandStationId": s.cfg.CommandStationID,
 	}).Info("withrottle inbound server listening")
@@ -209,365 +239,37 @@ func (s *Server) Run(ctx context.Context) error {
 		go s.cfg.OnListening(ctx)
 	}
 
-	for {
-		if ctx.Err() != nil {
-			s.shutdownConnections()
-			return nil
-		}
-		if tcpLn, ok := ln.(*net.TCPListener); ok {
-			_ = tcpLn.SetDeadline(time.Now().Add(1 * time.Second))
-		}
-		conn, err := ln.Accept()
-		if err != nil {
-			if ctx.Err() != nil {
-				s.shutdownConnections()
-				return nil
-			}
-			var netErr net.Error
-			if errors.As(err, &netErr) && netErr.Timeout() {
-				continue
-			}
-			return err
-		}
-		go s.serveConn(ctx, conn)
+	<-ctx.Done()
+	s.mu.Lock()
+	s.proto = nil
+	s.mu.Unlock()
+	return protoSrv.Close()
+}
+
+func (s *Server) protoServer() *wtproto.Server {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.proto
+}
+
+func (s *Server) disconnectProto(key string) {
+	if p := s.protoServer(); p != nil {
+		p.Disconnect(drive.ClientID(key))
 	}
 }
 
-func (s *Server) shutdownConnections() {
-	s.registry.wire.CloseAll()
-	s.connWg.Wait()
+func (s *Server) ctx() context.Context {
+	if v := s.runCtx.Load(); v != nil {
+		return v.(context.Context)
+	}
+	return context.Background()
 }
 
-func (s *Server) serveConn(ctx context.Context, conn net.Conn) {
-	s.connWg.Add(1)
-	defer s.connWg.Done()
-	r := bufio.NewReaderSize(conn, 512)
-	defer conn.Close()
-	readTimeout := s.readTimeout()
-	var clientKey string
-	for {
-		if ctx.Err() != nil {
-			s.handleDisconnect(ctx, clientKey, conn)
-			return
-		}
-		if err := conn.SetReadDeadline(time.Now().Add(readTimeout)); err != nil {
-			s.handleDisconnect(ctx, clientKey, conn)
-			return
-		}
-		line, err := readLineLimited(r, maxLineLen)
-		if err != nil {
-			s.handleDisconnect(ctx, clientKey, conn)
-			return
-		}
-		line = strings.TrimRight(line, "\r\n")
-		if line == "" {
-			continue
-		}
-		if clientKey != "" {
-			s.touchClientActivity(ctx, clientKey, line)
-		}
-		if clientKey == "" {
-			if handled, key := s.handleAnonymous(ctx, conn, line); handled {
-				if key != "" {
-					clientKey = key
-				}
-				continue
-			}
-			continue
-		}
-		key := clientKey
-		d := s.dispatch
-		if d == nil {
-			s.handleLine(ctx, conn, key, line)
-			continue
-		}
-		d.dispatch(key, func() {
-			s.handleLine(ctx, conn, key, line)
-		})
+func (s *Server) writeLine(key, line string) error {
+	if p := s.protoServer(); p != nil {
+		return p.SendTo(drive.ClientID(key), line)
 	}
-}
-
-func (s *Server) readTimeout() time.Duration {
-	secs := s.cfg.HeartbeatSecs
-	if secs <= 0 {
-		secs = defaultHeartbeatSecs
-	}
-	return time.Duration(secs*2+5) * time.Second
-}
-
-func (s *Server) handleAnonymous(ctx context.Context, conn net.Conn, line string) (handled bool, clientKey string) {
-	switch {
-	case strings.HasPrefix(line, "HU"):
-		deviceID := strings.TrimSpace(line[2:])
-		if deviceID == "" {
-			return true, ""
-		}
-		clientKey := inbound.ClientKey(contract.RemoteProtocolWithrottle, deviceID)
-		prevConn := s.registry.wire.Conn(clientKey)
-		takeover := prevConn != nil && prevConn != conn
-		if takeover {
-			s.registry.ResetForNewConn(clientKey)
-		}
-		now := time.Now().UTC()
-		client := s.registry.TouchByDeviceId(deviceID, conn, now)
-		if takeover && s.registry.IsPaired(client.Key) {
-			fields := logrus.Fields{
-				"client":    client.Key,
-				"deviceId":  deviceID,
-				"newRemote": conn.RemoteAddr().String(),
-			}
-			if prevConn.RemoteAddr() != nil {
-				fields["priorRemote"] = prevConn.RemoteAddr().String()
-			}
-			s.log.WithFields(fields).Warn("withrottle: paired handset device id taken over by new connection")
-		}
-		if s.registry.NeedsSync(client.Key, sessionSyncStale) {
-			s.syncPaired(ctx, client)
-			s.registry.MarkSynced(client.Key)
-		}
-		if s.cfg.Store != nil && s.registry.IsPaired(client.Key) {
-			_ = s.cfg.Store.TouchSeen(ctx, s.cfg.LayoutID, s.cfg.CommandStationID, client.Key, contract.NowMS(), contract.RemoteStickySessionIdle)
-		}
-		if !s.registry.initialBurstSent(client.Key) {
-			s.sendInitialBurst(ctx, client.Key)
-			s.registry.markInitialBurstSent(client.Key)
-		}
-		return true, client.Key
-	case strings.HasPrefix(line, "N"):
-		// N before HU is ignored.
-		return true, ""
-	case line == "*+" || line == "*-" || strings.HasPrefix(line, "*"):
-		return true, ""
-	default:
-		return false, ""
-	}
-}
-
-func (s *Server) handleLine(ctx context.Context, conn net.Conn, clientKey, line string) {
-	if s.registry.wire.Conn(clientKey) != conn {
-		s.log.WithFields(logrus.Fields{
-			"client": clientKey,
-			"line":   line,
-		}).Debug("withrottle: dropping line from stale connection")
-		return
-	}
-	client, ok := s.registry.Get(clientKey)
-	if !ok {
-		return
-	}
-	if s.registry.NeedsSync(clientKey, sessionSyncStale) {
-		s.syncPaired(ctx, client)
-		s.registry.MarkSynced(clientKey)
-	}
-	s.noteClientActivity(ctx, clientKey)
-
-	paired := s.registry.IsPaired(clientKey)
-	if paired && s.cfg.Store != nil {
-		s.registry.MarkSeenDirty(clientKey, contract.NowMS())
-	}
-
-	switch {
-	case strings.HasPrefix(line, "N"):
-		name := strings.TrimSpace(line[1:])
-		s.registry.setDeviceName(clientKey, name)
-		if !paired {
-			if consumed, active := s.pairing.HandleN(ctx, client, name); consumed && active != nil {
-				fields := pairingLogFields(active)
-				fields["client"] = clientKey
-				fields["pairingCode"] = active.PairingCode
-				s.log.WithFields(fields).Info("withrottle handset paired via device name")
-				return
-			}
-		}
-		if paired || s.registry.initialBurstSent(clientKey) {
-			_ = s.writeLine(clientKey, fmt.Sprintf("*%g", s.cfg.HeartbeatSecs))
-			return
-		}
-		s.sendInitialBurst(ctx, clientKey)
-		s.registry.markInitialBurstSent(clientKey)
-		return
-	case line == "Q":
-		s.evictClient(ctx, clientKey)
-		return
-	case line == "*+":
-		s.registry.setHeartbeatMonitor(clientKey, true)
-		return
-	case line == "*-":
-		s.registry.setHeartbeatMonitor(clientKey, false)
-		return
-	case line == "*":
-		return
-	case strings.HasPrefix(line, "PPA"):
-		// track power from client ignored in v1
-		return
-	case strings.HasPrefix(line, "M"):
-		s.handleM(ctx, client, line, paired)
-	default:
-		// ignore unknown lines per spec §16.3
-	}
-}
-
-func (s *Server) handleM(ctx context.Context, client *Client, line string, paired bool) {
-	cmd, ok := parseMAction(line)
-	if !ok {
-		return
-	}
-	switch cmd.Op {
-	case MOpSteal:
-		_ = s.writeLine(client.Key, "HMSteal not supported")
-		return
-	case MOpAdd:
-		s.handleAcquire(ctx, client, cmd, paired)
-	case MOpRemove:
-		s.handleRelease(ctx, client, cmd, paired)
-	case MOpAction:
-		s.handleThrottleAction(ctx, client, cmd, paired)
-	case MOpLabels:
-		if !paired {
-			return
-		}
-		s.handleFunctionLabels(client.Key, cmd)
-	}
-}
-
-func (s *Server) handleAcquire(ctx context.Context, client *Client, cmd MCommand, paired bool) {
-	addr, ok := parseAcquireAddr(cmd.LocoKey, cmd.Properties)
-	if !ok {
-		_ = s.writeLine(client.Key, "HMInvalid acquire address")
-		return
-	}
-	if !paired {
-		if !allowUnpairedAcquire(addr, s.cfg.PairingAddr, paired) {
-			_ = s.writeLine(client.Key, "HMNot paired")
-			return
-		}
-		key := locoKeyForAddr(addr)
-		s.registry.withThrottle(client.Key, cmd.ThrottleID, func(tw *throttleWire) {
-			tw.locos[addr] = key
-			tw.lastLoco = addr
-		})
-		s.registry.setSentinelAcquired(client.Key, true, cmd.ThrottleID)
-		for _, reply := range buildSentinelAcquireReply(cmd.ThrottleID, addr) {
-			_ = s.writeLine(client.Key, reply)
-		}
-		return
-	}
-	if s.adapter == nil {
-		return
-	}
-	s.adapter.HandleAcquire(ctx, client, cmd)
-}
-
-func (s *Server) handleRelease(ctx context.Context, client *Client, cmd MCommand, paired bool) {
-	if !paired && s.registry.sentinelAcquired(client.Key) {
-		addr, _, ok := parseLocoKey(cmd.LocoKey)
-		if ok && isSentinelAddr(addr, s.cfg.PairingAddr) {
-			s.registry.setSentinelAcquired(client.Key, false, 0)
-			s.registry.withThrottle(client.Key, cmd.ThrottleID, func(tw *throttleWire) {
-				delete(tw.locos, addr)
-			})
-			s.registry.ClearPairingBuffer(client.Key)
-		}
-		_ = s.writeLine(client.Key, buildReleaseLine(cmd.ThrottleID, cmd.LocoKey))
-		return
-	}
-	if !paired {
-		return
-	}
-	if s.adapter != nil {
-		s.adapter.HandleRelease(ctx, client, cmd)
-	}
-}
-
-func unpairedDriveProp(prop string) bool {
-	if len(prop) < 2 {
-		return false
-	}
-	switch prop[0] {
-	case 'V', 'R', 'F', 'f':
-		return true
-	default:
-		return false
-	}
-}
-
-// actionTargetsPairingLoco reports whether an unpaired M A command is aimed at
-// the pairing sentinel (explicit S/L key, or * when that throttle holds only
-// the sentinel). Other DCC addresses must not enter the pairing-digit path.
-func (s *Server) actionTargetsPairingLoco(client *Client, cmd MCommand) bool {
-	sentinel := s.cfg.PairingAddr
-	if cmd.LocoKey == "*" {
-		if !s.registry.sentinelAcquired(client.Key) {
-			return false
-		}
-		only := true
-		s.registry.withThrottle(client.Key, cmd.ThrottleID, func(tw *throttleWire) {
-			if len(tw.locos) == 0 {
-				only = false
-				return
-			}
-			for addr := range tw.locos {
-				if !isSentinelAddr(addr, sentinel) {
-					only = false
-					return
-				}
-			}
-		})
-		return only
-	}
-	addr, _, ok := parseLocoKey(cmd.LocoKey)
-	return ok && isSentinelAddr(addr, sentinel)
-}
-
-func (s *Server) handleThrottleAction(ctx context.Context, client *Client, cmd MCommand, paired bool) {
-	if len(cmd.Properties) == 0 {
-		return
-	}
-	prop := cmd.Properties[0]
-	if !paired {
-		if s.actionTargetsPairingLoco(client, cmd) && s.registry.sentinelAcquired(client.Key) {
-			addr := s.cfg.PairingAddr
-			switch {
-			case len(prop) >= 2 && prop[0] == 'V':
-				if wireSpeed, estop, ok := parseSpeedValue(prop); ok {
-					speed := uint8(0)
-					if !estop {
-						speed = dccSpeedFromWire(wireSpeed, s.cfg.SpeedSteps)
-					}
-					forward := s.virtual.Snapshot(client.Key, addr).Forward
-					s.sendVirtualLoco(ctx, client, cmd.ThrottleID, s.virtual.SetSpeed(client.Key, addr, speed, forward))
-				}
-				return
-			case len(prop) >= 2 && prop[0] == 'R':
-				forward := prop[1] != '0'
-				cur := s.virtual.Snapshot(client.Key, addr)
-				s.sendVirtualLoco(ctx, client, cmd.ThrottleID, s.virtual.SetSpeed(client.Key, addr, cur.Speed, forward))
-				return
-			case len(prop) >= 2 && (prop[0] == 'F' || prop[0] == 'f'):
-				if fn, on, force, ok := parseFunctionAction(prop); ok {
-					s.sendVirtualLoco(ctx, client, cmd.ThrottleID, s.virtual.SetFunction(client.Key, addr, fn, on))
-					rising := s.registry.PairingFnRisingEdge(client.Key, fn, on)
-					if pairingFnAccept(on, force, rising) {
-						if consumed, active := s.pairing.HandleFn(ctx, client, fn); consumed && active != nil {
-							fields := pairingLogFields(active)
-							fields["client"] = client.Key
-							fields["pairingCode"] = active.PairingCode
-							s.log.WithFields(fields).Info("withrottle handset paired via function keys")
-						}
-					}
-				}
-				return
-			}
-			return
-		}
-		if unpairedDriveProp(prop) && !s.actionTargetsPairingLoco(client, cmd) {
-			_ = s.writeLine(client.Key, "HMNot paired")
-		}
-		return
-	}
-	if s.adapter != nil {
-		s.adapter.HandleAction(ctx, client, cmd)
-	}
+	return s.registry.WriteLine(key, line)
 }
 
 func (s *Server) onPaired(ctx context.Context, clientKey string, active *contract.RemoteSessionWire) {
@@ -579,7 +281,9 @@ func (s *Server) onPaired(ctx context.Context, clientKey string, active *contrac
 		}
 		s.registry.setSentinelAcquired(clientKey, false, 0)
 	}
-	s.sendInitialBurst(ctx, clientKey)
+	if p := s.protoServer(); p != nil {
+		p.ResendBurst(drive.ClientID(clientKey))
+	}
 	if active != nil {
 		_ = s.writeLine(clientKey, fmt.Sprintf("HmPaired as %d", active.UserID))
 	}
@@ -588,32 +292,10 @@ func (s *Server) onPaired(ctx context.Context, clientKey string, active *contrac
 	}
 }
 
-func (s *Server) sendVirtualLoco(ctx context.Context, client *Client, throttleID byte, snap contract.LocoStateWire) {
-	_ = NewResponder(s, client, throttleID).SendLocoState(ctx, snap)
-}
-
 func (s *Server) clearVirtualLoco(clientKey string) {
 	if s.virtual != nil {
 		s.virtual.RemoveClient(clientKey)
 	}
-}
-
-func (s *Server) sendInitialBurst(ctx context.Context, clientKey string) {
-	_ = ctx
-	paired := s.registry.IsPaired(clientKey)
-	sess, _ := s.registry.Session(clientKey)
-	_ = s.writeLine(clientKey, "VN2.0")
-	_ = s.writeLine(clientKey, fmt.Sprintf("*%g", s.cfg.HeartbeatSecs))
-	_ = s.writeLine(clientKey, s.trackPowerLine())
-	_ = s.writeLine(clientKey, BuildRosterLine(sess, s.allowedVehicles(), s.cfg.PairingAddr, paired))
-	_ = s.writeLine(clientKey, "HTBigFred")
-}
-
-func (s *Server) trackPowerLine() string {
-	if s.cfg.TrackPowerOn {
-		return "PPA1"
-	}
-	return "PPA0"
 }
 
 func (s *Server) syncPaired(ctx context.Context, client *Client) {
@@ -664,54 +346,8 @@ func scopeChanged(a, b *contract.RemoteSessionWire) bool {
 }
 
 func (s *Server) emitRosterUpdate(key string) {
-	sess, ok := s.registry.Session(key)
-	if !ok {
-		return
-	}
-	_ = s.writeLine(key, BuildRosterLine(sess, s.allowedVehicles(), s.cfg.PairingAddr, true))
-}
-
-func (s *Server) handleFunctionLabels(clientKey string, cmd MCommand) {
-	addr, _, ok := parseLocoKey(cmd.LocoKey)
-	if !ok {
-		return
-	}
-	line := buildFunctionLabelLine(cmd.ThrottleID, cmd.LocoKey, s.functionsForAddr(addr))
-	if line == "" {
-		return
-	}
-	_ = s.writeLine(clientKey, line)
-}
-
-// UpdateVehicleFunctions refreshes the layout function catalogue for acquire
-// replies and M…L label requests.
-func (s *Server) UpdateVehicleFunctions(snap contract.VehicleFunctions) {
-	if s == nil {
-		return
-	}
-	s.catalogueMu.Lock()
-	prev := s.cfg.VehicleFunctions
-	s.cfg.VehicleFunctions = snap
-	s.catalogueMu.Unlock()
-	for _, addr := range contract.VehicleFunctionsChangedAddrs(prev, snap) {
-		s.pushLabelsForAcquired(addr)
-	}
-}
-
-func (s *Server) pushLabelsForAcquired(addr uint16) {
-	if s.registry == nil {
-		return
-	}
-	for _, key := range s.registry.Subscribers(addr) {
-		throttleID, locoKey, ok := s.registry.findThrottleForAddr(key, addr)
-		if !ok {
-			continue
-		}
-		line := buildFunctionLabelLine(throttleID, locoKey, s.functionsForAddr(addr))
-		if line == "" {
-			continue
-		}
-		_ = s.writeLine(key, line)
+	if p := s.protoServer(); p != nil {
+		p.SendRoster(drive.ClientID(key))
 	}
 }
 
@@ -733,7 +369,40 @@ func (s *Server) allowedVehicles() contract.AllowedVehicles {
 	return s.cfg.AllowedVehicles
 }
 
-// UpdateAllowedVehicles refreshes the layout roster used for RL emission.
+// UpdateVehicleFunctions refreshes the layout function catalogue for acquire
+// replies and M…L label requests.
+func (s *Server) UpdateVehicleFunctions(snap contract.VehicleFunctions) {
+	if s == nil {
+		return
+	}
+	s.catalogueMu.Lock()
+	prev := s.cfg.VehicleFunctions
+	s.cfg.VehicleFunctions = snap
+	s.catalogueMu.Unlock()
+	p := s.protoServer()
+	if p == nil {
+		return
+	}
+	for _, addr := range contract.VehicleFunctionsChangedAddrs(prev, snap) {
+		labels := functionLabels(s.functionsForAddr(addr))
+		key := locoKeyForAddr(addr)
+		for _, holder := range p.HoldersOf(addr) {
+			if !s.registry.IsPaired(string(holder)) {
+				continue
+			}
+			tid, locoKey, ok := s.registry.findThrottleForAddr(string(holder), addr)
+			if !ok {
+				tid, locoKey = '0', key
+			}
+			line := wtproto.FormatLabelLine(tid, locoKey, labels)
+			if line == "" {
+				continue
+			}
+			_ = p.SendTo(holder, line)
+		}
+	}
+}
+
 func (s *Server) UpdateAllowedVehicles(snap contract.AllowedVehicles) {
 	if s == nil {
 		return
@@ -773,16 +442,6 @@ func (s *Server) dropPresence(ctx context.Context, key string) {
 	s.registry.Remove(key)
 }
 
-func (s *Server) handleDisconnect(ctx context.Context, clientKey string, staleConn net.Conn) {
-	if clientKey == "" {
-		return
-	}
-	if s.registry.wire.Conn(clientKey) != staleConn {
-		return
-	}
-	s.dropPresence(ctx, clientKey)
-}
-
 func (s *Server) noteClientActivity(ctx context.Context, clientKey string) {
 	if s.registry.IsPaired(clientKey) && s.registry.IdleBraked(clientKey) {
 		s.registry.ClearIdleBraked(clientKey)
@@ -792,32 +451,94 @@ func (s *Server) noteClientActivity(ctx context.Context, clientKey string) {
 	}
 }
 
-func (s *Server) touchClientActivity(ctx context.Context, clientKey, line string) {
-	if line == "" {
+// OnLocoStateChanged pushes M…A lines to paired holders except the commander.
+func (s *Server) OnLocoStateChanged(ctx context.Context, snap contract.LocoStateWire, originClientKey string) {
+	_ = ctx
+	p := s.protoServer()
+	if p == nil || s.registry == nil {
 		return
 	}
-	s.registry.touchLastSeen(clientKey, time.Now().UTC())
-	if s.registry.IsPaired(clientKey) && s.cfg.Store != nil {
-		s.registry.MarkSeenDirty(clientKey, contract.NowMS())
+	for _, holder := range p.HoldersOf(snap.Address) {
+		key := string(holder)
+		if key == originClientKey {
+			continue
+		}
+		client, ok := s.registry.Get(key)
+		if !ok || client.Session == nil {
+			continue
+		}
+		throttleID, locoKey, ok := s.registry.findThrottleForAddr(key, snap.Address)
+		if !ok {
+			locoKey = locoKeyForAddr(snap.Address)
+			throttleID = '0'
+		}
+		s.registry.setLastSpeed(key, throttleID, snap.Address, snap.Speed)
+		for _, line := range buildLocoNotify(throttleID, locoKey, snap, s.cfg.SpeedSteps) {
+			_ = p.SendTo(holder, line)
+		}
 	}
 }
 
-func (s *Server) writeLine(key, line string) error {
-	return s.registry.WriteLine(key, line)
+func buildLocoNotify(throttleID byte, locoKey string, snap contract.LocoStateWire, speedSteps uint) []string {
+	id := string(throttleID)
+	speed := wireSpeedFromDCC(snap.Speed, speedSteps)
+	dir := 0
+	if snap.Forward {
+		dir = 1
+	}
+	lines := []string{
+		fmt.Sprintf("M%sA%s%sV%d", id, locoKey, propSep, speed),
+		fmt.Sprintf("M%sA%s%sR%d", id, locoKey, propSep, dir),
+	}
+	if len(snap.Functions) > 0 {
+		fns := make([]int, 0, len(snap.Functions))
+		for fn := range snap.Functions {
+			if fn > maxWiThrottleFunction {
+				continue
+			}
+			fns = append(fns, fn)
+		}
+		sortInts(fns)
+		for _, fn := range fns {
+			state := 0
+			if snap.Functions[fn] {
+				state = 1
+			}
+			lines = append(lines, fmt.Sprintf("M%sA%s%sF%d%d", id, locoKey, propSep, state, fn))
+		}
+	}
+	return lines
 }
 
-func (s *Server) startDispatch() {
-	if s.dispatch == nil {
-		s.dispatch = newDispatcher(dispatchShards, dispatchShardBuf)
+func sortInts(fns []int) {
+	for i := 1; i < len(fns); i++ {
+		for j := i; j > 0 && fns[j] < fns[j-1]; j-- {
+			fns[j], fns[j-1] = fns[j-1], fns[j]
+		}
 	}
 }
 
-func (s *Server) stopDispatch() {
-	if s.dispatch != nil {
-		s.dispatch.close()
-		s.dispatch = nil
+func functionLabels(defs []contract.FunctionDefinition) []string {
+	if len(defs) == 0 {
+		return nil
 	}
+	maxFn := 0
+	labels := make([]string, maxWiThrottleFunction+1)
+	for _, d := range defs {
+		n := int(d.Num)
+		if n < 0 || n > maxWiThrottleFunction {
+			continue
+		}
+		if n > maxFn {
+			maxFn = n
+		}
+		labels[n] = d.FunctionLabel()
+	}
+	return labels[:maxFn+1]
 }
 
 // RegistryForTest exposes the participant registry in tests.
 func (s *Server) RegistryForTest() *Registry { return s.registry }
+
+var _ remotes.LocoStateObserver = (*Server)(nil)
+var _ remotes.RemoteProtocol = (*Server)(nil)

@@ -5,12 +5,14 @@ import { capabilities } from "../capabilities";
 export type CommandStationKind =
   | "z21"
   | "loconet_serial"
-  | "loconet_tcp";
+  | "loconet_tcp"
+  | "withrottle";
 
 const ALL_COMMAND_STATION_KINDS: CommandStationKind[] = [
   "z21",
   "loconet_serial",
   "loconet_tcp",
+  "withrottle",
 ];
 
 export const COMMAND_STATION_KINDS: CommandStationKind[] =
@@ -213,7 +215,15 @@ export interface DetectedConnection {
 export function kindFromConnectionUri(uri: string): CommandStationKind {
   const lower = uri.toLowerCase();
   if (lower.startsWith("serial://")) return "loconet_serial";
-  if (lower.startsWith("udp://")) return "z21";
+  if (lower.startsWith("udp://") || lower.startsWith("z21://")) return "z21";
+  if (lower.startsWith("withrottle://")) return "withrottle";
+  if (
+    lower.startsWith("tcp://") ||
+    lower.startsWith("loconet-tcp://") ||
+    lower.startsWith("lbserver://")
+  ) {
+    return "loconet_tcp";
+  }
   return "loconet_tcp";
 }
 

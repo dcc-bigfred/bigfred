@@ -13,6 +13,7 @@ const (
 	CodeCommandStationDeadmanTooShort        = "command_station_deadman_too_short"
 	CodeCommandStationPollIntervalInvalid    = "command_station_poll_interval_invalid"
 	CodeCommandStationInboundPortConflict    = "command_station_inbound_port_conflict"
+	CodeCommandStationWithrottlePortConflict = "command_station_withrottle_port_conflict"
 	CodeCommandStationMaxLoconetSlotsInvalid  = "command_station_max_loconet_slots_invalid"
 	CodeCommandStationIdleTimeoutInvalid     = "command_station_idle_timeout_invalid"
 	CodeCommandStationProgrammingTrackInvalid = "command_station_programming_track_invalid"
@@ -32,6 +33,7 @@ var (
 	ErrCommandStationDeadmanTooShort        = errors.New(CodeCommandStationDeadmanTooShort)
 	ErrCommandStationPollIntervalInvalid    = errors.New(CodeCommandStationPollIntervalInvalid)
 	ErrCommandStationInboundPortConflict    = errors.New(CodeCommandStationInboundPortConflict)
+	ErrCommandStationWithrottlePortConflict = errors.New(CodeCommandStationWithrottlePortConflict)
 	ErrCommandStationMaxLoconetSlotsInvalid = errors.New(CodeCommandStationMaxLoconetSlotsInvalid)
 	ErrCommandStationIdleTimeoutInvalid     = errors.New(CodeCommandStationIdleTimeoutInvalid)
 	ErrCommandStationProgrammingTrackInvalid = errors.New(CodeCommandStationProgrammingTrackInvalid)

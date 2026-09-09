@@ -99,7 +99,8 @@
     "kind": {
       "z21": "Z21 (UDP)",
       "loconet_serial": "LocoNet (serial)",
-      "loconet_tcp": "LocoNet (TCP)"
+      "loconet_tcp": "LocoNet (TCP)",
+      "withrottle": "WiThrottle (TCP)"
     },
     "programmingTrack": {
       "prog": "Tor programujący (prog)",
@@ -120,7 +121,7 @@
         "name": "Nazwa",
         "kind": "Typ",
         "connectionUri": "URI połączenia",
-        "connectionUriHelp": "np. udp://192.168.1.10:21105, serial:///dev/ttyUSB0:57600, serial://autodetect:115200, tcp://192.168.1.20:1234",
+        "connectionUriHelp": "np. udp://192.168.1.10:21105, serial:///dev/ttyUSB0:57600, serial://autodetect:115200, tcp://192.168.1.20:1234, withrottle://192.168.1.30:12090",
         "speedSteps": "Kroki prędkości",
         "speedStepsHelp": "Rozdzielczość prędkości DCC przekazywana do dcc-bus. Domyślnie 128.",
         "pollIntervalMs": "Interwał odpytywania (ms)",
@@ -149,6 +150,8 @@
         "singleVehicleControlHelp": "Gdy włączone, wybór lub jazda innym pojazdem/składem zatrzymuje pozostałe pojazdy użytkownika (prędkość > 1). Wypożyczone pojazdy nie są zatrzymywane.",
         "programming": "Programowanie dekoderów",
         "programmingHelp": "Pozwala odczytywać i zapisywać CV dekodera oraz zmieniać adres DCC przez tę centralkę. Domyślnie wyłączone, bo zapis CV na działającej makiecie jest destrukcyjny.",
+        "programmingWithrottleHelp": "Programowanie dekoderów nie jest dostępne przez WiThrottle — protokół nie ma komend odczytu/zapisu CV.",
+        "withrottlePortConflict": "Ta centralka łączyłaby się z serwerem WiThrottle na tym samym hoście i jednocześnie nasłuchiwała pilotów WiThrottle. Użyj innego portu wejściowego albo wyłącz serwer WiFred, jeśli chcesz tylko mówić do JMRI/DCC-EX.",
         "defaultProgrammingTrackOutput": "Domyślne wyjście toru programującego",
         "defaultProgrammingTrackOutputHelp": "Tor używany, gdy żądanie programowania nie wskazuje wprost: wydzielone wyjście toru programującego (prog) albo tor główny (POM, programowanie na torze głównym).",
         "hideInThrottle": "Ukryj w widoku manipulatora",

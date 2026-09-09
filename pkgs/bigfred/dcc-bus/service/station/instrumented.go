@@ -10,7 +10,7 @@ import (
 	"go.opentelemetry.io/otel/metric"
 
 	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/server/domain"
-	"github.com/dcc-bigfred/bigfred/pkgs/loco/commandstation"
+	"github.com/dcc-bigfred/proto/go/pkgs/commandstation"
 )
 
 const histogramName = "bigfred.dcc_bus.station.operation.duration"

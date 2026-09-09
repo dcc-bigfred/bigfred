@@ -14,6 +14,10 @@ func TestParseHostPort(t *testing.T) {
 	}{
 		{"plain host:port", "192.168.1.10:21105", "udp", 21105, "192.168.1.10", 21105, false},
 		{"with scheme", "udp://192.168.1.10:21105", "udp", 21105, "192.168.1.10", 21105, false},
+		{"z21 scheme on udp kind", "z21://192.168.1.10:21105", "udp", 21105, "192.168.1.10", 21105, false},
+		{"loconet-tcp scheme", "loconet-tcp://192.168.1.20:1234", "tcp", 1234, "192.168.1.20", 1234, false},
+		{"withrottle scheme default port", "withrottle://192.168.1.30", "withrottle", 12090, "192.168.1.30", 12090, false},
+		{"lbserver host only uses 1234", "lbserver://192.168.1.20", "lbserver", 1234, "192.168.1.20", 1234, false},
 		{"host only uses default", "192.168.1.10", "udp", 21105, "192.168.1.10", 21105, false},
 		{"empty rejected", "", "udp", 21105, "", 0, true},
 	}

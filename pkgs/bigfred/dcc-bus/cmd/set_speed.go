@@ -9,7 +9,7 @@ import (
 	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/contract"
 	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/service"
 	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/remotes"
-	"github.com/dcc-bigfred/bigfred/pkgs/loco/commandstation"
+	"github.com/dcc-bigfred/proto/go/pkgs/commandstation"
 )
 
 // HandleSetSpeed forwards a throttle move to the command station, updates

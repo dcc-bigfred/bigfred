@@ -7,8 +7,6 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/contract"
 	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/remotes"
 )
@@ -100,7 +98,7 @@ func (r *Responder) SendLocoError(ctx context.Context, addr uint16, code, detail
 	return r.server.writeHM(r.client.Key, joinHM(code, detail))
 }
 
-// Adapter maps inbound WiThrottle lines to remotes.InboundDrivePort.
+// Adapter maps inbound WiThrottle actions to remotes.InboundDrivePort.
 type Adapter struct {
 	server *Server
 	drive  remotes.InboundDrivePort
@@ -142,104 +140,72 @@ func (a *Adapter) authorize(client *Client, addr uint16) bool {
 	return a.drive.AuthorizeDrive(p.UserID, addr, a.driveScope(client))
 }
 
-func (a *Adapter) HandleAcquire(ctx context.Context, client *Client, cmd MCommand) {
-	addr, ok := parseAcquireAddr(cmd.LocoKey, cmd.Properties)
-	if !ok {
-		a.server.writeLine(client.Key, "HMInvalid acquire address")
-		return
-	}
-	if !a.authorize(client, addr) {
-		a.logDriveRejected(client, addr, "acquire")
-		a.server.writeLine(client.Key, "HMNot authorized")
-		return
-	}
-	key := locoKeyForAddr(addr)
-	a.server.registry.withThrottle(client.Key, cmd.ThrottleID, func(tw *throttleWire) {
-		tw.locos[addr] = key
-		tw.lastLoco = addr
-	})
-	snap := a.drive.LocoSnapshot(addr)
-	for _, line := range buildAcquireReply(cmd.ThrottleID, addr, a.server.functionsForAddr(addr), snap.Speed, snap.Forward, a.server.cfg.SpeedSteps) {
-		_ = a.server.writeLine(client.Key, line)
-	}
-	resp := NewResponder(a.server, client, cmd.ThrottleID)
-	result := a.drive.Subscribe(ctx, a.throttleActor(client), resp, []uint16{addr})
-	if !result.OK {
-		a.server.registry.withThrottle(client.Key, cmd.ThrottleID, func(tw *throttleWire) {
-			delete(tw.locos, addr)
-		})
-		a.logDriveFailure(client, addr, "acquire", result.Code)
-		_ = a.server.writeLine(client.Key, buildReleaseLine(cmd.ThrottleID, key))
-		_ = a.server.writeHM(client.Key, result.Code)
-		return
-	}
-}
-
-func (a *Adapter) HandleRelease(ctx context.Context, client *Client, cmd MCommand) {
-	var released []uint16
-	a.server.registry.withThrottle(client.Key, cmd.ThrottleID, func(tw *throttleWire) {
-		if cmd.LocoKey == "*" {
+func (a *Adapter) HandleRelease(ctx context.Context, client *Client, throttleID byte, locoKey string, addr uint16) {
+	_ = ctx
+	released := []uint16{addr}
+	if locoKey == "*" {
+		a.server.registry.withThrottle(client.Key, throttleID, func(tw *throttleWire) {
 			released = make([]uint16, 0, len(tw.locos))
-			for addr := range tw.locos {
-				released = append(released, addr)
-				delete(tw.locos, addr)
+			for a := range tw.locos {
+				released = append(released, a)
+				delete(tw.locos, a)
 				if tw.lastSpeed != nil {
-					delete(tw.lastSpeed, addr)
+					delete(tw.lastSpeed, a)
 				}
 			}
-			return
-		}
-		if addr, _, ok := parseLocoKey(cmd.LocoKey); ok {
+		})
+	} else {
+		a.server.registry.withThrottle(client.Key, throttleID, func(tw *throttleWire) {
 			delete(tw.locos, addr)
 			if tw.lastSpeed != nil {
 				delete(tw.lastSpeed, addr)
 			}
-			released = []uint16{addr}
-		}
-	})
-	for _, addr := range released {
-		a.server.registry.UnsubscribeLoco(client.Key, addr)
+		})
+	}
+	for _, aaddr := range released {
+		a.server.registry.UnsubscribeLoco(client.Key, aaddr)
 		if a.drive != nil {
-			a.drive.Release(a.throttleActor(client), addr)
+			a.drive.Release(a.throttleActor(client), aaddr)
 		}
 	}
-	_ = ctx
-	if cmd.LocoKey == "*" {
-		a.server.writeLine(client.Key, "M"+string(cmd.ThrottleID)+"-*"+propSep+"r")
+	if locoKey == "*" {
+		_ = a.server.writeLine(client.Key, "M"+string(throttleID)+"-*"+propSep+"r")
 		return
 	}
-	a.server.writeLine(client.Key, buildReleaseLine(cmd.ThrottleID, cmd.LocoKey))
+	_ = a.server.writeLine(client.Key, buildReleaseLine(throttleID, locoKey))
 }
 
-func (a *Adapter) HandleAction(ctx context.Context, client *Client, cmd MCommand) {
-	if len(cmd.Properties) == 0 {
+func (a *Adapter) HandleAction(ctx context.Context, client *Client, throttleID byte, locoKey string, addr uint16, prop string) {
+	if len(prop) == 0 {
 		return
 	}
-	prop := cmd.Properties[0]
-	var addrs []uint16
-	a.server.registry.withThrottle(client.Key, cmd.ThrottleID, func(tw *throttleWire) {
-		addrs = addrFromLocoKey(cmd.LocoKey, tw)
-	})
+	addrs := []uint16{addr}
+	if locoKey == "*" {
+		a.server.registry.withThrottle(client.Key, throttleID, func(tw *throttleWire) {
+			addrs = make([]uint16, 0, len(tw.locos))
+			for a := range tw.locos {
+				addrs = append(addrs, a)
+			}
+		})
+	}
 	if len(addrs) == 0 {
 		return
 	}
 	switch {
 	case len(prop) >= 2 && prop[0] == 'V':
-		a.handleSpeed(ctx, client, cmd.ThrottleID, addrs, prop)
+		a.handleSpeed(ctx, client, throttleID, addrs, prop)
 	case len(prop) >= 2 && prop[0] == 'R':
-		a.handleDirection(ctx, client, cmd.ThrottleID, addrs, prop)
+		a.handleDirection(ctx, client, throttleID, addrs, prop)
 	case len(prop) >= 2 && (prop[0] == 'F' || prop[0] == 'f'):
-		a.handleFunction(ctx, client, cmd.ThrottleID, addrs, prop)
+		a.handleFunction(ctx, client, throttleID, addrs, prop)
 	case prop == "X":
 		a.handleEStop(ctx, client, addrs)
 	case prop == "I":
-		a.handleIdle(ctx, client, cmd.ThrottleID, addrs)
+		a.handleIdle(ctx, client, throttleID, addrs)
 	case len(prop) >= 2 && prop[0] == 'q':
-		a.handleQuery(ctx, client, cmd.ThrottleID, cmd.LocoKey, prop)
+		a.handleQuery(ctx, client, throttleID, locoKey, prop)
 	case len(prop) >= 2 && prop[0] == 's':
-		a.handleSpeedStepMode(client, cmd.ThrottleID, prop)
-	default:
-		// ignore unsupported sub-commands in v1
+		a.handleSpeedStepMode(client, throttleID, prop)
 	}
 }
 
@@ -399,29 +365,6 @@ func (a *Adapter) handleSpeedStepMode(client *Client, throttleID byte, prop stri
 	})
 }
 
-func (a *Adapter) logDriveRejected(client *Client, addr uint16, action string) {
-	if a.server.log == nil {
-		return
-	}
-	a.server.log.WithFields(logrus.Fields{
-		"client": client.Key,
-		"loco":   addr,
-		"action": action,
-	}).Info("withrottle drive rejected: not authorized")
-}
-
-func (a *Adapter) logDriveFailure(client *Client, addr uint16, action, code string) {
-	if a.server.log == nil {
-		return
-	}
-	a.server.log.WithFields(logrus.Fields{
-		"client": client.Key,
-		"loco":   addr,
-		"action": action,
-		"code":   code,
-	}).Info("withrottle drive command failed")
-}
-
 func (s *Server) writeHM(key, msg string) error {
 	msg = strings.TrimSpace(msg)
 	if msg == "" {
@@ -459,19 +402,4 @@ func truncateUTF8(s string, max int) string {
 		s = s[:len(s)-1]
 	}
 	return s
-}
-
-func parseAcquireAddr(locoKey string, props []string) (addr uint16, ok bool) {
-	if addr, _, ok = parseLocoKey(locoKey); ok {
-		return addr, true
-	}
-	if len(props) > 0 {
-		if addr, _, ok = parseLocoKey(props[0]); ok {
-			return addr, true
-		}
-		if addr, _, ok = parseLocoKey(props[len(props)-1]); ok {
-			return addr, true
-		}
-	}
-	return 0, false
 }

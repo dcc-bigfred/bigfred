@@ -10,7 +10,8 @@ import (
 
 	buserrors "github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/errors"
 	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/protocol"
-	"github.com/dcc-bigfred/bigfred/pkgs/loco/commandstation"
+	"github.com/dcc-bigfred/proto/go/pkgs/commandstation"
+	"github.com/dcc-bigfred/proto/go/pkgs/z21"
 )
 
 const (
@@ -75,8 +76,9 @@ func (r *Router) programmingGate() (Result, bool) {
 
 // HandleLocoCVWrite programs the requested CVs on one decoder. Writes
 // are applied in the order the client sent them with a settle pause in
-// between; the first failure aborts the batch so a half-applied address
-// change is reported instead of silently continued.
+// between. A per-CV failure is recorded in Errors and the rest of the
+// list still runs (ok stays true). Address changes stay fail-fast in
+// HandleLocoAddrSet.
 func (r *Router) HandleLocoCVWrite(_ context.Context, actor Actor, _ Responder, p protocol.LocoCVWritePayload, _ string) Result {
 	if res, ok := r.programmingGate(); !ok {
 		return res
@@ -90,18 +92,22 @@ func (r *Router) HandleLocoCVWrite(_ context.Context, actor Actor, _ Responder, 
 	defer r.progMu.Unlock()
 
 	written := make([]protocol.CVEntry, 0, len(p.CVs))
+	failed := make([]uint16, 0)
 	for i, entry := range p.CVs {
 		if i > 0 {
 			time.Sleep(programmingSettle)
 		}
 		if err := r.writeCV(mode, locoID, entry.CV, int(entry.Value), false); err != nil {
-			return r.programmingFailure(actor, "loco.cvWrite", p.Address, err, buserrors.CodeProgrammingFailed)
+			r.programmingSlotWarn(actor, "loco.cvWrite", p.Address, entry.CV, err)
+			failed = append(failed, entry.CV)
+			continue
 		}
 		written = append(written, entry)
 	}
 
 	res := OKResult()
 	res.CVs = written
+	res.Errors = failed
 	return res
 }
 
@@ -121,16 +127,20 @@ func (r *Router) HandleLocoCVRead(_ context.Context, actor Actor, _ Responder, p
 	defer r.progMu.Unlock()
 
 	out := make([]protocol.CVEntry, 0, len(p.CVs))
+	failed := make([]uint16, 0)
 	for _, num := range p.CVs {
 		value, err := r.readCV(mode, locoID, num)
 		if err != nil {
-			return r.programmingFailure(actor, "loco.cvRead", p.Address, err, buserrors.CodeProgrammingFailed)
+			r.programmingSlotWarn(actor, "loco.cvRead", p.Address, num, err)
+			failed = append(failed, num)
+			continue
 		}
 		out = append(out, protocol.CVEntry{CV: num, Value: uint8(value)})
 	}
 
 	res := OKResult()
 	res.CVs = out
+	res.Errors = failed
 	return res
 }
 
@@ -196,7 +206,14 @@ func (r *Router) HandleLocoAddrSet(_ context.Context, actor Actor, _ Responder, 
 		return r.programmingFailure(actor, "loco.addrSet", p.Address, fmt.Errorf("read CV29: %w", err), buserrors.CodeProgrammingFailed)
 	}
 
-	writes, long, err := addressCVWrites(p.Address, cv29)
+	// Default: disable RailComPlus. Explicit true in the body turns it on.
+	disableRailCom := true
+	if p.RailComPlus != nil && *p.RailComPlus {
+		disableRailCom = false
+	}
+	cv28 := r.tryReadCV28(actor, mode, locoID)
+
+	writes, long, err := addressWritesFromProto(p.Address, cv29, disableRailCom, cv28)
 	if err != nil {
 		return r.programmingFailure(actor, "loco.addrSet", p.Address, err, buserrors.WsCodeBadPayload)
 	}
@@ -225,6 +242,32 @@ func (r *Router) HandleLocoAddrSet(_ context.Context, actor Actor, _ Responder, 
 	return res
 }
 
+func (r *Router) tryReadCV28(actor Actor, mode commandstation.Mode, locoID commandstation.LocoAddr) *byte {
+	value, err := r.readCV(mode, locoID, z21.RailComPlusCV)
+	if err != nil {
+		r.log.WithError(err).WithFields(logrus.Fields{
+			"sessionId": actor.SessionID,
+			"userId":    actor.UserID,
+			"cv":        z21.RailComPlusCV,
+		}).Warn("optional CV 28 unread, continuing")
+		return nil
+	}
+	b := byte(value)
+	return &b
+}
+
+func addressWritesFromProto(addr uint16, cv29 int, disableRailCom bool, cv28 *byte) ([]protocol.CVEntry, bool, error) {
+	writes, long, err := z21.AddressCVWrites(addr, byte(cv29), z21.WithRailComPlusDisabled(disableRailCom, cv28))
+	if err != nil {
+		return nil, false, err
+	}
+	out := make([]protocol.CVEntry, 0, len(writes))
+	for _, w := range writes {
+		out = append(out, protocol.CVEntry{CV: w.CV, Value: w.Value})
+	}
+	return out, long, nil
+}
+
 func (r *Router) readCV(mode commandstation.Mode, locoID commandstation.LocoAddr, num uint16) (int, error) {
 	if r.station == nil {
 		return 0, errNoStation
@@ -245,7 +288,20 @@ func (r *Router) writeCV(mode commandstation.Mode, locoID commandstation.LocoAdd
 	}, commandstation.Verify(verify), commandstation.Timeout(programmingTimeout))
 }
 
+func (r *Router) programmingSlotWarn(actor Actor, frameType string, addr uint16, cv uint16, err error) {
+	r.log.WithError(err).WithFields(logrus.Fields{
+		"sessionId": actor.SessionID,
+		"userId":    actor.UserID,
+		"type":      frameType,
+		"addr":      addr,
+		"cv":        cv,
+	}).Warn("dcc-bus programming CV failed")
+}
+
 func (r *Router) programmingFailure(actor Actor, frameType string, addr uint16, err error, code string) Result {
+	if stderrors.Is(err, commandstation.ErrUnsupported) {
+		code = buserrors.CodeProgrammingFailed
+	}
 	r.log.WithError(err).WithFields(logrus.Fields{
 		"sessionId": actor.SessionID,
 		"userId":    actor.UserID,

@@ -14,7 +14,7 @@ import (
 
 	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/netutil"
 	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/platform"
-	"github.com/dcc-bigfred/bigfred/pkgs/loco/commandstation"
+	"github.com/dcc-bigfred/proto/go/pkgs/commandstation"
 )
 
 const scanTimeout = 60 * time.Second
@@ -75,6 +75,7 @@ func runScan(parent context.Context, log *logrus.Logger, lanPrefix string) error
 
 	enc := json.NewEncoder(os.Stdout)
 	scanErr := scanners.Scan(ctx, func(c commandstation.DetectedConnection) error {
+		c.URI = legacyScanURI(c.URI)
 		if err := enc.Encode(c); err != nil {
 			return fmt.Errorf("dcc-bus scan: encode: %w", err)
 		}
@@ -91,6 +92,19 @@ func runScan(parent context.Context, log *logrus.Logger, lanPrefix string) error
 	return fmt.Errorf("dcc-bus scan: %w", scanErr)
 }
 
+// legacyScanURI maps proto's scheme names onto the ones BigFred has always
+// stored and shown in the admin form (udp:// for Z21, tcp:// for binary
+// LocoNet over TCP), so a rescan proposes the same URI as before.
+func legacyScanURI(uri string) string {
+	switch {
+	case strings.HasPrefix(uri, "z21://"):
+		return "udp://" + strings.TrimPrefix(uri, "z21://")
+	case strings.HasPrefix(uri, "loconet-tcp://"):
+		return "tcp://" + strings.TrimPrefix(uri, "loconet-tcp://")
+	}
+	return uri
+}
+
 // buildScanAutodetections returns the autodetection stack for dcc-bus scan.
 // When supportsSerial is false (Android phone build), serial ports are omitted.
 // An empty lanPrefix skips LAN scanners.
@@ -103,6 +117,7 @@ func buildScanAutodetections(supportsSerial bool, lanPrefix string) commandstati
 		scanners = append(scanners,
 			commandstation.LocoNetTCPAutodetection{SubnetPrefix: lanPrefix},
 			commandstation.Z21Autodetection{SubnetPrefix: lanPrefix},
+			commandstation.WiThrottleAutodetection{SubnetPrefix: lanPrefix},
 		)
 	}
 	return scanners

@@ -3,114 +3,48 @@ package withrottle
 import (
 	"bufio"
 	"context"
-	"fmt"
 	"net"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/contract"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/remotepairing"
+	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/remotes"
 )
 
 func TestHUTriggersInitialBurst(t *testing.T) {
-	srv, err := New(Config{
+	srv := startWT(t, Config{
 		LayoutID:         1,
 		CommandStationID: 1,
 		HeartbeatSecs:    10,
 		TrackPowerOn:     true,
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	clientConn, serverConn := net.Pipe()
-	defer clientConn.Close()
-	defer serverConn.Close()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	done := make(chan struct{})
-	go func() {
-		srv.serveConn(ctx, serverConn)
-		close(done)
-	}()
-
-	if _, err := fmt.Fprintf(clientConn, "HUengine-driver\n"); err != nil {
-		t.Fatal(err)
-	}
-
-	r := bufio.NewReader(clientConn)
-	first, err := r.ReadString('\n')
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := strings.TrimRight(first, "\r\n"); got != "VN2.0" {
+	conn, r := dialWT(t, srv)
+	wtWrite(t, conn, "HUengine-driver")
+	if got := wtRead(t, r); got != "VN2.0" {
 		t.Fatalf("first line after HU: got %q want VN2.0", got)
 	}
-
-	second, err := r.ReadString('\n')
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := strings.TrimRight(second, "\r\n"); got != "*10" {
+	if got := wtRead(t, r); got != "*10" {
 		t.Fatalf("second line after HU: got %q want *10", got)
-	}
-
-	_ = clientConn.Close()
-	select {
-	case <-done:
-	case <-time.After(2 * time.Second):
-		t.Fatal("serveConn did not exit after client close")
 	}
 }
 
 func TestHUReconnectWithSameDeviceGetsFreshBurst(t *testing.T) {
-	srv, err := New(Config{
+	srv := startWT(t, Config{
 		LayoutID:         1,
 		CommandStationID: 1,
 		HeartbeatSecs:    10,
 		TrackPowerOn:     true,
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	first, _ := dialWT(t, srv)
+	wtWrite(t, first, "HUsame-device")
+	assertInitialBurst(t, first)
 
-	firstClient, firstServer := net.Pipe()
-	firstDone := make(chan struct{})
-	go func() {
-		srv.serveConn(ctx, firstServer)
-		close(firstDone)
-	}()
-	if _, err := fmt.Fprintln(firstClient, "HUsame-device"); err != nil {
-		t.Fatal(err)
-	}
-	assertInitialBurst(t, firstClient)
-
-	secondClient, secondServer := net.Pipe()
-	secondDone := make(chan struct{})
-	go func() {
-		srv.serveConn(ctx, secondServer)
-		close(secondDone)
-	}()
-	if _, err := fmt.Fprintln(secondClient, "HUsame-device"); err != nil {
-		t.Fatal(err)
-	}
-	assertInitialBurst(t, secondClient)
-
-	_ = secondClient.Close()
-	_ = firstClient.Close()
-	for name, done := range map[string]<-chan struct{}{
-		"first serveConn":  firstDone,
-		"second serveConn": secondDone,
-	} {
-		select {
-		case <-done:
-		case <-time.After(2 * time.Second):
-			t.Fatalf("%s did not exit", name)
-		}
-	}
+	second, _ := dialWT(t, srv)
+	wtWrite(t, second, "HUsame-device")
+	assertInitialBurst(t, second)
 }
 
 func assertInitialBurst(t *testing.T, conn net.Conn) {
@@ -140,5 +74,161 @@ func assertInitialBurst(t *testing.T, conn net.Conn) {
 	}
 	if !sawRoster {
 		t.Fatal("initial burst did not contain roster")
+	}
+}
+
+// Engine Driver sends N<name> before HU<id>. v1 ignored N until HU, so the
+// burst carried the paired roster; the anonymous session must not get a
+// burst with the "Pair with BigFred" sentinel first.
+func TestNBeforeHUPairedGetsPairedRoster(t *testing.T) {
+	store := testPairingStore(t)
+	ctx := context.Background()
+	req, err := store.CreateWithrottlePairingRequest(ctx, remotepairing.CreateWithrottlePairingInput{
+		LayoutID:         1,
+		CommandStationID: 1,
+		UserID:           9,
+		AllowAllVehicles: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, _, err := store.PairViaWithrottleCode(ctx, 1, 1, req.PairingCode, ClientKeyForDevice("ed-n-first"), contract.NowMS()); err != nil || !ok {
+		t.Fatalf("pair: ok=%v err=%v", ok, err)
+	}
+	srv := startWT(t, Config{
+		LayoutID:         1,
+		CommandStationID: 1,
+		Store:            store,
+		HeartbeatSecs:    10,
+		TrackPowerOn:     true,
+		AllowedVehicles: contract.AllowedVehicles{Vehicles: []contract.AllowedVehicle{
+			{VehicleID: "v42", DisplayName: "Shunter", Addr: 42, OwnerUserID: 9, ControllerUserIDs: []uint{9}},
+		}},
+	})
+	conn, r := dialWT(t, srv)
+	wtWrite(t, conn, "NMy Throttle")
+	if n := drainQuiet(t, conn, r, 150*time.Millisecond); n != 0 {
+		t.Fatalf("N before HU must not trigger the initial burst, got %d lines", n)
+	}
+	wtWrite(t, conn, "HUed-n-first")
+	roster := drainUntilLine(t, r, func(line string) bool { return strings.HasPrefix(line, "RL") })
+	if !strings.Contains(roster, "Shunter") || strings.Contains(roster, "Pair with BigFred") {
+		t.Fatalf("burst roster after N,HU: %q", roster)
+	}
+	if got := srv.registry.deviceName(ClientKeyForDevice("ed-n-first")); got != "" {
+		t.Fatalf("device name should not be recorded pre-HU (v1 ignored N before HU), got %q", got)
+	}
+}
+
+func TestHUReconnectWithCoordinatorKeepsTCP(t *testing.T) {
+	coord := remotes.NewCoordinator(remotes.CoordinatorConfig{
+		LayoutID:         1,
+		CommandStationID: 1,
+	})
+	srv := startWT(t, Config{
+		LayoutID:         1,
+		CommandStationID: 1,
+		HeartbeatSecs:    10,
+		TrackPowerOn:     true,
+		Coordinator:      coord,
+	})
+
+	first, _ := dialWT(t, srv)
+	wtWrite(t, first, "HUsame-device")
+	assertInitialBurst(t, first)
+
+	second, _ := dialWT(t, srv)
+	wtWrite(t, second, "HUsame-device")
+	assertInitialBurst(t, second)
+
+	if _, err := second.Write([]byte("*\n")); err != nil {
+		t.Fatalf("replacement TCP closed after HU takeover: %v", err)
+	}
+}
+
+func TestStarPlusArmsHeartbeatMonitor(t *testing.T) {
+	srv := startWT(t, Config{
+		LayoutID:         1,
+		CommandStationID: 1,
+		HeartbeatSecs:    10,
+		TrackPowerOn:     true,
+	})
+	conn, r := dialWT(t, srv)
+	handshakeHU(t, conn, r, "hb-arm")
+	wtWrite(t, conn, "*+")
+	key := ClientKeyForDevice("hb-arm")
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		c, ok := srv.registry.Get(key)
+		if ok && c.HeartbeatMonitor {
+			wtWrite(t, conn, "*-")
+			for time.Now().Before(deadline.Add(time.Second)) {
+				c, ok = srv.registry.Get(key)
+				if ok && !c.HeartbeatMonitor {
+					return
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+			t.Fatal("*- did not clear HeartbeatMonitor")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("*+ did not arm HeartbeatMonitor")
+}
+
+func TestPairedActionOnUnheldLocoIsIgnored(t *testing.T) {
+	drive := &speedProbeDrive{}
+	srv := startWT(t, Config{
+		LayoutID:         1,
+		CommandStationID: 1,
+		SpeedSteps:       128,
+		Drive:            drive,
+	})
+	conn, r := dialWT(t, srv)
+	handshakeHU(t, conn, r, "unheld")
+	pairDevice(srv, "unheld")
+	wtWrite(t, conn, "M0AS3<;>V40")
+	time.Sleep(80 * time.Millisecond)
+	if drive.calls() != 0 {
+		t.Fatalf("SetSpeed on unheld loco: %d calls", drive.calls())
+	}
+}
+
+func TestCoordinatorEvictClearsWireState(t *testing.T) {
+	coord := remotes.NewCoordinator(remotes.CoordinatorConfig{
+		LayoutID:         1,
+		CommandStationID: 1,
+	})
+	srv := startWT(t, Config{
+		LayoutID:         1,
+		CommandStationID: 1,
+		HeartbeatSecs:    10,
+		TrackPowerOn:     true,
+		Coordinator:      coord,
+	})
+	conn, r := dialWT(t, srv)
+	handshakeHU(t, conn, r, "wire-evict")
+	key := ClientKeyForDevice("wire-evict")
+	srv.registry.setLastSpeed(key, '0', 3, 40)
+	if _, ok := srv.registry.lastSpeed(key, '0', 3); !ok {
+		t.Fatal("setup lastSpeed")
+	}
+	coord.DropPresence(context.Background(), key)
+	if _, ok := srv.registry.lastSpeed(key, '0', 3); ok {
+		t.Fatal("wire lastSpeed survived DropPresence")
+	}
+	_ = conn
+	_ = r
+}
+
+func TestScopeChangedDetectsRosterDelta(t *testing.T) {
+	a := &contract.RemoteSessionWire{AllowAllVehicles: false, AllowedAddrs: []uint16{3, 7}}
+	b := &contract.RemoteSessionWire{AllowAllVehicles: false, AllowedAddrs: []uint16{3, 7}}
+	if scopeChanged(a, b) {
+		t.Fatal("identical scopes")
+	}
+	b.AllowedAddrs = []uint16{3, 8}
+	if !scopeChanged(a, b) {
+		t.Fatal("addr set change must be detected")
 	}
 }

@@ -61,6 +61,10 @@ function isLoconetKind(kind: CommandStationKind): boolean {
   return kind === "loconet_serial" || kind === "loconet_tcp";
 }
 
+function isWithrottleKind(kind: CommandStationKind): boolean {
+  return kind === "withrottle";
+}
+
 type WizardStepId =
   | "select"
   | "remotes"
@@ -277,7 +281,7 @@ export default function ConnectionWizardPage() {
         idleTimeoutSecs: DEFAULT_COMMAND_STATION_IDLE_TIMEOUT_SECS,
         bootStopEnabled,
         singleVehicleControl: false,
-        programming,
+        programming: isWithrottleKind(kind) ? false : programming,
         hideInThrottle,
         defaultProgrammingTrackOutput,
         ...(isLoconetKind(kind)
@@ -567,16 +571,28 @@ export default function ConnectionWizardPage() {
                 <FormControlLabel
                   control={
                     <Switch
-                      checked={programming}
+                      checked={
+                        selectedKind != null && isWithrottleKind(selectedKind)
+                          ? false
+                          : programming
+                      }
+                      disabled={
+                        selectedKind != null && isWithrottleKind(selectedKind)
+                      }
                       onChange={(_, v) => setProgramming(v)}
                     />
                   }
                   label={t("commandStation:admin.dialogs.fields.programming")}
                 />
                 <FormHelperText sx={{ mt: -1, ml: 4 }}>
-                  {t("commandStation:admin.dialogs.fields.programmingHelp")}
+                  {selectedKind != null && isWithrottleKind(selectedKind)
+                    ? t(
+                        "commandStation:admin.dialogs.fields.programmingWithrottleHelp",
+                      )
+                    : t("commandStation:admin.dialogs.fields.programmingHelp")}
                 </FormHelperText>
-                {programming && (
+                {programming &&
+                  !(selectedKind != null && isWithrottleKind(selectedKind)) && (
                   <FormControl fullWidth>
                     <InputLabel>
                       {t(

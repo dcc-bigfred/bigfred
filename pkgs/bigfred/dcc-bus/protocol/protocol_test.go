@@ -40,3 +40,28 @@ func TestFrameWithID(t *testing.T) {
 		t.Fatalf("ack = %#v", ack)
 	}
 }
+
+func TestAckPayloadErrorsRoundTrip(t *testing.T) {
+	raw, err := json.Marshal(AckPayload{OK: true, Errors: []uint16{2, 500}})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		t.Fatalf("map: %v", err)
+	}
+	if _, ok := m["errors"]; !ok {
+		t.Fatalf("errors missing: %s", raw)
+	}
+	empty, err := json.Marshal(AckPayload{OK: true})
+	if err != nil {
+		t.Fatalf("marshal empty: %v", err)
+	}
+	var emptyMap map[string]any
+	if err := json.Unmarshal(empty, &emptyMap); err != nil {
+		t.Fatalf("empty map: %v", err)
+	}
+	if _, ok := emptyMap["errors"]; ok {
+		t.Fatalf("empty errors should omit: %s", empty)
+	}
+}

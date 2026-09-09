@@ -37,6 +37,7 @@
   "command_station_idle_timeout_invalid": "Limit bezczynności pilota musi być między 0 a 3600 s.",
   "command_station_programming_track_invalid": "Domyślne wyjście toru programującego musi być „prog” albo „pom”.",
   "command_station_inbound_port_conflict": "Inna centralka ma już włączony serwer pilota Z21 lub WiFred na tym samym porcie (domyślnie 21105 lub 12090). Na jednym hoście tylko jedna centralka może nasłuchiwać na danym porcie — wyłącz piloty na jednej z centralek lub zmień porty w zaawansowanych ustawieniach.",
+  "command_station_withrottle_port_conflict": "Ten klient WiThrottle łączyłby się z własnym listenerem WiFred na tym hoście. Użyj innego portu wejściowego albo wyłącz serwer WiFred.",
   "layout_max_vehicles_invalid": "Limit pojazdów na użytkownika musi być między 1 a 120.",
   "layout_max_vehicles_exceeds_slot_budget": "Limit pojazdów nie może przekraczać budżetu slotów LocoNet przypisanej centralce.",
   "radio_chat_disabled": "Komunikaty radiowe są wyłączone na tej makiecie.",

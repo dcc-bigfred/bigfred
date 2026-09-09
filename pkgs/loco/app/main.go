@@ -3,7 +3,7 @@ package app
 import (
 	"fmt"
 
-	"github.com/dcc-bigfred/bigfred/pkgs/loco/commandstation"
+	"github.com/dcc-bigfred/proto/go/pkgs/commandstation"
 	"github.com/dcc-bigfred/bigfred/pkgs/loco/config"
 	"github.com/dcc-bigfred/bigfred/pkgs/loco/output"
 	"github.com/sirupsen/logrus"

@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/contract"
-	"github.com/dcc-bigfred/bigfred/pkgs/loco/commandstation"
+	"github.com/dcc-bigfred/proto/go/pkgs/commandstation"
 )
 
 // ThrottleActor identifies the user behind one remote handset session.

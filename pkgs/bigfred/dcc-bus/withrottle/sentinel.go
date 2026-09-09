@@ -2,7 +2,6 @@ package withrottle
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 )
 
@@ -52,69 +51,4 @@ func buildReleaseLine(throttleID byte, locoKey string) string {
 func buildSentinelReleaseLines(throttleID byte, sentinel uint16) []string {
 	key := locoKeyForAddr(sentinel)
 	return []string{buildReleaseLine(throttleID, key) + "r"}
-}
-
-// parseSpeedValue reads V payload into WiThrottle wire speed 0–126.
-func parseSpeedValue(prop string) (wireSpeed int, estop bool, ok bool) {
-	if len(prop) < 2 || prop[0] != 'V' {
-		return 0, false, false
-	}
-	n, err := strconv.Atoi(prop[1:])
-	if err != nil {
-		return 0, false, false
-	}
-	if n < 0 {
-		return 1, true, true
-	}
-	if n == 1 {
-		return 1, true, true
-	}
-	if n > 126 {
-		n = 126
-	}
-	return n, false, true
-}
-
-// dccSpeedFromWire maps WiThrottle V encoding to DCC 128-step speed.
-func dccSpeedFromWire(wireSpeed int, speedSteps uint) uint8 {
-	if wireSpeed <= 0 {
-		return 0
-	}
-	if wireSpeed == 1 {
-		return 0
-	}
-	if speedSteps == 0 {
-		speedSteps = 128
-	}
-	max := int(speedSteps) - 1
-	step := ((wireSpeed-1)*max + 62) / 125
-	if step > max {
-		step = max
-	}
-	if step < 0 {
-		step = 0
-	}
-	return uint8(step)
-}
-
-// wireSpeedFromDCC maps DCC speed to WiThrottle V encoding.
-func wireSpeedFromDCC(speed uint8, speedSteps uint) int {
-	if speed == 0 {
-		return 0
-	}
-	if speedSteps == 0 {
-		speedSteps = 128
-	}
-	max := int(speedSteps) - 1
-	if max <= 0 {
-		return 2
-	}
-	wire := 1 + (int(speed)*125+max/2)/max
-	if wire < 2 {
-		wire = 2
-	}
-	if wire > 126 {
-		wire = 126
-	}
-	return wire
 }

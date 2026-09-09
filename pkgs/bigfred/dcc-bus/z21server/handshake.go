@@ -2,12 +2,12 @@ package z21server
 
 // Roco Z21 identity advertised to stock handset apps (black Z21, FW 1.24).
 const (
-	HwTypeZ21Black     uint32 = 0x00000201 // D_HWT_Z21_NEW — retail “black Z21” (2013)
-	FirmwareBCD        uint32 = 0x00000124   // BCD 1.24 in LAN_GET_HWINFO
-	FirmwareVersionMSB byte   = 0x01
-	FirmwareVersionLSB byte   = 0x24
-	XBusProtocolVersion byte  = 0x36         // X-Bus V3.6
-	CmdStationIDZ21    byte   = 0x12         // Z21 device family
+	HwTypeZ21Black      uint32 = 0x00000201 // D_HWT_Z21_NEW — retail “black Z21” (2013)
+	FirmwareBCD         uint32 = 0x00000124 // BCD 1.24 in LAN_GET_HWINFO
+	FirmwareVersionMSB  byte   = 0x01
+	FirmwareVersionLSB  byte   = 0x24
+	XBusProtocolVersion byte   = 0x36 // X-Bus V3.6
+	CmdStationIDZ21     byte   = 0x12 // Z21 device family
 
 	capDCC           byte = 0x01
 	capLocoCmds      byte = 0x10

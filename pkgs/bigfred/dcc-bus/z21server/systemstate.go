@@ -77,7 +77,7 @@ func buildSystemStateReply(st SystemState) []byte {
 }
 
 func (s *Server) pushSystemState(client *Client) {
-	if s.conn == nil {
+	if s.protoServer() == nil && s.conn == nil {
 		return
 	}
 	_ = s.writeUDP(&client.Addr, client.Key, buildSystemStateReply(s.effectiveSystemState()))

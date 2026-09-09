@@ -131,7 +131,11 @@ func (s *CommandStation) Create(ctx context.Context, eff domain.EffectiveRoles, 
 		CreatedAt:        now,
 		UpdatedAt:        now,
 	}
+	applyWithrottleKindPolicy(&row)
 	if err := s.validateInboundPorts(ctx, row, 0); err != nil {
+		return domain.CommandStation{}, err
+	}
+	if err := validation.ValidateWithrottlePortConflict(row.Kind, row.ConnectionURI, row.WithrottleServerEnabled, row.EffectiveWithrottleInboundPort()); err != nil {
 		return domain.CommandStation{}, err
 	}
 	if err := s.applySlotLeaseSettings(&row, in.MaxLoconetSlots, in.IdleTimeoutSecs); err != nil {
@@ -275,8 +279,12 @@ func (s *CommandStation) Update(ctx context.Context, eff domain.EffectiveRoles, 
 		}
 	}
 	row.UpdatedAt = time.Now().UTC()
+	applyWithrottleKindPolicy(&row)
 
 	if err := s.validateInboundPorts(ctx, row, row.ID); err != nil {
+		return domain.CommandStation{}, err
+	}
+	if err := validation.ValidateWithrottlePortConflict(row.Kind, row.ConnectionURI, row.WithrottleServerEnabled, row.EffectiveWithrottleInboundPort()); err != nil {
 		return domain.CommandStation{}, err
 	}
 	if err := s.stations.Update(ctx, &row); err != nil {
@@ -329,6 +337,13 @@ func (s *CommandStation) checkCatalogManage(eff domain.EffectiveRoles) error {
 	default:
 		return errors.New(decision.Reason)
 	}
+}
+
+func applyWithrottleKindPolicy(row *domain.CommandStation) {
+	if row.Kind != domain.CommandStationKindWiThrottle {
+		return
+	}
+	row.Programming = false
 }
 
 func (s *CommandStation) validateInboundPorts(ctx context.Context, row domain.CommandStation, excludeID uint) error {

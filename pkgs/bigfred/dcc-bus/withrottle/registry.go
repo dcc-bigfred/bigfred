@@ -200,6 +200,16 @@ func (r *Registry) withThrottle(key string, id byte, fn func(*throttleWire)) {
 	r.wire.WithThrottle(key, id, fn)
 }
 
+func (r *Registry) throttleHolds(key string, id byte, addr uint16) bool {
+	held := false
+	r.withThrottle(key, id, func(tw *throttleWire) {
+		if tw.locos != nil {
+			_, held = tw.locos[addr]
+		}
+	})
+	return held
+}
+
 func (r *Registry) findThrottleForAddr(key string, addr uint16) (byte, string, bool) {
 	return r.wire.FindThrottleForAddr(key, addr)
 }

@@ -10,7 +10,7 @@ import (
 
 	buserrors "github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/errors"
 	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/dcc-bus/protocol"
-	"github.com/dcc-bigfred/bigfred/pkgs/loco/commandstation"
+	"github.com/dcc-bigfred/proto/go/pkgs/commandstation"
 )
 
 type cvCall struct {
@@ -25,6 +25,7 @@ type cvStubStation struct {
 	commandstation.StubStation
 	mu     sync.Mutex
 	values map[uint16]int
+	fail   map[uint16]error
 	reads  []cvCall
 	writes []cvCall
 }
@@ -33,6 +34,9 @@ func (s *cvStubStation) ReadCV(mode commandstation.Mode, lcv commandstation.Loco
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.reads = append(s.reads, cvCall{mode: mode, locoID: lcv.LocoId, cv: uint16(lcv.Cv.Num)})
+	if err := s.fail[uint16(lcv.Cv.Num)]; err != nil {
+		return 0, err
+	}
 	return s.values[uint16(lcv.Cv.Num)], nil
 }
 
@@ -40,6 +44,9 @@ func (s *cvStubStation) WriteCV(mode commandstation.Mode, lcv commandstation.Loc
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.writes = append(s.writes, cvCall{mode: mode, locoID: lcv.LocoId, cv: uint16(lcv.Cv.Num), value: lcv.Cv.Value})
+	if err := s.fail[uint16(lcv.Cv.Num)]; err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -180,6 +187,7 @@ func TestHandleLocoAddrSet_preservesOtherCV29Bits(t *testing.T) {
 func TestHandleLocoAddrSet_shortAddressClearsLongBit(t *testing.T) {
 	t.Parallel()
 	// CV29 = 38: long-address bit set on top of the same config bits.
+	// CV 28 unread (not in the map) is 0 — bit 7 already off, so no CV 28 write.
 	st := &cvStubStation{values: map[uint16]int{29: 38}}
 	r := newProgrammingRouter(st, true, protocol.ProgrammingModeProg)
 
@@ -190,8 +198,120 @@ func TestHandleLocoAddrSet_shortAddressClearsLongBit(t *testing.T) {
 	if res.LongAddress {
 		t.Fatalf("address 7 must be programmed as a short address")
 	}
-	last := st.writes[len(st.writes)-1]
-	if last.cv != 29 || last.value != 6 {
-		t.Fatalf("CV29 write = %+v, want 6 (long bit cleared)", last)
+	want := []cvCall{
+		{mode: commandstation.ProgrammingTrackMode, cv: 1, value: 7},
+		{mode: commandstation.ProgrammingTrackMode, cv: 29, value: 6},
+	}
+	if len(st.writes) != len(want) {
+		t.Fatalf("writes = %+v, want %+v", st.writes, want)
+	}
+	for i, w := range want {
+		if st.writes[i] != w {
+			t.Fatalf("write %d = %+v, want %+v", i, st.writes[i], w)
+		}
+	}
+	for _, w := range st.writes {
+		if w.cv == 17 || w.cv == 18 {
+			t.Fatalf("short address must not write CV17/18, got %+v", st.writes)
+		}
+	}
+}
+
+func TestHandleLocoCVRead_continuesAfterPerCVError(t *testing.T) {
+	t.Parallel()
+	st := &cvStubStation{
+		values: map[uint16]int{1: 3, 3: 10},
+		fail:   map[uint16]error{2: commandstation.ErrUnsupported},
+	}
+	r := newProgrammingRouter(st, true, protocol.ProgrammingModeProg)
+
+	res := r.HandleLocoCVRead(context.Background(), Actor{}, noopResponder{}, protocol.LocoCVReadPayload{
+		CVs: []uint16{1, 2, 3},
+	}, "")
+	if !res.OK {
+		t.Fatalf("read failed: %s", res.Code)
+	}
+	if len(st.reads) != 3 {
+		t.Fatalf("reads = %v, want CV1/2/3", st.reads)
+	}
+	if len(res.CVs) != 2 || res.CVs[0].CV != 1 || res.CVs[1].CV != 3 {
+		t.Fatalf("cvs = %+v, want CV1 and CV3", res.CVs)
+	}
+	if len(res.Errors) != 1 || res.Errors[0] != 2 {
+		t.Fatalf("errors = %v, want [2]", res.Errors)
+	}
+}
+
+func TestHandleLocoCVWrite_continuesAfterPerCVError(t *testing.T) {
+	t.Parallel()
+	st := &cvStubStation{fail: map[uint16]error{2: commandstation.ErrUnsupported}}
+	r := newProgrammingRouter(st, true, protocol.ProgrammingModeProg)
+
+	res := r.HandleLocoCVWrite(context.Background(), Actor{}, noopResponder{}, protocol.LocoCVWritePayload{
+		CVs: []protocol.CVEntry{{CV: 1, Value: 3}, {CV: 2, Value: 4}, {CV: 3, Value: 5}},
+	}, "")
+	if !res.OK {
+		t.Fatalf("write failed: %s", res.Code)
+	}
+	if len(st.writes) != 3 {
+		t.Fatalf("writes = %v, want three attempts", st.writes)
+	}
+	if len(res.CVs) != 2 || res.CVs[0].CV != 1 || res.CVs[1].CV != 3 {
+		t.Fatalf("cvs = %+v, want CV1 and CV3", res.CVs)
+	}
+	if len(res.Errors) != 1 || res.Errors[0] != 2 {
+		t.Fatalf("errors = %v, want [2]", res.Errors)
+	}
+}
+
+func TestHandleLocoAddrSet_disablesRailComPlusByDefault(t *testing.T) {
+	t.Parallel()
+	st := &cvStubStation{values: map[uint16]int{28: 131, 29: 30}}
+	r := newProgrammingRouter(st, true, protocol.ProgrammingModeProg)
+
+	res := r.HandleLocoAddrSet(context.Background(), Actor{}, noopResponder{}, protocol.LocoAddrSetPayload{Address: 121}, "")
+	if !res.OK {
+		t.Fatalf("addrSet failed: %s", res.Code)
+	}
+	if st.writes[0].cv != 28 || st.writes[0].value != 3 {
+		t.Fatalf("first write = %+v, want CV28=3", st.writes[0])
+	}
+	if st.writes[1].cv != 1 || st.writes[2].cv != 29 {
+		t.Fatalf("writes = %+v, want CV28 then CV1/CV29", st.writes)
+	}
+}
+
+func TestHandleLocoAddrSet_railcomPlusTrueSetsBit(t *testing.T) {
+	t.Parallel()
+	on := true
+	st := &cvStubStation{values: map[uint16]int{28: 3, 29: 6}}
+	r := newProgrammingRouter(st, true, protocol.ProgrammingModeProg)
+
+	res := r.HandleLocoAddrSet(context.Background(), Actor{}, noopResponder{}, protocol.LocoAddrSetPayload{
+		Address:     7,
+		RailComPlus: &on,
+	}, "")
+	if !res.OK {
+		t.Fatalf("addrSet failed: %s", res.Code)
+	}
+	if st.writes[0].cv != 28 || st.writes[0].value != 131 {
+		t.Fatalf("first write = %+v, want CV28=131", st.writes[0])
+	}
+}
+
+func TestHandleLocoAddrSet_skipsRailComWhenCV28Unread(t *testing.T) {
+	t.Parallel()
+	st := &cvStubStation{
+		values: map[uint16]int{29: 6},
+		fail:   map[uint16]error{28: commandstation.ErrUnsupported},
+	}
+	r := newProgrammingRouter(st, true, protocol.ProgrammingModeProg)
+
+	res := r.HandleLocoAddrSet(context.Background(), Actor{}, noopResponder{}, protocol.LocoAddrSetPayload{Address: 7}, "")
+	if !res.OK {
+		t.Fatalf("addrSet failed: %s", res.Code)
+	}
+	if st.writes[0].cv != 1 {
+		t.Fatalf("writes = %+v, want address CVs without CV28", st.writes)
 	}
 }

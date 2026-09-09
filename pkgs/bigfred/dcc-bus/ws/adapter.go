@@ -92,6 +92,7 @@ func deliver(ctx context.Context, sess *Session, requestID string, res cmd.Resul
 			EvictedAddr: res.EvictedAddr,
 			DrivenAddrs: res.DrivenAddrs,
 			CVs:         res.CVs,
+			Errors:      res.Errors,
 			LocoAddress: res.LocoAddress,
 			LongAddress: res.LongAddress,
 		}

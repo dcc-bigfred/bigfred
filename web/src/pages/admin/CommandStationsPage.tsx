@@ -70,6 +70,25 @@ function isLoconetKind(kind: CommandStationKind): boolean {
   return kind === "loconet_serial" || kind === "loconet_tcp";
 }
 
+function isWithrottleKind(kind: CommandStationKind): boolean {
+  return kind === "withrottle";
+}
+
+function withrottleLoopbackConflict(
+  kind: CommandStationKind,
+  uri: string,
+  inboundEnabled: boolean,
+): boolean {
+  if (!isWithrottleKind(kind) || !inboundEnabled) return false;
+  const lower = uri.trim().toLowerCase();
+  return (
+    lower === "" ||
+    lower.includes("localhost") ||
+    lower.includes("127.0.0.1") ||
+    lower.includes("::1")
+  );
+}
+
 export default function CommandStationsPage() {
   const { t } = useTranslation(["commandStation", "common", "errors"]);
   const navigate = useNavigate();
@@ -234,7 +253,7 @@ export default function CommandStationsPage() {
         idleTimeoutSecs: idleTimeoutSecsInput,
         bootStopEnabled: bootStopEnabledInput,
         singleVehicleControl: singleVehicleControlInput,
-        programming: programmingInput,
+        programming: isWithrottleKind(kindInput) ? false : programmingInput,
         hideInThrottle: hideInThrottleInput,
         defaultProgrammingTrackOutput: defaultProgrammingTrackOutputInput,
         ...(isLoconetKind(kindInput)
@@ -451,9 +470,13 @@ export default function CommandStationsPage() {
               <Select
                 value={kindInput}
                 label={t("commandStation:admin.dialogs.fields.kind")}
-                onChange={(e) =>
-                  setKindInput(e.target.value as CommandStationKind)
-                }
+                onChange={(e) => {
+                  const next = e.target.value as CommandStationKind;
+                  setKindInput(next);
+                  if (isWithrottleKind(next)) {
+                    setProgrammingInput(false);
+                  }
+                }}
               >
                 {COMMAND_STATION_KINDS.map((kind) => (
                   <MenuItem key={kind} value={kind}>
@@ -608,16 +631,19 @@ export default function CommandStationsPage() {
             <FormControlLabel
               control={
                 <Switch
-                  checked={programmingInput}
+                  checked={isWithrottleKind(kindInput) ? false : programmingInput}
+                  disabled={isWithrottleKind(kindInput)}
                   onChange={(e) => setProgrammingInput(e.target.checked)}
                 />
               }
               label={t("commandStation:admin.dialogs.fields.programming")}
             />
             <Typography variant="body2" color="text.secondary">
-              {t("commandStation:admin.dialogs.fields.programmingHelp")}
+              {isWithrottleKind(kindInput)
+                ? t("commandStation:admin.dialogs.fields.programmingWithrottleHelp")
+                : t("commandStation:admin.dialogs.fields.programmingHelp")}
             </Typography>
-            {programmingInput && (
+            {programmingInput && !isWithrottleKind(kindInput) && (
               <FormControl fullWidth>
                 <InputLabel>
                   {t(
@@ -643,7 +669,7 @@ export default function CommandStationsPage() {
                 </Select>
               </FormControl>
             )}
-            {programmingInput && (
+            {programmingInput && !isWithrottleKind(kindInput) && (
               <Typography variant="body2" color="text.secondary">
                 {t(
                   "commandStation:admin.dialogs.fields.defaultProgrammingTrackOutputHelp",
@@ -727,6 +753,17 @@ export default function CommandStationsPage() {
                 "commandStation:admin.dialogs.fields.withrottleServerEnabledHelp",
               )}
             </Typography>
+            {withrottleLoopbackConflict(
+              kindInput,
+              uriInput,
+              withrottleServerEnabledInput,
+            ) && (
+              <Alert severity="warning">
+                {t(
+                  "commandStation:admin.dialogs.fields.withrottlePortConflict",
+                )}
+              </Alert>
+            )}
             {dialog?.kind === "edit" &&
               dialog.target.withrottleServerEnabled &&
               !withrottleServerEnabledInput && (

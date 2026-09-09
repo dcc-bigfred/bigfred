@@ -3,8 +3,10 @@ package z21server
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net"
+	"strconv"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -13,6 +15,8 @@ import (
 	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/remotepairing"
 	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/remotes"
 	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/remotes/inbound"
+	"github.com/dcc-bigfred/proto/go/pkgs/drive"
+	z21proto "github.com/dcc-bigfred/proto/go/pkgs/z21"
 )
 
 // GatewayName is the remotes gateway factory key for Z21 LAN.
@@ -51,6 +55,10 @@ type Server struct {
 	coordinator *remotes.Coordinator
 	virtual     *remotes.VirtualLocoStore
 	dispatch    *dispatcher
+
+	runCtx atomic.Value // context.Context
+	mu     sync.Mutex
+	proto  *z21proto.Server
 }
 
 const (
@@ -74,7 +82,7 @@ func New(cfg Config) (*Server, error) {
 	if cfg.LayoutID == 0 || cfg.CommandStationID == 0 {
 		return nil, errors.New("z21server: layout and command station id are required")
 	}
-	if cfg.Port == 0 {
+	if cfg.Port == 0 && (cfg.Bind == "" || cfg.Bind == "0.0.0.0") {
 		cfg.Port = 21105
 	}
 	if cfg.Bind == "" {
@@ -94,7 +102,6 @@ func New(cfg Config) (*Server, error) {
 	var inboundReg *inbound.ClientRegistry
 	if cfg.Coordinator != nil {
 		inboundReg = cfg.Coordinator.Registry()
-		cfg.Coordinator.RegisterOnEvict(wire.Remove)
 	}
 	registry := NewRegistry(inboundReg, wire)
 	s := &Server{
@@ -105,13 +112,15 @@ func New(cfg Config) (*Server, error) {
 	}
 	if cfg.Coordinator != nil {
 		s.virtual = cfg.Coordinator.VirtualLocos()
-	} else {
-		s.virtual = remotes.NewVirtualLocoStore()
-	}
-	if cfg.Coordinator != nil {
+		cfg.Coordinator.RegisterOnEvict(func(key string) {
+			wire.Remove(key)
+			s.disconnectProto(key)
+		})
 		cfg.Coordinator.RegisterSessionSyncHandler(contract.RemoteProtocolZ21, func(ctx context.Context, clientKey string) {
 			s.syncPairedByKey(ctx, clientKey)
 		})
+	} else {
+		s.virtual = remotes.NewVirtualLocoStore()
 	}
 	s.pairing = NewPairingHandler(cfg.Store, cfg.LayoutID, cfg.CommandStationID, s.registry, func(ctx context.Context) {
 		if s.coordinator != nil {
@@ -165,20 +174,29 @@ func (s *Server) Name() string { return contract.RemoteProtocolZ21 }
 
 // Run listens until ctx is cancelled.
 func (s *Server) Run(ctx context.Context) error {
-	addr, err := net.ResolveUDPAddr("udp", net.JoinHostPort(s.cfg.Bind, fmt.Sprintf("%d", s.cfg.Port)))
+	s.runCtx.Store(ctx)
+	bind := net.JoinHostPort(s.cfg.Bind, strconv.Itoa(int(s.cfg.Port)))
+	ipStickiness := s.cfg.IPStickiness
+	protoSrv, err := z21proto.Listen(bind, s,
+		z21proto.WithSerial(s.cfg.Serial),
+		z21proto.WithPeerTTL(0),
+		z21proto.WithSystemStatePayload(s.effectiveSystemState().encode()),
+		z21proto.WithClientKeyFunc(func(a *net.UDPAddr) drive.ClientID {
+			return drive.ClientID(inbound.ClientKey(contract.RemoteProtocolZ21, inbound.EndpointFromAddr(a, ipStickiness)))
+		}),
+		z21proto.WithErrorHandler(func(err error) {
+			s.log.WithError(err).Warn("z21 inbound listener error")
+		}),
+	)
 	if err != nil {
 		return err
 	}
-	conn, err := net.ListenUDP("udp", addr)
-	if err != nil {
-		return err
-	}
-	s.conn = conn
-	defer conn.Close()
-	defer s.stopDispatch()
+	s.mu.Lock()
+	s.proto = protoSrv
+	s.mu.Unlock()
 
 	s.log.WithFields(logrus.Fields{
-		"bind":             conn.LocalAddr().String(),
+		"bind":             protoSrv.Addr().String(),
 		"layoutId":         s.cfg.LayoutID,
 		"commandStationId": s.cfg.CommandStationID,
 		"ipStickiness":     s.cfg.IPStickiness,
@@ -192,48 +210,30 @@ func (s *Server) Run(ctx context.Context) error {
 		go func() { _ = s.coordinator.PublishSnapshot(ctx) }()
 	}
 
-	s.startDispatch()
+	<-ctx.Done()
+	s.mu.Lock()
+	s.proto = nil
+	s.mu.Unlock()
+	return protoSrv.Close()
+}
 
-	buf := make([]byte, 4096)
-	var lastInlineLog time.Time
-	var lastInline int64
-	for {
-		if err := conn.SetReadDeadline(time.Now().Add(1 * time.Second)); err != nil {
-			return err
-		}
-		n, remote, err := conn.ReadFromUDP(buf)
-		if err != nil {
-			if ctx.Err() != nil {
-				return nil
-			}
-			var netErr net.Error
-			if errors.As(err, &netErr) && netErr.Timeout() {
-				// Opportunistic overload log: the read deadline fires
-				// once a second, so throttle to ~10s and only when the
-				// inline-fallback counter actually grew.
-				if now := time.Now(); now.Sub(lastInlineLog) >= 10*time.Second {
-					if cur := s.dispatch.InlineFallbacks(); cur != lastInline {
-						s.log.WithField("inlineFallbacks", cur).Warn("z21 dispatch: shard queue saturated, ran tasks inline")
-						lastInline = cur
-						lastInlineLog = now
-					}
-				}
-				continue
-			}
-			return err
-		}
-		// Route every dataset from this source to the same shard so
-		// per-handset ordering (drive commands, CV pairing sequence)
-		// is preserved while Redis ops are offloaded from the read loop.
-		key := inbound.ClientKey(contract.RemoteProtocolZ21, inbound.EndpointFromAddr(remote, s.cfg.IPStickiness))
-		datagram := append([]byte(nil), buf[:n]...)
-		remoteCopy := *remote
-		s.dispatch.dispatch(key, func() {
-			for _, pkt := range splitZ21Datagram(datagram) {
-				s.handlePacket(ctx, &remoteCopy, pkt)
-			}
-		})
+func (s *Server) protoServer() *z21proto.Server {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.proto
+}
+
+func (s *Server) disconnectProto(key string) {
+	if p := s.protoServer(); p != nil {
+		p.Disconnect(drive.ClientID(key))
 	}
+}
+
+func (s *Server) ctx() context.Context {
+	if v := s.runCtx.Load(); v != nil {
+		return v.(context.Context)
+	}
+	return context.Background()
 }
 
 func (s *Server) startDispatch() {
@@ -527,10 +527,14 @@ func (s *Server) evictClient(ctx context.Context, key string) {
 }
 
 func (s *Server) writeUDP(addr *net.UDPAddr, clientKey string, pkt []byte) error {
+	s.logTx(clientKey, pkt)
+	if p := s.protoServer(); p != nil {
+		p.SendTo(drive.ClientID(clientKey), pkt)
+		return nil
+	}
 	if s.conn == nil {
 		return errors.New("z21server: not listening")
 	}
-	s.logTx(clientKey, pkt)
 	_, err := s.conn.WriteToUDP(pkt, addr)
 	return err
 }

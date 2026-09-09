@@ -128,12 +128,13 @@ func register(m *migrator.Migrator) {
 	m.Register(migrationVersion(20260808, 2), addCommandStationHideInThrottleColumnUp, addCommandStationHideInThrottleColumnDown)
 	m.Register(migrationVersion(20260808, 3), addCommandStationDefaultProgrammingTrackOutputColumnUp, addCommandStationDefaultProgrammingTrackOutputColumnDown)
 	m.Register(migrationVersion(20260809, 1), seedBasicTemplateUp, seedBasicTemplateDown)
+	m.Register(migrationVersion(20260905, 1), allowCommandStationKindWithrottleUp, allowCommandStationKindWithrottleDown)
 }
 
 // createCommandStationsUp installs the `command_stations` catalogue
 // row backing domain.CommandStation (§7e). One row per physical DCC
 // command station. `kind` is a closed enum that drives which driver
-// `pkgs/loco/commandstation` should construct; `connection_uri` is
+// proto `commandstation` should construct; `connection_uri` is
 // a kind-specific URI parsed by the daemon (e.g.
 // `udp://192.168.1.10:21105` for z21, `serial:///dev/ttyUSB0:57600`
 // for loconet-serial). `speed_steps` is the catalogue default the
@@ -923,6 +924,62 @@ func addCommandStationDefaultProgrammingTrackOutputColumnUp(s *rel.Schema) {
 
 func addCommandStationDefaultProgrammingTrackOutputColumnDown(s *rel.Schema) {
 	// SQLite cannot DROP COLUMN in older schemas; leave columns in place.
+}
+
+const commandStationsKindCheckWithrottle = `CHECK (kind IN ('z21','loconet_serial','loconet_tcp','withrottle'))`
+const commandStationsKindCheckLegacy = `CHECK (kind IN ('z21','loconet_serial','loconet_tcp'))`
+
+func rebuildCommandStationsKindCheck(s *rel.Schema, kindCheck string) {
+	s.Exec(rel.Raw(`PRAGMA foreign_keys=OFF`))
+	s.Exec(rel.Raw(`
+		CREATE TABLE "command_stations__migration" (
+			"id" INTEGER PRIMARY KEY AUTOINCREMENT,
+			"name" VARCHAR(255),
+			"kind" VARCHAR(255),
+			"connection_uri" TEXT DEFAULT '',
+			"speed_steps" INTEGER DEFAULT 128,
+			"created_at" DATETIME,
+			"updated_at" DATETIME,
+			"heartbeat_secs" REAL NOT NULL DEFAULT 2,
+			"deadman_secs" REAL NOT NULL DEFAULT 6,
+			"poll_interval_ms" INTEGER NOT NULL DEFAULT 0,
+			"z21_server_enabled" INTEGER NOT NULL DEFAULT 0,
+			"z21_ip_stickiness" INTEGER NOT NULL DEFAULT 0,
+			"z21_inbound_port" INTEGER NOT NULL DEFAULT 21105,
+			"withrottle_server_enabled" INTEGER NOT NULL DEFAULT 0,
+			"withrottle_inbound_port" INTEGER NOT NULL DEFAULT 12090,
+			"withrottle_pairing_addr" INTEGER NOT NULL DEFAULT 3,
+			"withrottle_heartbeat_secs" REAL NOT NULL DEFAULT 10,
+			"max_loconet_slots" INTEGER NOT NULL DEFAULT 80,
+			"idle_timeout_secs" INTEGER NOT NULL DEFAULT 60,
+			"boot_stop_enabled" INTEGER NOT NULL DEFAULT 0,
+			"single_vehicle_control" INTEGER NOT NULL DEFAULT 0,
+			"allocate_physical_slots" INTEGER NOT NULL DEFAULT 1,
+			"programming" INTEGER NOT NULL DEFAULT 0,
+			"hide_in_throttle" INTEGER NOT NULL DEFAULT 0,
+			"default_programming_track_output" TEXT NOT NULL DEFAULT 'prog',
+			UNIQUE ("name"),
+			` + kindCheck + `,
+			CHECK (speed_steps IN (14,28,128))
+		)
+	`))
+	s.Exec(rel.Raw(`
+		INSERT INTO "command_stations__migration"
+		SELECT * FROM "command_stations"
+	`))
+	s.Exec(rel.Raw(`DROP TABLE "command_stations"`))
+	s.Exec(rel.Raw(`ALTER TABLE "command_stations__migration" RENAME TO "command_stations"`))
+	s.Exec(rel.Raw(`PRAGMA foreign_keys=ON`))
+}
+
+// allowCommandStationKindWithrottleUp extends the catalogue CHECK so outbound
+// WiThrottle clients (JMRI, DCC-EX, LNWI) can be stored as kind=withrottle.
+func allowCommandStationKindWithrottleUp(s *rel.Schema) {
+	rebuildCommandStationsKindCheck(s, commandStationsKindCheckWithrottle)
+}
+
+func allowCommandStationKindWithrottleDown(s *rel.Schema) {
+	rebuildCommandStationsKindCheck(s, commandStationsKindCheckLegacy)
 }
 
 // updateWithrottlePairingAddrDefaultUp moves rows still on the old sentinel default (10239) to 3.

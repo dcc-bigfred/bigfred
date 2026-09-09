@@ -19,7 +19,7 @@ const broadcastFlagDriving uint32 = 0x00000001
 // skipped.
 func (s *Server) OnLocoStateChanged(ctx context.Context, snap contract.LocoStateWire, originClientKey string) {
 	_ = ctx
-	if s.conn == nil || s.registry == nil {
+	if (s.protoServer() == nil && s.conn == nil) || s.registry == nil {
 		return
 	}
 	pkt := buildLocoInfoReply(snap.Address, snap, s.cfg.SpeedSteps)

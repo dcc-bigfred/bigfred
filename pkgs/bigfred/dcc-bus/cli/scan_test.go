@@ -3,7 +3,7 @@ package cli
 import (
 	"testing"
 
-	"github.com/dcc-bigfred/bigfred/pkgs/loco/commandstation"
+	"github.com/dcc-bigfred/proto/go/pkgs/commandstation"
 )
 
 func TestBuildScanAutodetections(t *testing.T) {
@@ -15,9 +15,9 @@ func TestBuildScanAutodetections(t *testing.T) {
 		wantSerial     bool
 		wantLAN        bool
 	}{
-		{"hub with LAN", true, "192.168.0", 3, true, true},
+		{"hub with LAN", true, "192.168.0", 4, true, true},
 		{"hub without LAN", true, "", 1, true, false},
-		{"phone with LAN", false, "192.168.0", 2, false, true},
+		{"phone with LAN", false, "192.168.0", 3, false, true},
 		{"phone without LAN", false, "", 0, false, false},
 	}
 	for _, tc := range cases {
@@ -32,7 +32,7 @@ func TestBuildScanAutodetections(t *testing.T) {
 				switch s.(type) {
 				case commandstation.LocoNetSerialAutodetection:
 					hasSerial = true
-				case commandstation.LocoNetTCPAutodetection, commandstation.Z21Autodetection:
+				case commandstation.LocoNetTCPAutodetection, commandstation.Z21Autodetection, commandstation.WiThrottleAutodetection:
 					hasLAN = true
 				}
 			}
@@ -43,5 +43,20 @@ func TestBuildScanAutodetections(t *testing.T) {
 				t.Fatalf("lan = %v, want %v", hasLAN, tc.wantLAN)
 			}
 		})
+	}
+}
+
+func TestLegacyScanURIKeepsV1Schemes(t *testing.T) {
+	cases := map[string]string{
+		"z21://192.168.0.10:21105":        "udp://192.168.0.10:21105",
+		"loconet-tcp://192.168.0.20:1234": "tcp://192.168.0.20:1234",
+		"lbserver://192.168.0.20:1234":    "lbserver://192.168.0.20:1234",
+		"withrottle://192.168.0.30:12090": "withrottle://192.168.0.30:12090",
+		"serial:///dev/ttyUSB0:57600":     "serial:///dev/ttyUSB0:57600",
+	}
+	for in, want := range cases {
+		if got := legacyScanURI(in); got != want {
+			t.Errorf("legacyScanURI(%q) = %q, want %q", in, got, want)
+		}
 	}
 }

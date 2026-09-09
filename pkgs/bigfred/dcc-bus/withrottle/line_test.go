@@ -6,11 +6,12 @@ import (
 	"testing"
 
 	"github.com/dcc-bigfred/bigfred/pkgs/bigfred/contract"
+	wtproto "github.com/dcc-bigfred/proto/go/pkgs/withrottle"
 )
 
 func TestParseMAction_acquire(t *testing.T) {
 	cmd, ok := parseMAction("M0+S3<;>S3")
-	if !ok || cmd.Op != MOpAdd || cmd.LocoKey != "S3" {
+	if !ok || cmd.Op != wtproto.MOpAdd || cmd.LocoKey != "S3" {
 		t.Fatalf("parseMAction: %+v ok=%v", cmd, ok)
 	}
 }

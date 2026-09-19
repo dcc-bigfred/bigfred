@@ -15,6 +15,8 @@ github.com/dcc-bigfred/microinit/go v0.5.1-0.20260808183938-3d44aecd02c5 h1:zftT
 github.com/dcc-bigfred/microinit/go v0.5.1-0.20260808183938-3d44aecd02c5/go.mod h1:pWmLbG5Xl+PEx0nr0t70gc+Ztizk/+LuJcBvz00dtys=
 github.com/dcc-bigfred/proto/go v0.1.1 h1:GuhZQV4EhyDUjlnAw8KpsY+xUEr/a4yMyN7bqJfX3qw=
 github.com/dcc-bigfred/proto/go v0.1.1/go.mod h1:4Z1R+RTIguFeC2gC8iRsV+/XKhkcB0to2ndXun3/FTQ=
+github.com/dcc-bigfred/proto/go v0.1.4-0.20260919175930-402166e2819d h1:R922xr2x0vKO1xsj4WwVKPM1MeO1reng1TrBA6Ih0HA=
+github.com/dcc-bigfred/proto/go v0.1.4-0.20260919175930-402166e2819d/go.mod h1:4Z1R+RTIguFeC2gC8iRsV+/XKhkcB0to2ndXun3/FTQ=
 github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f h1:lO4WD4F/rVNCu3HqELle0jiPLLBs70cWOduZpkS1E78=
 github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f/go.mod h1:cuUVRXasLTGF7a8hSLbxyZXjz+1KgoB3wDUb6vlszIc=
 github.com/dustin/go-humanize v1.0.1 h1:GzkhY7T5VNhEkwH0PVJgjz+fX1rhBrR7pRT3mDkpeCY=
